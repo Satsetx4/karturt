@@ -41,6 +41,8 @@ System Admin accounts do not belong to an RT unit. After the first password sign
 
 Account creation is not exposed as a public sign-up route. Resident and official accounts are separate identities, and an official role comes from an active `official_assignments` row rather than client input.
 
+Login identifiers are unique within each RT. Until sign-in includes an RT selector, an identifier that matches accounts in multiple RT units is rejected as ambiguous instead of choosing an account arbitrarily.
+
 ## Database workflow
 
 ```text

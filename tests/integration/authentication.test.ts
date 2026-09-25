@@ -4,6 +4,7 @@ import { hashPassword } from "better-auth/crypto";
 import type { AppDatabase } from "../../src/db/client";
 import { appAccounts, authAccount, authUser, officialAssignments } from "../../src/db/schema";
 import { createAuth } from "../../src/lib/auth/server";
+import { findUniqueLoginAccount } from "../../src/lib/auth/login-account";
 import { MfaEnrollmentRequiredError, resolvePrincipalForUser } from "../../src/lib/auth/principal";
 import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 
@@ -73,5 +74,33 @@ describe("authentication and account-role integration", () => {
     expect(principal.role).toBe("system_admin");
     expect(principal.appAccountId).toBe(adminAccount.id);
     expect(principal.rtUnitId).toBeNull();
+  });
+
+  it("refuses an ambiguous resident login identifier shared by two RT units", async () => {
+    const { db } = testDatabase;
+    const firstRt = await createRt(db);
+    const secondRt = await createRt(db);
+    const firstHousehold = await createHousehold(db, firstRt, { number: "C-01" });
+    const secondHousehold = await createHousehold(db, secondRt, { number: "C-01" });
+    const firstUser = await createAuthUser(db);
+    const secondUser = await createAuthUser(db);
+    await db.insert(appAccounts).values({
+      rtUnitId: firstRt,
+      authUserId: firstUser.id,
+      accountType: "resident",
+      loginIdentifier: "C-01",
+      personId: firstHousehold.personId,
+      householdId: firstHousehold.householdId,
+    });
+    await db.insert(appAccounts).values({
+      rtUnitId: secondRt,
+      authUserId: secondUser.id,
+      accountType: "resident",
+      loginIdentifier: "C-01",
+      personId: secondHousehold.personId,
+      householdId: secondHousehold.householdId,
+    });
+
+    await expect(findUniqueLoginAccount(db as unknown as AppDatabase, "resident", "C-01")).resolves.toBeNull();
   });
 });

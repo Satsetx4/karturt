@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuth } from "@/lib/auth/server";
 import { getDb } from "@/db/client";
-import { appAccounts, authUser, houses, households, officialAssignments } from "@/db/schema";
+import { houses, households, officialAssignments } from "@/db/schema";
+import { findUniqueLoginAccount } from "@/lib/auth/login-account";
 
 export const runtime = "nodejs";
 
@@ -44,12 +45,7 @@ export async function POST(request: Request, context: { params: Promise<{ type: 
   }
 
   const db = getDb();
-  const [account] = await db
-    .select({ id: appAccounts.id, authUserId: authUser.id, email: authUser.email, status: appAccounts.status, householdId: appAccounts.householdId, rtUnitId: appAccounts.rtUnitId })
-    .from(appAccounts)
-    .innerJoin(authUser, eq(authUser.id, appAccounts.authUserId))
-    .where(and(eq(appAccounts.accountType, type), sql`lower(${appAccounts.loginIdentifier}) = ${identifier.toLowerCase()}`))
-    .limit(1);
+  const account = await findUniqueLoginAccount(db, type, identifier);
 
   if (!account || account.status !== "active") {
     return NextResponse.json({ message: "Data masuk belum cocok atau akun belum aktif." }, { status: 401 });
