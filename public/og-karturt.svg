@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f3f6f4"/>
+  <path d="M0 0h1200v630H0z" fill="url(#grid)"/>
+  <rect x="105" y="130" width="84" height="84" rx="24" fill="#173745"/>
+  <path d="M128 148h12v24l20-24h15l-22 25 23 25h-15l-17-19-4 4v15h-12z" fill="#f4fbf8"/>
+  <text x="215" y="190" fill="#152a34" font-family="Arial,sans-serif" font-size="53" font-weight="700">KartuRT</text>
+  <text x="105" y="330" fill="#152a34" font-family="Arial,sans-serif" font-size="70" font-weight="700">Administrasi warga,</text>
+  <text x="105" y="415" fill="#276f68" font-family="Arial,sans-serif" font-size="70" font-weight="700">lebih jelas.</text>
+  <text x="105" y="485" fill="#5d6b70" font-family="Arial,sans-serif" font-size="27">Informasi iuran RT dan akun warga dalam satu tempat.</text>
+  <rect x="1010" y="102" width="90" height="5" rx="2.5" fill="#276f68"/>
+  <defs><pattern id="grid" width="38" height="38" patternUnits="userSpaceOnUse"><path d="M38 0H0v38" fill="none" stroke="#2a5b5e" stroke-opacity=".045"/></pattern></defs>
+</svg>
