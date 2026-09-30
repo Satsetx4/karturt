@@ -7,6 +7,7 @@ on:
       - "feat/phase-4-resident-card"
       - "fix/phase-4-1-resident-card-cleanup"
       - "feat/phase-4-5-audit-core-readiness"
+      - "feat/phase-5-payment-request"
     paths-ignore:
       - "docs/test-gate-a-report.md"
   pull_request:

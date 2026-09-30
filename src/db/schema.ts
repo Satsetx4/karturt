@@ -25,6 +25,7 @@ export const officialRoleEnum = pgEnum("official_role", ["treasurer", "rt_chairm
 export const householdStatusEnum = pgEnum("household_status", ["active", "inactive"]);
 export const billingYearStatusEnum = pgEnum("billing_year_status", ["draft", "open", "closed"]);
 export const monthlyDueStatusEnum = pgEnum("monthly_due_status", ["not_due", "unpaid", "paid", "waived"]);
+export const paymentRequestStatusEnum = pgEnum("payment_request_status", ["pending", "verified", "rejected", "cancelled"]);
 
 export const rtUnits = pgTable("rt_units", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -201,6 +202,7 @@ export const appAccounts = pgTable("app_accounts", {
     foreignColumns: [people.rtUnitId, people.householdId, people.id],
   }).onDelete("restrict"),
   unique("app_accounts_rt_id_type_uq").on(table.rtUnitId, table.id, table.accountType),
+  unique("app_accounts_rt_household_id_type_uq").on(table.rtUnitId, table.householdId, table.id, table.accountType),
   uniqueIndex("app_accounts_login_identifier_uq")
     .on(table.rtUnitId, table.accountType, sql`lower(${table.loginIdentifier})`)
     .where(sql`${table.accountType} <> 'system_admin'`),
@@ -297,6 +299,7 @@ export const monthlyDues = pgTable("monthly_dues", {
     foreignColumns: [feeRates.billingYearId, feeRates.id],
   }).onDelete("restrict"),
   uniqueIndex("monthly_dues_household_year_month_uq").on(table.householdId, table.billingYearId, table.month),
+  unique("monthly_dues_rt_household_id_uq").on(table.rtUnitId, table.householdId, table.id),
   check("monthly_dues_month_valid", sql`${table.month} between 1 and 12`),
   check("monthly_dues_due_day_ten", sql`extract(day from ${table.dueDate}) = 10`),
   check("monthly_dues_due_month_matches_month", sql`extract(month from ${table.dueDate}) = ${table.month}`),
@@ -304,6 +307,80 @@ export const monthlyDues = pgTable("monthly_dues", {
     "monthly_dues_status_amount_consistent",
     sql`(${table.status} = 'not_due' and ${table.amount} = 0 and ${table.feeRateId} is null and ${table.waivedReason} is null) or (${table.status} in ('unpaid', 'paid') and ${table.amount} > 0 and ${table.feeRateId} is not null and ${table.waivedReason} is null) or (${table.status} = 'waived' and ${table.amount} > 0 and ${table.feeRateId} is not null and ${table.waivedReason} is not null and length(trim(${table.waivedReason})) > 0)`,
   ),
+]);
+
+export const paymentRequests = pgTable("payment_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  requestCode: varchar("request_code", { length: 24 }).notNull(),
+  rtUnitId: uuid("rt_unit_id").notNull(),
+  householdId: uuid("household_id").notNull(),
+  requestedByAccountId: uuid("requested_by_account_id").notNull(),
+  requestedByAccountType: accountTypeEnum("requested_by_account_type").notNull().default("resident"),
+  status: paymentRequestStatusEnum("status").notNull().default("pending"),
+  idempotencyKey: varchar("idempotency_key", { length: 36 }).notNull(),
+  requestFingerprint: varchar("request_fingerprint", { length: 64 }).notNull(),
+  totalAmount: bigint("total_amount", { mode: "number" }).notNull(),
+  itemCount: integer("item_count").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({
+    name: "payment_requests_rt_household_fk",
+    columns: [table.rtUnitId, table.householdId],
+    foreignColumns: [households.rtUnitId, households.id],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "payment_requests_resident_account_fk",
+    columns: [table.rtUnitId, table.householdId, table.requestedByAccountId, table.requestedByAccountType],
+    foreignColumns: [appAccounts.rtUnitId, appAccounts.householdId, appAccounts.id, appAccounts.accountType],
+  }).onDelete("restrict"),
+  unique("payment_requests_rt_household_id_uq").on(table.rtUnitId, table.householdId, table.id),
+  uniqueIndex("payment_requests_request_code_uq").on(table.requestCode),
+  uniqueIndex("payment_requests_requester_idempotency_uq").on(table.requestedByAccountId, table.idempotencyKey),
+  index("payment_requests_household_status_created_idx").on(table.rtUnitId, table.householdId, table.status, table.createdAt),
+  check("payment_requests_resident_only", sql`${table.requestedByAccountType} = 'resident'`),
+  check("payment_requests_idempotency_key_uuid", sql`${table.idempotencyKey} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`),
+  check("payment_requests_fingerprint_sha256", sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`),
+  check("payment_requests_positive_total", sql`${table.totalAmount} > 0`),
+  check("payment_requests_positive_item_count", sql`${table.itemCount} > 0`),
+]);
+
+export const paymentRequestItems = pgTable("payment_request_items", {
+  requestId: uuid("request_id").notNull(),
+  rtUnitId: uuid("rt_unit_id").notNull(),
+  householdId: uuid("household_id").notNull(),
+  monthlyDueId: uuid("monthly_due_id").notNull(),
+  period: varchar("period", { length: 7 }).notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({
+    name: "payment_request_items_request_scope_fk",
+    columns: [table.rtUnitId, table.householdId, table.requestId],
+    foreignColumns: [paymentRequests.rtUnitId, paymentRequests.householdId, paymentRequests.id],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "payment_request_items_due_scope_fk",
+    columns: [table.rtUnitId, table.householdId, table.monthlyDueId],
+    foreignColumns: [monthlyDues.rtUnitId, monthlyDues.householdId, monthlyDues.id],
+  }).onDelete("restrict"),
+  unique("payment_request_items_request_due_uq").on(table.requestId, table.monthlyDueId),
+  unique("payment_request_items_request_period_uq").on(table.requestId, table.period),
+  index("payment_request_items_due_idx").on(table.rtUnitId, table.householdId, table.monthlyDueId),
+  check("payment_request_items_period_valid", sql`${table.period} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("payment_request_items_amount_positive", sql`${table.amount} > 0`),
+]);
+
+export const paymentRequestClaims = pgTable("payment_request_claims", {
+  monthlyDueId: uuid("monthly_due_id").primaryKey(),
+  requestId: uuid("request_id").notNull(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({
+    name: "payment_request_claims_item_fk",
+    columns: [table.requestId, table.monthlyDueId],
+    foreignColumns: [paymentRequestItems.requestId, paymentRequestItems.monthlyDueId],
+  }).onDelete("restrict"),
+  index("payment_request_claims_request_idx").on(table.requestId),
 ]);
 
 export const auditEvents = pgTable("audit_events", {
@@ -341,8 +418,12 @@ export const schema = {
   billingYears,
   feeRates,
   monthlyDues,
+  paymentRequests,
+  paymentRequestItems,
+  paymentRequestClaims,
   auditEvents,
 };
 
 export type AccountType = (typeof accountTypeEnum.enumValues)[number];
 export type OfficialRole = (typeof officialRoleEnum.enumValues)[number];
+export type PaymentRequestStatus = (typeof paymentRequestStatusEnum.enumValues)[number];

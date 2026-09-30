@@ -3,6 +3,7 @@ import type { OfficialRole } from "@/db/schema";
 export type AppRole = "resident" | OfficialRole | "system_admin";
 export type Permission =
   | "billing:read:self"
+  | "payment:request:self"
   | "billing:read:rt"
   | "billing:generate"
   | "fee_rate:manage"
@@ -27,7 +28,7 @@ export interface Principal {
 }
 
 const permissions: Record<AppRole, ReadonlySet<Permission>> = {
-  resident: new Set(["billing:read:self"]),
+  resident: new Set(["billing:read:self", "payment:request:self"]),
   treasurer: new Set(["billing:read:rt", "resident:read:rt", "payment:verify", "payment:record_cash"]),
   rt_chairman: new Set([
     "billing:read:rt",
@@ -63,7 +64,7 @@ export function canPerform(
 ) {
   if (!permissions[principal.role].has(permission)) return false;
   if (principal.role === "resident") {
-    if (permission !== "billing:read:self") return false;
+    if (permission !== "billing:read:self" && permission !== "payment:request:self") return false;
     if (!principal.rtUnitId || !principal.householdId) return false;
     if (!scope?.householdId || !scope.rtUnitId) return false;
     if (scope.householdId !== principal.householdId || scope.rtUnitId !== principal.rtUnitId) return false;

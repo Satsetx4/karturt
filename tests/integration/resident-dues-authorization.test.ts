@@ -91,8 +91,10 @@ describe("resident monthly-dues authorization", () => {
       "billingYear",
       "dueDate",
       "month",
+      "paymentRequestStatus",
       "status",
     ]);
+    expect(dues.map((due) => due.paymentRequestStatus)).toEqual([null, null]);
     for (const due of dues) {
       expect(due).not.toHaveProperty("id");
       expect(due).not.toHaveProperty("rtUnitId");

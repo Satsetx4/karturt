@@ -4,6 +4,7 @@ export type ResidentDue = {
   amount: number;
   dueDate: string;
   status: "paid" | "unpaid" | "waived" | "not_due";
+  paymentRequestStatus?: "pending" | "verified" | "rejected" | "cancelled" | null;
 };
 export type CurrentResidentStatusToken =
   | "PAID"
@@ -45,7 +46,8 @@ export const residentStatusLabels: Record<ResidentStatusToken, string> = {
   PENDING: "Menunggu konfirmasi",
 };
 
-export function dueToken(due: ResidentDue): CurrentResidentStatusToken {
+export function dueToken(due: ResidentDue): ResidentStatusToken {
+  if (due.paymentRequestStatus === "pending") return "PENDING";
   return domainStatusTokens[due.status];
 }
 

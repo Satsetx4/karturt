@@ -32,6 +32,7 @@ describe("resident card semantics", () => {
     expect(dueToken(due("paid", 1))).toBe("PAID");
     expect(dueToken(due("waived", 2))).toBe("WAIVED");
     expect(dueToken(due("not_due", 3))).toBe("NOT_DUE");
+    expect(dueToken({ ...due("unpaid", 4), paymentRequestStatus: "pending" })).toBe("PENDING");
     expect(residentStatusLabels.PENDING).toBe("Menunggu konfirmasi");
   });
 

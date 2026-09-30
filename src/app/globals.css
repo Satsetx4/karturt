@@ -248,11 +248,33 @@ button { color: inherit; }
 .dues-history li { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
 .resident-profile dd { margin: 0 0 18px; overflow-wrap: anywhere; }
 .resident-profile dt { color: var(--muted); }
+.payment-request-panel { min-width: 0; margin: 22px 0; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-raised); }
+.payment-request-panel h2 { margin: 0 0 8px; font-size: 21px; }
+.payment-request-panel > p { margin: 8px 0 14px; color: var(--muted); line-height: 1.5; }
+.payment-request-label { display: block; margin: 14px 0 7px; font-weight: 700; }
+.payment-request-select { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; }
+.payment-request-total { margin-top: 14px; padding: 14px; display: grid; gap: 5px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.payment-request-total strong { font-size: 21px; }
+.payment-request-periods { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 4px; }
+.payment-request-action { width: 100%; margin-top: 14px; }
+.payment-request-confirm-actions { display: grid; justify-items: start; gap: 9px; margin-top: 14px; }
+.payment-request-confirm-actions p { margin: 0; color: var(--muted); line-height: 1.5; }
+.payment-request-success, .payment-request-error { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; overflow-wrap: anywhere; }
+.payment-request-success { border-color: #d7b64d; background: #fff7d8; color: #624b00; }
+.payment-request-success p { margin: 0 0 8px; }
+.payment-request-success .due-status { margin: 10px 0; color: #624b00; }
+.dark .payment-request-success { border-color: #8e7428; background: #332d19; color: #f6e6aa; }
+.dark .payment-request-success .due-status { color: #f6e6aa; }
+.payment-request-error { border-left: 3px solid #b95448; background: #fff0ed; color: #883c35; }
+.dark .payment-request-error { background: #3a2928; color: #f4b5ad; }
+.payment-request-success .button { margin-top: 6px; }
 @media(min-width: 600px) { .dues-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media(min-width: 768px) { .resident-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } .due-card { padding: 20px; } }
 .due-card:has(.status-paid) { border-top: 3px solid #27805e; }
 .due-card:has(.status-unpaid) { border-top: 3px solid #b54b40; }
 .due-card:has(.status-waived) { border-top: 3px solid #778393; }
 .due-card:has(.status-not_due) { border-top: 3px solid var(--line-strong); }
-.due-card:has(.status-pending) { border-top: 3px solid #99703a; }
+.due-card:has(.status-pending) { border-top: 3px solid #d0a51d; }
+.status-pending { color: #735700; }
+.dark .status-pending { color: #f2d778; }
 

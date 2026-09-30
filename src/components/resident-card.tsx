@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle,
   Clock,
@@ -32,6 +32,195 @@ const rupiah = (amount: number) =>
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(amount);
+
+function periodLabel(period: string) {
+  const [year, month] = period.split("-").map(Number);
+  return `${monthNames[month - 1]} ${year}`;
+}
+
+function duePeriod(due: ResidentDue) {
+  return `${due.billingYear}-${String(due.month).padStart(2, "0")}`;
+}
+
+type PaymentRequestResponse = {
+  requestCode: string;
+  status: "pending" | "verified" | "rejected" | "cancelled";
+  periods: string[];
+  totalAmount: number;
+  whatsappUrl: string | null;
+  contactMessage: string | null;
+  message: string;
+};
+
+export function ResidentPaymentRequestPanel({
+  dues,
+  onCreated,
+}: {
+  dues: ResidentDue[];
+  onCreated: () => void;
+}) {
+  const [selectedPeriod, setSelectedPeriod] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [result, setResult] = useState<PaymentRequestResponse | null>(null);
+  const inFlight = useRef(false);
+  const idempotencyKey = useRef<string | null>(null);
+  const requestableDues = dues.filter((due) =>
+    due.status === "unpaid" && due.paymentRequestStatus !== "pending",
+  );
+  const requestablePeriods = new Set(requestableDues.map(duePeriod));
+  const selectedDues = requestableDues.filter((due) =>
+    selectedPeriod !== "" && duePeriod(due) <= selectedPeriod,
+  );
+  const totalAmount = selectedDues.reduce((total, due) => total + due.amount, 0);
+
+  function changePeriod(period: string) {
+    setSelectedPeriod(period);
+    setConfirming(false);
+    setMessage("");
+    setResult(null);
+    if (sessionExpired) setSessionExpired(false);
+    idempotencyKey.current = null;
+  }
+
+  async function submit() {
+    if (inFlight.current || !selectedPeriod) return;
+    inFlight.current = true;
+    setSubmitting(true);
+    setMessage("");
+    idempotencyKey.current ??= crypto.randomUUID();
+    try {
+      const response = await fetch("/api/resident/payment-requests", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": idempotencyKey.current,
+        },
+        body: JSON.stringify({ period: selectedPeriod }),
+      });
+      if (response.status === 401) {
+        setSessionExpired(true);
+        setMessage("Sesi berakhir. Silakan masuk kembali.");
+        idempotencyKey.current = null;
+        return;
+      }
+      const data = await response.json().catch(() => ({})) as Partial<PaymentRequestResponse> & { message?: string };
+      if (response.status === 409) {
+        setMessage(data.message ?? "Bulan iuran berubah. Muat ulang halaman lalu periksa kembali.");
+        setConfirming(false);
+        idempotencyKey.current = null;
+        onCreated();
+        return;
+      }
+      if (!response.ok || !data.requestCode || !Array.isArray(data.periods)) {
+        setMessage(data.message ?? "Permintaan belum dapat disimpan. Periksa sambungan internet lalu coba lagi.");
+        return;
+      }
+      const created = data as PaymentRequestResponse;
+      setResult(created);
+      setConfirming(false);
+      setMessage(created.message);
+      idempotencyKey.current = null;
+      onCreated();
+    } catch {
+      setMessage("Belum tersambung. Periksa internet lalu coba lagi.");
+    } finally {
+      inFlight.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  if (requestableDues.length === 0 && !result) {
+    return (
+      <section className="payment-request-panel" aria-labelledby="payment-request-title">
+        <h2 id="payment-request-title">Ajukan pembayaran</h2>
+        {dues.some((due) => due.paymentRequestStatus === "pending") ? (
+          <p>Permintaan yang ada sedang menunggu konfirmasi.</p>
+        ) : (
+          <p>Belum ada bulan dengan status Belum bayar yang dapat diajukan.</p>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <section className="payment-request-panel" aria-labelledby="payment-request-title">
+      <h2 id="payment-request-title">Ajukan pembayaran</h2>
+      <p>Pilih bulan. Iuran Belum bayar yang lebih lama dan belum diajukan ikut dihitung otomatis.</p>
+      <label className="payment-request-label" htmlFor="payment-request-period">Bulan terakhir yang ingin diajukan</label>
+      <select
+        id="payment-request-period"
+        className="payment-request-select"
+        value={selectedPeriod}
+        disabled={submitting || confirming}
+        onChange={(event) => changePeriod(event.target.value)}
+      >
+        <option value="">Pilih bulan</option>
+        {[...requestablePeriods].sort().map((period) => (
+          <option key={period} value={period}>{periodLabel(period)}</option>
+        ))}
+      </select>
+
+      {selectedPeriod && selectedDues.length > 0 && (
+        <div className="payment-request-total" aria-live="polite">
+          <span>{selectedDues.length} bulan masuk dalam permintaan</span>
+          <strong>{rupiah(totalAmount)}</strong>
+          {confirming && (
+            <ul className="payment-request-periods">
+              {selectedDues.map((due) => (
+                <li key={duePeriod(due)}>{periodLabel(duePeriod(due))}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {message && (
+        <div className={result ? "payment-request-success" : "payment-request-error"} role={result ? "status" : "alert"}>
+          <p>{message}</p>
+          {sessionExpired && <a className="button button--primary" href="/login/warga">Masuk kembali</a>}
+          {result && (
+            <>
+              <p>Nomor pengajuan: <strong>{result.requestCode}</strong></p>
+              <ResidentDueStatus token="PENDING" />
+              {result.whatsappUrl ? (
+                <a className="button button--primary" href={result.whatsappUrl} target="_blank" rel="noreferrer">
+                  Buka WhatsApp Bendahara
+                </a>
+              ) : (
+                <p>{result.contactMessage ?? "Permintaan Anda tetap tercatat."}</p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {!confirming ? (
+        <button
+          className="button button--primary payment-request-action"
+          type="button"
+          disabled={!selectedPeriod || selectedDues.length === 0 || submitting}
+          onClick={() => setConfirming(true)}
+        >
+          Periksa jumlah
+        </button>
+      ) : (
+        <div className="payment-request-confirm-actions">
+          <p>Pastikan bulan dan jumlahnya sudah benar sebelum mengirim permintaan.</p>
+          <button className="button button--primary" type="button" disabled={submitting} onClick={() => void submit()}>
+            {submitting ? "Menyimpan…" : "Konfirmasi dan ajukan"}
+          </button>
+          <button className="text-button" type="button" disabled={submitting} onClick={() => setConfirming(false)}>
+            Periksa lagi
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
 
 export function ResidentDueStatus({
   token,
@@ -243,6 +432,7 @@ export function ResidentCard({
           {tab === "card" ? (
             <>
               <ResidentDuesSummary summary={summary} />
+              <ResidentPaymentRequestPanel dues={dues} onCreated={() => setRetry((r) => r + 1)} />
               <ol className="dues-grid">
                 {yearMonths(dues, year).map(({ name, month, due }) => {
                   return (

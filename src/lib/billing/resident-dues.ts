@@ -1,6 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
-import { billingYears, monthlyDues } from "@/db/schema";
+import { billingYears, monthlyDues, paymentRequestClaims, paymentRequests } from "@/db/schema";
 import { assertCanPerform, type Principal } from "@/lib/auth/permissions";
 
 export async function getResidentMonthlyDues(database: AppDatabase, principal: Principal) {
@@ -19,11 +19,17 @@ export async function getResidentMonthlyDues(database: AppDatabase, principal: P
       amount: monthlyDues.amount,
       dueDate: monthlyDues.dueDate,
       status: monthlyDues.status,
+      paymentRequestStatus: paymentRequests.status,
     })
     .from(monthlyDues)
     .innerJoin(billingYears, and(
       eq(billingYears.id, monthlyDues.billingYearId),
       eq(billingYears.rtUnitId, principal.rtUnitId),
+    ))
+    .leftJoin(paymentRequestClaims, eq(paymentRequestClaims.monthlyDueId, monthlyDues.id))
+    .leftJoin(paymentRequests, and(
+      eq(paymentRequests.id, paymentRequestClaims.requestId),
+      eq(paymentRequests.status, "pending"),
     ))
     .where(and(
       eq(monthlyDues.rtUnitId, principal.rtUnitId),

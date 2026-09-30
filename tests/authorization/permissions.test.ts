@@ -32,6 +32,13 @@ describe("role authorization", () => {
     expect(canPerform(principal("resident"), "payment:verify", { rtUnitId: "rt-one" })).toBe(false);
   });
 
+  it("allows payment requests only for a resident's own household", () => {
+    expect(canPerform(principal("resident"), "payment:request:self", { rtUnitId: "rt-one", householdId: "household-one" })).toBe(true);
+    expect(canPerform(principal("resident"), "payment:request:self", { rtUnitId: "rt-two", householdId: "household-one" })).toBe(false);
+    expect(canPerform(principal("treasurer"), "payment:request:self", { rtUnitId: "rt-one", householdId: "household-one" })).toBe(false);
+    expect(canPerform(principal("system_admin"), "payment:request:self", { rtUnitId: "rt-one", householdId: "household-one" })).toBe(false);
+  });
+
   it("keeps fee, waiver, and assignment management with the RT Chairman", () => {
     const chairman = principal("rt_chairman");
     expect(canPerform(chairman, "fee_rate:manage", { rtUnitId: "rt-one" })).toBe(true);
