@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - "verify/**"
+    paths-ignore:
+      - "docs/test-gate-a-report.md"
   pull_request:
   workflow_dispatch:
 
@@ -56,4 +58,10 @@ jobs:
             exit 1
           fi
       - name: Production build
+        env:
+          APP_ENV: production
+          DATABASE_ENV: production
+          DATABASE_URL: postgresql://karturt:ci-only-not-a-secret@localhost:5432/karturt_ci
+          BETTER_AUTH_SECRET: ci-build-only-secret-never-valid-for-deployment-0000000000
+          NEXT_PUBLIC_APP_URL: https://example.invalid
         run: npm run build
