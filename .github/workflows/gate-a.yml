@@ -5,6 +5,7 @@ on:
     branches:
       - "verify/**"
       - "feat/phase-4-resident-card"
+      - "fix/phase-4-1-resident-card-cleanup"
     paths-ignore:
       - "docs/test-gate-a-report.md"
   pull_request:

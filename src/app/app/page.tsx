@@ -66,8 +66,8 @@ export default async function AccountHomePage() {
           </p>
           <h1>Selamat datang{user?.name ? `, ${user.name}` : ""}.</h1>
           <p>
-            Akun dan batas akses Anda sudah tersambung. Modul kartu bulanan akan
-            dibuka setelah Test Gate A selesai.
+            Akun Anda aktif. Informasi pada halaman ini mengikuti akses akun
+            Anda.
           </p>
           {principal.role === "system_admin" && (
             <>

@@ -14,13 +14,11 @@ export async function getResidentMonthlyDues(database: AppDatabase, principal: P
 
   return database
     .select({
-      id: monthlyDues.id,
       billingYear: billingYears.year,
       month: monthlyDues.month,
       amount: monthlyDues.amount,
       dueDate: monthlyDues.dueDate,
       status: monthlyDues.status,
-      waivedReason: monthlyDues.waivedReason,
     })
     .from(monthlyDues)
     .innerJoin(billingYears, and(

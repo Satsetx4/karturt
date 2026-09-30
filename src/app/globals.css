@@ -234,16 +234,18 @@ button { color: inherit; }
 .resident-summary { display: grid; gap: 12px; margin: 20px 0; }
 .resident-summary div, .due-card, .resident-profile { padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
 .resident-summary span, .resident-summary strong { display: block; }
-.resident-summary strong { font-size: 23px; }
+.resident-summary span { font-size: 16px; }
+.resident-summary strong { font-size: 21px; }
 .resident-note { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
 .dues-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .due-card { min-width: 0; padding: 12px; overflow-wrap: anywhere; }
-.due-card h2 { font-size: 18px; margin: 0 0 12px; }
-.due-card strong { display: block; margin-top: 10px; }
-.due-status { display: flex; align-items: start; gap: 6px; margin: 0; font-size: 14px; }
-.due-status svg { flex-shrink: 0; margin-top: 2px; }
+.due-card h2 { font-size: 17px; line-height: 1.3; margin: 0 0 12px; }
+.due-card strong { display: block; margin-top: 10px; font-size: 17px; }
+.due-status { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 16px; line-height: 1.3; font-weight: 700; }
+.due-status svg { flex: 0 0 20px; margin-top: 1px; }
+.due-status span { min-width: 0; }
 .dues-history { list-style: none; padding: 0; }
-.dues-history li { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.dues-history li { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
 .resident-profile dd { margin: 0 0 18px; overflow-wrap: anywhere; }
 .resident-profile dt { color: var(--muted); }
 @media(min-width: 600px) { .dues-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -252,4 +254,5 @@ button { color: inherit; }
 .due-card:has(.status-unpaid) { border-top: 3px solid #b54b40; }
 .due-card:has(.status-waived) { border-top: 3px solid #778393; }
 .due-card:has(.status-not_due) { border-top: 3px solid var(--line-strong); }
+.due-card:has(.status-pending) { border-top: 3px solid #99703a; }
 

@@ -86,6 +86,18 @@ describe("resident monthly-dues authorization", () => {
       [2026, 1, "not_due"],
       [2026, 5, "unpaid"],
     ]);
-    expect(dues.every((due) => !("householdId" in due) && !("rtUnitId" in due))).toBe(true);
+    expect(Object.keys(dues[0]).sort()).toEqual([
+      "amount",
+      "billingYear",
+      "dueDate",
+      "month",
+      "status",
+    ]);
+    for (const due of dues) {
+      expect(due).not.toHaveProperty("id");
+      expect(due).not.toHaveProperty("rtUnitId");
+      expect(due).not.toHaveProperty("householdId");
+      expect(due).not.toHaveProperty("waivedReason");
+    }
   });
 });

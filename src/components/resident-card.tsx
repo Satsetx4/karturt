@@ -4,27 +4,27 @@ import {
   CheckCircle,
   Clock,
   CircleAlert,
+  CircleHelp,
   MinusCircle,
   CircleSlash,
+  type LucideIcon,
 } from "lucide-react";
 import {
   dueToken,
   duesSummary,
+  formatResidentDate,
   monthNames,
+  residentStatusLabels,
   yearMonths,
   type ResidentDue,
+  type ResidentStatusToken,
 } from "@/lib/billing/resident-card";
-const labels = {
-  PAID: "Lunas",
-  UNPAID: "Belum lunas",
-  WAIVED: "Dibebaskan",
-  NOT_DUE: "Tidak ditagihkan",
-};
-const icons = {
+const icons: Record<ResidentStatusToken, LucideIcon> = {
   PAID: CheckCircle,
   UNPAID: CircleAlert,
   WAIVED: MinusCircle,
   NOT_DUE: CircleSlash,
+  PENDING: Clock,
 };
 const rupiah = (amount: number) =>
   new Intl.NumberFormat("id-ID", {
@@ -32,6 +32,65 @@ const rupiah = (amount: number) =>
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(amount);
+
+export function ResidentDueStatus({
+  token,
+}: {
+  token: ResidentStatusToken | "MISSING";
+}) {
+  const Icon = token === "MISSING" ? CircleHelp : icons[token];
+  const label =
+    token === "MISSING" ? "Data belum tersedia" : residentStatusLabels[token];
+  return (
+    <p className={`due-status status-${token.toLowerCase()}`}>
+      <Icon size={20} aria-hidden="true" />
+      <span>{label}</span>
+    </p>
+  );
+}
+
+export function ResidentMonthCard({
+  name,
+  due,
+}: {
+  name: string;
+  due?: ResidentDue;
+}) {
+  const token = due ? dueToken(due) : "MISSING";
+  return (
+    <li className="due-card">
+      <h2>{name}</h2>
+      <ResidentDueStatus token={token} />
+      <strong>
+        {due && due.status !== "not_due" ? rupiah(due.amount) : "—"}
+      </strong>
+    </li>
+  );
+}
+
+export function ResidentDuesSummary({
+  summary,
+}: {
+  summary: { paid: number; arrears: number; unpaid: number };
+}) {
+  return (
+    <div className="resident-summary">
+      <div>
+        <span>Tunggakan</span>
+        <strong>{rupiah(summary.arrears)}</strong>
+      </div>
+      <div>
+        <span>Total belum dibayar</span>
+        <strong>{rupiah(summary.unpaid)}</strong>
+      </div>
+      <div>
+        <span>Total sudah dibayar</span>
+        <strong>{rupiah(summary.paid)}</strong>
+      </div>
+    </div>
+  );
+}
+
 export function ResidentCard({
   profile,
   businessDate,
@@ -150,8 +209,8 @@ export function ResidentCard({
           <dd>{profile.houseNumber}</dd>
           <dt>RT</dt>
           <dd>{profile.rtName}</dd>
-          <dt>Mulai menjadi household</dt>
-          <dd>{profile.startsOn}</dd>
+          <dt>Terdaftar sejak</dt>
+          <dd>{formatResidentDate(profile.startsOn)}</dd>
         </dl>
       ) : state === "loading" ? (
         <p role="status">Memuat iuran…</p>
@@ -183,55 +242,11 @@ export function ResidentCard({
           </label>
           {tab === "card" ? (
             <>
-              <div className="resident-summary">
-                <div>
-                  <span>Tunggakan lewat jatuh tempo</span>
-                  <strong>{rupiah(summary.arrears)}</strong>
-                </div>
-                <div>
-                  <span>Total belum lunas</span>
-                  <strong>{rupiah(summary.unpaid)}</strong>
-                </div>
-                <div>
-                  <span>Iuran berstatus lunas</span>
-                  <strong>{rupiah(summary.paid)}</strong>
-                </div>
-              </div>
-              <p className="resident-note">
-                Jatuh tempo tanggal 10. Bulan yang belum jatuh tempo tetap
-                berstatus belum lunas. Dibebaskan dan tidak ditagihkan tidak
-                masuk tunggakan.
-              </p>
+              <ResidentDuesSummary summary={summary} />
               <ol className="dues-grid">
                 {yearMonths(dues, year).map(({ name, month, due }) => {
-                  const token = due ? dueToken(due) : null;
-                  const Icon = token ? icons[token] : Clock;
                   return (
-                    <li key={month} className="due-card">
-                      <h2>{name}</h2>
-                      <p
-                        className={`due-status status-${due?.status ?? "missing"}`}
-                      >
-                        <Icon size={18} aria-hidden="true" />
-                        <span>
-                          {token ? labels[token] : "Data belum tersedia"}
-                        </span>
-                      </p>
-                      {token && <small>{token}</small>}
-                      <strong>{due ? rupiah(due.amount) : "—"}</strong>
-                      {due && (
-                        <p className="resident-note">
-                          {due.status === "not_due"
-                            ? "Di luar periode kewajiban"
-                            : `Jatuh tempo ${due.dueDate}`}
-                        </p>
-                      )}
-                      {due?.status === "waived" && (
-                        <p className="resident-note">
-                          Alasan: {due.waivedReason}
-                        </p>
-                      )}
-                    </li>
+                    <ResidentMonthCard key={month} name={name} due={due} />
                   );
                 })}
               </ol>
@@ -239,8 +254,8 @@ export function ResidentCard({
           ) : (
             <>
               <p>
-                Catatan status iuran, bukan riwayat transaksi. Detail waktu
-                pembayaran dan bukti pembayaran belum tersedia.
+                Halaman ini menampilkan catatan iuran bulanan, bukan bukti
+                pembayaran.
               </p>
               {selected.length === 0 ? (
                 <p>Belum ada catatan iuran untuk tahun ini.</p>
@@ -252,7 +267,8 @@ export function ResidentCard({
                       <li key={d.month}>
                         <strong>{monthNames[d.month - 1]}</strong>
                         <span>
-                          {labels[dueToken(d)]} · {rupiah(d.amount)}
+                          {residentStatusLabels[dueToken(d)]} ·{" "}
+                          {d.status === "not_due" ? "—" : rupiah(d.amount)}
                         </span>
                       </li>
                     ))}

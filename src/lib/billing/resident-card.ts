@@ -4,8 +4,14 @@ export type ResidentDue = {
   amount: number;
   dueDate: string;
   status: "paid" | "unpaid" | "waived" | "not_due";
-  waivedReason: string | null;
 };
+export type CurrentResidentStatusToken =
+  | "PAID"
+  | "UNPAID"
+  | "WAIVED"
+  | "NOT_DUE";
+export type ResidentStatusToken = CurrentResidentStatusToken | "PENDING";
+
 export const monthNames = [
   "Januari",
   "Februari",
@@ -20,9 +26,34 @@ export const monthNames = [
   "November",
   "Desember",
 ];
-// Pending verification belongs to future active payment requests (Phase 5).
-export function dueToken(due: ResidentDue) {
-  return due.status.toUpperCase() as "PAID" | "UNPAID" | "WAIVED" | "NOT_DUE";
+
+const domainStatusTokens: Record<
+  ResidentDue["status"],
+  CurrentResidentStatusToken
+> = {
+  paid: "PAID",
+  unpaid: "UNPAID",
+  waived: "WAIVED",
+  not_due: "NOT_DUE",
+};
+
+export const residentStatusLabels: Record<ResidentStatusToken, string> = {
+  PAID: "Sudah bayar",
+  UNPAID: "Belum bayar",
+  WAIVED: "Dibebaskan",
+  NOT_DUE: "Tidak perlu bayar",
+  PENDING: "Menunggu konfirmasi",
+};
+
+export function dueToken(due: ResidentDue): CurrentResidentStatusToken {
+  return domainStatusTokens[due.status];
+}
+
+export function formatResidentDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat("id-ID", { dateStyle: "long" }).format(
+    new Date(year, month - 1, day),
+  );
 }
 export function yearMonths(dues: ResidentDue[], year: number) {
   return monthNames.map((name, index) => ({

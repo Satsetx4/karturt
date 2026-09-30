@@ -19,12 +19,27 @@ describe("resident dues HTTP authority", () => {
       rtUnitId: "own-rt",
     };
     mocks.principal.mockResolvedValue(principal);
-    mocks.dues.mockResolvedValue([]);
+    const dues = [
+      {
+        billingYear: 2026,
+        month: 6,
+        amount: 40000,
+        dueDate: "2026-06-10",
+        status: "unpaid",
+      },
+    ];
+    mocks.dues.mockResolvedValue(dues);
     const response = await GET();
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(mocks.dues).toHaveBeenLastCalledWith(mocks.db, principal);
     expect(GET.length).toBe(0);
+    expect(await response.json()).toEqual({ dues });
+    for (const due of dues) {
+      expect(due).not.toHaveProperty("id");
+      expect(due).not.toHaveProperty("rtUnitId");
+      expect(due).not.toHaveProperty("householdId");
+    }
   });
   it("returns 401 for expired session", async () => {
     mocks.principal.mockRejectedValue(new UnauthenticatedError());
