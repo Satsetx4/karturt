@@ -1,137 +1,89 @@
-# Test Gate A — Repair Fase 0–3
+# KartuRT Test Gate A - Laporan verifikasi akhir
 
-**Tanggal:** 30 September 2026
-**Branch kerja:** `repair/phase-0-3`
-**Baseline source commit:** `522447cbabfcfbd3a18e3cd50266fe91bf781cb1`
-**Verified repair code commit:** `d01f57cadb59511a67725b261906b5c1be41ec3c`
-**Migration head:** `0003_due_auth_audit_domain`
-**Runtime:** Node.js `v24.19.0`
-**Source of truth:** `karturt-feat-milestone-1-foundation.zip` dan Master Context v2 tanggal 30 September 2026.
-
-Perubahan ini berada pada branch terpisah. Tidak ada push atau merge ke `main`.
-
-## Ringkasan keputusan gate
-
-**Automated Gate A lokal: PASS.** Seluruh lint, typecheck, unit, integration, constraints, authorization, build, migration consistency, dan migration smoke lokal yang dapat dijalankan lulus.
-
-**Gate A keseluruhan: NO-GO ke Fase 4.** Development Neon tidak terkonfigurasi pada checkout ini (`.env.local` tidak ada dan `DATABASE_URL` tidak tersedia). Karena itu isolasi branch Neon, penerapan migration pada database development yang sesungguhnya, dan auth/billing smoke terhadap Neon belum diverifikasi. Guard `npm run db:check` berhenti sebelum mencoba koneksi, sesuai perilaku fail-fast.
-
-GO per tahap di bawah berarti implementasi dan bukti lokal tahap tersebut selesai. Itu tidak membuka Fase 4 selama gate Neon masih terbuka.
-
-## Laporan per tahap
-
-| Tahap | File utama yang berubah | Perbaikan dan bukti | Risiko tersisa / workaround | Hasil tahap |
-|---|---|---|---|---|
-| **0 — Freeze baseline dan inventaris** | `docs/test-gate-a-report.md` | Source ZIP dipetakan ke baseline `522447c`; perubahan dikerjakan pada branch `repair/phase-0-3`. Status awal dan mismatch diambil dari Master Context v2 dan dibandingkan dengan schema, route, migration, serta test yang tersedia. | ZIP tidak membawa metadata Git. Baseline SHA berasal dari checkout yang isinya cocok dengan ZIP; laporan tetap membedakan baseline itu dari repair commit. | **GO** |
-| **1 — Schema `NOT_DUE`** | `src/db/schema.ts`, `drizzle/0003_due_auth_audit_domain.sql`, `drizzle/meta/0003_snapshot.json`, `drizzle/meta/_journal.json` | Enum due menjadi `not_due/unpaid/paid/waived`; constraint membedakan `NOT_DUE` tanpa obligation dari `WAIVED` yang memerlukan nominal positif dan alasan. Test upgrade menjalankan migration lama, membuat legacy `waived/not_yet_resident`, lalu memastikan hasilnya `not_due` dengan alasan kosong. | Penerapan pada Neon belum dilakukan. Workaround: setelah development branch terkonfirmasi dan backup disiapkan, jalankan migration terkontrol di sana lalu cek enum/row hasil. | **GO lokal** |
-| **2 — Billing lifecycle join/leave** | `src/lib/billing/generator.ts`, `src/lib/billing/activation.ts`, `drizzle/0002_monthly_due_period_guard.sql`, `tests/unit/billing-generator.test.ts`, `tests/integration/billing-generator.test.ts` | Bulan sebelum join dan setelah bulan akhir menjadi `NOT_DUE`; tunggakan saat household aktif tetap melekat pada household lama; due generator tetap 12 bulan, jatuh tempo tanggal 10, fee snapshot, serta retry aman. Regression mencakup join, leave, tanggal invalid, dan pengulangan generator. | Aturan prorata untuk mulai/akhir pada tengah bulan tidak ditentukan Master Context. Implementasi mengenakan bulan mulai dan bulan akhir sebagai bulan penuh, konsisten dengan model bulanan yang ada; konfirmasi bisnis diperlukan sebelum dipakai menagih data nyata. | **GO lokal** |
-| **3 — Regression test billing** | `tests/unit/billing-generator.test.ts`, `tests/integration/billing-generator.test.ts`, `tests/constraints/database-constraints.test.ts`, `tests/integration/migration-upgrade.test.ts` | Status dan batas tanggal diuji pada generator, constraint PostgreSQL-compatible, retry, legacy backfill, serta periode household yang berakhir. Empat suite Gate A mencatat 17 unit, 27 integration, 14 constraint, dan 4 authorization test lulus. | PGlite tidak mewakili beberapa koneksi Neon independen untuk race/concurrency produksi. Workaround: jalankan concurrent smoke terhadap development Neon sebelum data warga dipakai. | **GO lokal** |
-| **4 — Resident provisioning** | `scripts/provision-account.ts`, `src/lib/accounts/resident-provisioning.ts`, `.env.example`, `tests/integration/account-provisioning.test.ts`, `README.md` | Identifier warga diturunkan dari `house.number`. PIN harus enam digit numerik. Provisioning memverifikasi person/household/house aktif dan konsistensi RT; input identifier bebas untuk akun resident ditolak. Prefix env account disamakan dengan yang dibaca script. | CLI belum dijalankan pada Neon nyata karena tidak ada kredensial development. Jalankan hanya dengan variabel one-time di `.env.local` dan koneksi branch development. | **GO lokal** |
-| **5 — Lockout PIN** | `src/lib/auth/login-lockout.ts`, `src/lib/auth/login-account.ts`, `src/app/api/login/[type]/route.ts`, `tests/integration/resident-lockout.test.ts`, `tests/integration/resident-login-route.test.ts` | Lima PIN salah mengunci akun 15 menit; keberhasilan login/reset mengosongkan counter. Jalur HTTP resident diuji dengan house number + PIN yang benar. Respons gagal tetap generik, sementara rate limit IP Better Auth aktif. | Perilaku `x-forwarded-for` harus dikonfirmasi di deployment: proxy tepercaya perlu menimpa header dari klien. Workaround sebelum produksi: batasi trusted proxy dan uji rate limit dari edge deployment. | **GO lokal** |
-| **6 — Credential reset dan recovery** | `src/lib/auth/reset-resident-pin.ts`, `src/lib/auth/recover-system-admin-two-factor.ts`, `src/app/api/residents/[accountId]/reset-pin/route.ts`, `src/app/api/system-admin/accounts/[accountId]/recover-two-factor/route.ts`, `src/lib/audit/writer.ts`, `tests/integration/audit-and-credential-reset.test.ts`, `tests/integration/authentication.test.ts` | Ketua RT dapat reset PIN dalam RT-nya; Bendahara dan cross-RT ditolak. System Admin reset warga memerlukan reason + reference. Reset mencabut sesi dan menulis audit dalam transaksi. Backup code diuji satu kali pakai. Kehilangan authenticator dan seluruh backup code memakai recovery oleh System Admin lain yang telah memverifikasi TOTP; sesi target dicabut, faktor lama dihapus, tindakan diaudit, dan target tetap tidak memperoleh principal sampai TOTP baru diverifikasi. | Recovery darurat mensyaratkan ada System Admin lain yang masih dapat memverifikasi TOTP. Untuk instalasi dengan hanya satu admin yang kehilangan seluruh faktor, prosedur operator/out-of-band belum diotomasi. Workaround operasional: pertahankan admin recovery kedua yang telah diverifikasi dan ikat tindakan ke incident reference. | **GO lokal** |
-| **7 — Official temporal lifecycle** | `src/lib/officials/lifecycle.ts`, `src/lib/auth/principal.ts`, `src/app/api/login/[type]/route.ts`, `drizzle/0003_due_auth_audit_domain.sql`, `tests/integration/official-lifecycle.test.ts`, `tests/constraints/database-constraints.test.ts` | `startsOn` dan `endsOn` inklusif terhadap business date Jakarta. Assignment mendatang belum memberi akses. Trigger menolak periode overlap untuk role RT yang sama atau account yang sama dan tetap mengizinkan pergantian berurutan; principal harus menemukan tepat satu assignment aktif. | Pengujian trigger dilakukan di PGlite, bukan transaksi paralel pada Neon. Workaround: validasi data existing/preflight dan concurrent assignment pada development Neon sebelum organisasi memakai akun pejabat. | **GO lokal** |
-| **8 — Environment/config hazards** | `src/lib/env.ts`, `drizzle.config.ts`, `src/app/layout.tsx`, `scripts/bootstrap-rt.ts`, `scripts/provision-account.ts`, `.env.example`, `tests/unit/environment.test.ts` | Label `APP_ENV` dan `DATABASE_ENV` wajib eksplisit dan cocok; fallback URL database lokal di tooling dihapus; staging/production memerlukan app origin HTTPS eksplisit; placeholder auth secret ditolak. Bootstrap dan provisioning membaca prefix variabel yang sama dengan contoh. Production build dijalankan memakai nilai build-only, bukan credential deployment. | Label environment tidak membuktikan identitas branch di balik URL. Workaround: cocokkan Neon project/branch ID secara independen sebelum mengisi secret development atau menjalankan migration. | **GO lokal** |
-| **9 — Authorization dan IDOR** | `src/lib/auth/permissions.ts`, `src/lib/auth/principal.ts`, `src/lib/billing/activation.ts`, `src/lib/billing/generator.ts`, `src/lib/billing/resident-dues.ts`, `src/app/api/resident/monthly-dues/route.ts`, `tests/authorization/permissions.test.ts`, `tests/integration/resident-dues-authorization.test.ts` | Tenant RT/household diturunkan dari principal dan scope wajib eksplisit untuk permission tenant. Service activation/generation tidak menerima `rtUnitId` dari klien. Resident dues dibaca hanya dari household pada principal; cross-RT, cross-household, Treasurer, dan principal tidak lengkap ditolak. | Service dues dan policy dites dengan PGlite; route handler dues tidak dijalankan end-to-end dengan session Neon. Workaround sebelum rilis: jalankan HTTP smoke terautentikasi pada preview + Neon development. | **GO lokal** |
-| **10 — Security/regression tests** | `tests/unit/*`, `tests/integration/*`, `tests/constraints/database-constraints.test.ts`, `tests/authorization/permissions.test.ts` | Mencakup provisioning, login route, lockout, TOTP/backup code, recovery/reset, revocation, append-only audit, billing, bootstrap idempotency, migration upgrade, official lifecycle, dan data isolation. Semua suite lulus pada repair commit. | Tidak ada browser/device atau deployment-edge test pada tahap ini; pekerjaan yang berubah adalah fondasi server/data. Workaround: jalankan browser/preview dan perangkat nyata saat environment dev tersedia. | **GO lokal** |
-| **11 — Audit Core sebelum financial mutation** | `src/db/schema.ts`, `drizzle/0003_due_auth_audit_domain.sql`, `src/lib/audit/writer.ts`, `src/lib/auth/reset-resident-pin.ts`, `src/lib/auth/recover-system-admin-two-factor.ts`, `tests/integration/audit-and-credential-reset.test.ts` | Audit event memuat actor/action/entity/time/reason/context, mempunyai append-only trigger, dan ditulis dalam transaksi yang sama dengan credential mutation. Test membuktikan commit bersama serta rollback bersama bila operasi gagal. | Payment/waiver/adjustment mutation belum ada pada fase ini dan tidak diklaim terlindungi oleh writer. Saat service finansial dibuat, semua mutation kritis harus memanggil writer yang sama sebelum digunakan. | **GO untuk foundation** |
-| **12 — Dokumentasi dan Gate A** | `README.md`, `docs/milestone-1-architecture.md`, `docs/test-gate-a-report.md` | Dokumen diperbarui tentang PIN, provisioning, recovery, due lifecycle, migration head, dan Gate A. Hasil serta hal yang belum terverifikasi dicatat pada laporan ini. | Neon development dan deployment smoke menunggu environment yang terisolasi dan terkonfirmasi. | **GO untuk laporan; Gate A keseluruhan NO-GO** |
-
-## Bukti Test Gate A
-
-| Pemeriksaan | Hasil | Bukti |
-|---|---|---|
-| Lint | PASS | `npm run lint` |
-| Typecheck | PASS | `npm run typecheck` |
-| Unit | PASS — 4 file, 17 test | `npm run test:unit` |
-| Integration | PASS — 10 file, 27 test | `npm run test:integration` |
-| Constraints | PASS — 1 file, 14 test | `npm run test:constraints` |
-| Authorization | PASS — 1 file, 4 test | `npm run test:authorization` |
-| Full suite | PASS — 16 file, 62 test | `npm test` |
-| Production build | PASS | `npm run build` dengan label production, HTTPS origin, dan secret sementara khusus build; tidak memakai Neon credential |
-| Migration journal consistency | PASS | `npx drizzle-kit check` dengan label eksplisit dan URL dummy yang tidak dipakai untuk koneksi |
-| Schema drift | PASS | `npm run db:generate -- --name gate_a_schema_drift` menghasilkan “No schema changes, nothing to migrate” |
-| Clean migration | PASS lokal | Test integration membuat database PGlite kosong dan menerapkan seluruh migration `0000`–`0003` |
-| Legacy upgrade migration | PASS lokal | `tests/integration/migration-upgrade.test.ts` menjalankan `0000`–`0002`, memuat baris legacy, lalu menguji `0003` |
-| Auth/billing smoke | PASS lokal | PGlite menguji resident login route, principal, dues milik household sendiri, activation/generation, due lifecycle, dan retry |
-| Bootstrap rerun | PASS lokal | `tests/integration/bootstrap.test.ts` mencakup retry dan concurrent retry di PGlite |
-| Production config validation | PASS lokal | `tests/unit/environment.test.ts` dan production build menolak label/URL/secret yang tidak valid |
-| Neon development `db:check` | BLOCKED | `npm run db:check` berhenti pada guard eksplisit karena tidak ada `.env.local`, `APP_ENV`, `DATABASE_ENV`, atau `DATABASE_URL` |
-| Browser/device smoke | NOT RUN | Tidak ada perubahan visual flow pada repair server/data; browser, preview deployment, dan perangkat fisik tetap perlu verifikasi di gate UX/UAT |
-
-## Bug yang ditemukan dan diperbaiki
-
-- Bulan sebelum household mulai disimpan sebagai waiver; sekarang menjadi `NOT_DUE`, dan data legacy dimigrasikan.
-- Generator belum menutup periode setelah household berakhir; kini future month menjadi `NOT_DUE` sementara kewajiban historis tetap pada household lama.
-- Constraint due sebelumnya tidak dapat membedakan ketiadaan kewajiban dari waiver; invariant amount/rate/reason diperketat untuk semua status.
-- Provisioning resident menerima identifier bebas dan kurang memeriksa relasi RT/entity aktif; sekarang identifier berasal dari nomor rumah dan hubungan diperiksa di server.
-- PIN salah belum memiliki lockout account-level yang ditentukan; sekarang lima kegagalan memicu lock 15 menit.
-- Reset credential belum memiliki jalur terstruktur dengan audit dan session revocation; jalur Chairman dan recovery System Admin ditambahkan.
-- Emergency recovery 2FA memerlukan backup code satu-kali-pakai dan jalur jika semua faktor hilang; kedua jalur kini diuji.
-- Pemeriksaan pejabat sebelumnya tidak menghormati seluruh rentang `startsOn`/`endsOn`; sekarang menggunakan tanggal bisnis Jakarta dan menjaga larangan assignment overlap.
-- Tooling memiliki fallback database yang berisiko dan contoh konfigurasi tidak selaras; tooling sekarang fail-fast dengan label eksplisit dan konfigurasi deployment tervalidasi.
-- Authorization helper dapat dipanggil tanpa scope tenant yang memadai; tenant scope kini wajib dan data resident diturunkan dari principal.
-- Belum ada fondasi audit append-only yang atomic; Audit Core kini tersedia untuk mutation kritis sebelum payment/waiver flow dipakai.
-
-## Risiko tersisa dan tindak lanjut
-
-1. **P1 — Gate blocker:** siapkan Neon branch development terpisah, pastikan project/branch ID, isi label yang cocok, jalankan `npm run db:check`, terapkan migration, lalu lakukan auth/billing HTTP smoke terhadap branch itu. Jangan memakai production connection untuk verifikasi ini.
-2. **P2 — Proxy/IP trust:** pastikan hosting menimpa `x-forwarded-for` atau batasi trusted proxy sebelum mengandalkan limit per-IP.
-3. **P2 — Database concurrency:** konfirmasi transaction/trigger behavior dengan koneksi PostgreSQL independen pada Neon development.
-4. **P2 — Recovery satu-admin:** emergency TOTP recovery saat ini memerlukan admin lain yang sudah verified. Pertahankan admin kedua dan incident reference; prosedur operator untuk sistem yang hanya memiliki satu admin belum diotomasi.
-5. **P2 — Billing bulan parsial:** tidak ada aturan prorata; saat ini bulan mulai dan akhir dihitung penuh. Konfirmasi sebelum tagihan data riil dibentuk untuk rumah yang mulai/berakhir di tengah bulan.
-6. **P2 — Browser/deployment:** auth cookie, recovery UI, Resident Card, dan perilaku browser/mobile belum diuji pada deployment/physical device; Resident Card sendiri tetap berada di Fase 4.
-7. **Audit boundary:** belum ada payment, waiver, reversal, atau adjustment service. Jangan membangun/mengaktifkan mutation finansial sebelum service tersebut menulis audit event dalam transaksi yang sama.
+- **Tanggal:** 30 September 2026
+- **Branch sumber:** `repair/phase-0-3`
+- **Verification branch:** `verify/gate-a-neon-ci`
+- **Code/config HEAD saat verifikasi penuh:** `78f38f6dbc405954e0b06fba53668b4204f70f81`
+- **Baseline original:** `522447cbabfcfbd3a18e3cd50266fe91bf781cb1`
+- **Repair implementation:** `d01f57cadb59511a67725b261906b5c1be41ec3c`
+- **Repair report commit:** `9ed1ddd6544891b8a2e98fa8e175eef7ad3f8459`
+- **Migration head:** `0003_due_auth_audit_domain`
+- **Runtime:** Node.js `v24.18.0`, npm `11.17.0`
 
 ## Keputusan
 
-**Repair Fase 0–3: selesai pada branch kerja; automated local gates PASS.**
-**Test Gate A: NO-GO ke Fase 4 sampai development Neon, branch identity, migration, dan smoke live terverifikasi.**
-**Merge/push:** repair commits sudah pushed ke `repair/phase-0-3`; belum merged ke default branch. Branch verification lokal belum pushed.
+**Test Gate A: PASS. GO ke Fase 4.**
 
-## Verification follow-up — 30 September 2026
+Syarat gate yang wajib sudah diverifikasi: Neon development project/branch identity, migration nyata, live auth/billing smoke, dan concurrency pada koneksi PostgreSQL independen. Tidak ada blocker Critical/High yang tersisa untuk memulai Fase 4. Browser/device visual smoke belum ditutup karena belum ada deployment preview; ini tetap ditunda ke UX/UAT dan tidak mengubah hasil Gate A server/data.
 
-- Local checkout: `D:\!AGY\karturt`; source branch: `repair/phase-0-3`.
-- Verification branch: `verify/gate-a-neon-ci`, based on `9ed1ddd6544891b8a2e98fa8e175eef7ad3f8459`. HEAD at the successful Gate A CI run: `2acb404551891a3b94e0379f286e4933d8629a72`.
-- Runtime observed: Node `v24.18.0`, npm `11.17.0`.
-- Migration head: `0003_due_auth_audit_domain`.
-- Working tree was clean before creating the verification branch and editing this report.
+Repair branch sudah dipush. Verification branch ini dipush setelah pembaruan laporan. Tidak ada merge atau perubahan pada default branch.
 
-### Stage results
+## Baseline dan Neon development
 
-| Stage | Result | Evidence / remaining work |
+- Baseline branch `repair/phase-0-3` berada pada `9ed1ddd6544891b8a2e98fa8e175eef7ad3f8459`; verification branch dibuat darinya.
+- Checkout verifikasi bersih sebelum perubahan laporan. Migrasi lokal berakhir pada `0003_due_auth_audit_domain`.
+- Neon project **KartuRT**, project ID `billowing-base-57949906`, region `aws-ap-southeast-1`.
+- Default branch Neon adalah `production`, ID `br-patient-band-azznfh28`. Branch yang diuji adalah `karturt-development`, ID `br-crimson-band-az6i637k`, bukan default dan bukan production.
+- Development branch dibuat dari snapshot project yang baru dibuat. Preflight sebelum migration menemukan hanya tabel bawaan `neon_auth`, tidak ada tabel aplikasi, dan belum ada tabel `drizzle.__drizzle_migrations`. Branch memiliki 0 byte data tertulis pada saat dibuat; tidak ada existing development data yang ditimpa.
+- Endpoint verifikasi `ep-quiet-cake-azrhjiyh` memakai koneksi langsung tanpa pooler. Koneksi dan migrasi hanya memakai development branch.
+- `APP_ENV=development`, `DATABASE_ENV=development`, DATABASE_URL development langsung, app URL lokal, dan auth secret acak disimpan hanya pada `.env.local` yang diabaikan Git. Tidak ada URL/password/token/secret di repo, report, atau GitHub Actions.
+
+## Hasil per tahap
+
+| Tahap | Hasil | Bukti |
 |---|---|---|
-| 1 — Freeze baseline | PASS | Checkout at the recorded repair commit; branch created locally. |
-| 2 — Neon development identity | BLOCKED | Neon MCP tools are available, but this connection is not scoped to a project and exposes no project-list operation. A read-only branch-list call requires a project ID. The Neon dashboard opened to sign-in. Project ID, dev branch ID/name, and URL remain unverified. No secret values were inspected or recorded. |
-| 3 — Real Neon migration | NOT RUN | No production or development database was contacted. Need authenticated Neon dashboard access and a confirmed isolated development branch before migration. |
-| 4 — Live auth/billing smoke | NOT RUN | Requires the verified development database and test data. |
-| 5 — PostgreSQL concurrency | NOT RUN | Requires independent connections to the verified development branch. |
-| 6 — GitHub Actions | PASS | Added `.github/workflows/gate-a.yml` and pushed to the verification branch. Run [#3](https://github.com/Satsetx4/karturt/actions/runs/36706667404) on commit `2acb404551891a3b94e0379f286e4933d8629a72` completed successfully; every job step passed. No Neon secrets are configured or used. Integration/full suite run with one worker to avoid a local Vitest worker OOM. |
-| 7 — Preview/browser smoke | DEFERRED | No safe development/preview deployment is configured. |
-| 8 — Local Gate A rerun | PASS, except live DB | See detailed results below. `npm run db:check` correctly stopped at the environment guard because local development labels/URL were unavailable. |
-| 9 — Formal report | UPDATED | Historical wording now correctly says repair commits were pushed to `repair/phase-0-3` and not merged to the default branch. |
+| 1 - Freeze verification baseline | PASS | Repair HEAD dan source commit dicatat; branch kerja `verify/gate-a-neon-ci`; runtime dan migration head tercatat di atas. |
+| 2 - Neon development | PASS | Project KartuRT dan branch `karturt-development` teridentifikasi; branch development bukan default/production. `npm run db:check` terhubung dengan label development yang cocok. |
+| 3 - Migration di Neon | PASS | Migration `0000-0003` diterapkan pada Neon development. SQL read-only mengonfirmasi migration journal berisi empat migration, enum `not_due/unpaid/paid/waived`, trigger audit append-only, trigger eksklusivitas official, kolom lockout, dan constraints due tanggal 10. Migration rerun dan `db:check` sesudahnya lulus. |
+| 4 - Live Neon auth/billing smoke | PASS | Bootstrap RT retry idempotent; house/household/person dibuat; account resident diturunkan dari house.number dengan PIN enam digit; login, lockout lima PIN salah/15 menit, valid PIN ketika terkunci ditolak, reset oleh Chairman satu RT berhasil, cross-RT dan Treasurer ditolak, sesi dicabut, TOTP System Admin wajib, backup code hanya dapat dipakai sekali, billing menghasilkan 12 baris dengan status/periode yang benar, retry tidak menggandakan data, dan dues HTTP endpoint hanya mengembalikan household/RT principal. |
+| 5 - PostgreSQL concurrency | PASS | Dua backend Neon dengan PID berbeda dipakai. Concurrent annual billing menghasilkan tepat 12 baris unik; dua assignment treasurer overlap menghasilkan satu pemenang; sepuluh increment login paralel tetap membatasi counter ke 5 dan mengunci akun. Transaksi mutation+audit yang dipaksa rollback tidak meninggalkan keduanya; trigger menolak update/delete audit. |
+| 6 - GitHub Actions | PASS | `.github/workflows/gate-a.yml` berjalan tanpa Neon secret. Run [#3](https://github.com/Satsetx4/karturt/actions/runs/36706667404) pada commit `2acb404551891a3b94e0379f286e4933d8629a72` selesai dengan semua langkah sukses, termasuk install, lint, typecheck, seluruh test, migration/schema check, dan production build. |
+| 7 - Preview/browser | DEFERRED | Belum ada deployment preview yang aman. Local Next dev HTTP route `/login/warga` merespons 200 dan smoke auth/billing HTTP lulus; pembacaan visual responsive 360-420 px melalui in-app browser tidak berhasil dimuat dan harus diulang pada UX/UAT preview. |
+| 8 - Re-run Gate A | PASS | Seluruh perintah lokal, Neon check/migration rerun, PGlite clean/upgrade migration, dan GitHub Actions tercatat di bagian bukti di bawah. |
+| 9 - Formal report | UPDATED | Hasil akhir dicatat di file ini. Verification branch dipush; tidak ada PR, merge, atau perubahan default branch. |
 
-### Fresh local verification results
+## Bukti pemeriksaan
 
-| Check | Result |
+| Pemeriksaan | Hasil |
 |---|---|
-| `npm ci` | PASS — 427 packages; zero vulnerabilities reported |
 | `npm run lint` | PASS |
 | `npm run typecheck` | PASS |
-| `npm run test:unit` | PASS — 17 tests / 4 files |
-| `npm run test:integration -- --maxWorkers=1` | PASS — 27 tests / 10 files; includes clean and legacy-upgrade PGlite migrations and auth/billing smoke |
-| `npm run test:constraints` | PASS — 14 tests |
-| `npm run test:authorization` | PASS — 4 tests |
-| `npm test -- --maxWorkers=1` | PASS — 62 tests / 16 files |
-| `npx drizzle-kit check` | PASS — migration journal consistent |
-| `npm run db:generate -- --name gate_a_ci_drift` | PASS — no schema changes |
-| `npm run build` | PASS — build-only environment values, no Neon credential |
-| `npm run db:check` | BLOCKED at explicit guard — `APP_ENV` and `DATABASE_ENV` absent; no DB connection attempted |
-| GitHub Actions | PASS — [run #3](https://github.com/Satsetx4/karturt/actions/runs/36706667404), all steps successful at the recorded CI HEAD |
+| `npm run test:unit -- --maxWorkers=1` | PASS - 17 test, 4 file |
+| `npm run test:integration -- --maxWorkers=1` | PASS - 27 test, 10 file; termasuk migration clean/upgrade PGlite |
+| `npm run test:constraints -- --maxWorkers=1` | PASS - 14 test |
+| `npm run test:authorization -- --maxWorkers=1` | PASS - 4 test |
+| `npm test -- --maxWorkers=1` | PASS - 62 test, 16 file |
+| `npm run build` | PASS - memakai nilai production build-only, bukan secret/URL Neon |
+| `npx drizzle-kit check` | PASS - migration journal konsisten |
+| `npm run db:generate -- --name gate_a_neon_drift_check` | PASS - tidak ada perubahan schema |
+| `npm run db:check` | PASS sebelum dan sesudah migration |
+| `npm run db:migrate` | PASS pada Neon development; rerun kedua juga PASS |
+| Gate A GitHub Actions | PASS - [run #3](https://github.com/Satsetx4/karturt/actions/runs/36706667404) |
 
-An initial parallel integration run exhausted local worker memory and exited before completing. Re-running integration serially passed all 27 tests; serial full suite passed all 62. The workflow uses the same serial setting for those two runs. This was a runner resource issue; no application failure was reproduced.
+Vitest integration dan full suite dijalankan dengan satu worker. Percobaan parallel sebelumnya kehabisan memori runner lokal; rerun serial lulus, demikian juga workflow GitHub yang memakai setting serial.
 
-### Current gate decision
+## Perbaikan foundation yang diverifikasi
 
-**Automated local Gate A: PASS. Full Test Gate A: NO-GO to Phase 4.** Required Neon development identity, real migration, live smoke, and PostgreSQL concurrency remain unverified. The Neon dashboard still requires sign-in before its project list is visible. Complete the sign-in flow in the open browser window and tell me when the Neon dashboard appears; I can then inspect project/branch identity without receiving credentials in chat. Do not select production for verification.
+- Iuran sebelum household bergabung dan setelah bulan akhir menjadi `NOT_DUE`; bulan aktif menjadi `UNPAID`; setiap tahun menghasilkan 12 baris dengan tanggal jatuh tempo tanggal 10 dan retry aman.
+- Resident provisioning mengambil identifier dari nomor rumah dan membatasi PIN tepat enam digit numerik.
+- Lima PIN salah mengunci akun 15 menit. Reset PIN berwenang mengosongkan kegagalan, menulis audit, dan mencabut sesi lama.
+- Reset oleh Chairman dibatasi satu RT; Treasurer dan Chairman RT lain ditolak.
+- System Admin harus mendaftarkan dan memverifikasi TOTP. Login password meminta faktor kedua; backup code yang sudah dipakai ditolak saat replay.
+- Official assignment memakai business date Jakarta dan trigger database menjaga exclusivity periode.
+- Audit event append-only; domain mutation dan audit berjalan dalam transaksi yang sama.
+- Authorization resident dues diambil dari authenticated household/RT, bukan ID yang dikirim pengguna.
 
-No database writes, secret files, or application-code changes occurred in this follow-up. The verification branch and workflow were pushed to GitHub; no pull request or merge was made.
+## Risiko tersisa
+
+- **Preview/responsive:** belum ada deployment preview. Browser visual dan perangkat fisik 360-420 px, tablet, desktop ditunda ke UX/UAT; Gate A tidak mengklaim verifikasi ini.
+- **Trusted proxy:** deployment harus menimpa atau membatasi `x-forwarded-for` sebelum mengandalkan rate limit per IP.
+- **Recovery satu-admin:** recovery TOTP darurat memerlukan System Admin lain yang telah memverifikasi faktornya.
+- **Bulan parsial:** implementasi bulanan mengenakan bulan mulai dan bulan akhir sebagai bulan penuh; prorata tidak ditambahkan atau diubah dalam verifikasi ini. Pastikan aturan Master Context v2 sebelum membuat tagihan untuk tanggal mulai/akhir tengah bulan.
+- **Data smoke development:** Neon development kini berisi fixture sintetis hasil live smoke, bukan data production. Branch dibiarkan ada; tidak ada penghapusan branch atau data Neon.
+- **Neon CI:** workflow GitHub tidak memakai secret Neon. CI Neon live dapat ditambahkan setelah secret dev khusus disiapkan; verifikasi live pada turn ini dilakukan langsung pada project/branch yang teridentifikasi.
+
+## Catatan operasional
+
+- Tidak ada koneksi, migration, atau smoke test pada Neon production.
+- Sebelum beralih ke project KartuRT, sesi dashboard sempat membuat branch kosong `karturt-development` (`br-solitary-recipe-b3seziuu`) dan endpoint `ep-autumn-rice-b3gpx31j` di project Agustusan. Tidak ada migration atau application data yang dijalankan di sana; compute endpoint tersebut sudah disuspend. Branch tidak dihapus.
+- Tidak ada branch yang dimerge ke default.
