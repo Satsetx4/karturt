@@ -10,6 +10,7 @@ import {
   authSession,
   authTwoFactor,
   authUser,
+  houses,
   rtUnits,
 } from "../../src/db/schema";
 import { appendAuditEvent } from "../../src/lib/audit/writer";
@@ -120,6 +121,7 @@ describe("Audit Core and resident PIN recovery", () => {
       reason: "Resident requested a replacement PIN.",
       context: { recoveryReference: null, revokedSessionCount: 2 },
     });
+    expect(event.occurredAt).toBeInstanceOf(Date);
     await expect(db.update(auditEvents).set({ reason: "tampered" }).where(eq(auditEvents.id, event.id))).rejects.toThrow();
     await expect(db.delete(auditEvents).where(eq(auditEvents.id, event.id))).rejects.toThrow();
     await expect(testDatabase.client.exec("TRUNCATE audit_events")).rejects.toThrow();
@@ -149,6 +151,7 @@ describe("Audit Core and resident PIN recovery", () => {
       pin: "123456",
       reason: "Emergency PIN recovery.",
     })).rejects.toThrow("recovery reference");
+    await expect(db.select().from(auditEvents).where(eq(auditEvents.entityId, resident.accountId))).resolves.toHaveLength(0);
 
     await expect(resetResidentPin(db as unknown as AppDatabase, systemAdmin, {
       residentAccountId: resident.accountId,
@@ -163,6 +166,100 @@ describe("Audit Core and resident PIN recovery", () => {
       actorAppAccountId: systemAdmin.appAccountId,
       context: { recoveryReference: "REC-2026-001", revokedSessionCount: 0 },
     }]);
+  });
+
+  it("accepts only the action-specific audit context and rejects secrets and personal values", async () => {
+    const { db } = testDatabase;
+    const rtUnitId = await createRt(db);
+    const chairman = await createOfficialPrincipal(rtUnitId, "rt_chairman");
+    const resident = await createResident(rtUnitId);
+    const safeEvent = await db.transaction((transaction) => appendAuditEvent(transaction, {
+      actorAppAccountId: chairman.appAccountId,
+      action: "resident.pin.reset",
+      entityType: "resident_account",
+      entityId: resident.accountId,
+      reason: "Resident requested an access update.",
+      context: { recoveryReference: null, revokedSessionCount: 0 },
+    }));
+
+    expect(safeEvent.occurredAt).toBeInstanceOf(Date);
+    await expect(db.transaction((transaction) => appendAuditEvent(transaction, {
+      actorAppAccountId: chairman.appAccountId,
+      action: "resident.pin.reset",
+      entityType: "resident_account",
+      entityId: resident.accountId,
+      reason: "Resident requested an access update.",
+      context: { recoveryReference: null, revokedSessionCount: 0, accessToken: "must-not-be-stored" },
+    }))).rejects.toThrow("Audit context fields do not match the action contract");
+    await expect(db.transaction((transaction) => appendAuditEvent(transaction, {
+      actorAppAccountId: chairman.appAccountId,
+      action: "resident.pin.reset",
+      entityType: "resident_account",
+      entityId: resident.accountId,
+      reason: "PIN is 804216",
+      context: { recoveryReference: null, revokedSessionCount: 0 },
+    }))).rejects.toThrow("credential or personal data");
+    await expect(db.transaction((transaction) => appendAuditEvent(transaction, {
+      actorAppAccountId: chairman.appAccountId,
+      action: "resident.pin.reset",
+      entityType: "resident_account",
+      entityId: resident.accountId,
+      reason: "Contact resident@example.test or 081234567890.",
+      context: { recoveryReference: null, revokedSessionCount: 0 },
+    }))).rejects.toThrow("credential or personal data");
+    await expect(db.transaction((transaction) => appendAuditEvent(transaction, {
+      actorAppAccountId: chairman.appAccountId,
+      action: "test.unregistered_context",
+      entityType: "resident_account",
+      entityId: resident.accountId,
+      reason: "No personal details.",
+      context: { phone: "081234567890" },
+    }))).rejects.toThrow("explicitly allowlisted");
+
+    await expect(db.select().from(auditEvents).where(eq(auditEvents.entityId, resident.accountId))).resolves.toHaveLength(1);
+  });
+
+  it("rolls back PIN, lockout, and session changes when the audit insert fails", async () => {
+    const { db } = testDatabase;
+    const rtUnitId = await createRt(db);
+    const chairman = await createOfficialPrincipal(rtUnitId, "rt_chairman");
+    const resident = await createResident(rtUnitId);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    await db.insert(authSession).values({
+      id: randomUUID(),
+      token: randomUUID(),
+      userId: resident.userId,
+      expiresAt,
+    });
+    const [beforeCredential] = await db.select({ password: authAccount.password })
+      .from(authAccount).where(eq(authAccount.userId, resident.userId));
+    const [beforeAccount] = await db.select({
+      failedLoginAttempts: appAccounts.failedLoginAttempts,
+      lockedUntil: appAccounts.lockedUntil,
+    }).from(appAccounts).where(eq(appAccounts.id, resident.accountId));
+
+    await expect(resetResidentPin(db as unknown as AppDatabase, {
+      ...chairman,
+      appAccountId: randomUUID(),
+    }, {
+      residentAccountId: resident.accountId,
+      pin: "804216",
+      reason: "Resident requested a replacement PIN.",
+    })).rejects.toThrow();
+
+    const [afterCredential] = await db.select({ password: authAccount.password })
+      .from(authAccount).where(eq(authAccount.userId, resident.userId));
+    expect(afterCredential?.password).toBe(beforeCredential?.password);
+    await expect(verifyPassword({ hash: afterCredential!.password!, password: "123456" })).resolves.toBe(true);
+    await expect(verifyPassword({ hash: afterCredential!.password!, password: "804216" })).resolves.toBe(false);
+    const [afterAccount] = await db.select({
+      failedLoginAttempts: appAccounts.failedLoginAttempts,
+      lockedUntil: appAccounts.lockedUntil,
+    }).from(appAccounts).where(eq(appAccounts.id, resident.accountId));
+    expect(afterAccount?.failedLoginAttempts).toBe(beforeAccount?.failedLoginAttempts);
+    expect(afterAccount?.lockedUntil?.getTime()).toBe(beforeAccount?.lockedUntil?.getTime());
+    await expect(db.select().from(authSession).where(eq(authSession.userId, resident.userId))).resolves.toHaveLength(1);
+    await expect(db.select().from(auditEvents).where(eq(auditEvents.entityId, resident.accountId))).resolves.toHaveLength(0);
   });
 
   it("commits a service mutation and its audit event together, and rolls both back on failure", async () => {
@@ -200,6 +297,50 @@ describe("Audit Core and resident PIN recovery", () => {
     expect(rolledBack?.name).toBe(committedName);
     expect(await db.select().from(auditEvents).where(eq(auditEvents.action, "test.service.rollback"))).toHaveLength(0);
     expect(before?.name).toBeTruthy();
+  });
+
+  it("preserves both independent domain writes and their audit events under concurrent transactions", async () => {
+    const { db } = testDatabase;
+    const rtUnitId = await createRt(db);
+    const chairman = await createOfficialPrincipal(rtUnitId, "rt_chairman");
+    const firstHousehold = await createHousehold(db, rtUnitId);
+    const secondHousehold = await createHousehold(db, rtUnitId);
+
+    await Promise.all([
+      db.transaction(async (transaction) => {
+        await transaction.update(houses).set({ label: "Concurrent audit fixture one" })
+          .where(eq(houses.id, firstHousehold.houseId));
+        await appendAuditEvent(transaction, {
+          actorAppAccountId: chairman.appAccountId,
+          action: "test.concurrent.house_label",
+          entityType: "house",
+          entityId: firstHousehold.houseId,
+          reason: "Verify concurrent atomic write.",
+        });
+      }),
+      db.transaction(async (transaction) => {
+        await transaction.update(houses).set({ label: "Concurrent audit fixture two" })
+          .where(eq(houses.id, secondHousehold.houseId));
+        await appendAuditEvent(transaction, {
+          actorAppAccountId: chairman.appAccountId,
+          action: "test.concurrent.house_label",
+          entityType: "house",
+          entityId: secondHousehold.houseId,
+          reason: "Verify concurrent atomic write.",
+        });
+      }),
+    ]);
+
+    const [firstHouse] = await db.select({ label: houses.label }).from(houses)
+      .where(eq(houses.id, firstHousehold.houseId));
+    const [secondHouse] = await db.select({ label: houses.label }).from(houses)
+      .where(eq(houses.id, secondHousehold.houseId));
+    expect(firstHouse?.label).toBe("Concurrent audit fixture one");
+    expect(secondHouse?.label).toBe("Concurrent audit fixture two");
+    const firstEvents = await db.select().from(auditEvents).where(eq(auditEvents.entityId, firstHousehold.houseId));
+    const secondEvents = await db.select().from(auditEvents).where(eq(auditEvents.entityId, secondHousehold.houseId));
+    expect(firstEvents).toMatchObject([{ actorAppAccountId: chairman.appAccountId, action: "test.concurrent.house_label" }]);
+    expect(secondEvents).toMatchObject([{ actorAppAccountId: chairman.appAccountId, action: "test.concurrent.house_label" }]);
   });
 
   it("recovers a locked-out System Admin only through another verified admin and requires fresh TOTP enrollment", async () => {

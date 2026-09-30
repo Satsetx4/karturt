@@ -16,6 +16,7 @@
     "test:integration": "vitest run tests/integration",
     "test:constraints": "vitest run tests/constraints",
     "test:authorization": "vitest run tests/authorization",
+    "db:test-audit-neon": "tsx scripts/phase-4-5-neon-audit-check.ts",
     "smoke:resident-card": "tsx scripts/phase-4-1-browser-smoke.tsx",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",

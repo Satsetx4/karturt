@@ -1,16 +1,82 @@
 import type { AppDatabase } from "@/db/client";
 import { auditEvents } from "@/db/schema";
 
+export type AuditContextValue = string | number | boolean | null;
+export type AuditContext = Readonly<Record<string, AuditContextValue>>;
+
 export interface AppendAuditEventInput {
   actorAppAccountId: string;
   action: string;
   entityType: string;
   entityId: string;
   reason?: string | null;
-  context?: Record<string, unknown>;
+  context?: AuditContext;
 }
 
-export async function appendAuditEvent<TTransaction>(transaction: TTransaction, input: AppendAuditEventInput) {
+type TransactionExecutor = { insert: unknown; rollback: () => never };
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const actionPattern = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
+const entityTypePattern = /^[a-z][a-z0-9_]*$/;
+const recoveryReferencePattern = /^[A-Z]{2,10}-\d{4}-\d{3,8}$/;
+const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+const indonesianPhonePattern = /\b(?:\+?62|0)8\d{7,11}\b/;
+const credentialAssignmentPattern = /\b(?:password|passcode|pin|otp|totp|secret|token|api[_ -]?key|authorization|cookie|email|phone)\s*[:=]\s*[^\s,;]+/i;
+const labeledCodePattern = /\b(?:pin|otp|totp|password|passcode)\s+(?:is\s+)?\d{4,12}\b/i;
+const jwtPattern = /\beyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/;
+
+const recoveryActions = new Set([
+  "resident.pin.structured_recovery",
+  "system_admin.two_factor.emergency_recovery",
+]);
+
+function normalizeContext(action: string, context: AuditContext | undefined): AuditContext {
+  const value = context ?? {};
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("Audit context must be a flat object.");
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error("Audit context must be a plain object.");
+  }
+
+  const keys = Object.keys(value).sort();
+  if (action === "resident.pin.reset" || recoveryActions.has(action)) {
+    if (keys.join(",") !== "recoveryReference,revokedSessionCount") {
+      throw new Error("Audit context fields do not match the action contract.");
+    }
+    const reference = value.recoveryReference;
+    if (action === "resident.pin.reset") {
+      if (reference !== null) throw new Error("Resident PIN reset context cannot include a recovery reference.");
+    } else if (typeof reference !== "string" || !recoveryReferencePattern.test(reference)) {
+      throw new Error("Audit recovery reference must use the approved reference format.");
+    }
+
+    const revokedSessionCount = value.revokedSessionCount;
+    if (typeof revokedSessionCount !== "number" || !Number.isSafeInteger(revokedSessionCount) || revokedSessionCount < 0) {
+      throw new Error("Audit session count must be a non-negative integer.");
+    }
+
+    return { recoveryReference: reference as string | null, revokedSessionCount };
+  }
+
+  if (keys.length > 0) {
+    throw new Error("Audit context fields must be explicitly allowlisted for the action.");
+  }
+  return {};
+}
+
+function assertSafeReason(reason: string | null) {
+  if (reason === null) return;
+  if (emailPattern.test(reason) || indonesianPhonePattern.test(reason) || credentialAssignmentPattern.test(reason) || labeledCodePattern.test(reason) || jwtPattern.test(reason)) {
+    throw new Error("Audit reason contains a credential or personal data value.");
+  }
+}
+
+export async function appendAuditEvent<TTransaction extends TransactionExecutor>(
+  transaction: TTransaction,
+  input: AppendAuditEventInput,
+) {
   const action = input.action.trim();
   const entityType = input.entityType.trim();
   const entityId = input.entityId.trim();
@@ -19,6 +85,17 @@ export async function appendAuditEvent<TTransaction>(transaction: TTransaction, 
   if (input.reason != null && !reason) throw new Error("Audit reason cannot be blank.");
   if (action.length > 120 || entityType.length > 80 || entityId.length > 160 || (reason?.length ?? 0) > 500) {
     throw new Error("Audit event fields exceed the supported length.");
+  }
+  if (!uuidPattern.test(input.actorAppAccountId) || !uuidPattern.test(entityId)) {
+    throw new Error("Audit actor and entity identifiers must be UUIDs.");
+  }
+  if (!actionPattern.test(action) || !entityTypePattern.test(entityType)) {
+    throw new Error("Audit action and entity type must use canonical identifiers.");
+  }
+  assertSafeReason(reason);
+  const safeContext = normalizeContext(action, input.context);
+  if (Buffer.byteLength(JSON.stringify(safeContext), "utf8") > 2048) {
+    throw new Error("Audit context exceeds the supported size.");
   }
 
   const transactionalWriter = transaction as Pick<AppDatabase, "insert">;
@@ -30,7 +107,7 @@ export async function appendAuditEvent<TTransaction>(transaction: TTransaction, 
       entityType,
       entityId,
       reason,
-      context: input.context ?? {},
+      context: safeContext,
     })
     .returning({ id: auditEvents.id, occurredAt: auditEvents.occurredAt });
   return event;
