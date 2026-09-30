@@ -1,0 +1,59 @@
+name: Test Gate A
+
+on:
+  push:
+    branches:
+      - "verify/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate-a:
+    name: Gate A local verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      APP_ENV: test
+      DATABASE_ENV: test
+      DATABASE_URL: postgresql://karturt:ci-only-not-a-secret@localhost:5432/karturt_ci
+      BETTER_AUTH_SECRET: ci-build-only-secret-never-valid-for-deployment-0000000000
+      NEXT_PUBLIC_APP_URL: https://example.invalid
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Integration and migration tests
+        run: npm run test:integration -- --maxWorkers=1
+      - name: Database constraint tests
+        run: npm run test:constraints
+      - name: Authorization tests
+        run: npm run test:authorization
+      - name: Full test suite
+        run: npm test -- --maxWorkers=1
+      - name: Drizzle migration journal consistency
+        run: npx drizzle-kit check
+      - name: Drizzle schema drift check
+        run: |
+          npm run db:generate -- --name gate_a_ci_drift
+          git diff --exit-code -- drizzle
+          if test -n "$(git status --porcelain --untracked-files=all -- drizzle)"; then
+            echo "Schema drift generated untracked migration files."
+            exit 1
+          fi
+      - name: Production build
+        run: npm run build

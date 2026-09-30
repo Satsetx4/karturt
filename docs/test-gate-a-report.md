@@ -86,4 +86,51 @@ GO per tahap di bawah berarti implementasi dan bukti lokal tahap tersebut selesa
 
 **Repair Fase 0–3: selesai pada branch kerja; automated local gates PASS.**
 **Test Gate A: NO-GO ke Fase 4 sampai development Neon, branch identity, migration, dan smoke live terverifikasi.**
-**Merge/push:** tidak dilakukan.
+**Merge/push:** repair commits sudah pushed ke `repair/phase-0-3`; belum merged ke default branch. Branch verification lokal belum pushed.
+
+## Verification follow-up — 30 September 2026
+
+- Local checkout: `D:\!AGY\karturt`; source branch: `repair/phase-0-3`.
+- Verification branch: `verify/gate-a-neon-ci`, based on `9ed1ddd6544891b8a2e98fa8e175eef7ad3f8459` before follow-up edits.
+- Runtime observed: Node `v24.18.0`, npm `11.17.0`.
+- Migration head: `0003_due_auth_audit_domain`.
+- Working tree was clean before creating the verification branch and editing this report.
+
+### Stage results
+
+| Stage | Result | Evidence / remaining work |
+|---|---|---|
+| 1 — Freeze baseline | PASS | Checkout at the recorded repair commit; branch created locally. |
+| 2 — Neon development identity | BLOCKED | Neon MCP tools are available, but this connection is not scoped to a project and exposes no project-list operation. A read-only branch-list call requires a project ID. The Neon dashboard opened to sign-in. Project ID, dev branch ID/name, and URL remain unverified. No secret values were inspected or recorded. |
+| 3 — Real Neon migration | NOT RUN | No production or development database was contacted. Need authenticated Neon dashboard access and a confirmed isolated development branch before migration. |
+| 4 — Live auth/billing smoke | NOT RUN | Requires the verified development database and test data. |
+| 5 — PostgreSQL concurrency | NOT RUN | Requires independent connections to the verified development branch. |
+| 6 — GitHub Actions | PREPARED LOCALLY | Added `.github/workflows/gate-a.yml`. It uses lockfile install, local suites, migration journal/schema checks, and build-only placeholder values; it contains no Neon credentials. Workflow result awaits pushing this branch. Integration/full suite run with one worker to avoid a local Vitest worker OOM. |
+| 7 — Preview/browser smoke | DEFERRED | No safe development/preview deployment is configured. |
+| 8 — Local Gate A rerun | PASS, except live DB | See detailed results below. `npm run db:check` correctly stopped at the environment guard because local development labels/URL were unavailable. |
+| 9 — Formal report | UPDATED | Historical wording now correctly says repair commits were pushed to `repair/phase-0-3` and not merged to the default branch. |
+
+### Fresh local verification results
+
+| Check | Result |
+|---|---|
+| `npm ci` | PASS — 427 packages; zero vulnerabilities reported |
+| `npm run lint` | PASS |
+| `npm run typecheck` | PASS |
+| `npm run test:unit` | PASS — 17 tests / 4 files |
+| `npm run test:integration -- --maxWorkers=1` | PASS — 27 tests / 10 files; includes clean and legacy-upgrade PGlite migrations and auth/billing smoke |
+| `npm run test:constraints` | PASS — 14 tests |
+| `npm run test:authorization` | PASS — 4 tests |
+| `npm test -- --maxWorkers=1` | PASS — 62 tests / 16 files |
+| `npx drizzle-kit check` | PASS — migration journal consistent |
+| `npm run db:generate -- --name gate_a_ci_drift` | PASS — no schema changes |
+| `npm run build` | PASS — build-only environment values, no Neon credential |
+| `npm run db:check` | BLOCKED at explicit guard — `APP_ENV` and `DATABASE_ENV` absent; no DB connection attempted |
+
+An initial parallel integration run exhausted local worker memory and exited before completing. Re-running integration serially passed all 27 tests; serial full suite passed all 62. The workflow uses the same serial setting for those two runs. This was a runner resource issue; no application failure was reproduced.
+
+### Current gate decision
+
+**Automated local Gate A: PASS. Full Test Gate A: NO-GO to Phase 4.** Required Neon development identity, real migration, live smoke, and PostgreSQL concurrency remain unverified. The next human action is to sign in to Neon in the open dashboard tab and tell me when the project list is visible. I can then inspect project/branch identity and continue without receiving credentials in chat. Do not select production for verification.
+
+No database writes, secret files, application-code changes, push, or merge occurred in this follow-up. The workflow and report are local on `verify/gate-a-neon-ci`.
