@@ -2,7 +2,9 @@ import {
   boolean,
   check,
   foreignKey,
+  index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   smallint,
@@ -22,8 +24,7 @@ export const accountStatusEnum = pgEnum("account_status", ["active", "locked", "
 export const officialRoleEnum = pgEnum("official_role", ["treasurer", "rt_chairman"]);
 export const householdStatusEnum = pgEnum("household_status", ["active", "inactive"]);
 export const billingYearStatusEnum = pgEnum("billing_year_status", ["draft", "open", "closed"]);
-export const monthlyDueStatusEnum = pgEnum("monthly_due_status", ["unpaid", "waived"]);
-export const monthlyDueWaiverReasonEnum = pgEnum("monthly_due_waiver_reason", ["not_yet_resident"]);
+export const monthlyDueStatusEnum = pgEnum("monthly_due_status", ["not_due", "unpaid", "paid", "waived"]);
 
 export const rtUnits = pgTable("rt_units", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -178,6 +179,8 @@ export const appAccounts = pgTable("app_accounts", {
   accountType: accountTypeEnum("account_type").notNull(),
   status: accountStatusEnum("status").notNull().default("active"),
   loginIdentifier: varchar("login_identifier", { length: 100 }).notNull(),
+  failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
   personId: uuid("person_id"),
   householdId: uuid("household_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -207,6 +210,7 @@ export const appAccounts = pgTable("app_accounts", {
   uniqueIndex("app_accounts_active_resident_household_uq")
     .on(table.rtUnitId, table.householdId)
     .where(sql`${table.accountType} = 'resident' and ${table.status} = 'active'`),
+  check("app_accounts_failed_login_attempts_valid", sql`${table.failedLoginAttempts} between 0 and 5`),
   check(
     "app_accounts_type_scope_valid",
     sql`(${table.accountType} = 'resident' and ${table.rtUnitId} is not null and ${table.personId} is not null and ${table.householdId} is not null) or (${table.accountType} = 'official' and ${table.rtUnitId} is not null and ${table.personId} is not null and ${table.householdId} is null) or (${table.accountType} = 'system_admin' and ${table.rtUnitId} is null and ${table.personId} is null and ${table.householdId} is null)`,
@@ -228,12 +232,6 @@ export const officialAssignments = pgTable("official_assignments", {
     columns: [table.rtUnitId, table.appAccountId, table.appAccountType],
     foreignColumns: [appAccounts.rtUnitId, appAccounts.id, appAccounts.accountType],
   }).onDelete("restrict"),
-  uniqueIndex("official_assignments_one_active_role_uq")
-    .on(table.rtUnitId, table.role)
-    .where(sql`${table.endsOn} is null`),
-  uniqueIndex("official_assignments_one_active_role_per_account_uq")
-    .on(table.appAccountId)
-    .where(sql`${table.endsOn} is null`),
   check("official_assignments_official_type_only", sql`${table.appAccountType} = 'official'`),
   check("official_assignments_dates_valid", sql`${table.endsOn} is null or ${table.endsOn} >= ${table.startsOn}`),
 ]);
@@ -280,7 +278,7 @@ export const monthlyDues = pgTable("monthly_dues", {
   amount: integer("amount").notNull(),
   dueDate: date("due_date", { mode: "string" }).notNull(),
   status: monthlyDueStatusEnum("status").notNull().default("unpaid"),
-  waivedReason: monthlyDueWaiverReasonEnum("waived_reason"),
+  waivedReason: varchar("waived_reason", { length: 500 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   foreignKey({
@@ -301,10 +299,29 @@ export const monthlyDues = pgTable("monthly_dues", {
   uniqueIndex("monthly_dues_household_year_month_uq").on(table.householdId, table.billingYearId, table.month),
   check("monthly_dues_month_valid", sql`${table.month} between 1 and 12`),
   check("monthly_dues_due_day_ten", sql`extract(day from ${table.dueDate}) = 10`),
+  check("monthly_dues_due_month_matches_month", sql`extract(month from ${table.dueDate}) = ${table.month}`),
   check(
     "monthly_dues_status_amount_consistent",
-    sql`(${table.status} = 'unpaid' and ${table.amount} > 0 and ${table.feeRateId} is not null and ${table.waivedReason} is null) or (${table.status} = 'waived' and ${table.amount} = 0 and ${table.feeRateId} is null and ${table.waivedReason} = 'not_yet_resident')`,
+    sql`(${table.status} = 'not_due' and ${table.amount} = 0 and ${table.feeRateId} is null and ${table.waivedReason} is null) or (${table.status} in ('unpaid', 'paid') and ${table.amount} > 0 and ${table.feeRateId} is not null and ${table.waivedReason} is null) or (${table.status} = 'waived' and ${table.amount} > 0 and ${table.feeRateId} is not null and ${table.waivedReason} is not null and length(trim(${table.waivedReason})) > 0)`,
   ),
+]);
+
+export const auditEvents = pgTable("audit_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  actorAppAccountId: uuid("actor_app_account_id").notNull().references(() => appAccounts.id, { onDelete: "restrict" }),
+  action: varchar("action", { length: 120 }).notNull(),
+  entityType: varchar("entity_type", { length: 80 }).notNull(),
+  entityId: varchar("entity_id", { length: 160 }).notNull(),
+  reason: varchar("reason", { length: 500 }),
+  context: jsonb("context").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("audit_events_actor_time_idx").on(table.actorAppAccountId, table.occurredAt),
+  index("audit_events_entity_time_idx").on(table.entityType, table.entityId, table.occurredAt),
+  check("audit_events_action_not_blank", sql`length(trim(${table.action})) > 0`),
+  check("audit_events_entity_type_not_blank", sql`length(trim(${table.entityType})) > 0`),
+  check("audit_events_entity_id_not_blank", sql`length(trim(${table.entityId})) > 0`),
+  check("audit_events_reason_not_blank", sql`${table.reason} is null or length(trim(${table.reason})) > 0`),
 ]);
 
 export const schema = {
@@ -324,6 +341,7 @@ export const schema = {
   billingYears,
   feeRates,
   monthlyDues,
+  auditEvents,
 };
 
 export type AccountType = (typeof accountTypeEnum.enumValues)[number];

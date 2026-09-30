@@ -24,10 +24,12 @@ describe("role authorization", () => {
   });
 
   it("gives payment verification to the Treasurer only", () => {
-    expect(canPerform(principal("treasurer"), "payment:verify")).toBe(true);
-    expect(canPerform(principal("rt_chairman"), "payment:verify")).toBe(false);
-    expect(canPerform(principal("system_admin", { rtUnitId: null, householdId: null, personId: null }), "payment:verify")).toBe(false);
-    expect(canPerform(principal("resident"), "payment:verify")).toBe(false);
+    expect(canPerform(principal("treasurer"), "payment:verify", { rtUnitId: "rt-one" })).toBe(true);
+    expect(canPerform(principal("treasurer"), "payment:verify")).toBe(false);
+    expect(canPerform(principal("treasurer"), "payment:verify", { rtUnitId: "rt-two" })).toBe(false);
+    expect(canPerform(principal("rt_chairman"), "payment:verify", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("system_admin", { rtUnitId: null, householdId: null, personId: null }), "payment:verify", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("resident"), "payment:verify", { rtUnitId: "rt-one" })).toBe(false);
   });
 
   it("keeps fee, waiver, and assignment management with the RT Chairman", () => {
@@ -35,7 +37,9 @@ describe("role authorization", () => {
     expect(canPerform(chairman, "fee_rate:manage", { rtUnitId: "rt-one" })).toBe(true);
     expect(canPerform(chairman, "waiver:manage", { rtUnitId: "rt-one" })).toBe(true);
     expect(canPerform(chairman, "official:manage", { rtUnitId: "rt-one" })).toBe(true);
+    expect(canPerform(chairman, "resident:reset_credential", { rtUnitId: "rt-one" })).toBe(true);
     expect(canPerform(principal("treasurer"), "fee_rate:manage")).toBe(false);
+    expect(canPerform(principal("treasurer"), "resident:reset_credential", { rtUnitId: "rt-one" })).toBe(false);
   });
 
   it("limits System Admin to system recovery and auditing", () => {

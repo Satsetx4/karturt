@@ -8,6 +8,7 @@ export type Permission =
   | "fee_rate:manage"
   | "resident:read:rt"
   | "resident:manage"
+  | "resident:reset_credential"
   | "official:manage"
   | "payment:verify"
   | "payment:record_cash"
@@ -34,12 +35,26 @@ const permissions: Record<AppRole, ReadonlySet<Permission>> = {
     "fee_rate:manage",
     "resident:read:rt",
     "resident:manage",
+    "resident:reset_credential",
     "official:manage",
     "waiver:manage",
     "audit:read",
   ]),
   system_admin: new Set(["system:recover", "system:manage", "audit:read"]),
 };
+
+const rtScopedPermissions = new Set<Permission>([
+  "billing:read:rt",
+  "billing:generate",
+  "fee_rate:manage",
+  "resident:read:rt",
+  "resident:manage",
+  "resident:reset_credential",
+  "official:manage",
+  "payment:verify",
+  "payment:record_cash",
+  "waiver:manage",
+]);
 
 export function canPerform(
   principal: Principal,
@@ -49,10 +64,17 @@ export function canPerform(
   if (!permissions[principal.role].has(permission)) return false;
   if (principal.role === "resident") {
     if (permission !== "billing:read:self") return false;
-    if (scope?.householdId && scope.householdId !== principal.householdId) return false;
-    if (scope?.rtUnitId && scope.rtUnitId !== principal.rtUnitId) return false;
+    if (!principal.rtUnitId || !principal.householdId) return false;
+    if (!scope?.householdId || !scope.rtUnitId) return false;
+    if (scope.householdId !== principal.householdId || scope.rtUnitId !== principal.rtUnitId) return false;
   }
-  if (principal.role !== "system_admin" && scope?.rtUnitId && scope.rtUnitId !== principal.rtUnitId) return false;
+  if (rtScopedPermissions.has(permission)) {
+    if (principal.role === "system_admin" || !principal.rtUnitId) return false;
+    if (!scope?.rtUnitId || scope.rtUnitId !== principal.rtUnitId) return false;
+  }
+  if (permission === "audit:read" && principal.role === "rt_chairman") {
+    if (!principal.rtUnitId || !scope?.rtUnitId || scope.rtUnitId !== principal.rtUnitId) return false;
+  }
   return true;
 }
 

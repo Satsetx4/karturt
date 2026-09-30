@@ -1,26 +1,20 @@
 import { headers } from "next/headers";
-import { and, eq, isNull, lte } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
 import { getAuth } from "@/lib/auth/server";
 import { getDb } from "@/db/client";
-import { appAccounts, authUser, officialAssignments } from "@/db/schema";
+import { appAccounts, authTwoFactor, authUser, households, officialAssignments, people } from "@/db/schema";
 import type { Principal } from "@/lib/auth/permissions";
+import { officialAssignmentActiveOn, jakartaBusinessDate } from "@/lib/officials/lifecycle";
 
 export class UnauthenticatedError extends Error {}
 export class MfaEnrollmentRequiredError extends Error {}
 
-function todayInJakarta() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Jakarta",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${value.year}-${value.month}-${value.day}`;
-}
-
-export async function resolvePrincipalForUser(database: AppDatabase, authUserId: string): Promise<Principal> {
+export async function resolvePrincipalForUser(
+  database: AppDatabase,
+  authUserId: string,
+  businessDate = jakartaBusinessDate(),
+): Promise<Principal> {
   const [account] = await database
     .select({
       id: appAccounts.id,
@@ -38,11 +32,34 @@ export async function resolvePrincipalForUser(database: AppDatabase, authUserId:
     .limit(1);
 
   if (!account || account.status !== "active") throw new UnauthenticatedError("This account is not active.");
-  if (account.accountType === "system_admin" && !account.twoFactorEnabled) {
-    throw new MfaEnrollmentRequiredError("System Admin accounts must enable two-factor authentication first.");
+  if (account.accountType === "system_admin") {
+    const [factor] = await database
+      .select({ verified: authTwoFactor.verified })
+      .from(authTwoFactor)
+      .where(eq(authTwoFactor.userId, authUserId))
+      .limit(1);
+    if (!account.twoFactorEnabled || !factor?.verified) {
+      throw new MfaEnrollmentRequiredError("System Admin access requires a verified TOTP factor.");
+    }
   }
 
   if (account.accountType === "resident") {
+    if (!account.rtUnitId || !account.householdId || !account.personId) {
+      throw new UnauthenticatedError("This resident account has no valid household membership.");
+    }
+    const [membership] = await database
+      .select({ householdStatus: households.status, personIsActive: people.isActive })
+      .from(households)
+      .innerJoin(people, and(
+        eq(people.rtUnitId, households.rtUnitId),
+        eq(people.householdId, households.id),
+        eq(people.id, account.personId),
+      ))
+      .where(and(eq(households.rtUnitId, account.rtUnitId), eq(households.id, account.householdId)))
+      .limit(1);
+    if (!membership || membership.householdStatus !== "active" || !membership.personIsActive) {
+      throw new UnauthenticatedError("This resident account no longer has an active household membership.");
+    }
     return {
       authUserId: account.authUserId,
       appAccountId: account.id,
@@ -64,19 +81,19 @@ export async function resolvePrincipalForUser(database: AppDatabase, authUserId:
     };
   }
 
-  const [assignment] = await database
+  const assignments = await database
     .select({ role: officialAssignments.role })
     .from(officialAssignments)
     .where(
       and(
         eq(officialAssignments.appAccountId, account.id),
         eq(officialAssignments.rtUnitId, account.rtUnitId!),
-        isNull(officialAssignments.endsOn),
-        lte(officialAssignments.startsOn, todayInJakarta()),
+        officialAssignmentActiveOn(businessDate),
       ),
     )
-    .limit(1);
-  if (!assignment) throw new UnauthenticatedError("There is no active official assignment for this account.");
+    .limit(2);
+  if (assignments.length !== 1) throw new UnauthenticatedError("There is no unique active official assignment for this account.");
+  const [assignment] = assignments;
 
   return {
     authUserId: account.authUserId,

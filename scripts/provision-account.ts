@@ -4,12 +4,14 @@ import { hashPassword } from "better-auth/crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { closeDb, getDb } from "@/db/client";
-import { appAccounts, authAccount, authUser, officialAssignments } from "@/db/schema";
+import { appAccounts, authAccount, authUser, officialAssignments, people } from "@/db/schema";
+import { resolveResidentProvisioningTarget } from "@/lib/accounts/resident-provisioning";
+import { isValidAccountPassword } from "@/lib/auth/account-password";
 import { requireDatabaseEnvironment } from "@/lib/env";
 
 const inputSchema = z.object({
   type: z.enum(["resident", "official", "system_admin"]),
-  identifier: z.string().trim().min(1).max(100),
+  identifier: z.string().trim().min(1).max(100).optional(),
   displayName: z.string().trim().min(1).max(160),
   password: z.string().min(6).max(128),
   rtUnitId: z.string().uuid().optional(),
@@ -34,7 +36,7 @@ async function main() {
   requireDatabaseEnvironment();
   const parsed = inputSchema.safeParse({
     type: envValue("KARTURT_ACCOUNT_TYPE"),
-    identifier: envValue("KARTURT_LOGIN_IDENTIFIER"),
+    identifier: envValue("KARTURT_LOGIN_IDENTIFIER")?.trim() || undefined,
     displayName: envValue("KARTURT_DISPLAY_NAME"),
     password: envValue("KARTURT_ACCOUNT_PASSWORD"),
     rtUnitId: envValue("KARTURT_RT_UNIT_ID") || undefined,
@@ -47,12 +49,16 @@ async function main() {
     throw new Error("Account variables are incomplete or invalid. Read the account provisioning section in README.md.");
   }
   const input = parsed.data;
+  if (!isValidAccountPassword(input.type, input.password)) {
+    throw new Error("Resident PIN must be exactly six digits.");
+  }
   if (input.type !== "system_admin" && (!input.rtUnitId || !input.personId)) {
     throw new Error("Resident and official accounts require an RT unit and a person record.");
   }
-  if (input.type === "resident" && !input.householdId) {
-    throw new Error("Resident accounts require the active household ID.");
+  if (input.type === "resident" && (!input.householdId || input.identifier)) {
+    throw new Error("Resident accounts require an active household and derive the login identifier from its house number.");
   }
+  if (input.type !== "resident" && !input.identifier) throw new Error("Official and System Admin accounts require a login identifier.");
   if (input.type === "official" && !input.officialRole) {
     throw new Error("Official accounts require an active official role.");
   }
@@ -60,8 +66,23 @@ async function main() {
     throw new Error("Only official accounts can be assigned an official role.");
   }
 
-  const loginIdentifier = input.type === "resident" ? input.identifier.toUpperCase() : input.identifier.toLowerCase();
   const db = getDb();
+  const target = input.type === "resident"
+    ? await resolveResidentProvisioningTarget(db, {
+      rtUnitId: input.rtUnitId!,
+      householdId: input.householdId!,
+      personId: input.personId!,
+    })
+    : null;
+  if (input.type === "official") {
+    const [person] = await db.select({ id: people.id }).from(people).where(and(
+      eq(people.id, input.personId!),
+      eq(people.rtUnitId, input.rtUnitId!),
+      eq(people.isActive, true),
+    )).limit(1);
+    if (!person) throw new Error("Official provisioning requires an active person in the selected RT.");
+  }
+  const loginIdentifier = target?.loginIdentifier ?? input.identifier!.toLowerCase();
   const [existing] = await db
     .select({ id: appAccounts.id })
     .from(appAccounts)

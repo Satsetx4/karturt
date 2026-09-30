@@ -1,8 +1,7 @@
 import { loadEnvConfig } from "@next/env";
-import { and, eq } from "drizzle-orm";
 import { closeDb, getDb } from "@/db/client";
-import { rtSettings, rtUnits } from "@/db/schema";
 import { requireDatabaseEnvironment } from "@/lib/env";
+import { bootstrapRtUnit } from "@/lib/rt/bootstrap";
 
 function required(name: string) {
   const value = process.env[name]?.trim();
@@ -24,20 +23,8 @@ async function main() {
   };
 
   const db = getDb();
-  const [existing] = await db.select({ id: rtUnits.id }).from(rtUnits)
-    .where(and(
-      eq(rtUnits.code, values.code),
-      eq(rtUnits.rwCode, values.rwCode),
-      eq(rtUnits.village, values.village),
-    )).limit(1);
-  if (existing) throw new Error("An RT unit with that code already exists. No record was changed.");
-
-  const id = await db.transaction(async (transaction) => {
-    const [unit] = await transaction.insert(rtUnits).values(values).returning({ id: rtUnits.id });
-    await transaction.insert(rtSettings).values({ rtUnitId: unit.id });
-    return unit.id;
-  });
-  console.info(JSON.stringify({ event: "rt_unit.bootstrapped", rtUnitId: id }));
+  const result = await bootstrapRtUnit(db, values);
+  console.info(JSON.stringify({ event: "rt_unit.bootstrapped", rtUnitId: result.id, created: result.created }));
 }
 
 main()

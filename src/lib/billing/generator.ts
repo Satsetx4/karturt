@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
+import { assertCanPerform, type Principal } from "@/lib/auth/permissions";
 import {
   billingYears,
   feeRates,
@@ -20,6 +21,7 @@ export interface AnnualDueInput {
   billingYearId: string;
   year: number;
   householdStartsOn: string;
+  householdEndsOn?: string | null;
   dueDay?: number;
   feeRates: FeeRateInput[];
 }
@@ -30,8 +32,15 @@ export function buildAnnualDues(input: AnnualDueInput) {
     throw new Error("Billing year must be between 2000 and 2200.");
   }
   if (dueDay !== 10) throw new Error("KartuRT's current monthly due day is the 10th.");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.householdStartsOn)) {
-    throw new Error("Household start date must use YYYY-MM-DD format.");
+  for (const [label, value] of [["start", input.householdStartsOn], ["end", input.householdEndsOn]] as const) {
+    if (value == null) continue;
+    const parsed = Date.parse(`${value}T00:00:00.000Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(parsed) || new Date(parsed).toISOString().slice(0, 10) !== value) {
+      throw new Error(`Household ${label} date must be a valid YYYY-MM-DD date.`);
+    }
+  }
+  if (input.householdEndsOn && input.householdEndsOn < input.householdStartsOn) {
+    throw new Error("Household end date cannot be before its start date.");
   }
 
   const rates = [...input.feeRates].sort((left, right) => left.effectiveMonth - right.effectiveMonth);
@@ -48,12 +57,13 @@ export function buildAnnualDues(input: AnnualDueInput) {
   }
 
   const startYearMonth = input.householdStartsOn.slice(0, 7);
+  const endYearMonth = input.householdEndsOn?.slice(0, 7);
   return Array.from({ length: 12 }, (_, index) => {
     const month = index + 1;
     const monthKey = `${input.year}-${String(month).padStart(2, "0")}`;
     const dueDate = `${input.year}-${String(month).padStart(2, "0")}-${String(dueDay).padStart(2, "0")}`;
 
-    if (monthKey < startYearMonth) {
+    if (monthKey < startYearMonth || (endYearMonth != null && monthKey > endYearMonth)) {
       return {
         rtUnitId: input.rtUnitId,
         householdId: input.householdId,
@@ -62,8 +72,8 @@ export function buildAnnualDues(input: AnnualDueInput) {
         month,
         amount: 0,
         dueDate,
-        status: "waived" as const,
-        waivedReason: "not_yet_resident" as const,
+        status: "not_due" as const,
+        waivedReason: null,
       };
     }
 
@@ -87,19 +97,25 @@ export function buildAnnualDues(input: AnnualDueInput) {
 
 export async function generateHouseholdDues(
   database: AppDatabase,
-  input: { rtUnitId: string; householdId: string; billingYearId: string },
+  principal: Principal,
+  input: { householdId: string; billingYearId: string },
 ) {
+  const rtUnitId = principal.rtUnitId;
+  if (!rtUnitId) throw new Error("Forbidden: billing actions require an RT principal.");
+  assertCanPerform(principal, "billing:generate", { rtUnitId });
   const [household] = await database
-    .select({ id: households.id, rtUnitId: households.rtUnitId, startsOn: households.startsOn })
+    .select({ id: households.id, rtUnitId: households.rtUnitId, startsOn: households.startsOn, endsOn: households.endsOn, status: households.status })
     .from(households)
-    .where(and(eq(households.id, input.householdId), eq(households.rtUnitId, input.rtUnitId)))
+    .where(and(eq(households.id, input.householdId), eq(households.rtUnitId, rtUnitId)))
     .limit(1);
   if (!household) throw new Error("Household was not found in this RT.");
+  if (household.status === "active" && household.endsOn !== null) throw new Error("Active households cannot have an end date.");
+  if (household.status === "inactive" && household.endsOn === null) throw new Error("Inactive households require an end date.");
 
   const [year] = await database
     .select({ id: billingYears.id, year: billingYears.year, status: billingYears.status, rtUnitId: billingYears.rtUnitId })
     .from(billingYears)
-    .where(and(eq(billingYears.id, input.billingYearId), eq(billingYears.rtUnitId, input.rtUnitId)))
+    .where(and(eq(billingYears.id, input.billingYearId), eq(billingYears.rtUnitId, rtUnitId)))
     .limit(1);
   if (!year) throw new Error("Billing year was not found in this RT.");
   if (year.status !== "open") throw new Error("Monthly dues can only be generated for an open billing year.");
@@ -107,20 +123,22 @@ export async function generateHouseholdDues(
   const [settings] = await database
     .select({ dueDay: rtSettings.dueDay })
     .from(rtSettings)
-    .where(eq(rtSettings.rtUnitId, input.rtUnitId))
+    .where(eq(rtSettings.rtUnitId, rtUnitId))
     .limit(1);
   if (!settings) throw new Error("RT billing settings were not found.");
 
   const rates = await database
     .select({ id: feeRates.id, effectiveMonth: feeRates.effectiveMonth, monthlyAmount: feeRates.monthlyAmount })
     .from(feeRates)
-    .where(and(eq(feeRates.rtUnitId, input.rtUnitId), eq(feeRates.billingYearId, year.id)))
+    .where(and(eq(feeRates.rtUnitId, rtUnitId), eq(feeRates.billingYearId, year.id)))
     .orderBy(feeRates.effectiveMonth);
 
   const proposed = buildAnnualDues({
+    rtUnitId,
     ...input,
     year: year.year,
     householdStartsOn: household.startsOn,
+    householdEndsOn: household.endsOn,
     dueDay: settings.dueDay,
     feeRates: rates,
   });

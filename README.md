@@ -31,13 +31,16 @@ Set these values in the ignored `.env.local` file, then run `npm run account:pro
 Required for all account types:
 
 - `KARTURT_ACCOUNT_TYPE`: `resident`, `official`, or `system_admin`
-- `KARTURT_LOGIN_IDENTIFIER`: house number for a resident; assigned username for an official or System Admin
 - `KARTURT_DISPLAY_NAME`: the real account holder name
 - `KARTURT_ACCOUNT_PASSWORD`: resident PIN or official/System Admin password; stored only as a Better Auth password hash
 
-Resident and official accounts also require `KARTURT_RT_UNIT_ID` and `KARTURT_PERSON_ID`. Residents require `KARTURT_HOUSEHOLD_ID`. Officials require `KARTURT_OFFICIAL_ROLE` (`treasurer` or `rt_chairman`); `KARTURT_ASSIGNMENT_STARTS_ON` can set the role start date.
+Officials and System Admins require `KARTURT_LOGIN_IDENTIFIER` as their username. Resident identifiers are derived from the selected household's `house.number`; do not provide a resident identifier. Resident provisioning requires the RT, active household, and active person IDs, and the server verifies that all three belong together before creating the account. A resident PIN must contain exactly six numeric digits.
 
-System Admin accounts do not belong to an RT unit. After the first password sign-in, the only available action is to enroll an authenticator app. System Admin access remains blocked until two-factor authentication is enabled. Enrollment shows recovery codes once; save them outside the app.
+Officials also require `KARTURT_RT_UNIT_ID`, `KARTURT_PERSON_ID`, and `KARTURT_OFFICIAL_ROLE` (`treasurer` or `rt_chairman`); `KARTURT_ASSIGNMENT_STARTS_ON` can set a scheduled role start date.
+
+System Admin accounts do not belong to an RT unit. After the first password sign-in, enroll an authenticator app. System Admin access remains blocked until a TOTP factor is verified. Enrollment shows backup codes once; save them outside the app. If an admin loses both the authenticator and backup codes, a different verified System Admin can perform a reasoned, referenced emergency recovery. It revokes the target's sessions and old factor; the target remains outside the app until a new TOTP factor is verified.
+
+Five failed resident PIN attempts lock that account for 15 minutes; the IP-based login rate limit also remains active. A Chairman can reset a resident PIN only within their RT. A System Admin resident recovery must include a reason and recovery reference. Both reset paths revoke the resident's existing sessions and append an audit event. Emergency System Admin 2FA recovery is a separate action and must be authorized by another verified System Admin.
 
 Account creation is not exposed as a public sign-up route. Resident and official accounts are separate identities, and an official role comes from an active `official_assignments` row rather than client input.
 
@@ -65,7 +68,7 @@ npm run test:authorization
 npm run build
 ```
 
-PGlite integration tests apply the checked-in PostgreSQL migration and cover unique constraints, cross-RT foreign keys, one active official per role, idempotent 12-month generation, due dates on the 10th, waiver of months before a household's start month, Better Auth credential login, and permission boundaries.
+PGlite integration tests apply the checked-in PostgreSQL migrations and cover unique constraints, cross-RT foreign keys, temporal official exclusivity, idempotent 12-month generation, due dates on the 10th, `NOT_DUE` lifecycle rows before/after household membership, legacy billing migration, credential login and recovery, one-time System Admin backup codes, and permission boundaries.
 
 ## Scope boundary
 

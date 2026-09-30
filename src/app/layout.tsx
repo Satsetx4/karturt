@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Source_Sans_3 } from "next/font/google";
+import { getPublicAppUrl } from "@/lib/env";
 import "./globals.css";
 
 const sourceSans = Source_Sans_3({
@@ -8,7 +9,7 @@ const sourceSans = Source_Sans_3({
   weight: ["400", "500", "600", "700", "800"],
 });
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const appUrl = getPublicAppUrl();
 const themeBootstrap = `(()=>{let theme="light";try{const stored=localStorage.getItem("karturt:theme");if(stored==="dark")theme="dark"}catch{}document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle("dark",theme==="dark")})()`;
 const organizationData = {
   "@context": "https://schema.org",

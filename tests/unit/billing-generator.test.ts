@@ -14,10 +14,10 @@ const base = {
 };
 
 describe("annual monthly-dues generation", () => {
-  it("creates twelve months, waives months before activation, and snapshots effective rates", () => {
+  it("creates twelve months, marks months before activation not due, and snapshots effective rates", () => {
     const rows = buildAnnualDues(base);
     expect(rows).toHaveLength(12);
-    expect(rows.slice(0, 4).every((row) => row.status === "waived" && row.amount === 0)).toBe(true);
+    expect(rows.slice(0, 4).every((row) => row.status === "not_due" && row.amount === 0 && row.waivedReason === null)).toBe(true);
     expect(rows[4]?.status).toBe("unpaid");
     expect(rows[4]?.amount).toBe(40_000);
     expect(rows[6]?.amount).toBe(50_000);
@@ -26,13 +26,33 @@ describe("annual monthly-dues generation", () => {
 
   it("starts obligations in the joining month, even when the household joined after day one", () => {
     const rows = buildAnnualDues({ ...base, householdStartsOn: "2026-05-31" });
-    expect(rows[3]?.status).toBe("waived");
+    expect(rows[3]?.status).toBe("not_due");
     expect(rows[4]?.status).toBe("unpaid");
   });
 
   it("does not create a charge for months before the household start year", () => {
     const rows = buildAnnualDues({ ...base, householdStartsOn: "2027-03-15" });
-    expect(rows.every((row) => row.status === "waived" && row.amount === 0)).toBe(true);
+    expect(rows.every((row) => row.status === "not_due" && row.amount === 0)).toBe(true);
+  });
+
+  it("marks months after the end month not due while preserving the active end month", () => {
+    const rows = buildAnnualDues({ ...base, householdStartsOn: "2026-01-01", householdEndsOn: "2026-08-31" });
+    expect(rows.slice(0, 8).every((row) => row.status === "unpaid")).toBe(true);
+    expect(rows.slice(8).every((row) => row.status === "not_due" && row.amount === 0)).toBe(true);
+  });
+
+  it("marks every month not due when the household ended before the billing year", () => {
+    const rows = buildAnnualDues({
+      ...base,
+      householdStartsOn: "2020-01-01",
+      householdEndsOn: "2025-12-31",
+    });
+    expect(rows.every((row) => row.status === "not_due")).toBe(true);
+  });
+
+  it("rejects impossible lifecycle dates", () => {
+    expect(() => buildAnnualDues({ ...base, householdStartsOn: "2026-02-30" })).toThrow("valid YYYY-MM-DD");
+    expect(() => buildAnnualDues({ ...base, householdEndsOn: "2026-04-01" })).toThrow("cannot be before");
   });
 
   it("rejects a billable month without a rate", () => {

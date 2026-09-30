@@ -121,6 +121,32 @@ describe("PostgreSQL constraints", () => {
     await expect(db.insert(officialAssignments).values({ rtUnitId, appAccountId: secondAccount.id, role: "treasurer", startsOn: "2026-01-01" })).resolves.toBeDefined();
   });
 
+  it("allows only one active RT Chairman per RT", async () => {
+    const { db } = testDatabase;
+    const rtUnitId = await createRt(db);
+    const firstHousehold = await createHousehold(db, rtUnitId);
+    const secondHousehold = await createHousehold(db, rtUnitId);
+    const firstUser = await createAuthUser(db);
+    const secondUser = await createAuthUser(db);
+    const [firstAccount] = await db.insert(appAccounts).values({
+      rtUnitId,
+      authUserId: firstUser.id,
+      accountType: "official",
+      loginIdentifier: `chair-${randomUUID().slice(0, 6)}`,
+      personId: firstHousehold.personId,
+    }).returning({ id: appAccounts.id });
+    const [secondAccount] = await db.insert(appAccounts).values({
+      rtUnitId,
+      authUserId: secondUser.id,
+      accountType: "official",
+      loginIdentifier: `chair-${randomUUID().slice(0, 6)}`,
+      personId: secondHousehold.personId,
+    }).returning({ id: appAccounts.id });
+
+    await db.insert(officialAssignments).values({ rtUnitId, appAccountId: firstAccount.id, role: "rt_chairman", startsOn: "2024-01-01" });
+    await expect(db.insert(officialAssignments).values({ rtUnitId, appAccountId: secondAccount.id, role: "rt_chairman", startsOn: "2025-01-01" })).rejects.toThrow();
+  });
+
   it("rejects a second monthly due for the same household, year, and month", async () => {
     const { db } = testDatabase;
     const rtUnitId = await createRt(db);
@@ -130,6 +156,68 @@ describe("PostgreSQL constraints", () => {
     const row = { rtUnitId, householdId: household.householdId, billingYearId: year.id, feeRateId: rate.id, month: 1, amount: 40_000, dueDate: "2026-01-10", status: "unpaid" as const, waivedReason: null };
     await db.insert(monthlyDues).values(row);
     await expect(db.insert(monthlyDues).values(row)).rejects.toThrow();
+  });
+
+  it("keeps NOT_DUE distinct from WAIVED and requires a valid obligation for payable states", async () => {
+    const { db } = testDatabase;
+    const rtUnitId = await createRt(db);
+    const household = await createHousehold(db, rtUnitId);
+    const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" }).returning({ id: billingYears.id });
+    const [rate] = await db.insert(feeRates).values({ rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 }).returning({ id: feeRates.id });
+
+    await expect(db.insert(monthlyDues).values({
+      rtUnitId,
+      householdId: household.householdId,
+      billingYearId: year.id,
+      feeRateId: null,
+      month: 1,
+      amount: 0,
+      dueDate: "2026-01-10",
+      status: "not_due",
+    })).resolves.toBeDefined();
+
+    await expect(db.insert(monthlyDues).values({
+      rtUnitId,
+      householdId: household.householdId,
+      billingYearId: year.id,
+      feeRateId: rate.id,
+      month: 2,
+      amount: 40_000,
+      dueDate: "2026-02-10",
+      status: "waived",
+      waivedReason: "   ",
+    })).rejects.toThrow();
+
+    await expect(db.insert(monthlyDues).values({
+      rtUnitId,
+      householdId: household.householdId,
+      billingYearId: year.id,
+      feeRateId: null,
+      month: 3,
+      amount: 0,
+      dueDate: "2026-03-10",
+      status: "unpaid",
+    })).rejects.toThrow();
+  });
+
+  it("rejects a monthly due whose billing year belongs to another RT", async () => {
+    const { db } = testDatabase;
+    const rtOne = await createRt(db);
+    const rtTwo = await createRt(db);
+    const household = await createHousehold(db, rtOne);
+    const [year] = await db.insert(billingYears).values({ rtUnitId: rtTwo, year: 2026, status: "open" }).returning({ id: billingYears.id });
+    const [rate] = await db.insert(feeRates).values({ rtUnitId: rtTwo, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 }).returning({ id: feeRates.id });
+
+    await expect(db.insert(monthlyDues).values({
+      rtUnitId: rtOne,
+      householdId: household.householdId,
+      billingYearId: year.id,
+      feeRateId: rate.id,
+      month: 1,
+      amount: 40_000,
+      dueDate: "2026-01-10",
+      status: "unpaid",
+    })).rejects.toThrow();
   });
 
   it("rejects a monthly due not dated on the 10th", async () => {
@@ -148,6 +236,26 @@ describe("PostgreSQL constraints", () => {
       dueDate: "2026-01-11",
       status: "unpaid",
     })).rejects.toThrow();
+  });
+
+  it("requires the monthly due date to match its month and billing year", async () => {
+    const { db } = testDatabase;
+    const rtUnitId = await createRt(db);
+    const household = await createHousehold(db, rtUnitId);
+    const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" }).returning({ id: billingYears.id });
+    const [rate] = await db.insert(feeRates).values({ rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 }).returning({ id: feeRates.id });
+    const common = {
+      rtUnitId,
+      householdId: household.householdId,
+      billingYearId: year.id,
+      feeRateId: rate.id,
+      month: 1,
+      amount: 40_000,
+      status: "unpaid" as const,
+    };
+
+    await expect(db.insert(monthlyDues).values({ ...common, dueDate: "2026-02-10" })).rejects.toThrow();
+    await expect(db.insert(monthlyDues).values({ ...common, dueDate: "2027-01-10" })).rejects.toThrow();
   });
 
   it("keeps the configured due day fixed at ten", async () => {

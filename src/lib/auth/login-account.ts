@@ -12,6 +12,9 @@ export async function findUniqueLoginAccount(database: AppDatabase, type: Accoun
       status: appAccounts.status,
       householdId: appAccounts.householdId,
       rtUnitId: appAccounts.rtUnitId,
+      personId: appAccounts.personId,
+      failedLoginAttempts: appAccounts.failedLoginAttempts,
+      lockedUntil: appAccounts.lockedUntil,
     })
     .from(appAccounts)
     .innerJoin(authUser, eq(authUser.id, appAccounts.authUserId))
