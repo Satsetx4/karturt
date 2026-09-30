@@ -1,7 +1,7 @@
 # Fase 4 — Resident Card UI handoff
 
 Date: 30 September 2026, Asia/Jakarta.
-Decision: **GO for Fase 4**, subject to the final CI result recorded below. This is not a production launch or authorization to begin Fase 5.
+Decision: **GO for Fase 4**, with the final implementation CI PASS recorded below. This is not a production launch or authorization to begin Fase 5.
 
 ## Frozen baseline and context
 
@@ -52,7 +52,7 @@ Mobile flow: resident login → Kartu Iuran → Riwayat or Profil; Logout stays 
 
 ## Automated verification
 
-Final CI: [Fase 4 gate](https://github.com/Satsetx4/karturt/actions/runs/36717893712), commit `7fa56e0af236259777532cd645529c2f4139087e` — FINAL_CI_PENDING.
+Final CI: [Fase 4 gate](https://github.com/Satsetx4/karturt/actions/runs/36717893712), commit `7fa56e0af236259777532cd645529c2f4139087e` — **PASS / success, all gate steps**.
 Earlier implementation CI also passed: [run 36717117565](https://github.com/Satsetx4/karturt/actions/runs/36717117565), commit `25e785d7056bd1c04c90804cb50df711526648f6`.
 
 | Gate | Verified result |
@@ -103,6 +103,6 @@ Financial authority remains on the server. Existing login/provisioning/lockout a
 - Existing Gate A deployment risks (trusted proxy, operational recovery, deployment secrets) still apply; no production-readiness claim is made.
 - The frontend history is intentionally not a payment ledger. Payment details and derived verification-pending state must wait for their real authoritative engine.
 
-**Fase 4 decision: GO after final CI PASS.** Branch is pushed for review; no PR merge or default-branch modification is authorized/performed. The final documentation commit may follow the tested implementation SHA and must change only this report.
+**Fase 4 decision: GO. Final implementation CI PASS.** Branch is pushed for review; no PR merge or default-branch modification is authorized/performed. The final documentation commit may follow the tested implementation SHA and must change only this report.
 
 **Fase 5 Payment Request BELUM DIMULAI.** No payment request, verify/reject/cancel, cash payment, waiver mutation, tariff adjustment/reversal, WhatsApp mutation, upload, or new financial engine was implemented. Existing Audit Core must be reviewed and tested against each future mutation's actual atomicity/audit requirements; its current presence is not blanket coverage of future financial operations.
