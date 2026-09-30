@@ -223,3 +223,33 @@ button { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+.resident-area { margin: 32px 0; min-width: 0; }
+.resident-area h1 { font-size: clamp(28px, 5vw, 42px); margin: 0; }
+.resident-nav { display: flex; gap: 8px; margin: 24px 0; }
+.resident-nav button, .resident-year select { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font: inherit; }
+.resident-nav button { flex: 1; cursor: pointer; transition: transform 180ms cubic-bezier(.2,.8,.3,1); }
+.resident-nav button:active { transform: scale(.97); }
+.resident-nav [aria-current] { background: var(--teal-wash); border-color: var(--teal); font-weight: 700; }
+.resident-year { display: flex; gap: 12px; align-items: center; }
+.resident-summary { display: grid; gap: 12px; margin: 20px 0; }
+.resident-summary div, .due-card, .resident-profile { padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.resident-summary span, .resident-summary strong { display: block; }
+.resident-summary strong { font-size: 23px; }
+.resident-note { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.dues-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.due-card { min-width: 0; padding: 12px; overflow-wrap: anywhere; }
+.due-card h2 { font-size: 18px; margin: 0 0 12px; }
+.due-card strong { display: block; margin-top: 10px; }
+.due-status { display: flex; align-items: start; gap: 6px; margin: 0; font-size: 14px; }
+.due-status svg { flex-shrink: 0; margin-top: 2px; }
+.dues-history { list-style: none; padding: 0; }
+.dues-history li { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.resident-profile dd { margin: 0 0 18px; overflow-wrap: anywhere; }
+.resident-profile dt { color: var(--muted); }
+@media(min-width: 600px) { .dues-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media(min-width: 768px) { .resident-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } .due-card { padding: 20px; } }
+.due-card:has(.status-paid) { border-top: 3px solid #27805e; }
+.due-card:has(.status-unpaid) { border-top: 3px solid #b54b40; }
+.due-card:has(.status-waived) { border-top: 3px solid #778393; }
+.due-card:has(.status-not_due) { border-top: 3px solid var(--line-strong); }
+

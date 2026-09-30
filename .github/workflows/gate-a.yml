@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "verify/**"
+      - "feat/phase-4-resident-card"
     paths-ignore:
       - "docs/test-gate-a-report.md"
   pull_request:
@@ -65,3 +66,4 @@ jobs:
           BETTER_AUTH_SECRET: ci-build-only-secret-never-valid-for-deployment-0000000000
           NEXT_PUBLIC_APP_URL: https://example.invalid
         run: npm run build
+
