@@ -231,11 +231,11 @@ button { color: inherit; }
 .resident-nav button:active { transform: scale(.97); }
 .resident-nav [aria-current] { background: var(--teal-wash); border-color: var(--teal); font-weight: 700; }
 .resident-year { display: flex; gap: 12px; align-items: center; }
-.resident-summary { display: grid; gap: 12px; margin: 20px 0; }
+.resident-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 20px 0; }
 .resident-summary div, .due-card, .resident-profile { padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
 .resident-summary span, .resident-summary strong { display: block; }
-.resident-summary span { font-size: 16px; }
-.resident-summary strong { font-size: 21px; }
+.resident-summary span { font-size: 14px; line-height: 1.35; }
+.resident-summary strong { font-size: 20px; overflow-wrap: anywhere; }
 .resident-note { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
 .dues-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .due-card { min-width: 0; padding: 12px; overflow-wrap: anywhere; }
@@ -269,7 +269,8 @@ button { color: inherit; }
 .dark .payment-request-error { background: #3a2928; color: #f4b5ad; }
 .payment-request-success .button { margin-top: 6px; }
 @media(min-width: 600px) { .dues-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media(min-width: 768px) { .resident-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } .due-card { padding: 20px; } }
+@media(min-width: 600px) { .resident-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media(min-width: 768px) { .due-card { padding: 20px; } }
 .due-card:has(.status-paid) { border-top: 3px solid #27805e; }
 .due-card:has(.status-unpaid) { border-top: 3px solid #b54b40; }
 .due-card:has(.status-waived) { border-top: 3px solid #778393; }

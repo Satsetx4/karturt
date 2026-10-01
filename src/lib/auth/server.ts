@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor } from "better-auth/plugins";
 import type { AppDatabase } from "@/db/client";
 import { getDb } from "@/db/client";
-import { schema } from "@/db/schema";
+import { relationalSchema } from "@/db/schema";
 import { requireAuthEnvironment } from "@/lib/env";
 
 export function createAuth(database: AppDatabase, options: { secret: string; baseURL: string }) {
@@ -12,7 +12,7 @@ export function createAuth(database: AppDatabase, options: { secret: string; bas
     baseURL: options.baseURL,
     secret: options.secret,
     trustedOrigins: [options.baseURL],
-    database: drizzleAdapter(database, { provider: "pg", schema }),
+    database: drizzleAdapter(database, { provider: "pg", schema: relationalSchema }),
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,

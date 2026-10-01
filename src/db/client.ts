@@ -1,12 +1,12 @@
 import { Pool } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { schema } from "@/db/schema";
+import { relationalSchema } from "@/db/schema";
 import { requireDatabaseEnvironment } from "@/lib/env";
 
 function createConnection() {
   const env = requireDatabaseEnvironment();
   const pool = new Pool({ connectionString: env.databaseUrl, max: 5, connectionTimeoutMillis: 10_000 });
-  return { pool, db: drizzle({ client: pool, schema }) };
+  return { pool, db: drizzle({ client: pool, schema: relationalSchema }) };
 }
 
 type Connection = ReturnType<typeof createConnection>;

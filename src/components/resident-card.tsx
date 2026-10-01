@@ -260,20 +260,20 @@ export function ResidentMonthCard({
 export function ResidentDuesSummary({
   summary,
 }: {
-  summary: { paid: number; arrears: number; unpaid: number };
+  summary: { paid: number; pending: number; unpaid: number };
 }) {
   return (
     <div className="resident-summary">
       <div>
-        <span>Tunggakan</span>
-        <strong>{rupiah(summary.arrears)}</strong>
-      </div>
-      <div>
-        <span>Total belum dibayar</span>
+        <span>Belum bayar</span>
         <strong>{rupiah(summary.unpaid)}</strong>
       </div>
       <div>
-        <span>Total sudah dibayar</span>
+        <span>Menunggu konfirmasi</span>
+        <strong>{rupiah(summary.pending)}</strong>
+      </div>
+      <div>
+        <span>Sudah bayar</span>
         <strong>{rupiah(summary.paid)}</strong>
       </div>
     </div>
@@ -353,7 +353,7 @@ export function ResidentCard({
     ]),
   ].sort((a, b) => b - a);
   const selected = dues.filter((d) => d.billingYear === year);
-  const summary = duesSummary(selected, businessDate);
+  const summary = duesSummary(selected);
   return (
     <section className="resident-area">
       <p className="eyebrow">RUANG WARGA · {profile.rtName}</p>

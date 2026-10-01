@@ -72,7 +72,7 @@ const dues = [
   due("unpaid", 11),
   due("unpaid", 12),
 ];
-const summary = duesSummary(dues, "2026-06-15");
+const summary = duesSummary(dues);
 const monthCards = yearMonths(dues, 2026).map(({ name, due: monthDue, month }) =>
   createElement(ResidentMonthCard, { key: month, name, due: monthDue }),
 );

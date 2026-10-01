@@ -60,6 +60,27 @@ describe("authentication and account-role integration", () => {
     expect(officialPrincipal.householdId).toBeNull();
   });
 
+  it("loads credential accounts through the explicit user-to-account Drizzle relation", async () => {
+    const { db } = testDatabase;
+    const user = await createAuthUser(db, "Relational credential fixture");
+    await db.insert(authAccount).values({
+      id: randomUUID(),
+      accountId: user.id,
+      providerId: "credential",
+      userId: user.id,
+      password: await hashPassword("593817"),
+    });
+
+    const record = await db.query.user.findFirst({
+      where: (table, { eq: equals }) => equals(table.email, user.email),
+      with: { accounts: true },
+    });
+
+    expect(record?.accounts).toHaveLength(1);
+    expect(record?.accounts[0]).toMatchObject({ accountId: user.id, providerId: "credential" });
+    expect(record?.accounts[0]?.password).toBeTruthy();
+  });
+
   it("holds System Admin outside the app until a TOTP factor is verified", async () => {
     const { db } = testDatabase;
     const adminUser = await createAuthUser(db, "System Admin fixture");

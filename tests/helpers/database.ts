@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { schema, authUser, houses, households, people, rtSettings, rtUnits } from "../../src/db/schema";
+import { relationalSchema, authUser, houses, households, people, rtSettings, rtUnits } from "../../src/db/schema";
 
 export async function createTestDatabase() {
   const client = new PGlite();
@@ -13,7 +13,7 @@ export async function createTestDatabase() {
   for (const name of migrations) {
     await client.exec(readFileSync(resolve(migrationFolder, name), "utf8"));
   }
-  return { client, db: drizzle(client, { schema }), close: () => client.close() };
+  return { client, db: drizzle(client, { schema: relationalSchema }), close: () => client.close() };
 }
 
 export async function createRt(database: Awaited<ReturnType<typeof createTestDatabase>>["db"]) {

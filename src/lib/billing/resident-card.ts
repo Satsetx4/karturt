@@ -47,7 +47,7 @@ export const residentStatusLabels: Record<ResidentStatusToken, string> = {
 };
 
 export function dueToken(due: ResidentDue): ResidentStatusToken {
-  if (due.paymentRequestStatus === "pending") return "PENDING";
+  if (due.status === "unpaid" && due.paymentRequestStatus === "pending") return "PENDING";
   return domainStatusTokens[due.status];
 }
 
@@ -64,17 +64,21 @@ export function yearMonths(dues: ResidentDue[], year: number) {
     due: dues.find((d) => d.billingYear === year && d.month === index + 1),
   }));
 }
-export function duesSummary(dues: ResidentDue[], _businessDate: string) {
+export function duesSummary(dues: ResidentDue[]) {
   return dues.reduce(
     (total, due) => ({
       paid: total.paid + (due.status === "paid" ? due.amount : 0),
-      arrears:
-        total.arrears +
-        (due.status === "unpaid" && due.dueDate < _businessDate
+      pending:
+        total.pending +
+        (due.status === "unpaid" && due.paymentRequestStatus === "pending"
           ? due.amount
           : 0),
-      unpaid: total.unpaid + (due.status === "unpaid" ? due.amount : 0),
+      unpaid:
+        total.unpaid +
+        (due.status === "unpaid" && due.paymentRequestStatus !== "pending"
+          ? due.amount
+          : 0),
     }),
-    { paid: 0, arrears: 0, unpaid: 0 },
+    { paid: 0, pending: 0, unpaid: 0 },
   );
 }

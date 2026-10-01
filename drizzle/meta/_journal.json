@@ -36,6 +36,13 @@
       "when": 1790789591367,
       "tag": "0004_phase_5_payment_request",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790813764088,
+      "tag": "0005_phase_5_1_payment_request_items_immutable",
+      "breakpoints": true
     }
   ]
 }

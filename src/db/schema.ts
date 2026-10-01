@@ -17,7 +17,7 @@ import {
   varchar,
   bigint,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 export const accountTypeEnum = pgEnum("account_type", ["resident", "official", "system_admin"]);
 export const accountStatusEnum = pgEnum("account_status", ["active", "locked", "disabled"]);
@@ -146,6 +146,17 @@ export const authAccount = pgTable("account", {
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const authUserRelations = relations(authUser, ({ many }) => ({
+  accounts: many(authAccount),
+}));
+
+export const authAccountRelations = relations(authAccount, ({ one }) => ({
+  user: one(authUser, {
+    fields: [authAccount.userId],
+    references: [authUser.id],
+  }),
+}));
 
 export const authVerification = pgTable("verification", {
   id: text("id").primaryKey(),
@@ -422,6 +433,12 @@ export const schema = {
   paymentRequestItems,
   paymentRequestClaims,
   auditEvents,
+};
+
+export const relationalSchema = {
+  ...schema,
+  authUserRelations,
+  authAccountRelations,
 };
 
 export type AccountType = (typeof accountTypeEnum.enumValues)[number];

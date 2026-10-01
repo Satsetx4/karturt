@@ -3,10 +3,12 @@ import { spawn } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { once } from "node:events";
 import { tmpdir } from "node:os";
@@ -15,6 +17,9 @@ import { setTimeout as delay } from "node:timers/promises";
 import { build } from "esbuild";
 
 const root = process.cwd();
+const evidenceDirectory = resolve(root, "docs", "phase-5-1-evidence");
+const screenshotRunId = new Date().toISOString().replace(/[:.]/g, "-");
+const savedScreenshots: string[] = [];
 const cssDirectory = join(root, ".next", "static", "chunks");
 const cssFiles = readdirSync(cssDirectory).filter((file) => file.endsWith(".css"));
 if (cssFiles.length === 0) throw new Error("Build CSS was not found. Run npm run build first.");
@@ -47,15 +52,15 @@ type FixtureDue = {
 };
 
 const dues: FixtureDue[] = [
-  { billingYear: 2025, month: 11, amount: 30000, dueDate: "2025-11-10", status: "unpaid", paymentRequestStatus: "pending" },
   { billingYear: 2025, month: 12, amount: 30000, dueDate: "2025-12-10", status: "unpaid", paymentRequestStatus: null },
   { billingYear: 2026, month: 1, amount: 40000, dueDate: "2026-01-10", status: "paid", paymentRequestStatus: null },
-  { billingYear: 2026, month: 2, amount: 40000, dueDate: "2026-02-10", status: "unpaid", paymentRequestStatus: null },
+  { billingYear: 2026, month: 2, amount: 30000, dueDate: "2026-02-10", status: "unpaid", paymentRequestStatus: "pending" },
   { billingYear: 2026, month: 3, amount: 40000, dueDate: "2026-03-10", status: "unpaid", paymentRequestStatus: null },
-  { billingYear: 2026, month: 4, amount: 40000, dueDate: "2026-04-10", status: "waived", paymentRequestStatus: null },
-  { billingYear: 2026, month: 5, amount: 0, dueDate: "2026-05-10", status: "not_due", paymentRequestStatus: null },
+  { billingYear: 2026, month: 4, amount: 40000, dueDate: "2026-04-10", status: "unpaid", paymentRequestStatus: null },
+  { billingYear: 2026, month: 5, amount: 40000, dueDate: "2026-05-10", status: "waived", paymentRequestStatus: null },
+  { billingYear: 2026, month: 6, amount: 0, dueDate: "2026-06-10", status: "not_due", paymentRequestStatus: null },
 ];
-const originalPending = new Set(["2025-11"]);
+const originalPending = new Set(["2026-02"]);
 const claimedPeriods = new Set(originalPending);
 const idempotentResponses = new Map<string, Record<string, unknown>>();
 let postCount = 0;
@@ -133,7 +138,7 @@ function createMockServer(bundlePath: string) {
         "Halo Bendahara, saya mengajukan pembayaran iuran.",
         "Nama: Warga Uji",
         "Nomor rumah: SMOKE-1",
-        "Bulan: Desember 2025, Februari 2026, Maret 2026",
+        "Bulan: Desember 2025, Maret 2026, April 2026",
         "Jumlah: Rp 110.000",
         "Waktu pengajuan: 1 Oktober 2026 pukul 10.00 WIB",
         `Nomor pengajuan: ${requestCode}`,
@@ -263,6 +268,19 @@ async function runBrowserSmoke() {
       }
       throw new Error(message);
     };
+    const captureEvidence = async (name: string) => {
+      const response = await command("Page.captureScreenshot", {
+        format: "png",
+        captureBeyondViewport: false,
+        fromSurface: true,
+      });
+      const data = (response.result as { data?: unknown } | undefined)?.data;
+      assert.equal(typeof data, "string", "Chrome did not return screenshot evidence.");
+      mkdirSync(evidenceDirectory, { recursive: true });
+      const filename = `${screenshotRunId}-${name}.png`;
+      writeFileSync(join(evidenceDirectory, filename), Buffer.from(data as string, "base64"), { flag: "wx" });
+      savedScreenshots.push(join("docs", "phase-5-1-evidence", filename));
+    };
 
     await command("Page.enable");
     await command("Runtime.enable");
@@ -275,14 +293,25 @@ async function runBrowserSmoke() {
     await command("Page.navigate", { url: pageUrl });
     await waitFor("document.querySelector('.payment-request-select') !== null", "Payment request UI did not render.");
 
+    const initialSummary = await evaluate(`(() => [...document.querySelectorAll('.resident-summary div')].map(item => [
+      item.querySelector('span').textContent,
+      item.querySelector('strong').textContent,
+    ]))()`);
+    assert.deepEqual(initialSummary, [
+      ["Belum bayar", "Rp 110.000"],
+      ["Menunggu konfirmasi", "Rp 30.000"],
+      ["Sudah bayar", "Rp 40.000"],
+    ]);
+    await captureEvidence("mobile-summary-390x844");
+
     const selection = await evaluate(`(() => {
       const select = document.querySelector('.payment-request-select');
       const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
-      setter.call(select, '2026-03');
+      setter.call(select, '2026-04');
       select.dispatchEvent(new Event('change', { bubbles: true }));
       return { value: select.value, months: document.querySelector('.payment-request-total span')?.textContent, total: document.querySelector('.payment-request-total strong')?.textContent };
     })()`);
-    assert.deepEqual(selection, { value: "2026-03", months: "3 bulan masuk dalam permintaan", total: "Rp 110.000" });
+    assert.deepEqual(selection, { value: "2026-04", months: "3 bulan masuk dalam permintaan", total: "Rp 110.000" });
     const selectionTargets = await evaluate(`([...document.querySelectorAll('.resident-nav button, .payment-request-select, .payment-request-action')].map(item => Math.round(item.getBoundingClientRect().height)))`);
     assert.ok((selectionTargets as number[]).every((height) => height >= 44), "Month selection or review touch target is below 44px.");
     await evaluate("document.querySelector('.payment-request-action').click()");
@@ -291,7 +320,7 @@ async function runBrowserSmoke() {
       periods: [...document.querySelectorAll('.payment-request-periods li')].map(item => item.textContent),
       buttonHeight: Math.round([...document.querySelectorAll('button')].find(item => item.textContent.includes('Konfirmasi dan ajukan')).getBoundingClientRect().height),
     }))()`);
-    assert.deepEqual((confirmation as { periods: string[] }).periods, ["Desember 2025", "Februari 2026", "Maret 2026"]);
+    assert.deepEqual((confirmation as { periods: string[] }).periods, ["Desember 2025", "Maret 2026", "April 2026"]);
     assert.ok((confirmation as { buttonHeight: number }).buttonHeight >= 44, "Confirmation touch target is below 44px.");
     await evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(item => item.textContent.includes('Konfirmasi dan ajukan')); button.click(); button.click(); })()`);
     await waitFor("document.body.innerText.includes('KRT-SMOKE-5A7B9C')", "Payment request did not reach the success state.");
@@ -311,7 +340,7 @@ async function runBrowserSmoke() {
     assert.equal((result as { pendingIcon: boolean }).pendingIcon, true);
     assert.match(String((result as { whatsappHref: string }).whatsappHref), /^https:\/\/wa\.me\/628123456789\?text=/);
     assert.equal(metrics.postCount, 1, "Double-click issued more than one POST.");
-    assert.deepEqual(metrics.lastPayload, { period: "2026-03" }, "The browser sent internal identifiers or extra fields.");
+    assert.deepEqual(metrics.lastPayload, { period: "2026-04" }, "The browser sent internal identifiers or extra fields.");
     assert.match(metrics.lastIdempotencyKey, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
 
     await command("Page.reload", { ignoreCache: true });
@@ -319,10 +348,19 @@ async function runBrowserSmoke() {
     const persisted = await evaluate(`(() => ({
       pendingCount: document.querySelectorAll('.due-card .status-pending').length,
       pendingText: [...document.querySelectorAll('.due-card .status-pending span')].map(item => item.textContent),
+      summary: [...document.querySelectorAll('.resident-summary div')].map(item => [
+        item.querySelector('span').textContent,
+        item.querySelector('strong').textContent,
+      ]),
       hasRequestCode: document.body.innerText.includes('KRT-SMOKE-5A7B9C'),
     }))()`);
-    assert.equal((persisted as { pendingCount: number }).pendingCount, 2, "Pending month status did not persist after refresh.");
-    assert.deepEqual((persisted as { pendingText: string[] }).pendingText, ["Menunggu konfirmasi", "Menunggu konfirmasi"]);
+    assert.equal((persisted as { pendingCount: number }).pendingCount, 3, "Pending month status did not persist after refresh.");
+    assert.deepEqual((persisted as { pendingText: string[] }).pendingText, ["Menunggu konfirmasi", "Menunggu konfirmasi", "Menunggu konfirmasi"]);
+    assert.deepEqual((persisted as { summary: string[][] }).summary, [
+      ["Belum bayar", "Rp 0"],
+      ["Menunggu konfirmasi", "Rp 140.000"],
+      ["Sudah bayar", "Rp 40.000"],
+    ]);
 
     for (const viewport of viewports) {
       await command("Emulation.setDeviceMetricsOverride", {
@@ -345,6 +383,11 @@ async function runBrowserSmoke() {
           statusColor: getComputedStyle(status).color,
           statusBorder: getComputedStyle(status.closest('.due-card')).borderTopColor,
           statusIcon: Boolean(status.querySelector('svg')),
+          summaryColumns: getComputedStyle(document.querySelector('.resident-summary')).gridTemplateColumns.split(' ').length,
+          summary: [...document.querySelectorAll('.resident-summary div')].map(item => [
+            item.querySelector('span').textContent,
+            item.querySelector('strong').textContent,
+          ]),
           touchTargets: [...nav, select, ...primary].filter(item => item && item.offsetParent !== null).map(item => Math.round(item.getBoundingClientRect().height)),
           text: document.body.innerText,
         };
@@ -357,28 +400,37 @@ async function runBrowserSmoke() {
         statusColor: string;
         statusBorder: string;
         statusIcon: boolean;
+        summaryColumns: number;
+        summary: string[][];
         touchTargets: number[];
         text: string;
       };
       assert.equal(measured.width, viewport.width);
       assert.equal(measured.height, viewport.height);
       assert.ok(measured.documentWidth <= viewport.width, `Horizontal overflow at ${viewport.width}px.`);
+      assert.equal(measured.summaryColumns, viewport.width < 600 ? 2 : 3, `Unexpected summary column count at ${viewport.width}px.`);
       assert.ok(measured.statusFontSize >= 16, `Status text is too small at ${viewport.width}px.`);
       assert.ok(measured.statusIcon, `Pending status icon is missing at ${viewport.width}px.`);
       assert.ok(measured.touchTargets.every((height) => height >= 44), `Touch target below 44px at ${viewport.width}px.`);
       assert.match(measured.statusColor, /rgb\(115, 87, 0\)|rgb\(242, 215, 120\)/);
       assert.equal(measured.statusBorder, "rgb(208, 165, 29)");
       assert.doesNotMatch(measured.text, /tanggal 10|jatuh tempo|2026-\d{2}-10|\b(PAID|UNPAID|WAIVED|NOT_DUE|PENDING)\b|payment_request/i);
+      assert.doesNotMatch(measured.text, /Tunggakan|Total belum dibayar|Total sudah dibayar/i);
+      assert.deepEqual(measured.summary.map(([label]) => label), ["Belum bayar", "Menunggu konfirmasi", "Sudah bayar"]);
+      assert.equal(measured.summary[0]?.[1], "Rp 0", "Pending amount leaked into Belum bayar.");
+      assert.equal(measured.summary[1]?.[1], "Rp 140.000");
       assert.match(measured.text, /Menunggu konfirmasi/);
+      if (viewport.width === 1440) await captureEvidence("desktop-pending-1440x900");
       console.info(`${viewport.width}x${viewport.height}: PASS, no overflow, 44px+ touch targets, icon+text pending status, no due date or technical token.`);
     }
     const waLink = (result as { whatsappHref: string }).whatsappHref;
     const message = new URL(waLink).searchParams.get("text") ?? "";
     assert.match(message, /SMOKE-1/);
     assert.match(message, /KRT-SMOKE-5A7B9C/);
-    assert.match(message, /Desember 2025, Februari 2026, Maret 2026/);
+    assert.match(message, /Desember 2025, Maret 2026, April 2026/);
     assert.match(message.replace(/\s/g, ""), /Rp110\.000/);
     console.info("Older unpaid selection, confirmation total, double-click guard, public period payload, WhatsApp details, and refresh persistence: PASS.");
+    console.info(`Non-sensitive browser screenshots saved: ${savedScreenshots.join(", ")}`);
   } finally {
     if (socket?.readyState === WebSocket.OPEN) {
       try { socket.send(JSON.stringify({ id: ++commandId, method: "Browser.close" })); } catch {}

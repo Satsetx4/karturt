@@ -17,7 +17,7 @@ function SmokePage({ initialDues }: { initialDues: ResidentDue[] }) {
   }, []);
 
   const year = 2026;
-  const summary = duesSummary(dues, "2026-06-15");
+  const summary = duesSummary(dues);
 
   return (
     <main className="page-shell">

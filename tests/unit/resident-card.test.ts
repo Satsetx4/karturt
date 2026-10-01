@@ -33,6 +33,7 @@ describe("resident card semantics", () => {
     expect(dueToken(due("waived", 2))).toBe("WAIVED");
     expect(dueToken(due("not_due", 3))).toBe("NOT_DUE");
     expect(dueToken({ ...due("unpaid", 4), paymentRequestStatus: "pending" })).toBe("PENDING");
+    expect(dueToken({ ...due("paid", 5), paymentRequestStatus: "pending" })).toBe("PAID");
     expect(residentStatusLabels.PENDING).toBe("Menunggu konfirmasi");
   });
 
@@ -75,13 +76,15 @@ describe("resident card semantics", () => {
     );
     const summaryMarkup = renderToStaticMarkup(
       createElement(ResidentDuesSummary, {
-        summary: { paid: 40000, arrears: 40000, unpaid: 80000 },
+        summary: { paid: 40000, pending: 25000, unpaid: 80000 },
       }),
     );
     const text = `${visibleText(monthMarkup)} ${visibleText(summaryMarkup)}`;
 
     expect(text).toContain("Belum bayar");
-    expect(text).toMatch(/Tunggakan/);
+    expect(text).toContain("Menunggu konfirmasi");
+    expect(text).toContain("Sudah bayar");
+    expect(text).not.toMatch(/Tunggakan|Total belum dibayar|Total sudah dibayar/i);
     expect(text).not.toMatch(/2026-06-10|tanggal 10|jatuh tempo/i);
     expect(text).not.toMatch(/\b(PAID|UNPAID|WAIVED|NOT_DUE|PENDING)\b/i);
     expect(text).not.toMatch(/\b(paid|unpaid|due|pending)\b/i);
@@ -94,22 +97,64 @@ describe("resident card semantics", () => {
     expect(dueToken(due("waived", 1))).toBe("WAIVED");
     expect(dueToken(due("not_due", 2))).toBe("NOT_DUE");
   });
-  it("excludes waived/not due/future from arrears, includes future in unpaid", () => {
-    expect(
-      duesSummary(
-        [
-          due("waived", 1),
-          due("not_due", 2),
-          due("paid", 3),
-          due("unpaid", 4),
-          due("unpaid", 12),
-        ],
-        "2026-06-15",
-      ),
-    ).toEqual({ paid: 40000, arrears: 40000, unpaid: 80000 });
+  it("counts an ordinary unpaid due only under Belum bayar", () => {
+    expect(duesSummary([due("unpaid", 4)])).toEqual({
+      paid: 0,
+      pending: 0,
+      unpaid: 40000,
+    });
   });
-  it("does not call a due overdue on day 10", () => {
-    expect(duesSummary([due("unpaid", 6)], "2026-06-10").arrears).toBe(0);
+
+  it("counts an unpaid due with an active request only under Menunggu konfirmasi", () => {
+    const pendingDue = { ...due("unpaid", 6), paymentRequestStatus: "pending" as const };
+    expect(duesSummary([pendingDue])).toEqual({
+      paid: 0,
+      pending: 40000,
+      unpaid: 0,
+    });
+    expect(pendingDue.status).toBe("unpaid");
+    expect(dueToken(pendingDue)).toBe("PENDING");
+  });
+
+  it("counts paid dues only under Sudah bayar", () => {
+    expect(duesSummary([due("paid", 3)])).toEqual({
+      paid: 40000,
+      pending: 0,
+      unpaid: 0,
+    });
+  });
+
+  it("excludes waived and not-due obligations from the three totals", () => {
+    expect(duesSummary([due("waived", 4), due("not_due", 5)])).toEqual({
+      paid: 0,
+      pending: 0,
+      unpaid: 0,
+    });
+  });
+
+  it("sums mixed dues across billing years without merging pending into unpaid", () => {
+    expect(duesSummary([
+      { ...due("unpaid", 12), billingYear: 2025, amount: 25000 },
+      { ...due("unpaid", 1), billingYear: 2026, amount: 30000, paymentRequestStatus: "pending" },
+      { ...due("unpaid", 2), billingYear: 2026, amount: 45000 },
+      { ...due("paid", 11), billingYear: 2024, amount: 10000 },
+      { ...due("waived", 10), billingYear: 2025, amount: 50000 },
+      { ...due("not_due", 3), billingYear: 2026, amount: 0 },
+    ])).toEqual({
+      paid: 10000,
+      pending: 30000,
+      unpaid: 70000,
+    });
+  });
+
+  it("keeps the active request visible on a resident month card", () => {
+    const pendingDue = { ...due("unpaid", 6), paymentRequestStatus: "pending" as const };
+    const markup = renderToStaticMarkup(createElement(ResidentMonthCard, {
+      name: "Juni",
+      due: pendingDue,
+    }));
+    expect(visibleText(markup)).toContain("Menunggu konfirmasi");
+    expect(pendingDue.status).toBe("unpaid");
   });
   it("renders Jan-Dec in order and preserves missing records without assigning NOT_DUE", () => {
     const months = yearMonths([due("unpaid", 12), due("paid", 1)], 2026);
