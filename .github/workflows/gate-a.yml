@@ -9,6 +9,7 @@ on:
       - "feat/phase-4-5-audit-core-readiness"
       - "feat/phase-5-payment-request"
       - "fix/phase-5-1-pre-verification-hardening"
+      - "feat/phase-6-treasurer-verification"
     paths-ignore:
       - "docs/test-gate-a-report.md"
   pull_request:

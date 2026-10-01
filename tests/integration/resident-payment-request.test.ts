@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   appAccounts,
   auditEvents,
@@ -11,6 +11,8 @@ import {
   paymentRequestClaims,
   paymentRequestItems,
   paymentRequests,
+  paymentAllocations,
+  payments,
   people,
 } from "../../src/db/schema";
 import { resolvePrincipalForUser } from "../../src/lib/auth/principal";
@@ -28,6 +30,82 @@ type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
 type DueInput = { period: string; status?: "unpaid" | "paid" | "waived" | "not_due"; amount?: number };
 
 const key = () => randomUUID();
+
+async function createVerifiedPaidHistory(
+  database: TestDatabase["db"],
+  input: { rtUnitId: string; householdId: string; residentAccountId: string; personId: string; dueId: string; period: string; amount: number },
+) {
+  const treasurerUser = await createAuthUser(database);
+  const [treasurerAccount] = await database.insert(appAccounts).values({
+    rtUnitId: input.rtUnitId,
+    authUserId: treasurerUser.id,
+    accountType: "official",
+    loginIdentifier: `treasurer-${randomUUID().slice(0, 12)}`,
+    personId: input.personId,
+  }).returning({ id: appAccounts.id });
+  await database.insert(officialAssignments).values({
+    rtUnitId: input.rtUnitId,
+    appAccountId: treasurerAccount!.id,
+    role: "treasurer",
+    startsOn: "2020-01-01",
+  });
+
+  const requestId = randomUUID();
+  const requestCode = `KRT-${randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`;
+  await database.transaction(async (transaction) => {
+    await transaction.insert(paymentRequests).values({
+      id: requestId,
+      requestCode,
+      rtUnitId: input.rtUnitId,
+      householdId: input.householdId,
+      requestedByAccountId: input.residentAccountId,
+      requestedByAccountType: "resident",
+      status: "verified",
+      idempotencyKey: randomUUID(),
+      requestFingerprint: createHash("sha256").update(`fixture:${requestCode}`).digest("hex"),
+      totalAmount: input.amount,
+      itemCount: 1,
+      verifiedByAccountId: treasurerAccount!.id,
+      verifiedByAccountType: "official",
+      verifiedAt: new Date(),
+    });
+    await transaction.insert(paymentRequestItems).values({
+      requestId,
+      rtUnitId: input.rtUnitId,
+      householdId: input.householdId,
+      monthlyDueId: input.dueId,
+      period: input.period,
+      amount: input.amount,
+    });
+    const [payment] = await transaction.insert(payments).values({
+      rtUnitId: input.rtUnitId,
+      householdId: input.householdId,
+      paymentRequestId: requestId,
+      amount: input.amount,
+      method: "transfer",
+      verifiedByAccountId: treasurerAccount!.id,
+      verifiedByAccountType: "official",
+    }).returning({ id: payments.id });
+    await transaction.insert(paymentAllocations).values({
+      rtUnitId: input.rtUnitId,
+      householdId: input.householdId,
+      paymentRequestId: requestId,
+      paymentId: payment!.id,
+      monthlyDueId: input.dueId,
+      amount: input.amount,
+    });
+    await transaction.insert(auditEvents).values({
+      actorAppAccountId: treasurerAccount!.id,
+      action: "payment_request.verified",
+      entityType: "payment_request",
+      entityId: requestId,
+      context: { itemCount: 1, totalAmount: input.amount },
+    });
+    await transaction.update(monthlyDues)
+      .set({ status: "paid" })
+      .where(eq(monthlyDues.id, input.dueId));
+  });
+}
 
 async function createResident(
   database: TestDatabase["db"],
@@ -68,7 +146,7 @@ async function createResident(
     const month = Number(monthText);
     const status = due.status ?? "unpaid";
     const noObligation = status === "not_due";
-    await database.insert(monthlyDues).values({
+    const [createdDue] = await database.insert(monthlyDues).values({
       rtUnitId,
       householdId: household.householdId,
       billingYearId: years.get(year)!.id,
@@ -76,9 +154,20 @@ async function createResident(
       month,
       amount: noObligation ? 0 : due.amount ?? 40000,
       dueDate: `${yearText}-${monthText}-10`,
-      status,
+      status: status === "paid" ? "unpaid" : status,
       waivedReason: status === "waived" ? "approved waiver" : null,
-    });
+    }).returning({ id: monthlyDues.id });
+    if (status === "paid") {
+      await createVerifiedPaidHistory(database, {
+        rtUnitId,
+        householdId: household.householdId,
+        residentAccountId: account!.id,
+        personId: household.personId,
+        dueId: createdDue!.id,
+        period: due.period,
+        amount: due.amount ?? 40000,
+      });
+    }
   }
 
   const principal = await resolvePrincipalForUser(database as never, user.id, "2026-06-18");
@@ -255,7 +344,10 @@ describe("resident payment request transactions", () => {
       period: "2026-13",
       idempotencyKey: key(),
     })).rejects.toThrow();
-    await expect(db.select().from(paymentRequests).where(eq(paymentRequests.householdId, resident.householdId)))
+    await expect(db.select().from(paymentRequests).where(and(
+      eq(paymentRequests.householdId, resident.householdId),
+      eq(paymentRequests.status, "pending"),
+    )))
       .resolves.toHaveLength(0);
     await expect(db.select().from(auditEvents).where(and(
       eq(auditEvents.action, "payment_request.created"),

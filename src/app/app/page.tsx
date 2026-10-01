@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { Brand } from "@/components/brand";
 import { SiteFooter } from "@/components/site-footer";
 import { SignOutButton } from "@/components/sign-out-button";
+import { TreasurerDashboard } from "@/components/treasurer-dashboard";
 import { getDb } from "@/db/client";
 import { authUser } from "@/db/schema";
 import {
@@ -14,6 +15,7 @@ import {
   UnauthenticatedError,
   MfaEnrollmentRequiredError,
 } from "@/lib/auth/principal";
+import { getTreasurerPaymentRequestQueue } from "@/lib/billing/treasurer-payment-requests";
 
 export const metadata: Metadata = {
   title: "Ruang akun",
@@ -44,6 +46,9 @@ export default async function AccountHomePage() {
     principal.role === "resident"
       ? await getResidentProfile(getDb(), principal)
       : null;
+  const treasurerRequests = principal.role === "treasurer"
+    ? await getTreasurerPaymentRequestQueue(getDb(), principal)
+    : null;
   const [user] = await getDb()
     .select({ name: authUser.name })
     .from(authUser)
@@ -58,6 +63,8 @@ export default async function AccountHomePage() {
       </header>
       {profile ? (
         <ResidentCard profile={profile} businessDate={jakartaBusinessDate()} />
+      ) : principal.role === "treasurer" ? (
+        <TreasurerDashboard requests={treasurerRequests ?? []} />
       ) : (
         <section className="app-card">
           <span className="account-badge">{roleNames[principal.role]}</span>

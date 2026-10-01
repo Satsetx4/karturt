@@ -43,6 +43,13 @@
       "when": 1790813764088,
       "tag": "0005_phase_5_1_payment_request_items_immutable",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790821534571,
+      "tag": "0006_phase_6_treasurer_payment_ledger",
+      "breakpoints": true
     }
   ]
 }

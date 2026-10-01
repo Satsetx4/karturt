@@ -65,6 +65,21 @@ function normalizeContext(action: string, context: AuditContext | undefined): Au
     return { periods: periods as string, totalAmount, itemCount };
   }
 
+  if (action === "payment_request.verified") {
+    if (keys.join(",") !== "itemCount,totalAmount") {
+      throw new Error("Audit context fields do not match the action contract.");
+    }
+    const itemCount = value.itemCount;
+    const totalAmount = value.totalAmount;
+    if (typeof itemCount !== "number" || !Number.isSafeInteger(itemCount) || itemCount <= 0) {
+      throw new Error("Audit payment item count must be a positive safe integer.");
+    }
+    if (typeof totalAmount !== "number" || !Number.isSafeInteger(totalAmount) || totalAmount <= 0) {
+      throw new Error("Audit payment total must be a positive safe integer.");
+    }
+    return { itemCount, totalAmount };
+  }
+
   if (action === "resident.pin.reset" || recoveryActions.has(action)) {
     if (keys.join(",") !== "recoveryReference,revokedSessionCount") {
       throw new Error("Audit context fields do not match the action contract.");

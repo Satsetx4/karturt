@@ -1,0 +1,752 @@
+import assert from "node:assert/strict";
+import { randomBytes, randomInt, randomUUID } from "node:crypto";
+import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { once } from "node:events";
+import { join, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
+import { setTimeout as delay } from "node:timers/promises";
+import { loadEnvConfig } from "@next/env";
+import { hashPassword } from "better-auth/crypto";
+import { and, eq, inArray } from "drizzle-orm";
+import { closeDb, getDb } from "@/db/client";
+import {
+  appAccounts,
+  auditEvents,
+  authAccount,
+  authSession,
+  authUser,
+  billingYears,
+  feeRates,
+  households,
+  houses,
+  monthlyDues,
+  officialAssignments,
+  paymentAllocations,
+  paymentRequestClaims,
+  paymentRequestItems,
+  paymentRequests,
+  payments,
+  people,
+  rtSettings,
+  rtUnits,
+} from "@/db/schema";
+import { requireDatabaseEnvironment } from "@/lib/env";
+import type { Principal } from "@/lib/auth/permissions";
+import { createResidentPaymentRequest } from "@/lib/billing/resident-payment-request";
+import { dueToken, duesSummary, residentStatusLabels } from "@/lib/billing/resident-card";
+
+const target = {
+  projectId: "billowing-base-57949906",
+  branchId: "br-crimson-band-az6i637k",
+  endpointId: "ep-quiet-cake-azrhjiyh",
+  databaseName: "neondb",
+};
+const root = process.cwd();
+const expectedPort = 3199;
+const browserViewports = [
+  { width: 360, height: 800 },
+  { width: 390, height: 844 },
+  { width: 430, height: 900 },
+  { width: 768, height: 1024 },
+  { width: 1440, height: 900 },
+];
+const userIds: string[] = [];
+let nextProcess: ChildProcess | undefined;
+let chromeProcess: ChildProcess | undefined;
+let devtoolsSocket: WebSocket | undefined;
+let browserProfile: string | undefined;
+
+type FixturePerson = {
+  accountId: string;
+  userId: string;
+  householdId: string;
+  personId: string;
+};
+
+function assertDevelopmentTarget() {
+  const env = requireDatabaseEnvironment();
+  if (env.appEnv !== "development" || env.databaseEnv !== "development") {
+    throw new Error("Phase 6 smoke requires APP_ENV and DATABASE_ENV to both be development.");
+  }
+  const expected = {
+    KARTURT_NEON_DEV_PROJECT_ID: target.projectId,
+    KARTURT_NEON_DEV_BRANCH_ID: target.branchId,
+    KARTURT_NEON_DEV_ENDPOINT_ID: target.endpointId,
+  };
+  for (const [key, value] of Object.entries(expected)) {
+    if (process.env[key] !== value) throw new Error(`The verified development target is required in ${key}.`);
+  }
+  const databaseUrl = new URL(env.databaseUrl);
+  if (
+    databaseUrl.hostname.split(".")[0] !== target.endpointId ||
+    databaseUrl.hostname.includes("pooler") ||
+    databaseUrl.pathname !== `/${target.databaseName}`
+  ) {
+    throw new Error("DATABASE_URL must use the direct karturt-development endpoint and neondb database.");
+  }
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl) throw new Error("NEXT_PUBLIC_APP_URL must point to the local smoke server.");
+  const parsedAppUrl = new URL(appUrl);
+  if (parsedAppUrl.hostname !== "127.0.0.1" || Number(parsedAppUrl.port) !== expectedPort) {
+    throw new Error(`NEXT_PUBLIC_APP_URL must use http://127.0.0.1:${expectedPort} for this smoke.`);
+  }
+  return { baseUrl: parsedAppUrl.origin, databaseHost: databaseUrl.hostname };
+}
+
+function getChromePath() {
+  const candidates = [
+    process.env.CHROME_PATH,
+    process.env.ProgramFiles ? join(process.env.ProgramFiles, "Google", "Chrome", "Application", "chrome.exe") : undefined,
+    process.env["ProgramFiles(x86)"] ? join(process.env["ProgramFiles(x86)"], "Microsoft", "Edge", "Application", "msedge.exe") : undefined,
+    process.env.ProgramFiles ? join(process.env.ProgramFiles, "Microsoft", "Edge", "Application", "msedge.exe") : undefined,
+  ].filter((value): value is string => Boolean(value));
+  const browser = candidates.find((candidate) => existsSync(candidate));
+  if (!browser) throw new Error("Chrome or Edge was not found. Set CHROME_PATH to its executable.");
+  return browser;
+}
+
+async function startNext(baseUrl: string) {
+  const appUrl = new URL(baseUrl);
+  nextProcess = spawn(process.execPath, [
+    resolve(root, "node_modules/next/dist/bin/next"),
+    "dev",
+    "--hostname",
+    "127.0.0.1",
+    "--port",
+    String(expectedPort),
+  ], {
+    cwd: root,
+    env: { ...process.env, NODE_ENV: "development", NEXT_PUBLIC_APP_URL: appUrl.origin },
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  nextProcess.once("error", (error) => { throw error; });
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (nextProcess.exitCode !== null) throw new Error("Next development server exited before becoming ready.");
+    try {
+      const response = await fetch(`${baseUrl}/login/pengurus`, { cache: "no-store" });
+      if (response.ok) return;
+    } catch {
+      // The local server is still starting.
+    }
+    await delay(500);
+  }
+  throw new Error("Next development server did not become ready.");
+}
+
+async function createPerson(
+  db: ReturnType<typeof getDb>,
+  rtUnitId: string,
+  options: { houseNumber: string; name: string; loginIdentifier: string; accountType: "resident" | "official"; phone?: string },
+): Promise<FixturePerson> {
+  const [house] = await db.insert(houses).values({ rtUnitId, number: options.houseNumber }).returning({ id: houses.id });
+  const [household] = await db.insert(households).values({
+    rtUnitId,
+    houseId: house!.id,
+    startsOn: "2020-01-01",
+  }).returning({ id: households.id });
+  const [person] = await db.insert(people).values({
+    rtUnitId,
+    householdId: household!.id,
+    fullName: options.name,
+    phone: options.phone ?? null,
+  }).returning({ id: people.id });
+  const userId = randomUUID();
+  await db.insert(authUser).values({
+    id: userId,
+    name: options.name,
+    email: `${options.loginIdentifier.toLowerCase()}@example.invalid`,
+    emailVerified: true,
+  });
+  const [account] = await db.insert(appAccounts).values({
+    rtUnitId,
+    authUserId: userId,
+    accountType: options.accountType,
+    loginIdentifier: options.loginIdentifier,
+    personId: person!.id,
+    householdId: options.accountType === "resident" ? household!.id : null,
+  }).returning({ id: appAccounts.id });
+  userIds.push(userId);
+  return { accountId: account!.id, userId, householdId: household!.id, personId: person!.id };
+}
+
+async function signIn(baseUrl: string, type: "resident" | "official", identifier: string, password: string) {
+  let response: Response | undefined;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    response = await fetch(`${baseUrl}/api/login/${type}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: baseUrl },
+      body: JSON.stringify({ identifier, password }),
+    });
+    if (response.status !== 429 || attempt > 0) break;
+    const retryAfter = response.headers.get("retry-after");
+    const retryDelay = retryAfter && /^\d+$/.test(retryAfter)
+      ? Number(retryAfter) * 1000
+      : retryAfter
+        ? Date.parse(retryAfter) - Date.now()
+        : 60_000;
+    await delay(Math.min(Math.max(retryDelay, 1000), 65_000));
+  }
+  assert.ok(response);
+  const message = await response.clone().text();
+  assert.equal(response.status, 200, `Normal ${type} sign-in must issue a session: ${message}`);
+  const cookie = response.headers.getSetCookie().map((value) => value.split(";", 1)[0]).join("; ");
+  assert.ok(cookie, `Normal ${type} sign-in must return a session cookie.`);
+  return cookie;
+}
+
+function cookiePairs(cookie: string) {
+  return cookie.split("; ").map((part) => {
+    const separator = part.indexOf("=");
+    return { name: part.slice(0, separator), value: part.slice(separator + 1) };
+  });
+}
+
+async function runBrowserSmoke(
+  baseUrl: string,
+  treasurerCookie: string,
+  secondTreasurerCookie: string,
+  residentCookie: string,
+  firstCode: string,
+  secondCode: string,
+) {
+  const tempRoot = resolve(tmpdir());
+  browserProfile = mkdtempSync(join(tempRoot, "karturt-phase-6-chrome-"));
+  const resolvedProfile = resolve(browserProfile);
+  if (!resolvedProfile.startsWith(`${tempRoot}${sep}`)) throw new Error("Chrome profile escaped the temp directory.");
+  chromeProcess = spawn(getChromePath(), [
+    "--headless=new",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--remote-debugging-port=0",
+    "--remote-allow-origins=*",
+    `--user-data-dir=${resolvedProfile}`,
+    "about:blank",
+  ], { stdio: "ignore", windowsHide: true });
+  const activePortPath = join(resolvedProfile, "DevToolsActivePort");
+  for (let attempt = 0; attempt < 100 && !existsSync(activePortPath); attempt += 1) {
+    if (chromeProcess.exitCode !== null) throw new Error("Chrome exited before its debug port opened.");
+    await delay(100);
+  }
+  if (!existsSync(activePortPath)) throw new Error("Chrome debug port did not open.");
+  const debugPort = readFileSync(activePortPath, "utf8").split(/\r?\n/)[0];
+  const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json() as Array<{ type: string; webSocketDebuggerUrl: string }>;
+  const pageTarget = targets.find((item) => item.type === "page");
+  if (!pageTarget) throw new Error("Chrome did not provide a page target.");
+  devtoolsSocket = new WebSocket(pageTarget.webSocketDebuggerUrl);
+  const pending = new Map<number, (value: Record<string, unknown>) => void>();
+  const requestedVerifyUrls: string[] = [];
+  const pageErrors: string[] = [];
+  let commandId = 0;
+  devtoolsSocket.addEventListener("message", (event) => {
+    const message = JSON.parse(String(event.data)) as Record<string, unknown> & { id?: number; method?: string; params?: Record<string, unknown> };
+    if (message.method === "Network.requestWillBeSent") {
+      const request = message.params?.request as { url?: string } | undefined;
+      if (request?.url?.includes("/api/treasurer/payment-requests/") && request.url.endsWith("/verify")) requestedVerifyUrls.push(request.url);
+    }
+    if (message.method === "Runtime.exceptionThrown") pageErrors.push("Uncaught browser exception");
+    if (message.method === "Log.entryAdded") {
+      const entry = (message.params?.entry ?? {}) as { level?: string };
+      if (entry.level === "error") pageErrors.push("Browser console error");
+    }
+    if (typeof message.id !== "number") return;
+    const resolveMessage = pending.get(message.id);
+    if (!resolveMessage) return;
+    pending.delete(message.id);
+    resolveMessage(message);
+  });
+  await new Promise<void>((resolveOpen, rejectOpen) => {
+    devtoolsSocket!.addEventListener("open", () => resolveOpen(), { once: true });
+    devtoolsSocket!.addEventListener("error", () => rejectOpen(new Error("Chrome DevTools connection failed.")), { once: true });
+  });
+  const command = (method: string, params: Record<string, unknown> = {}) => {
+    const id = ++commandId;
+    const promise = new Promise<Record<string, unknown>>((resolveMessage, rejectMessage) => {
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        rejectMessage(new Error(`Chrome DevTools command timed out: ${method}`));
+      }, 12000);
+      pending.set(id, (message) => {
+        clearTimeout(timer);
+        if (message.error) rejectMessage(new Error(`Chrome DevTools command failed: ${method}`));
+        else resolveMessage(message);
+      });
+    });
+    devtoolsSocket!.send(JSON.stringify({ id, method, params }));
+    return promise;
+  };
+  const evaluate = async <T,>(expression: string): Promise<T> => {
+    const response = await command("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
+    const result = response.result as { result?: { value?: T }; exceptionDetails?: unknown };
+    if (result?.exceptionDetails) throw new Error("Browser page evaluation failed.");
+    return result?.result?.value as T;
+  };
+  const waitFor = async (expression: string, message: string) => {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (await evaluate<boolean>(expression)) return;
+      await delay(100);
+    }
+    throw new Error(message);
+  };
+  const navigate = async (url: string, viewport: { width: number; height: number }) => {
+    await command("Emulation.setDeviceMetricsOverride", {
+      width: viewport.width,
+      height: viewport.height,
+      deviceScaleFactor: 1,
+      mobile: viewport.width < 768,
+    });
+    await command("Page.navigate", { url });
+  };
+  const capture = async (name: string) => {
+    const response = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false, fromSurface: true });
+    const data = (response.result as { data?: unknown } | undefined)?.data;
+    assert.equal(typeof data, "string", "Chrome did not return screenshot evidence.");
+    const directory = resolve(root, "docs", "phase-6-evidence");
+    mkdirSync(directory, { recursive: true });
+    const imagePath = join(directory, `${new Date().toISOString().replace(/[:.]/g, "-")}-${name}.png`);
+    writeFileSync(imagePath, Buffer.from(data as string, "base64"), { flag: "wx" });
+  };
+
+  await command("Page.enable");
+  await command("Runtime.enable");
+  await command("Log.enable");
+  await command("Network.enable");
+  for (const { name, value } of cookiePairs(treasurerCookie)) {
+    await command("Network.setCookie", { name, value, url: baseUrl, sameSite: "Lax" });
+  }
+
+  for (const viewport of browserViewports) {
+    await navigate(`${baseUrl}/app`, viewport);
+    await waitFor("document.querySelector('.treasurer-queue') !== null", "Treasurer queue did not render in the browser.");
+    const queue = await evaluate<{ count: number; codes: string[]; overflow: boolean }>(`(() => ({
+      count: Number(document.querySelector('.treasurer-count')?.textContent),
+      codes: [...document.querySelectorAll('.treasurer-request-code')].map(item => item.textContent.trim()),
+      overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+    }))()`);
+    assert.equal(queue.count, 2);
+    assert.deepEqual(queue.codes, [firstCode, secondCode], "Visible HTTP queue must preserve oldest-first ordering.");
+    assert.equal(queue.overflow, false, `Queue has horizontal overflow at ${viewport.width}px.`);
+    if (viewport.width === 390) await capture("treasurer-queue-390x844");
+
+    await navigate(`${baseUrl}/app/bendahara/${firstCode}`, viewport);
+    await waitFor("document.querySelector('.treasurer-confirm-button') !== null", "Pending request detail did not render.");
+    const detail = await evaluate<{ warning: boolean; buttonHeight: number; visibleCode: boolean; items: string[]; total: string; overflow: boolean; technicalCopy: boolean }>(`(() => {
+      const button = document.querySelector('.treasurer-confirm-button');
+      const text = document.body.innerText;
+      return {
+        warning: text.includes('Pastikan transfer sudah diterima sebelum mengonfirmasi.'),
+        buttonHeight: Math.round(button.getBoundingClientRect().height),
+        visibleCode: text.includes('${firstCode}'),
+        items: [...document.querySelectorAll('.treasurer-detail-items li')].map(item => item.innerText.replace(/\\s+/g, ' ').trim()),
+        total: document.querySelector('.treasurer-detail-total')?.innerText.replace(/\\s+/g, ' ').trim(),
+        overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+        technicalCopy: /SQLSTATE|undefined|null|internal server error/i.test(text),
+      };
+    })()`);
+    assert.equal(detail.warning, true);
+    assert.ok(detail.buttonHeight >= 44, `Verify control is below 44px at ${viewport.width}px.`);
+    assert.equal(detail.visibleCode, true);
+    assert.equal(detail.items.length, 3);
+    assert.ok(detail.items.every((item) => item.includes("Rp 18.000")));
+    assert.ok(detail.total?.includes("Rp 54.000"));
+    assert.equal(detail.overflow, false, `Detail has horizontal overflow at ${viewport.width}px.`);
+    assert.equal(detail.technicalCopy, false);
+    if (viewport.width === 390) await capture("treasurer-detail-pending-390x844");
+  }
+
+  const verifyUrl = `${baseUrl}/api/treasurer/payment-requests/${firstCode}/verify`;
+  const concurrentResponses = await Promise.all([
+    fetch(verifyUrl, { method: "POST", headers: { cookie: treasurerCookie, origin: baseUrl, "content-type": "application/json" }, body: "{}" }),
+    fetch(verifyUrl, { method: "POST", headers: { cookie: secondTreasurerCookie, origin: baseUrl, "content-type": "application/json" }, body: "{}" }),
+  ]);
+  assert.deepEqual(concurrentResponses.map((response) => response.status).sort(), [200, 409]);
+  const conflictResponse = concurrentResponses.find((response) => response.status === 409)!;
+  assert.equal((await conflictResponse.json() as { code?: string }).code, "already_processed");
+  const successResponse = concurrentResponses.find((response) => response.status === 200)!;
+  assert.equal((await successResponse.json() as { status?: string }).status, "verified");
+
+  await navigate(`${baseUrl}/app/bendahara/${firstCode}`, { width: 390, height: 844 });
+  await waitFor("document.querySelector('.treasurer-status--done') !== null", "Already-processed detail state did not render.");
+  assert.equal(await evaluate<boolean>(`document.body.innerText.includes('Sudah dikonfirmasi') && !document.querySelector('.treasurer-confirm-button')`), true);
+  await capture("treasurer-detail-processed-390x844");
+
+  await navigate(`${baseUrl}/app/bendahara/${secondCode}`, { width: 390, height: 844 });
+  await waitFor("document.querySelector('.treasurer-confirm-button') !== null", "Second pending request detail did not render.");
+  const verifyCountBefore = requestedVerifyUrls.length;
+  await evaluate(`(() => {
+    const button = document.querySelector('.treasurer-confirm-button');
+    button.click();
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  })()`);
+  await waitFor("document.body.innerText.includes('Pembayaran berhasil dikonfirmasi.')", "Browser verify button did not reach success state.");
+  assert.equal(requestedVerifyUrls.length - verifyCountBefore, 1, "Rapid duplicate browser clicks must issue one verify request.");
+  await capture("treasurer-detail-confirmed-by-browser-390x844");
+
+  for (const viewport of browserViewports) {
+    await navigate(`${baseUrl}/app/bendahara/${secondCode}`, viewport);
+    await waitFor("document.querySelector('.treasurer-status--done') !== null", "Processed state did not render at every viewport.");
+    const detail = await evaluate<{ overflow: boolean; noAction: boolean }>(`(() => ({
+      overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      noAction: !document.querySelector('.treasurer-confirm-button'),
+    }))()`);
+    assert.equal(detail.overflow, false, `Processed detail has horizontal overflow at ${viewport.width}px.`);
+    assert.equal(detail.noAction, true);
+  }
+
+  for (const { name, value } of cookiePairs(residentCookie)) {
+    await command("Network.setCookie", { name, value, url: baseUrl, sameSite: "Lax" });
+  }
+  for (const viewport of browserViewports) {
+    await navigate(`${baseUrl}/app`, viewport);
+    await waitFor("document.querySelector('.resident-summary') !== null", "Resident card did not render after verification.");
+    const resident = await evaluate<{ summary: string[]; summaryAmounts: string[]; paidMonths: number; pendingMonths: number; noArrears: boolean; overflow: boolean }>(`(() => ({
+      summary: [...document.querySelectorAll('.resident-summary span')].map(item => item.textContent.trim()),
+      summaryAmounts: [...document.querySelectorAll('.resident-summary strong')].map(item => item.textContent.trim()),
+      paidMonths: [...document.querySelectorAll('.due-status.status-paid')].length,
+      pendingMonths: document.querySelectorAll('.due-status.status-pending').length,
+      noArrears: !document.body.innerText.includes('Tunggakan'),
+      overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+    }))()`);
+    assert.deepEqual(resident.summary, ["Belum bayar", "Menunggu konfirmasi", "Sudah bayar"]);
+    assert.equal(resident.paidMonths, 3);
+    assert.equal(resident.summaryAmounts[1], "Rp 0");
+    assert.equal(resident.pendingMonths, 0);
+    assert.equal(resident.noArrears, true);
+    assert.equal(resident.overflow, false, `Resident card has horizontal overflow at ${viewport.width}px.`);
+    if (viewport.width === 390) await capture("resident-paid-390x844");
+  }
+  await navigate(`${baseUrl}/app`, { width: 390, height: 844 });
+  await waitFor("document.querySelector('.resident-summary') !== null", "Resident card did not render before history check.");
+  await evaluate(`(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Riwayat')?.click())()`);
+  await waitFor("document.querySelector('.dues-history') !== null", "Resident payment history did not render.");
+  const history = await evaluate<{ rows: string[]; overflow: boolean }>(`(() => ({
+    rows: [...document.querySelectorAll('.dues-history li')].map(item => item.innerText.replace(/\\s+/g, ' ').trim()),
+    overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+  }))()`);
+  assert.equal(history.rows.length, 3);
+  assert.ok(history.rows.every((row) => row.includes("Sudah bayar")));
+  assert.equal(history.overflow, false);
+  await capture("resident-paid-history-390x844");
+  assert.deepEqual(pageErrors, [], "Browser page and console errors must remain clear.");
+  devtoolsSocket.close();
+  devtoolsSocket = undefined;
+  return concurrentResponses.map((response) => response.status);
+}
+
+async function main() {
+  loadEnvConfig(root);
+  const { baseUrl, databaseHost } = assertDevelopmentTarget();
+  await startNext(baseUrl);
+  const db = getDb();
+  const suffix = randomBytes(5).toString("hex").toUpperCase();
+  const residentName = `Phase 6 smoke resident ${suffix}`;
+  const residentHouseNumber = `P6-${suffix}`;
+  const residentPin = String(randomInt(100000, 1000000));
+  const [unit] = await db.insert(rtUnits).values({
+    code: `P6-${suffix}`,
+    rwCode: `P6-${suffix}`,
+    name: `Phase 6 synthetic unit ${suffix}`,
+    village: "Synthetic development fixture",
+  }).returning({ id: rtUnits.id });
+  const rtUnitId = unit!.id;
+  await db.insert(rtSettings).values({ rtUnitId });
+
+  const primaryResident = await createPerson(db, rtUnitId, {
+    houseNumber: residentHouseNumber,
+    name: residentName,
+    loginIdentifier: residentHouseNumber,
+    accountType: "resident",
+  });
+  await db.insert(authAccount).values({
+    id: randomUUID(),
+    accountId: primaryResident.userId,
+    providerId: "credential",
+    userId: primaryResident.userId,
+    password: await hashPassword(residentPin),
+  });
+
+  const treasurerPassword = randomBytes(16).toString("base64url");
+  const treasurerIdentifier = `p6-treasurer-${suffix.toLowerCase()}`;
+  const treasurer = await createPerson(db, rtUnitId, {
+    houseNumber: `P6B-${suffix}`,
+    name: `Phase 6 smoke Treasurer ${suffix}`,
+    loginIdentifier: treasurerIdentifier,
+    accountType: "official",
+    phone: "08123456789",
+  });
+  await db.insert(authAccount).values({
+    id: randomUUID(),
+    accountId: treasurer.userId,
+    providerId: "credential",
+    userId: treasurer.userId,
+    password: await hashPassword(treasurerPassword),
+  });
+  await db.insert(officialAssignments).values({
+    rtUnitId,
+    appAccountId: treasurer.accountId,
+    role: "treasurer",
+    startsOn: "2020-01-01",
+  });
+
+  const [billingYear] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" })
+    .returning({ id: billingYears.id });
+  const [feeRate] = await db.insert(feeRates).values({
+    rtUnitId,
+    billingYearId: billingYear!.id,
+    effectiveMonth: 1,
+    monthlyAmount: 18000,
+  }).returning({ id: feeRates.id });
+  await db.insert(monthlyDues).values([4, 5, 6].map((month) => ({
+    rtUnitId,
+    householdId: primaryResident.householdId,
+    billingYearId: billingYear!.id,
+    feeRateId: feeRate!.id,
+    month,
+    amount: 18000,
+    dueDate: `2026-${String(month).padStart(2, "0")}-10`,
+    status: "unpaid" as const,
+  })));
+
+  const residentCookie = await signIn(baseUrl, "resident", residentHouseNumber, residentPin);
+  const initialDues = await fetch(`${baseUrl}/api/resident/monthly-dues`, { headers: { cookie: residentCookie }, cache: "no-store" });
+  assert.equal(initialDues.status, 200);
+  const before = await initialDues.json() as { dues: Array<{ month: number; status: string; paymentRequestStatus: string | null }> };
+  assert.deepEqual(before.dues.map(({ month, status, paymentRequestStatus }) => ({ month, status, paymentRequestStatus })), [
+    { month: 4, status: "unpaid", paymentRequestStatus: null },
+    { month: 5, status: "unpaid", paymentRequestStatus: null },
+    { month: 6, status: "unpaid", paymentRequestStatus: null },
+  ]);
+
+  const primaryRequestResponse = await fetch(`${baseUrl}/api/resident/payment-requests`, {
+    method: "POST",
+    headers: {
+      cookie: residentCookie,
+      origin: baseUrl,
+      "content-type": "application/json",
+      "idempotency-key": randomUUID(),
+    },
+    body: JSON.stringify({ period: "2026-06" }),
+  });
+  assert.equal(primaryRequestResponse.status, 200, "The real resident request route should create a request.");
+  const primaryRequest = await primaryRequestResponse.json() as {
+    requestCode: string;
+    status: string;
+    periods: string[];
+    totalAmount: number;
+    whatsappUrl: string | null;
+  };
+  assert.equal(primaryRequest.status, "pending");
+  assert.deepEqual(primaryRequest.periods, ["2026-04", "2026-05", "2026-06"]);
+  assert.equal(primaryRequest.totalAmount, 54000);
+  assert.match(primaryRequest.whatsappUrl ?? "", /^https:\/\/wa\.me\/628123456789\?text=/);
+  const whatsappText = decodeURIComponent(new URL(primaryRequest.whatsappUrl!).searchParams.get("text") ?? "");
+  assert.ok(whatsappText.includes(primaryRequest.requestCode));
+
+  await delay(60);
+  const secondResident = await createPerson(db, rtUnitId, {
+    houseNumber: `P6C-${suffix}`,
+    name: `Phase 6 queue resident ${suffix}`,
+    loginIdentifier: `p6-queue-${suffix.toLowerCase()}`,
+    accountType: "resident",
+  });
+  await db.insert(monthlyDues).values({
+    rtUnitId,
+    householdId: secondResident.householdId,
+    billingYearId: billingYear!.id,
+    feeRateId: feeRate!.id,
+    month: 7,
+    amount: 18000,
+    dueDate: "2026-07-10",
+    status: "unpaid",
+  });
+  const secondResidentPrincipal: Principal = {
+    authUserId: secondResident.userId,
+    appAccountId: secondResident.accountId,
+    role: "resident",
+    rtUnitId,
+    householdId: secondResident.householdId,
+    personId: secondResident.personId,
+  };
+  const secondRequest = await createResidentPaymentRequest(db, secondResidentPrincipal, {
+    period: "2026-07",
+    idempotencyKey: randomUUID(),
+  });
+
+  const treasurerCookie = await signIn(baseUrl, "official", treasurerIdentifier, treasurerPassword);
+  const secondTreasurerCookie = await signIn(baseUrl, "official", treasurerIdentifier, treasurerPassword);
+  const queueResponse = await fetch(`${baseUrl}/api/treasurer/payment-requests`, {
+    headers: { cookie: treasurerCookie },
+    cache: "no-store",
+  });
+  assert.equal(queueResponse.status, 200, "The active Treasurer session should read the pending queue.");
+  const queue = await queueResponse.json() as { pendingCount: number; requests: Array<{ requestCode: string; items: Array<{ period: string; amount: number }>; totalAmount: number }> };
+  assert.equal(queue.pendingCount, 2);
+  assert.deepEqual(queue.requests.map((request) => request.requestCode), [primaryRequest.requestCode, secondRequest.requestCode]);
+  assert.deepEqual(queue.requests[0]?.items.map((item) => item.period), primaryRequest.periods);
+  assert.equal(queue.requests[0]?.totalAmount, primaryRequest.totalAmount);
+  assert.equal("id" in queue.requests[0]!, false);
+  assert.equal("rtUnitId" in queue.requests[0]!, false);
+
+  const detailResponse = await fetch(`${baseUrl}/api/treasurer/payment-requests/${primaryRequest.requestCode}`, {
+    headers: { cookie: treasurerCookie },
+    cache: "no-store",
+  });
+  assert.equal(detailResponse.status, 200);
+  const detailBody = await detailResponse.json() as { request: { requestCode: string; items: Array<{ period: string; amount: number }>; totalAmount: number } };
+  assert.equal(detailBody.request.requestCode, primaryRequest.requestCode);
+  assert.deepEqual(detailBody.request.items, [
+    { period: "2026-04", amount: 18000 },
+    { period: "2026-05", amount: 18000 },
+    { period: "2026-06", amount: 18000 },
+  ]);
+  assert.equal(detailBody.request.totalAmount, 54000);
+  assert.equal("id" in detailBody.request, false);
+
+  const residentQueueRefusal = await fetch(`${baseUrl}/api/treasurer/payment-requests`, {
+    headers: { cookie: residentCookie },
+    cache: "no-store",
+  });
+  assert.equal(residentQueueRefusal.status, 403);
+  const residentVerifyRefusal = await fetch(`${baseUrl}/api/treasurer/payment-requests/${primaryRequest.requestCode}/verify`, {
+    method: "POST",
+    headers: { cookie: residentCookie, origin: baseUrl, "content-type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(residentVerifyRefusal.status, 403);
+  const crossOriginVerifyRefusal = await fetch(`${baseUrl}/api/treasurer/payment-requests/${primaryRequest.requestCode}/verify`, {
+    method: "POST",
+    headers: { cookie: treasurerCookie, origin: "https://example.invalid", "content-type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(crossOriginVerifyRefusal.status, 403);
+  const massAssignmentRefusal = await fetch(`${baseUrl}/api/treasurer/payment-requests/${primaryRequest.requestCode}/verify`, {
+    method: "POST",
+    headers: { cookie: treasurerCookie, origin: baseUrl, "content-type": "application/json" },
+    body: JSON.stringify({ amount: 1, periods: ["2026-06"], rtUnitId }),
+  });
+  assert.equal(massAssignmentRefusal.status, 400);
+
+  const concurrentStatuses = await runBrowserSmoke(
+    baseUrl,
+    treasurerCookie,
+    secondTreasurerCookie,
+    residentCookie,
+    primaryRequest.requestCode,
+    secondRequest.requestCode,
+  );
+  assert.deepEqual(concurrentStatuses.sort(), [200, 409]);
+
+  const refreshedResponse = await fetch(`${baseUrl}/api/resident/monthly-dues`, {
+    headers: { cookie: residentCookie },
+    cache: "no-store",
+  });
+  assert.equal(refreshedResponse.status, 200);
+  const refreshed = await refreshedResponse.json() as { dues: Array<{ billingYear: number; month: number; amount: number; dueDate: string; status: "paid" | "unpaid" | "waived" | "not_due"; paymentRequestStatus: "pending" | null }> };
+  const primaryDues = refreshed.dues.filter((due) => [4, 5, 6].includes(due.month));
+  assert.equal(primaryDues.length, 3);
+  assert.ok(primaryDues.every((due) => due.status === "paid" && due.paymentRequestStatus === null));
+  assert.equal(duesSummary(primaryDues).paid, 54000);
+  assert.ok(primaryDues.every((due) => residentStatusLabels[dueToken(due)] === "Sudah bayar"));
+
+  const [requestRow] = await db.select().from(paymentRequests)
+    .where(eq(paymentRequests.requestCode, primaryRequest.requestCode));
+  const requestItems = await db.select().from(paymentRequestItems)
+    .where(eq(paymentRequestItems.requestId, requestRow!.id));
+  const paymentRows = await db.select().from(payments)
+    .where(eq(payments.paymentRequestId, requestRow!.id));
+  const allocations = await db.select().from(paymentAllocations)
+    .where(eq(paymentAllocations.paymentRequestId, requestRow!.id));
+  const claims = await db.select().from(paymentRequestClaims)
+    .where(eq(paymentRequestClaims.requestId, requestRow!.id));
+  const auditRows = await db.select().from(auditEvents)
+    .where(and(
+      eq(auditEvents.action, "payment_request.verified"),
+      eq(auditEvents.entityId, requestRow!.id),
+    ));
+  const dueRows = await db.select().from(monthlyDues)
+    .where(inArray(monthlyDues.id, requestItems.map((item) => item.monthlyDueId)));
+  assert.equal(requestRow!.status, "verified");
+  assert.equal(requestRow!.itemCount, 3);
+  assert.equal(requestRow!.totalAmount, 54000);
+  assert.equal(paymentRows.length, 1);
+  assert.equal(paymentRows[0]!.amount, 54000);
+  assert.equal(allocations.length, 3);
+  assert.equal(allocations.reduce((sum, allocation) => sum + allocation.amount, 0), 54000);
+  assert.equal(claims.length, 0);
+  assert.equal(auditRows.length, 1);
+  assert.equal(auditRows[0]!.actorAppAccountId, treasurer.accountId);
+  assert.equal(requestItems.length, 3, "Verified request item history must remain intact.");
+  assert.ok(dueRows.every((due) => due.status === "paid"));
+
+  const secondaryRequestRow = await db.select().from(paymentRequests)
+    .where(eq(paymentRequests.requestCode, secondRequest.requestCode));
+  assert.equal(secondaryRequestRow.length, 1);
+  const secondaryPayments = await db.select().from(payments)
+    .where(eq(payments.paymentRequestId, secondaryRequestRow[0]!.id));
+  const secondaryAllocations = await db.select().from(paymentAllocations)
+    .where(eq(paymentAllocations.paymentRequestId, secondaryRequestRow[0]!.id));
+  const secondaryClaims = await db.select().from(paymentRequestClaims)
+    .where(eq(paymentRequestClaims.requestId, secondaryRequestRow[0]!.id));
+  const secondaryAudit = await db.select().from(auditEvents).where(and(
+    eq(auditEvents.action, "payment_request.verified"),
+    eq(auditEvents.entityId, secondaryRequestRow[0]!.id),
+  ));
+  assert.equal(secondaryPayments.length, 1, "The browser double-click must not create a duplicate payment.");
+  assert.equal(secondaryAllocations.length, 1);
+  assert.equal(secondaryClaims.length, 0);
+  assert.equal(secondaryAudit.length, 1);
+
+  console.info(JSON.stringify({
+    event: "phase_6.real_http_browser_smoke",
+    environment: "development",
+    projectId: target.projectId,
+    branchName: "karturt-development",
+    branchId: target.branchId,
+    endpointId: target.endpointId,
+    databaseHost,
+    migrationHead: "0006_phase_6_treasurer_payment_ledger",
+    authentication: "Normal Better Auth resident and active Treasurer sessions; two Treasurer sessions used for concurrent verify.",
+    realHttp: "Resident monthly dues -> payment request -> WhatsApp deep link -> Treasurer queue/detail -> concurrent verify -> resident monthly dues refresh.",
+    requestSnapshot: { itemCount: requestItems.length, totalAmount: requestRow!.totalAmount },
+    concurrency: concurrentStatuses,
+    ledger: { payments: paymentRows.length, allocations: allocations.length, claimsRemaining: claims.length, verifiedAuditEvents: auditRows.length, dueStatusesPaid: dueRows.every((due) => due.status === "paid") },
+    residentStatus: { summary: "Sudah bayar", paidMonths: primaryDues.length, pendingMonths: primaryDues.filter((due) => due.paymentRequestStatus === "pending").length },
+    browser: { actualNextRoutesAndNeonDevelopment: true, viewports: browserViewports, doubleClickVerifyRequests: 1, evidenceDirectory: "docs/phase-6-evidence" },
+    syntheticFinancialFixtures: "Retained on development to preserve payment and audit history; only smoke authentication sessions are removed.",
+  }));
+}
+
+async function stopChild(child: ChildProcess | undefined) {
+  if (!child || child.exitCode !== null) return;
+  child.kill();
+  await Promise.race([once(child, "exit"), delay(2000)]);
+}
+
+main()
+  .catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "Unexpected Phase 6 smoke failure.";
+    console.error(`Phase 6 development smoke failed: ${message}`);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    devtoolsSocket?.close();
+    await stopChild(chromeProcess);
+    await stopChild(nextProcess);
+    if (userIds.length) {
+      try {
+        await getDb().delete(authSession).where(inArray(authSession.userId, userIds));
+      } catch {
+        // Keep synthetic domain and financial fixtures; only remove temporary login sessions.
+      }
+    }
+    await closeDb();
+    if (browserProfile) {
+      const tempRoot = resolve(tmpdir());
+      const resolvedProfile = resolve(browserProfile);
+      if (resolvedProfile.startsWith(`${tempRoot}${sep}`) && resolvedProfile.includes("karturt-phase-6-chrome-")) {
+        rmSync(resolvedProfile, { recursive: true, force: true });
+      }
+    }
+  });

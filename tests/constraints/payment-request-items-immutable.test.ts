@@ -50,7 +50,7 @@ describe("payment request item snapshot migration", () => {
     const rtUnitId = await createRt(database);
     const household = await createHousehold(database, rtUnitId);
     const auth = await createAuthUser(database);
-    await database.insert(appAccounts).values({
+    const [residentAccount] = await database.insert(appAccounts).values({
       rtUnitId,
       authUserId: auth.id,
       accountType: "resident",
@@ -81,19 +81,45 @@ describe("payment request item snapshot migration", () => {
       status: "unpaid" as const,
     })));
 
-    const principal = await resolvePrincipalForUser(database as never, auth.id, "2026-06-18");
-    const beforeMigration = await createResidentPaymentRequest(database as never, principal, {
-      period: "2026-01",
-      idempotencyKey: randomUUID(),
-    });
+    const dueRows = await database.select({ id: monthlyDues.id })
+      .from(monthlyDues)
+      .where(eq(monthlyDues.householdId, household.householdId))
+      .orderBy(monthlyDues.month);
+    const beforeRequestCode = `KRT-${randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`;
+    const beforeRequestKey = randomUUID();
+    const beforeRequestResult = await client.query<{ id: string }>(`
+      INSERT INTO payment_requests (
+        request_code, rt_unit_id, household_id, requested_by_account_id,
+        requested_by_account_type, status, idempotency_key, request_fingerprint,
+        total_amount, item_count
+      ) VALUES ($1, $2, $3, $4, 'resident', 'pending', $5, $6, 40000, 1)
+      RETURNING id
+    `, [beforeRequestCode, rtUnitId, household.householdId, residentAccount!.id, beforeRequestKey, "0".repeat(64)]);
+    const beforeRequest = beforeRequestResult.rows[0];
+    await client.query(`
+      INSERT INTO payment_request_items (request_id, rt_unit_id, household_id, monthly_due_id, period, amount)
+      VALUES ($1, $2, $3, $4, '2026-01', 40000)
+    `, [beforeRequest!.id, rtUnitId, household.householdId, dueRows[0]!.id]);
+    await client.query(`
+      INSERT INTO payment_request_claims (request_id, monthly_due_id)
+      VALUES ($1, $2)
+    `, [beforeRequest!.id, dueRows[0]!.id]);
+    await client.query(`
+      INSERT INTO audit_events (actor_app_account_id, action, entity_type, entity_id, context)
+      VALUES ($1, 'payment_request.created', 'payment_request', $2, $3::jsonb)
+    `, [residentAccount!.id, beforeRequest!.id, JSON.stringify({ periods: "2026-01", totalAmount: 40000, itemCount: 1 })]);
 
     await client.exec(readFileSync(resolve(migrationFolder, hardeningMigration), "utf8"));
+    await client.exec(readFileSync(resolve(migrationFolder, "0006_phase_6_treasurer_payment_ledger.sql"), "utf8"));
+
+    const principal = await resolvePrincipalForUser(database as never, auth.id, "2026-06-18");
 
     const afterMigration = await createResidentPaymentRequest(database as never, principal, {
       period: "2026-02",
       idempotencyKey: randomUUID(),
     });
-    expect(beforeMigration.status).toBe("pending");
+    expect(beforeRequestCode).toMatch(/^KRT-[A-F0-9]{16}$/);
+    expect(beforeRequest).toBeDefined();
     expect(afterMigration.periods).toEqual(["2026-02"]);
   });
 

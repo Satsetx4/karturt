@@ -332,6 +332,9 @@ export const paymentRequests = pgTable("payment_requests", {
   requestFingerprint: varchar("request_fingerprint", { length: 64 }).notNull(),
   totalAmount: bigint("total_amount", { mode: "number" }).notNull(),
   itemCount: integer("item_count").notNull(),
+  verifiedByAccountId: uuid("verified_by_account_id"),
+  verifiedByAccountType: accountTypeEnum("verified_by_account_type").notNull().default("official"),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   foreignKey({
@@ -345,6 +348,11 @@ export const paymentRequests = pgTable("payment_requests", {
     foreignColumns: [appAccounts.rtUnitId, appAccounts.householdId, appAccounts.id, appAccounts.accountType],
   }).onDelete("restrict"),
   unique("payment_requests_rt_household_id_uq").on(table.rtUnitId, table.householdId, table.id),
+  foreignKey({
+    name: "payment_requests_verified_by_scope_fk",
+    columns: [table.rtUnitId, table.verifiedByAccountId, table.verifiedByAccountType],
+    foreignColumns: [appAccounts.rtUnitId, appAccounts.id, appAccounts.accountType],
+  }).onDelete("restrict"),
   uniqueIndex("payment_requests_request_code_uq").on(table.requestCode),
   uniqueIndex("payment_requests_requester_idempotency_uq").on(table.requestedByAccountId, table.idempotencyKey),
   index("payment_requests_household_status_created_idx").on(table.rtUnitId, table.householdId, table.status, table.createdAt),
@@ -353,6 +361,43 @@ export const paymentRequests = pgTable("payment_requests", {
   check("payment_requests_fingerprint_sha256", sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`),
   check("payment_requests_positive_total", sql`${table.totalAmount} > 0`),
   check("payment_requests_positive_item_count", sql`${table.itemCount} > 0`),
+  check("payment_requests_verified_by_official", sql`${table.verifiedByAccountType} = 'official'`),
+  check(
+    "payment_requests_verification_metadata_consistent",
+    sql`(${table.status} = 'verified' and ${table.verifiedAt} is not null and ${table.verifiedByAccountId} is not null) or (${table.status} <> 'verified' and ${table.verifiedAt} is null and ${table.verifiedByAccountId} is null)`,
+  ),
+]);
+
+export const payments = pgTable("payments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  rtUnitId: uuid("rt_unit_id").notNull(),
+  householdId: uuid("household_id").notNull(),
+  paymentRequestId: uuid("payment_request_id").notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  method: varchar("method", { length: 16 }).notNull().default("transfer"),
+  verifiedByAccountId: uuid("verified_by_account_id").notNull(),
+  verifiedByAccountType: accountTypeEnum("verified_by_account_type").notNull().default("official"),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({
+    name: "payments_request_scope_fk",
+    columns: [table.rtUnitId, table.householdId, table.paymentRequestId],
+    foreignColumns: [paymentRequests.rtUnitId, paymentRequests.householdId, paymentRequests.id],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "payments_verified_by_scope_fk",
+    columns: [table.rtUnitId, table.verifiedByAccountId, table.verifiedByAccountType],
+    foreignColumns: [appAccounts.rtUnitId, appAccounts.id, appAccounts.accountType],
+  }).onDelete("restrict"),
+  uniqueIndex("payments_payment_request_uq").on(table.paymentRequestId),
+  unique("payments_rt_household_id_uq").on(table.rtUnitId, table.householdId, table.id),
+  unique("payments_id_request_scope_uq").on(table.id, table.paymentRequestId, table.rtUnitId, table.householdId),
+  index("payments_household_verified_idx").on(table.rtUnitId, table.householdId, table.verifiedAt),
+  index("payments_treasurer_verified_idx").on(table.rtUnitId, table.verifiedByAccountId, table.verifiedAt),
+  check("payments_positive_amount", sql`${table.amount} > 0`),
+  check("payments_method_transfer_only", sql`${table.method} = 'transfer'`),
+  check("payments_verified_by_official", sql`${table.verifiedByAccountType} = 'official'`),
 ]);
 
 export const paymentRequestItems = pgTable("payment_request_items", {
@@ -376,9 +421,53 @@ export const paymentRequestItems = pgTable("payment_request_items", {
   }).onDelete("restrict"),
   unique("payment_request_items_request_due_uq").on(table.requestId, table.monthlyDueId),
   unique("payment_request_items_request_period_uq").on(table.requestId, table.period),
+  unique("payment_request_items_scope_amount_uq").on(
+    table.requestId,
+    table.rtUnitId,
+    table.householdId,
+    table.monthlyDueId,
+    table.amount,
+  ),
   index("payment_request_items_due_idx").on(table.rtUnitId, table.householdId, table.monthlyDueId),
   check("payment_request_items_period_valid", sql`${table.period} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
   check("payment_request_items_amount_positive", sql`${table.amount} > 0`),
+]);
+
+export const paymentAllocations = pgTable("payment_allocations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  rtUnitId: uuid("rt_unit_id").notNull(),
+  householdId: uuid("household_id").notNull(),
+  paymentRequestId: uuid("payment_request_id").notNull(),
+  paymentId: uuid("payment_id").notNull(),
+  monthlyDueId: uuid("monthly_due_id").notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({
+    name: "payment_allocations_payment_scope_fk",
+    columns: [table.paymentId, table.paymentRequestId, table.rtUnitId, table.householdId],
+    foreignColumns: [payments.id, payments.paymentRequestId, payments.rtUnitId, payments.householdId],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "payment_allocations_request_item_scope_amount_fk",
+    columns: [table.paymentRequestId, table.rtUnitId, table.householdId, table.monthlyDueId, table.amount],
+    foreignColumns: [
+      paymentRequestItems.requestId,
+      paymentRequestItems.rtUnitId,
+      paymentRequestItems.householdId,
+      paymentRequestItems.monthlyDueId,
+      paymentRequestItems.amount,
+    ],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "payment_allocations_due_scope_fk",
+    columns: [table.rtUnitId, table.householdId, table.monthlyDueId],
+    foreignColumns: [monthlyDues.rtUnitId, monthlyDues.householdId, monthlyDues.id],
+  }).onDelete("restrict"),
+  uniqueIndex("payment_allocations_payment_due_uq").on(table.paymentId, table.monthlyDueId),
+  uniqueIndex("payment_allocations_request_due_uq").on(table.paymentRequestId, table.monthlyDueId),
+  index("payment_allocations_due_history_idx").on(table.rtUnitId, table.householdId, table.monthlyDueId, table.createdAt),
+  check("payment_allocations_positive_amount", sql`${table.amount} > 0`),
 ]);
 
 export const paymentRequestClaims = pgTable("payment_request_claims", {
@@ -430,7 +519,9 @@ export const schema = {
   feeRates,
   monthlyDues,
   paymentRequests,
+  payments,
   paymentRequestItems,
+  paymentAllocations,
   paymentRequestClaims,
   auditEvents,
 };
