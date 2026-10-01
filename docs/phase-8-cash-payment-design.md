@@ -72,10 +72,6 @@ Use short 180–240 ms state transitions, visible focus, and a press scale aroun
 
 `/app` → `TreasurerDashboard` → separate `/app/bendahara/tunai` page → `TreasurerCashPaymentFlow` client component. The component calls same-RT authenticated search and preview handlers, then posts only `{ householdId, period }` plus an `Idempotency-Key` header. Route handlers authenticate and validate; billing services derive tenant and actor from the principal and execute the transaction; PostgreSQL remains authoritative for ledger completeness, paid-due validity, and audit cardinality. No third-party integration is needed.
 
-## Remaining implementation work
+## Implementation outcome
 
-- Add authenticated Treasurer household search, preview, and cash-record routes with strict input schemas and same-origin mutation checks.
-- Add an independent cash-payment flow to the Treasurer dashboard with explicit household/period/total confirmation and an in-flight idempotency key guard.
-- Extend audit writer contracts and test schema, transaction, authorization, idempotency, concurrency, request-race, history, and UI behavior.
-- Extend the Gate A branch filter and execute the requested local quality gates, development-Neon-only smoke, browser/responsive smoke, and existing Gate B/F7/F7.1 regressions.
-- Record evidence, limitations, residual risks, and the Fase 8/Fase 9 gate in `docs/phase-8-cash-payment-report.md`.
+Fase 8 implementation, development verification, responsive browser smoke, and Gate B/F7/F7.1 regression are complete on `feat/phase-8-cash-payment`. The completion evidence and residual-risk assessment are recorded in `docs/phase-8-cash-payment-report.md`; Fase 8 is PASS and Fase 9 is GO to begin planning. The feature branch remains unmerged and Neon production was not touched.
