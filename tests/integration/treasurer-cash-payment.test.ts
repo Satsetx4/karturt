@@ -26,6 +26,7 @@ import {
   CashPaymentPendingRequestConflictError,
   getTreasurerCashPaymentHousehold,
   recordTreasurerCashPayment,
+  searchTreasurerCashPaymentHouseholds,
 } from "@/lib/billing/treasurer-cash-payments";
 import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 
@@ -197,6 +198,26 @@ describe("Treasurer direct cash payment", () => {
     })).rejects.toBeInstanceOf(CashPaymentIdempotencyConflictError);
     expect(await testDatabase.db.select().from(payments)
       .where(eq(payments.cashIdempotencyKey, key))).toHaveLength(1);
+  });
+
+  it("treats injection-like household search text as data and keeps search within the Treasurer RT", async () => {
+    const scenario = await createScenario(["2026-12"]);
+    const otherRt = await createRt(testDatabase.db);
+    const foreignHousehold = await createHousehold(testDatabase.db, otherRt, { number: "FOREIGN-OR-1=1" });
+
+    const injectionLike = await searchTreasurerCashPaymentHouseholds(
+      database,
+      scenario.treasurerPrincipal,
+      "' OR 1=1 --",
+    );
+    expect(injectionLike.households).toEqual([]);
+
+    const foreignSearch = await searchTreasurerCashPaymentHouseholds(
+      database,
+      scenario.treasurerPrincipal,
+      "FOREIGN-OR-1=1",
+    );
+    expect(foreignSearch.households.some((household) => household.householdId === foreignHousehold.householdId)).toBe(false);
   });
 
   it("blocks pending claims without mutation, then records cash after rejection and preserves terminal history", async () => {
