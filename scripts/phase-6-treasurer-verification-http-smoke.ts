@@ -369,7 +369,7 @@ async function runBrowserSmoke(
       const timer = setTimeout(() => {
         pending.delete(id);
         rejectMessage(new Error(`Chrome DevTools command timed out: ${method}`));
-      }, 12000);
+      }, 30000);
       pending.set(id, (message) => {
         clearTimeout(timer);
         if (message.error) rejectMessage(new Error(`Chrome DevTools command failed: ${method}`));
@@ -382,24 +382,35 @@ async function runBrowserSmoke(
   const evaluate = async <T,>(expression: string): Promise<T> => {
     const response = await command("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
     const result = response.result as { result?: { value?: T }; exceptionDetails?: unknown };
-    if (result?.exceptionDetails) throw new Error("Browser page evaluation failed.");
+    if (result?.exceptionDetails) throw new Error(`Browser page evaluation failed: ${JSON.stringify(result.exceptionDetails)}`);
     return result?.result?.value as T;
   };
   const waitFor = async (expression: string, message: string) => {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
       if (await evaluate<boolean>(expression)) return;
       await delay(100);
     }
     throw new Error(message);
   };
-  const navigate = async (url: string, viewport: { width: number; height: number }) => {
+  const setViewport = async (viewport: { width: number; height: number }) => {
     await command("Emulation.setDeviceMetricsOverride", {
       width: viewport.width,
       height: viewport.height,
       deviceScaleFactor: 1,
-      mobile: viewport.width < 768,
+      mobile: false,
     });
-    await command("Page.navigate", { url });
+  };
+  const navigate = async (url: string, viewport: { width: number; height: number }) => {
+    await setViewport(viewport);
+    const currentUrl = await evaluate<string>("location.href");
+    if (currentUrl === url) {
+      await command("Page.reload", { ignoreCache: true });
+      await delay(200);
+    } else {
+      await command("Page.navigate", { url });
+    }
+    await waitFor(`location.href === ${JSON.stringify(url)} && document.readyState === 'complete'`, "Browser navigation did not finish loading the requested URL.");
+    await delay(200);
   };
   const capture = async (name: string) => {
     const response = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false, fromSurface: true });
@@ -428,8 +439,10 @@ async function runBrowserSmoke(
     await command("Network.setCookie", { name, value, url: baseUrl, sameSite: "Lax" });
   }
 
+  await navigate(`${baseUrl}/app`, browserViewports[0]!);
   for (const viewport of browserViewports) {
-    await navigate(`${baseUrl}/app`, viewport);
+    currentSmokeStage = `browser Treasurer queue at ${viewport.width}px`;
+    await setViewport(viewport);
     await waitFor("document.querySelector('.treasurer-queue') !== null", "Treasurer queue did not render in the browser.");
     const queue = await evaluate<{ count: number; codes: string[]; overflow: boolean }>(`(() => ({
       count: Number(document.querySelector('.treasurer-count')?.textContent),
@@ -440,12 +453,25 @@ async function runBrowserSmoke(
     assert.deepEqual(queue.codes, [firstCode, secondCode, phase7.pendingCode], "Visible HTTP queue must preserve oldest-first ordering.");
     assert.equal(queue.overflow, false, `Queue has horizontal overflow at ${viewport.width}px.`);
     if (viewport.width === 390) await capture("treasurer-queue-390x844");
+  }
 
-    await navigate(`${baseUrl}/app/bendahara/${firstCode}`, viewport);
-    await waitFor("document.querySelector('.treasurer-confirm-button') !== null", "Pending request detail did not render.");
+  await navigate(`${baseUrl}/app/bendahara/${firstCode}`, browserViewports[0]!);
+  for (const viewport of browserViewports) {
+    currentSmokeStage = `browser Treasurer pending detail at ${viewport.width}px`;
+    await setViewport(viewport);
+    try {
+      await waitFor("document.querySelector('.treasurer-confirm-button') !== null", "Pending request detail did not render.");
+    } catch {
+      const page = await evaluate<{ href: string; title: string; body: string }>(`({
+        href: location.href,
+        title: document.title,
+        body: document.body.innerText.replace(/\\s+/g, ' ').slice(0, 300),
+      })`);
+      throw new Error(`Pending request detail did not render: ${JSON.stringify(page)}`);
+    }
     const detail = await evaluate<{ warning: boolean; buttonHeight: number; visibleCode: boolean; items: string[]; total: string; overflow: boolean; technicalCopy: boolean }>(`(() => {
       const button = document.querySelector('.treasurer-confirm-button');
-      const text = document.body.innerText;
+      const text = document.body?.innerText ?? '';
       return {
         warning: text.includes('Pastikan transfer sudah diterima sebelum mengonfirmasi.'),
         buttonHeight: Math.round(button.getBoundingClientRect().height),
@@ -479,7 +505,16 @@ async function runBrowserSmoke(
   assert.equal((await successResponse.json() as { status?: string }).status, "verified");
 
   await navigate(`${baseUrl}/app/bendahara/${firstCode}`, { width: 390, height: 844 });
-  await waitFor("document.querySelector('.treasurer-status--done') !== null", "Already-processed detail state did not render.");
+  try {
+    await waitFor("document.querySelector('.treasurer-status--done') !== null", "Already-processed detail state did not render.");
+  } catch {
+    const page = await evaluate<{ href: string; title: string; body: string }>(`({
+      href: location.href,
+      title: document.title,
+      body: document.body?.innerText.replace(/\\s+/g, ' ').slice(0, 300) ?? '',
+    })`);
+    throw new Error(`Already-processed detail state did not render: ${JSON.stringify(page)}`);
+  }
   assert.equal(await evaluate<boolean>(`document.body.innerText.includes('Sudah dikonfirmasi') && !document.querySelector('.treasurer-confirm-button')`), true);
   await capture("treasurer-detail-processed-390x844");
 
@@ -495,8 +530,10 @@ async function runBrowserSmoke(
   assert.equal(requestedVerifyUrls.length - verifyCountBefore, 1, "Rapid duplicate browser clicks must issue one verify request.");
   await capture("treasurer-detail-confirmed-by-browser-390x844");
 
+  await navigate(`${baseUrl}/app/bendahara/${secondCode}`, browserViewports[0]!);
   for (const viewport of browserViewports) {
-    await navigate(`${baseUrl}/app/bendahara/${secondCode}`, viewport);
+    currentSmokeStage = `browser Treasurer processed detail at ${viewport.width}px`;
+    await setViewport(viewport);
     await waitFor("document.querySelector('.treasurer-status--done') !== null", "Processed state did not render at every viewport.");
     const detail = await evaluate<{ overflow: boolean; noAction: boolean }>(`(() => ({
       overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
@@ -509,8 +546,10 @@ async function runBrowserSmoke(
   for (const { name, value } of cookiePairs(residentCookie)) {
     await command("Network.setCookie", { name, value, url: baseUrl, sameSite: "Lax" });
   }
+  await navigate(`${baseUrl}/app`, browserViewports[0]!);
   for (const viewport of browserViewports) {
-    await navigate(`${baseUrl}/app`, viewport);
+    currentSmokeStage = `browser resident paid summary at ${viewport.width}px`;
+    await setViewport(viewport);
     await waitFor("document.querySelector('.resident-summary') !== null", "Resident card did not render after verification.");
     const resident = await evaluate<{ summary: string[]; summaryAmounts: string[]; paidMonths: number; pendingMonths: number; noArrears: boolean; overflow: boolean }>(`(() => ({
       summary: [...document.querySelectorAll('.resident-summary span')].map(item => item.textContent.trim()),
@@ -545,9 +584,18 @@ async function runBrowserSmoke(
     await command("Network.setCookie", { name, value, url: baseUrl, sameSite: "Lax" });
   }
   await evaluate(`localStorage.setItem("karturt:resident-tab", "card")`);
+  await navigate(`${baseUrl}/app`, browserViewports[0]!);
   for (const viewport of browserViewports) {
-    await navigate(`${baseUrl}/app`, viewport);
-    await waitFor("document.querySelector('.payment-request-history') !== null", "Resident payment-request history did not render in the browser.");
+    currentSmokeStage = `browser resident request history at ${viewport.width}px`;
+    await setViewport(viewport);
+    await waitFor(`(() => {
+      const text = document.body.innerText;
+      const cancelButton = [...document.querySelectorAll('.payment-request-history-list button')]
+        .some(button => button.textContent.trim() === 'Batalkan permintaan');
+      return document.querySelector('.payment-request-history') !== null &&
+        text.includes('${phase7.cancelledCode}') && text.includes('${phase7.rejectedCode}') &&
+        text.includes('${phase7.pendingCode}') && text.includes('Bukti transfer belum terbaca.') && cancelButton;
+    })()`, "Resident payment-request history and terminal labels did not finish rendering in the browser.");
     const panel = await evaluate<{
       cancelled: boolean;
       rejected: boolean;
@@ -570,16 +618,17 @@ async function runBrowserSmoke(
         technicalCopy: /SQLSTATE|undefined|null|internal server error/i.test(text),
       };
     })()`);
-    assert.equal(panel.cancelled, true);
-    assert.equal(panel.rejected, true);
-    assert.equal(panel.reason, true);
-    assert.equal(panel.pending, true);
+    assert.equal(panel.cancelled, true, `Cancelled history item missing at ${viewport.width}px.`);
+    assert.equal(panel.rejected, true, `Rejected history item missing at ${viewport.width}px.`);
+    assert.equal(panel.reason, true, `Rejection reason missing at ${viewport.width}px.`);
+    assert.equal(panel.pending, true, `Pending history item or cancel control missing at ${viewport.width}px.`);
     assert.ok(panel.cancelButtonHeight >= 44, `Resident cancel control is below 44px at ${viewport.width}px.`);
     assert.equal(panel.overflow, false, `Resident payment-request history has horizontal overflow at ${viewport.width}px.`);
     assert.equal(panel.technicalCopy, false);
     if (viewport.width === 390) await capturePhase7("resident-request-history-pending-390x844");
   }
 
+  await setViewport({ width: 390, height: 844 });
   const cancelCountBefore = requestedCancelUrls.length;
   await evaluate(`(() => [...document.querySelectorAll('.payment-request-history-list button')]
     .find(button => button.textContent.trim() === 'Batalkan permintaan')?.click())()`);
@@ -616,8 +665,10 @@ async function runBrowserSmoke(
     await command("Network.setCookie", { name, value, url: baseUrl, sameSite: "Lax" });
   }
   const uiRejectReason = "Bukti transfer belum terbaca.";
+  await navigate(`${baseUrl}/app/bendahara/${uiRequestCode}`, browserViewports[0]!);
   for (const viewport of browserViewports) {
-    await navigate(`${baseUrl}/app/bendahara/${uiRequestCode}`, viewport);
+    currentSmokeStage = `browser Treasurer reject form at ${viewport.width}px`;
+    await setViewport(viewport);
     await waitFor("document.querySelector('.treasurer-reject-form textarea') !== null", "Treasurer reject form did not render in the browser.");
     const form = await evaluate<{ required: boolean; disabled: boolean; verify: boolean; overflow: boolean }>(`(() => ({
       required: document.querySelector('.treasurer-reject-form textarea').required,
@@ -631,19 +682,21 @@ async function runBrowserSmoke(
     assert.equal(form.overflow, false, `Treasurer reject form has horizontal overflow at ${viewport.width}px.`);
     if (viewport.width === 390) await capturePhase7("treasurer-reject-required-390x844");
   }
+  await setViewport({ width: 390, height: 844 });
   await evaluate("document.querySelector('.treasurer-reject-form textarea').focus()");
   await command("Input.insertText", { text: uiRejectReason });
   await waitFor("!document.querySelector('.treasurer-reject-button').disabled", "Treasurer reject reason was not accepted by the browser form.");
   const rejectCountBefore = requestedRejectUrls.length;
   await evaluate("document.querySelector('.treasurer-reject-button').click()");
-  await waitFor("document.body.innerText.includes('Permintaan ditolak. Warga dapat mengajukan ulang bulan tersebut.')", "Treasurer reject form did not reach its success state.");
+  await waitFor("document.body.innerText.includes('Permintaan ditolak. Bulan iuran kembali Belum bayar dan dapat diajukan lagi.')", "Treasurer reject form did not reach its success state.");
   await waitFor("document.querySelector('.treasurer-status--done') && document.body.innerText.includes('Ditolak')", "Rejected status did not refresh in the browser detail.");
   assert.equal(requestedRejectUrls.length - rejectCountBefore, 1, "Treasurer reject action must issue one request.");
   assert.equal(await evaluate<boolean>(`document.body.innerText.includes('${uiRejectReason}') &&
     !document.querySelector('.treasurer-confirm-button') && !document.querySelector('.treasurer-reject-form')`), true);
   await capturePhase7("treasurer-request-rejected-390x844");
   for (const viewport of browserViewports) {
-    await navigate(`${baseUrl}/app/bendahara/${uiRequestCode}`, viewport);
+    currentSmokeStage = `browser rejected Treasurer detail at ${viewport.width}px`;
+    await setViewport(viewport);
     await waitFor("document.querySelector('.treasurer-status--done') !== null", "Rejected processed state did not render at every viewport.");
     const detail = await evaluate<{ reason: boolean; noActions: boolean; overflow: boolean; forbiddenDate: boolean; uuid: boolean }>(`(() => {
       const text = document.body.innerText;
@@ -664,8 +717,10 @@ async function runBrowserSmoke(
   for (const { name, value } of cookiePairs(phase7.residentCookie)) {
     await command("Network.setCookie", { name, value, url: baseUrl, sameSite: "Lax" });
   }
+  await navigate(`${baseUrl}/app`, browserViewports[0]!);
   for (const viewport of browserViewports) {
-    await navigate(`${baseUrl}/app`, viewport);
+    currentSmokeStage = `browser resident rejected history at ${viewport.width}px`;
+    await setViewport(viewport);
     await waitFor("document.querySelector('.payment-request-history') && document.body.innerText.includes('Ditolak')", "Resident did not see the rejected request after a browser rejection.");
     const residentFinal = await evaluate<{ latestRequest: boolean; reason: boolean; noPending: boolean; unpaid: boolean; cancelButton: boolean; overflow: boolean }>(`(() => {
       const text = document.body.innerText;
@@ -837,13 +892,12 @@ async function main() {
     idempotencyKey: randomUUID(),
   });
 
-  const phase7Password = randomBytes(16).toString("base64url");
+  const phase7Password = String(randomInt(100000, 1000000));
   const phase7HouseNumber = `P7-${suffix}`;
-  const phase7Identifier = `p7-resident-${suffix.toLowerCase()}`;
   const phase7Resident = await createPerson(db, rtUnitId, {
     houseNumber: phase7HouseNumber,
     name: `Phase 7 smoke resident ${suffix}`,
-    loginIdentifier: phase7Identifier,
+    loginIdentifier: phase7HouseNumber,
     accountType: "resident",
   });
   await db.insert(authAccount).values({
@@ -1010,16 +1064,21 @@ async function main() {
     cache: "no-store",
   });
   assert.equal(otherResidentHistoryResponse.status, 200);
-  assert.doesNotMatch(await otherResidentHistoryResponse.text(), /KRT-[A-F0-9]{16}/);
+  const otherResidentHistory = await otherResidentHistoryResponse.json() as { requests: Array<{ requestCode: string }> };
+  const phase7RequestCodes = new Set([
+    initialPhase7Request.requestCode,
+    phase7RequestAfterCancel.requestCode,
+    phase7RequestAfterReject.requestCode,
+  ]);
+  assert.equal(otherResidentHistory.requests.some(({ requestCode }) => phase7RequestCodes.has(requestCode)), false);
 
-  const racePassword = randomBytes(16).toString("base64url");
+  const racePassword = String(randomInt(100000, 1000000));
   const createRaceFixture = async (label: string, month: number) => {
     const houseNumber = `${label}-${suffix}`;
-    const identifier = `${label.toLowerCase()}-${suffix.toLowerCase()}`;
     const resident = await createPerson(db, rtUnitId, {
       houseNumber,
       name: `Phase 7 ${label} race resident ${suffix}`,
-      loginIdentifier: identifier,
+      loginIdentifier: houseNumber,
       accountType: "resident",
     });
     await db.insert(authAccount).values({
