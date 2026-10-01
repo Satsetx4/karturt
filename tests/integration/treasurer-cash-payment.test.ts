@@ -18,7 +18,10 @@ import type { Principal } from "@/lib/auth/permissions";
 import { getResidentMonthlyDues } from "@/lib/billing/resident-dues";
 import { dueToken, duesSummary } from "@/lib/billing/resident-card";
 import { createResidentPaymentRequest } from "@/lib/billing/resident-payment-request";
-import { rejectTreasurerPaymentRequest } from "@/lib/billing/payment-request-resolution";
+import {
+  cancelResidentPaymentRequest,
+  rejectTreasurerPaymentRequest,
+} from "@/lib/billing/payment-request-resolution";
 import {
   CashPaymentDueConflictError,
   CashPaymentHouseholdNotFoundError,
@@ -220,8 +223,8 @@ describe("Treasurer direct cash payment", () => {
     expect(foreignSearch.households.some((household) => household.householdId === foreignHousehold.householdId)).toBe(false);
   });
 
-  it("blocks pending claims without mutation, then records cash after rejection and preserves terminal history", async () => {
-    const scenario = await createScenario(["2026-11", "2026-12"]);
+  it("blocks pending claims without mutation, then records cash after rejection and cancellation without rewriting history", async () => {
+    const scenario = await createScenario(["2026-11", "2026-12", "2027-02"]);
     const request = await createResidentPaymentRequest(database, scenario.residentPrincipal, {
       period: "2026-12",
       idempotencyKey: randomUUID(),
@@ -259,6 +262,28 @@ describe("Treasurer direct cash payment", () => {
       eq(auditEvents.action, "payment_request.rejected"),
       eq(auditEvents.entityId, requestRow!.id),
     ))).toHaveLength(1);
+
+    const cancelledRequest = await createResidentPaymentRequest(database, scenario.residentPrincipal, {
+      period: "2027-02",
+      idempotencyKey: randomUUID(),
+    });
+    const [cancelledRequestRow] = await testDatabase.db.select().from(paymentRequests)
+      .where(eq(paymentRequests.requestCode, cancelledRequest.requestCode));
+    await cancelResidentPaymentRequest(database, scenario.residentPrincipal, cancelledRequest.requestCode);
+    const cancelledCash = await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: scenario.householdId,
+      period: "2027-02",
+      idempotencyKey: randomUUID(),
+    });
+    expect(cancelledCash.periods).toEqual(["2027-02"]);
+    expect((await testDatabase.db.select().from(paymentRequests)
+      .where(eq(paymentRequests.id, cancelledRequestRow!.id)))[0]!.status).toBe("cancelled");
+    expect(await testDatabase.db.select().from(paymentRequestClaims)
+      .where(eq(paymentRequestClaims.requestId, cancelledRequestRow!.id))).toHaveLength(0);
+    expect(await testDatabase.db.select().from(payments)
+      .where(eq(payments.paymentRequestId, cancelledRequestRow!.id))).toHaveLength(0);
+    expect(await testDatabase.db.select().from(paymentAllocations)
+      .where(eq(paymentAllocations.paymentRequestId, cancelledRequestRow!.id))).toHaveLength(0);
   });
 
   it("serializes distinct-key attempts against the same dues so only one can pay", async () => {
