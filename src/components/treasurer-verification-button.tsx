@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { useTreasurerResolutionCoordinator } from "@/components/treasurer-resolution-coordinator";
 
 type VerifyResponse = {
   code?: string;
@@ -9,6 +10,7 @@ type VerifyResponse = {
 };
 
 export function TreasurerVerificationButton({ requestCode }: { requestCode: string }) {
+  const coordinator = useTreasurerResolutionCoordinator();
   const [submitting, setSubmitting] = useState(false);
   const [complete, setComplete] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -16,7 +18,7 @@ export function TreasurerVerificationButton({ requestCode }: { requestCode: stri
   const inFlight = useRef(false);
 
   async function verify() {
-    if (inFlight.current || complete) return;
+    if (inFlight.current || complete || coordinator.completedBy !== null || !coordinator.begin("verify")) return;
     inFlight.current = true;
     setSubmitting(true);
     setMessage("");
@@ -35,6 +37,7 @@ export function TreasurerVerificationButton({ requestCode }: { requestCode: stri
       }
       if (response.status === 409 && data.code === "already_processed") {
         setComplete(true);
+        coordinator.markComplete("verify");
         setMessage("Permintaan ini sudah diproses. Antrean akan menampilkan status terbaru.");
         return;
       }
@@ -43,14 +46,18 @@ export function TreasurerVerificationButton({ requestCode }: { requestCode: stri
         return;
       }
       setComplete(true);
+      coordinator.markComplete("verify");
       setMessage("Pembayaran berhasil dikonfirmasi. Status iuran warga sudah diperbarui.");
     } catch {
       setMessage("Sambungan terputus. Muat ulang rincian untuk memeriksa status terbaru.");
     } finally {
       inFlight.current = false;
       setSubmitting(false);
+      coordinator.end("verify");
     }
   }
+
+  if (coordinator.completedBy === "reject") return null;
 
   return (
     <div className="treasurer-verify-actions">
@@ -61,8 +68,8 @@ export function TreasurerVerificationButton({ requestCode }: { requestCode: stri
           {complete && <Link className="button button--primary" href="/app">Kembali ke antrean</Link>}
         </div>
       )}
-      {!complete && (
-        <button className="button button--primary treasurer-confirm-button" type="button" disabled={submitting} onClick={() => void verify()}>
+      {!complete && coordinator.completedBy === null && (
+        <button className="button button--primary treasurer-confirm-button" type="button" disabled={submitting || coordinator.activeAction !== null} onClick={() => void verify()}>
           {submitting ? "Memproses…" : "Konfirmasi pembayaran"}
         </button>
       )}

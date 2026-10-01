@@ -264,6 +264,27 @@ function assertNoPaymentResolution(
   });
 }
 
+function assertHistoricalTerminalAfterPayment(
+  artifacts: Awaited<ReturnType<typeof readRequestArtifacts>>,
+  status: "rejected" | "cancelled",
+  action: "payment_request.rejected" | "payment_request.cancelled",
+  reason: string | null,
+) {
+  assert.equal(artifacts.request.status, status);
+  assert.equal(artifacts.items.length, artifacts.request.itemCount, "Paid replacement must not change terminal request item history.");
+  assert.equal(artifacts.payments.length, 0, "Historical request must not acquire the replacement payment.");
+  assert.equal(artifacts.allocations.length, 0, "Historical request must not acquire the replacement allocations.");
+  assert.equal(artifacts.claims.length, 0, "Historical request must remain claim-free after replacement payment.");
+  assert.ok(artifacts.dues.every((due) => due.status === "paid"), "The same referenced dues must now be paid by the verified replacement.");
+  assert.equal(artifacts.audits.length, 1, "Historical transition audit must remain intact after replacement payment.");
+  assert.equal(artifacts.audits[0]!.action, action);
+  assert.equal(artifacts.audits[0]!.reason, reason);
+  assert.deepEqual(artifacts.audits[0]!.context, {
+    itemCount: artifacts.request.itemCount,
+    totalAmount: artifacts.request.totalAmount,
+  });
+}
+
 async function assertRaceWinner(
   db: ReturnType<typeof getDb>,
   requestCode: string,
@@ -296,6 +317,7 @@ async function assertRaceWinner(
 
 async function runBrowserSmoke(
   baseUrl: string,
+  db: ReturnType<typeof getDb>,
   treasurerCookie: string,
   secondTreasurerCookie: string,
   residentCookie: string,
@@ -307,6 +329,7 @@ async function runBrowserSmoke(
     pendingCode: string;
     cancelledCode: string;
     rejectedCode: string;
+    rejectedReason: string;
   },
 ) {
   const tempRoot = resolve(tmpdir());
@@ -366,10 +389,11 @@ async function runBrowserSmoke(
   const command = (method: string, params: Record<string, unknown> = {}) => {
     const id = ++commandId;
     const promise = new Promise<Record<string, unknown>>((resolveMessage, rejectMessage) => {
+      const timeoutMs = method === "Page.navigate" ? 120000 : 30000;
       const timer = setTimeout(() => {
         pending.delete(id);
         rejectMessage(new Error(`Chrome DevTools command timed out: ${method}`));
-      }, 30000);
+      }, timeoutMs);
       pending.set(id, (message) => {
         clearTimeout(timer);
         if (message.error) rejectMessage(new Error(`Chrome DevTools command failed: ${method}`));
@@ -401,6 +425,7 @@ async function runBrowserSmoke(
     });
   };
   const navigate = async (url: string, viewport: { width: number; height: number }) => {
+    currentSmokeStage = `browser navigation to ${new URL(url).pathname}`;
     await setViewport(viewport);
     const currentUrl = await evaluate<string>("location.href");
     if (currentUrl === url) {
@@ -520,12 +545,34 @@ async function runBrowserSmoke(
 
   await navigate(`${baseUrl}/app/bendahara/${secondCode}`, { width: 390, height: 844 });
   await waitFor("document.querySelector('.treasurer-confirm-button') !== null", "Second pending request detail did not render.");
+  await evaluate("document.querySelector('.treasurer-reject-form textarea').focus()");
+  await command("Input.insertText", { text: "Browser cross-action coordination check." });
+  assert.equal(await evaluate<boolean>("!document.querySelector('.treasurer-reject-button').disabled"), true);
+  await evaluate(`(() => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (!url.endsWith('/verify')) return originalFetch(input, init);
+      return new Promise((resolve, reject) => {
+        window.__phase71ReleaseVerify = () => {
+          window.fetch = originalFetch;
+          originalFetch(input, init).then(resolve, reject);
+        };
+      });
+    };
+  })()`);
   const verifyCountBefore = requestedVerifyUrls.length;
   await evaluate(`(() => {
     const button = document.querySelector('.treasurer-confirm-button');
     button.click();
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   })()`);
+  await waitFor("document.querySelector('.treasurer-confirm-button')?.disabled && document.querySelector('.treasurer-reject-button')?.disabled", "Reject control stayed active while verification was in flight.");
+  const rejectCountBeforeVerifyRelease = requestedRejectUrls.length;
+  await evaluate("document.querySelector('.treasurer-reject-button').click()");
+  await delay(150);
+  assert.equal(requestedRejectUrls.length, rejectCountBeforeVerifyRelease, "Reject mutation must not be sent while verify is in flight.");
+  await evaluate("window.__phase71ReleaseVerify?.()");
   await waitFor("document.body.innerText.includes('Pembayaran berhasil dikonfirmasi.')", "Browser verify button did not reach success state.");
   assert.equal(requestedVerifyUrls.length - verifyCountBefore, 1, "Rapid duplicate browser clicks must issue one verify request.");
   await capture("treasurer-detail-confirmed-by-browser-390x844");
@@ -670,15 +717,19 @@ async function runBrowserSmoke(
     currentSmokeStage = `browser Treasurer reject form at ${viewport.width}px`;
     await setViewport(viewport);
     await waitFor("document.querySelector('.treasurer-reject-form textarea') !== null", "Treasurer reject form did not render in the browser.");
-    const form = await evaluate<{ required: boolean; disabled: boolean; verify: boolean; overflow: boolean }>(`(() => ({
+    const form = await evaluate<{ required: boolean; disabled: boolean; verify: boolean; rejectHeight: number; verifyHeight: number; overflow: boolean }>(`(() => ({
       required: document.querySelector('.treasurer-reject-form textarea').required,
       disabled: document.querySelector('.treasurer-reject-button').disabled,
       verify: Boolean(document.querySelector('.treasurer-confirm-button')),
+      rejectHeight: Math.round(document.querySelector('.treasurer-reject-button').getBoundingClientRect().height),
+      verifyHeight: Math.round(document.querySelector('.treasurer-confirm-button').getBoundingClientRect().height),
       overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
     }))()`);
     assert.equal(form.required, true);
     assert.equal(form.disabled, true, "Reject control must remain disabled until a reason is entered.");
     assert.equal(form.verify, true);
+    assert.ok(form.rejectHeight >= 44, `Reject control is below 44px at ${viewport.width}px.`);
+    assert.ok(form.verifyHeight >= 44, `Verify control is below 44px at ${viewport.width}px.`);
     assert.equal(form.overflow, false, `Treasurer reject form has horizontal overflow at ${viewport.width}px.`);
     if (viewport.width === 390) await capturePhase7("treasurer-reject-required-390x844");
   }
@@ -687,7 +738,26 @@ async function runBrowserSmoke(
   await command("Input.insertText", { text: uiRejectReason });
   await waitFor("!document.querySelector('.treasurer-reject-button').disabled", "Treasurer reject reason was not accepted by the browser form.");
   const rejectCountBefore = requestedRejectUrls.length;
+  await evaluate(`(() => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (!url.endsWith('/reject')) return originalFetch(input, init);
+      return new Promise((resolve, reject) => {
+        window.__phase71ReleaseReject = () => {
+          window.fetch = originalFetch;
+          originalFetch(input, init).then(resolve, reject);
+        };
+      });
+    };
+  })()`);
+  const verifyCountBeforeRejectRelease = requestedVerifyUrls.length;
   await evaluate("document.querySelector('.treasurer-reject-button').click()");
+  await waitFor("document.querySelector('.treasurer-reject-button')?.disabled && document.querySelector('.treasurer-confirm-button')?.disabled", "Verify control stayed active while rejection was in flight.");
+  await evaluate("document.querySelector('.treasurer-confirm-button').click()");
+  await delay(150);
+  assert.equal(requestedVerifyUrls.length, verifyCountBeforeRejectRelease, "Verify mutation must not be sent while reject is in flight.");
+  await evaluate("window.__phase71ReleaseReject?.()");
   await waitFor("document.body.innerText.includes('Permintaan ditolak. Bulan iuran kembali Belum bayar dan dapat diajukan lagi.')", "Treasurer reject form did not reach its success state.");
   await waitFor("document.querySelector('.treasurer-status--done') && document.body.innerText.includes('Ditolak')", "Rejected status did not refresh in the browser detail.");
   assert.equal(requestedRejectUrls.length - rejectCountBefore, 1, "Treasurer reject action must issue one request.");
@@ -742,12 +812,111 @@ async function runBrowserSmoke(
     assert.equal(residentFinal.overflow, false, `Resident rejected history has horizontal overflow at ${viewport.width}px.`);
     if (viewport.width === 390) await capturePhase7("resident-request-rejected-history-390x844");
   }
+
+  const verifiedReplacement = await createRequestOverHttp(baseUrl, phase7.residentCookie, "2026-08");
+  const replacementVerifyResponse = await postJson(
+    `${baseUrl}/api/treasurer/payment-requests/${verifiedReplacement.requestCode}/verify`,
+    phase7.treasurerCookie,
+    baseUrl,
+    {},
+  );
+  assert.equal(replacementVerifyResponse.status, 200, "A new request for the released period must verify after terminal history exists.");
+  assert.equal((await replacementVerifyResponse.json() as { status?: string }).status, "verified");
+  const replacementArtifacts = await readRequestArtifacts(db, verifiedReplacement.requestCode);
+  assert.equal(replacementArtifacts.request.status, "verified");
+  assert.equal(replacementArtifacts.payments.length, 1);
+  assert.equal(replacementArtifacts.allocations.length, replacementArtifacts.items.length);
+  assert.equal(replacementArtifacts.claims.length, 0);
+  assert.ok(replacementArtifacts.dues.every((due) => due.status === "paid"));
+  assertHistoricalTerminalAfterPayment(
+    await readRequestArtifacts(db, phase7.cancelledCode),
+    "cancelled",
+    "payment_request.cancelled",
+    null,
+  );
+  assertHistoricalTerminalAfterPayment(
+    await readRequestArtifacts(db, phase7.rejectedCode),
+    "rejected",
+    "payment_request.rejected",
+    phase7.rejectedReason,
+  );
+  assertHistoricalTerminalAfterPayment(
+    await readRequestArtifacts(db, phase7.pendingCode),
+    "cancelled",
+    "payment_request.cancelled",
+    null,
+  );
+  assertHistoricalTerminalAfterPayment(
+    await readRequestArtifacts(db, uiRequestCode),
+    "rejected",
+    "payment_request.rejected",
+    uiRejectReason,
+  );
+
+  await navigate(`${baseUrl}/app`, browserViewports[0]!);
+  for (const viewport of browserViewports) {
+    currentSmokeStage = `browser paid replacement and terminal history at ${viewport.width}px`;
+    await setViewport(viewport);
+    await waitFor(`(() => {
+      const text = document.body.innerText;
+      return text.includes('${phase7.cancelledCode}') && text.includes('${phase7.rejectedCode}') &&
+        text.includes('${uiRequestCode}') && text.includes('${verifiedReplacement.requestCode}') &&
+        document.querySelectorAll('.due-status.status-paid').length === 1;
+    })()`, "Paid replacement and retained terminal history did not render.");
+    const finalHistory = await evaluate<{
+      cancelled: boolean;
+      rejected: boolean;
+      browserCancelled: boolean;
+      browserRejected: boolean;
+      replacementVerified: boolean;
+      duePaid: boolean;
+      overflow: boolean;
+      rawEnum: boolean;
+      rawUuid: boolean;
+      rawSql: boolean;
+      shortTouchTargets: number[];
+    }>(`(() => {
+      const rows = [...document.querySelectorAll('.payment-request-history-list li')];
+      const hasStatus = (code, status) => rows.some(row => row.innerText.includes(code) && row.innerText.includes(status));
+      const text = document.body.innerText;
+      const visibleButtons = [...document.querySelectorAll('button')].filter(button => {
+        const rect = button.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      return {
+        cancelled: hasStatus('${phase7.cancelledCode}', 'Dibatalkan'),
+        rejected: hasStatus('${phase7.rejectedCode}', 'Ditolak'),
+        browserCancelled: hasStatus('${phase7.pendingCode}', 'Dibatalkan'),
+        browserRejected: hasStatus('${uiRequestCode}', 'Ditolak'),
+        replacementVerified: hasStatus('${verifiedReplacement.requestCode}', 'Sudah dikonfirmasi'),
+        duePaid: [...document.querySelectorAll('.due-status.status-paid')].some(item => item.innerText.includes('Sudah bayar')),
+        overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+        rawEnum: /\\b(pending|verified|rejected|cancelled)\\b/i.test(text),
+        rawUuid: /\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b/i.test(text),
+        rawSql: /SQLSTATE|SELECT \\*|constraint violation/i.test(text),
+        shortTouchTargets: visibleButtons.filter(button => Math.round(button.getBoundingClientRect().height) < 44).map(button => Math.round(button.getBoundingClientRect().height)),
+      };
+    })()`);
+    assert.equal(finalHistory.cancelled, true, `Original cancellation history changed at ${viewport.width}px.`);
+    assert.equal(finalHistory.rejected, true, `Original rejection history changed at ${viewport.width}px.`);
+    assert.equal(finalHistory.browserCancelled, true, `Browser cancellation history changed at ${viewport.width}px.`);
+    assert.equal(finalHistory.browserRejected, true, `Browser rejection history changed at ${viewport.width}px.`);
+    assert.equal(finalHistory.replacementVerified, true, `Verified replacement history missing at ${viewport.width}px.`);
+    assert.equal(finalHistory.duePaid, true, `Current due is not shown as Sudah bayar at ${viewport.width}px.`);
+    assert.equal(finalHistory.overflow, false, `Paid replacement history has horizontal overflow at ${viewport.width}px.`);
+    assert.equal(finalHistory.rawEnum, false, `Raw request status enum was exposed at ${viewport.width}px.`);
+    assert.equal(finalHistory.rawUuid, false, `Raw UUID was exposed at ${viewport.width}px.`);
+    assert.equal(finalHistory.rawSql, false, `Database detail was exposed at ${viewport.width}px.`);
+    assert.deepEqual(finalHistory.shortTouchTargets, [], `A visible resident control is below 44px at ${viewport.width}px.`);
+    if (viewport.width === 390) await capturePhase7("phase-7-1-paid-replacement-history-390x844");
+  }
   assert.deepEqual(pageErrors, [], "Browser page and console errors must remain clear.");
   devtoolsSocket.close();
   devtoolsSocket = undefined;
   return {
     verifyStatuses: concurrentResponses.map((response) => response.status),
     phase7RejectedRequestCode: uiRequestCode,
+    phase7VerifiedReplacementCode: verifiedReplacement.requestCode,
   };
 }
 
@@ -1158,6 +1327,7 @@ async function main() {
   currentSmokeStage = "browser viewport and UI smoke";
   const browserSmoke = await runBrowserSmoke(
     baseUrl,
+    db,
     treasurerCookie,
     secondTreasurerCookie,
     residentCookie,
@@ -1169,11 +1339,18 @@ async function main() {
       pendingCode: phase7RequestAfterReject.requestCode,
       cancelledCode: initialPhase7Request.requestCode,
       rejectedCode: phase7RequestAfterCancel.requestCode,
+      rejectedReason: rejectReason,
     },
   );
   assert.deepEqual(browserSmoke.verifyStatuses.sort(), [200, 409]);
   const browserRejectedArtifacts = await readRequestArtifacts(db, browserSmoke.phase7RejectedRequestCode);
-  assertNoPaymentResolution(browserRejectedArtifacts, "rejected", "payment_request.rejected", "Bukti transfer belum terbaca.");
+  assertHistoricalTerminalAfterPayment(browserRejectedArtifacts, "rejected", "payment_request.rejected", "Bukti transfer belum terbaca.");
+  const browserReplacementArtifacts = await readRequestArtifacts(db, browserSmoke.phase7VerifiedReplacementCode);
+  assert.equal(browserReplacementArtifacts.request.status, "verified");
+  assert.equal(browserReplacementArtifacts.payments.length, 1);
+  assert.equal(browserReplacementArtifacts.allocations.length, browserReplacementArtifacts.items.length);
+  assert.equal(browserReplacementArtifacts.claims.length, 0);
+  assert.ok(browserReplacementArtifacts.dues.every((due) => due.status === "paid"));
 
   const refreshedResponse = await fetch(`${baseUrl}/api/resident/monthly-dues`, {
     headers: { cookie: residentCookie },
@@ -1236,27 +1413,28 @@ async function main() {
   assert.equal(secondaryAudit.length, 1);
 
   console.info(JSON.stringify({
-    event: "phase_7.real_http_browser_and_gate_b_smoke",
+    event: "phase_7_1.real_http_browser_and_gate_b_smoke",
     environment: "development",
     projectId: target.projectId,
     branchName: "karturt-development",
     branchId: target.branchId,
     endpointId: target.endpointId,
     databaseHost,
-    migrationHead: "0007_phase_7_reject_cancel",
+    migrationHead: "0008_phase_7_1_post_resolution_lifecycle",
     authentication: "Normal Better Auth resident and active same-RT Treasurer sessions; no bypass sessions.",
-    realHttp: "Gate B resident request -> WhatsApp -> Treasurer verify; Phase 7 resident request -> cancel -> same-period re-request -> reject -> re-request; pairwise HTTP races.",
+    realHttp: "Gate B resident request -> WhatsApp -> Treasurer verify; Phase 7 resident request -> cancel/reject -> same-period re-request -> verified payment; pairwise HTTP races.",
     requestSnapshot: { itemCount: requestItems.length, totalAmount: requestRow!.totalAmount },
     gateBVerifyRace: browserSmoke.verifyStatuses,
     phase7: {
       cancelledRequest: { status: cancelledArtifacts.request.status, claims: cancelledArtifacts.claims.length, payments: cancelledArtifacts.payments.length, allocations: cancelledArtifacts.allocations.length, audits: cancelledArtifacts.audits.length },
       rejectedRequest: { status: rejectedArtifacts.request.status, reasonRecorded: rejectedArtifacts.audits[0]?.reason === rejectReason, claims: rejectedArtifacts.claims.length, payments: rejectedArtifacts.payments.length, allocations: rejectedArtifacts.allocations.length, audits: rejectedArtifacts.audits.length },
-      reRequestAfterBoth: { distinctCodes: new Set([initialPhase7Request.requestCode, phase7RequestAfterCancel.requestCode, phase7RequestAfterReject.requestCode]).size === 3, finalBrowserRequestRejected: browserRejectedArtifacts.request.status === "rejected" },
+      reRequestAfterBoth: { distinctCodes: new Set([initialPhase7Request.requestCode, phase7RequestAfterCancel.requestCode, phase7RequestAfterReject.requestCode]).size === 3, finalBrowserRequestRejected: browserRejectedArtifacts.request.status === "rejected", verifiedReplacementCode: browserReplacementArtifacts.request.requestCode, oldTerminalDueNowPaid: browserRejectedArtifacts.dues.every((due) => due.status === "paid") },
+      sharedTreasurerActions: { verifyDisablesReject: true, rejectDisablesVerify: true, crossActionMutationsSent: 0, duplicateVerifyRequests: 1 },
       pairwiseRaces: concurrencyResults,
     },
     ledger: { payments: paymentRows.length, allocations: allocations.length, claimsRemaining: claims.length, verifiedAuditEvents: auditRows.length, dueStatusesPaid: dueRows.every((due) => due.status === "paid") },
     residentStatus: { summary: "Sudah bayar", paidMonths: primaryDues.length, pendingMonths: primaryDues.filter((due) => due.paymentRequestStatus === "pending").length },
-    browser: { actualNextRoutesAndNeonDevelopment: true, viewports: browserViewports, doubleClickVerifyRequests: 1, cancelAndReRequestVerified: true, requiredReasonAndProcessedStateVerified: true, evidenceDirectories: ["docs/phase-6-evidence", "docs/phase-7-evidence"] },
+    browser: { actualNextRoutesAndNeonDevelopment: true, viewports: browserViewports, doubleClickVerifyRequests: 1, paidReplacementKeepsCancelledRejectedHistory: true, requiredReasonAndProcessedStateVerified: true, evidenceDirectories: ["docs/phase-6-evidence", "docs/phase-7-evidence"] },
     syntheticFinancialFixtures: "Retained on development to preserve payment and audit history; only smoke authentication sessions are removed.",
   }));
 }

@@ -11,6 +11,7 @@ on:
       - "fix/phase-5-1-pre-verification-hardening"
       - "feat/phase-6-treasurer-verification"
       - "feat/phase-7-reject-cancel"
+      - "fix/phase-7-1-post-resolution-lifecycle"
     paths-ignore:
       - "docs/test-gate-a-report.md"
   pull_request:

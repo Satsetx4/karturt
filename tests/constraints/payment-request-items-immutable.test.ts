@@ -112,6 +112,7 @@ describe("payment request item snapshot migration", () => {
     await client.exec(readFileSync(resolve(migrationFolder, hardeningMigration), "utf8"));
     await client.exec(readFileSync(resolve(migrationFolder, "0006_phase_6_treasurer_payment_ledger.sql"), "utf8"));
     await client.exec(readFileSync(resolve(migrationFolder, "0007_phase_7_reject_cancel.sql"), "utf8"));
+    await client.exec(readFileSync(resolve(migrationFolder, "0008_phase_7_1_post_resolution_lifecycle.sql"), "utf8"));
 
     const principal = await resolvePrincipalForUser(database as never, auth.id, "2026-06-18");
 

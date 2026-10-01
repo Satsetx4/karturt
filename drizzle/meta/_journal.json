@@ -57,6 +57,13 @@
       "when": 1790828222424,
       "tag": "0007_phase_7_reject_cancel",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790856793036,
+      "tag": "0008_phase_7_1_post_resolution_lifecycle",
+      "breakpoints": true
     }
   ]
 }

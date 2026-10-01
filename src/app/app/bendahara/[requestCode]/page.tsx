@@ -7,6 +7,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SignOutButton } from "@/components/sign-out-button";
 import { TreasurerVerificationButton } from "@/components/treasurer-verification-button";
 import { TreasurerRejectionForm } from "@/components/treasurer-rejection-form";
+import { TreasurerResolutionCoordinator } from "@/components/treasurer-resolution-coordinator";
 import { getDb } from "@/db/client";
 import { getCurrentPrincipal, MfaEnrollmentRequiredError, UnauthenticatedError } from "@/lib/auth/principal";
 import { getTreasurerPaymentRequestDetail } from "@/lib/billing/treasurer-payment-requests";
@@ -130,8 +131,10 @@ export default async function TreasurerPaymentRequestDetailPage({
           {!processed ? (
             <>
               <p className="treasurer-warning">Pastikan transfer sudah diterima sebelum mengonfirmasi.</p>
-              <TreasurerVerificationButton requestCode={paymentRequest.requestCode} />
-              <TreasurerRejectionForm requestCode={paymentRequest.requestCode} />
+              <TreasurerResolutionCoordinator>
+                <TreasurerVerificationButton requestCode={paymentRequest.requestCode} />
+                <TreasurerRejectionForm requestCode={paymentRequest.requestCode} />
+              </TreasurerResolutionCoordinator>
             </>
           ) : (
             <p className="treasurer-processed-note" role="status">Permintaan ini sudah diproses dan tidak dapat diubah.</p>

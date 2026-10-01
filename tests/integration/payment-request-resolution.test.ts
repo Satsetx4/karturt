@@ -32,6 +32,32 @@ import { createAuthUser, createHousehold, createRt, createTestDatabase } from ".
 
 type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
 
+function databaseErrorChain(error: unknown) {
+  const messages: string[] = [];
+  let current = error;
+  const seen = new Set<object>();
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const candidate = current as { message?: unknown; cause?: unknown; code?: unknown; constraint?: unknown };
+    if (typeof candidate.message === "string") messages.push(candidate.message);
+    if (typeof candidate.code === "string") messages.push(`code=${candidate.code}`);
+    if (typeof candidate.constraint === "string") messages.push(`constraint=${candidate.constraint}`);
+    current = candidate.cause;
+  }
+  return messages.join("\n");
+}
+
+async function expectDatabaseFailure(operation: Promise<unknown>, message: string) {
+  let failure: unknown;
+  try {
+    await operation;
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeDefined();
+  expect(databaseErrorChain(failure)).toContain(message);
+}
+
 describe("payment request reject and cancel", () => {
   let testDatabase: TestDatabase;
   let database: AppDatabase;
@@ -203,6 +229,96 @@ describe("payment request reject and cancel", () => {
     expect(transitionAudits).toHaveLength(0);
   }
 
+  async function verifyReplacementAndAssertHistory(
+    scenario: Awaited<ReturnType<typeof createScenario>>,
+    itemsBefore: Array<typeof paymentRequestItems.$inferSelect>,
+    oldStatus: "rejected" | "cancelled",
+    oldActorId: string,
+    oldReason: string | null,
+  ) {
+    const replacement = await createResidentPaymentRequest(database, scenario.residentPrincipal, {
+      period: "2026-02",
+      idempotencyKey: randomUUID(),
+    });
+    expect(replacement.requestCode).not.toBe(scenario.requestCode);
+    expect(replacement.periods).toEqual(["2026-01", "2026-02"]);
+
+    const verification = await verifyTreasurerPaymentRequest(database, scenario.treasurerPrincipal, replacement.requestCode);
+    expect(verification.status).toBe("verified");
+
+    const [oldRequest] = await testDatabase.db.select().from(paymentRequests)
+      .where(eq(paymentRequests.id, scenario.requestId));
+    const oldItems = await testDatabase.db.select().from(paymentRequestItems)
+      .where(eq(paymentRequestItems.requestId, scenario.requestId));
+    const oldClaims = await testDatabase.db.select().from(paymentRequestClaims)
+      .where(eq(paymentRequestClaims.requestId, scenario.requestId));
+    const oldPayments = await testDatabase.db.select().from(payments)
+      .where(eq(payments.paymentRequestId, scenario.requestId));
+    const oldAllocations = await testDatabase.db.select().from(paymentAllocations)
+      .where(eq(paymentAllocations.paymentRequestId, scenario.requestId));
+    const oldAudits = await testDatabase.db.select().from(auditEvents)
+      .where(and(
+        inArray(auditEvents.action, ["payment_request.verified", "payment_request.rejected", "payment_request.cancelled"]),
+        eq(auditEvents.entityType, "payment_request"),
+        eq(auditEvents.entityId, scenario.requestId),
+      ));
+
+    expect(oldRequest).toMatchObject({ status: oldStatus, resolvedByAccountId: oldActorId, resolutionReason: oldReason });
+    expect(oldItems).toEqual(itemsBefore);
+    expect(oldClaims).toHaveLength(0);
+    expect(oldPayments).toHaveLength(0);
+    expect(oldAllocations).toHaveLength(0);
+    expect(oldAudits).toHaveLength(1);
+    expect(oldAudits[0]).toMatchObject({
+      action: `payment_request.${oldStatus}`,
+      actorAppAccountId: oldActorId,
+      reason: oldReason,
+      context: { itemCount: scenario.itemCount, totalAmount: scenario.totalAmount },
+    });
+
+    const [replacementRequest] = await testDatabase.db.select().from(paymentRequests)
+      .where(eq(paymentRequests.requestCode, replacement.requestCode));
+    const replacementItems = await testDatabase.db.select().from(paymentRequestItems)
+      .where(eq(paymentRequestItems.requestId, replacementRequest!.id));
+    const replacementPayments = await testDatabase.db.select().from(payments)
+      .where(eq(payments.paymentRequestId, replacementRequest!.id));
+    const replacementAllocations = await testDatabase.db.select().from(paymentAllocations)
+      .where(eq(paymentAllocations.paymentRequestId, replacementRequest!.id));
+    const replacementClaims = await testDatabase.db.select().from(paymentRequestClaims)
+      .where(eq(paymentRequestClaims.requestId, replacementRequest!.id));
+    const paidDues = await testDatabase.db.select({ status: monthlyDues.status })
+      .from(monthlyDues)
+      .where(inArray(monthlyDues.id, scenario.dueIds));
+    expect(replacementRequest?.status).toBe("verified");
+    expect(replacementItems).toHaveLength(scenario.itemCount);
+    expect(replacementPayments).toHaveLength(1);
+    expect(replacementPayments[0]?.amount).toBe(scenario.totalAmount);
+    expect(replacementAllocations).toHaveLength(scenario.itemCount);
+    expect(replacementAllocations.reduce((sum, allocation) => sum + allocation.amount, 0)).toBe(scenario.totalAmount);
+    expect(replacementClaims).toHaveLength(0);
+    expect(paidDues.every((due) => due.status === "paid")).toBe(true);
+
+    await expect(testDatabase.db.update(paymentRequests)
+      .set({ status: "pending", resolvedAt: null, resolvedByAccountId: null, resolvedByAccountType: null, resolutionReason: null })
+      .where(eq(paymentRequests.id, scenario.requestId))).rejects.toThrow();
+    await expect(testDatabase.db.update(paymentRequests)
+      .set({ resolutionReason: oldReason ? `${oldReason} diubah` : "Riwayat diubah" })
+      .where(eq(paymentRequests.id, scenario.requestId))).rejects.toThrow();
+
+    const [stillHistorical] = await testDatabase.db.select().from(paymentRequests)
+      .where(eq(paymentRequests.id, scenario.requestId));
+    const stillOneAudit = await testDatabase.db.select().from(auditEvents)
+      .where(and(
+        inArray(auditEvents.action, ["payment_request.verified", "payment_request.rejected", "payment_request.cancelled"]),
+        eq(auditEvents.entityType, "payment_request"),
+        eq(auditEvents.entityId, scenario.requestId),
+      ));
+    expect(stillHistorical).toMatchObject({ status: oldStatus, resolvedByAccountId: oldActorId, resolutionReason: oldReason });
+    expect(stillOneAudit).toHaveLength(1);
+
+    return replacement;
+  }
+
   it("cancels only the requester's pending request and retains a fresh re-request path", async () => {
     const scenario = await createScenario();
     const itemsBefore = await testDatabase.db.select().from(paymentRequestItems)
@@ -229,17 +345,18 @@ describe("payment request reject and cancel", () => {
 
     const dueRefresh = await getResidentMonthlyDues(database, scenario.residentPrincipal);
     expect(dueRefresh.every((due) => due.status === "unpaid" && due.paymentRequestStatus === null)).toBe(true);
-    const reRequest = await createResidentPaymentRequest(database, scenario.residentPrincipal, {
-      period: "2026-02",
-      idempotencyKey: randomUUID(),
-    });
-    expect(reRequest.requestCode).not.toBe(scenario.requestCode);
-    expect(reRequest.periods).toEqual(["2026-01", "2026-02"]);
+    const reRequest = await verifyReplacementAndAssertHistory(
+      scenario,
+      itemsBefore,
+      "cancelled",
+      scenario.residentAccountId,
+      null,
+    );
     expect(await testDatabase.db.select().from(paymentRequests)
       .where(eq(paymentRequests.householdId, scenario.householdId))).toHaveLength(2);
 
     const history = await getResidentPaymentRequestHistory(database, scenario.residentPrincipal);
-    expect(history.requests.find((request) => request.requestCode === reRequest.requestCode)).toMatchObject({ status: "pending" });
+    expect(history.requests.find((request) => request.requestCode === reRequest.requestCode)).toMatchObject({ status: "verified" });
     expect(history.requests.find((request) => request.requestCode === scenario.requestCode)).toMatchObject({ status: "cancelled", resolutionReason: null });
     expect(JSON.stringify(history)).not.toMatch(/rtUnitId|householdId|actorAppAccountId|requestId/);
   });
@@ -277,13 +394,21 @@ describe("payment request reject and cancel", () => {
     const dueRefresh = await getResidentMonthlyDues(database, scenario.residentPrincipal);
     expect(dueRefresh.every((due) => due.status === "unpaid" && due.paymentRequestStatus === null)).toBe(true);
 
-    const reRequest = await createResidentPaymentRequest(database, scenario.residentPrincipal, {
-      period: "2026-02",
-      idempotencyKey: randomUUID(),
-    });
+    const reRequest = await verifyReplacementAndAssertHistory(
+      scenario,
+      itemsBefore,
+      "rejected",
+      scenario.treasurerAccountId,
+      reason,
+    );
     expect(reRequest.requestCode).not.toBe(scenario.requestCode);
     expect(await testDatabase.db.select().from(paymentRequests)
       .where(eq(paymentRequests.householdId, scenario.householdId))).toHaveLength(2);
+    const finalHistory = await getResidentPaymentRequestHistory(database, scenario.residentPrincipal);
+    expect(finalHistory.requests.find((request) => request.requestCode === scenario.requestCode))
+      .toMatchObject({ status: "rejected", resolutionReason: reason });
+    expect(finalHistory.requests.find((request) => request.requestCode === reRequest.requestCode))
+      .toMatchObject({ status: "verified" });
   });
 
   it("validates rejection reasons before opening a resolution transaction", async () => {
@@ -296,6 +421,111 @@ describe("payment request reject and cancel", () => {
         reason,
       )).rejects.toBeInstanceOf(InvalidPaymentRequestResolutionInputError);
     }
+    await expectStillPending(scenario);
+  });
+
+  it("rejects direct cancellation and rejection unless the transition owns unpaid dues and complete claims", async () => {
+    for (const action of ["cancelled", "rejected"] as const) {
+      const paidDueScenario = await createScenario();
+      await expectDatabaseFailure(testDatabase.db.transaction(async (transaction) => {
+        await transaction.update(monthlyDues)
+          .set({ status: "paid" })
+          .where(eq(monthlyDues.id, paidDueScenario.dueIds[0]!));
+        await transaction.update(paymentRequests)
+          .set(action === "cancelled" ? {
+            status: "cancelled",
+            resolvedAt: new Date(),
+            resolvedByAccountId: paidDueScenario.residentAccountId,
+            resolvedByAccountType: "resident",
+            resolutionReason: null,
+          } : {
+            status: "rejected",
+            resolvedAt: new Date(),
+            resolvedByAccountId: paidDueScenario.treasurerAccountId,
+            resolvedByAccountType: "official",
+            resolutionReason: "Bukti belum terbaca.",
+          })
+          .where(eq(paymentRequests.id, paidDueScenario.requestId));
+      }), "Requested dues must still be unpaid");
+      await expectStillPending(paidDueScenario);
+
+      const incompleteClaimsScenario = await createScenario();
+      await expectDatabaseFailure(testDatabase.db.transaction(async (transaction) => {
+        await transaction.delete(paymentRequestClaims)
+          .where(and(
+            eq(paymentRequestClaims.requestId, incompleteClaimsScenario.requestId),
+            eq(paymentRequestClaims.monthlyDueId, incompleteClaimsScenario.dueIds[0]!),
+          ));
+        await transaction.update(paymentRequests)
+          .set(action === "cancelled" ? {
+            status: "cancelled",
+            resolvedAt: new Date(),
+            resolvedByAccountId: incompleteClaimsScenario.residentAccountId,
+            resolvedByAccountType: "resident",
+            resolutionReason: null,
+          } : {
+            status: "rejected",
+            resolvedAt: new Date(),
+            resolvedByAccountId: incompleteClaimsScenario.treasurerAccountId,
+            resolvedByAccountType: "official",
+            resolutionReason: "Bukti belum terbaca.",
+          })
+          .where(eq(paymentRequests.id, incompleteClaimsScenario.requestId));
+      }), "complete claims owned by the request");
+      await expectStillPending(incompleteClaimsScenario);
+    }
+  });
+
+  it("rejects direct cancellation and rejection when a payment ledger already exists", async () => {
+    for (const action of ["cancelled", "rejected"] as const) {
+      const scenario = await createScenario();
+      await expectDatabaseFailure(testDatabase.db.transaction(async (transaction) => {
+        const [payment] = await transaction.insert(payments).values({
+          rtUnitId: scenario.rtUnitId,
+          householdId: scenario.householdId,
+          paymentRequestId: scenario.requestId,
+          amount: scenario.totalAmount,
+          verifiedByAccountId: scenario.treasurerAccountId,
+        }).returning({ id: payments.id });
+        await transaction.insert(paymentAllocations).values({
+          rtUnitId: scenario.rtUnitId,
+          householdId: scenario.householdId,
+          paymentRequestId: scenario.requestId,
+          paymentId: payment!.id,
+          monthlyDueId: scenario.dueIds[0]!,
+          amount: 40000,
+        });
+        await transaction.update(paymentRequests)
+          .set(action === "cancelled" ? {
+            status: "cancelled",
+            resolvedAt: new Date(),
+            resolvedByAccountId: scenario.residentAccountId,
+            resolvedByAccountType: "resident",
+            resolutionReason: null,
+          } : {
+            status: "rejected",
+            resolvedAt: new Date(),
+            resolvedByAccountId: scenario.treasurerAccountId,
+            resolvedByAccountType: "official",
+            resolutionReason: "Bukti belum terbaca.",
+          })
+          .where(eq(paymentRequests.id, scenario.requestId));
+      }), "already has a payment ledger");
+      await expectStillPending(scenario);
+    }
+  });
+
+  it("rejects invalid resolution metadata at the transition", async () => {
+    const scenario = await createScenario();
+    await expectDatabaseFailure(testDatabase.db.update(paymentRequests)
+      .set({
+        status: "rejected",
+        resolvedAt: new Date(),
+        resolvedByAccountId: scenario.treasurerAccountId,
+        resolvedByAccountType: "official",
+        resolutionReason: "   ",
+      })
+      .where(eq(paymentRequests.id, scenario.requestId)), "valid Treasurer resolution metadata");
     await expectStillPending(scenario);
   });
 
