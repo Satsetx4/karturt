@@ -35,7 +35,7 @@ export async function assertActiveTreasurer(
   database: TreasurerAuthDatabase,
   principal: Principal,
   businessDate = jakartaBusinessDate(),
-  permission: "payment:verify" | "payment:reject" | "payment:record_cash" = "payment:verify",
+  permission: "payment:verify" | "payment:reject" | "payment:record_cash" | "payment:reverse" = "payment:verify",
 ) {
   if (principal.role !== "treasurer" || !principal.rtUnitId) {
     throw new Error("Forbidden: only an active Treasurer may access payment verification.");

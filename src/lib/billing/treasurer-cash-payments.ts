@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { and, asc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
 import {
+  activeDueSettlements,
   billingYears,
   households,
   houses,
@@ -9,6 +10,7 @@ import {
   paymentAllocations,
   paymentRequestClaims,
   paymentRequests,
+  paymentReversals,
   payments,
   people,
 } from "@/db/schema";
@@ -260,6 +262,17 @@ function cashFingerprint(rtUnitId: string, input: Pick<RecordTreasurerCashPaymen
 }
 
 async function readCommittedCashResult(database: AppDatabase, paymentId: string): Promise<TreasurerCashPaymentResult> {
+  const [reversal] = await database
+    .select({ id: paymentReversals.id })
+    .from(paymentReversals)
+    .where(eq(paymentReversals.paymentId, paymentId))
+    .limit(1);
+  if (reversal) {
+    throw new CashPaymentIdempotencyConflictError(
+      "Pembayaran dengan kunci ini sudah dibatalkan. Gunakan kunci pengiriman baru untuk pencatatan ulang.",
+    );
+  }
+
   const rows = await database
     .select({ year: billingYears.year, month: monthlyDues.month, amount: paymentAllocations.amount })
     .from(paymentAllocations)
@@ -341,7 +354,7 @@ export async function recordTreasurerCashPayment(
 
       const targetYear = Number(input.period.slice(0, 4));
       const targetMonth = Number(input.period.slice(5, 7));
-      const dues = await transaction
+      const lockedDues = await transaction
         .select({
           id: monthlyDues.id,
           rtUnitId: monthlyDues.rtUnitId,
@@ -359,21 +372,28 @@ export async function recordTreasurerCashPayment(
         .where(and(
           eq(monthlyDues.rtUnitId, rtUnitId),
           eq(monthlyDues.householdId, input.householdId),
-          eq(monthlyDues.status, "unpaid"),
+          inArray(monthlyDues.status, ["unpaid", "paid"]),
           or(
             sql`${billingYears.year} < ${targetYear}`,
             and(eq(billingYears.year, targetYear), sql`${monthlyDues.month} <= ${targetMonth}`),
           ),
         ))
-        .orderBy(asc(billingYears.year), asc(monthlyDues.month), asc(monthlyDues.id))
+        .orderBy(asc(monthlyDues.id))
         .for("update", { of: monthlyDues });
 
-      const targetDue = dues.find((due) => due.year === targetYear && due.month === targetMonth);
-      if (!targetDue) {
+      const targetDue = lockedDues.find((due) => due.year === targetYear && due.month === targetMonth);
+      if (!targetDue || targetDue.status !== "unpaid") {
         throw new CashPaymentDueConflictError("Bulan yang dipilih tidak lagi memiliki tagihan belum lunas. Muat ulang data rumah.");
       }
-      if (dues.length === 0 || dues.some((due, index) =>
-        due.status !== "unpaid" || due.rtUnitId !== rtUnitId || due.householdId !== input.householdId ||
+      const dues = lockedDues
+        .filter((due) => due.status === "unpaid")
+        .sort((left, right) => canonicalPeriod(left.year, left.month).localeCompare(canonicalPeriod(right.year, right.month)));
+      if (dues.length === 0 || lockedDues.some((due) =>
+        !["unpaid", "paid"].includes(due.status) || due.rtUnitId !== rtUnitId || due.householdId !== input.householdId ||
+        !Number.isSafeInteger(due.amount) || due.amount <= 0 ||
+        due.year < 1 || due.year > 9999 || due.month < 1 || due.month > 12,
+      ) || dues.some((due, index) =>
+        due.rtUnitId !== rtUnitId || due.householdId !== input.householdId ||
         !Number.isSafeInteger(due.amount) || due.amount <= 0 ||
         due.year < 1 || due.year > 9999 || due.month < 1 || due.month > 12 ||
         (index > 0 && canonicalPeriod(dues[index - 1]!.year, dues[index - 1]!.month) >= canonicalPeriod(due.year, due.month)),
@@ -425,13 +445,25 @@ export async function recordTreasurerCashPayment(
         .returning({ id: payments.id });
       if (!payment) throw new CashPaymentLedgerInvariantError("Cash payment could not be recorded.");
 
-      await transaction.insert(paymentAllocations).values(dues.map((due) => ({
+      const allocations = await transaction.insert(paymentAllocations).values(dues.map((due) => ({
         rtUnitId,
         householdId: input.householdId,
         paymentRequestId: null,
         paymentId: payment.id,
         monthlyDueId: due.id,
         amount: due.amount,
+      }))).returning({ id: paymentAllocations.id, monthlyDueId: paymentAllocations.monthlyDueId, amount: paymentAllocations.amount });
+      if (allocations.length !== dues.length) {
+        throw new CashPaymentLedgerInvariantError("Cash payment allocation count does not match selected dues.");
+      }
+
+      await transaction.insert(activeDueSettlements).values(allocations.map((allocation) => ({
+        rtUnitId,
+        householdId: input.householdId,
+        paymentId: payment.id,
+        allocationId: allocation.id,
+        monthlyDueId: allocation.monthlyDueId,
+        amount: allocation.amount,
       })));
 
       const paidDues = await transaction

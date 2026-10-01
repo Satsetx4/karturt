@@ -16,6 +16,7 @@ export type Permission =
   | "payment:verify"
   | "payment:reject"
   | "payment:record_cash"
+  | "payment:reverse"
   | "waiver:manage"
   | "audit:read"
   | "system:recover"
@@ -32,7 +33,7 @@ export interface Principal {
 
 const permissions: Record<AppRole, ReadonlySet<Permission>> = {
   resident: new Set(["billing:read:self", "payment:request:self", "payment:history:self", "payment:cancel:self"]),
-  treasurer: new Set(["billing:read:rt", "resident:read:rt", "payment:verify", "payment:reject", "payment:record_cash"]),
+  treasurer: new Set(["billing:read:rt", "resident:read:rt", "payment:verify", "payment:reject", "payment:record_cash", "payment:reverse"]),
   rt_chairman: new Set([
     "billing:read:rt",
     "billing:generate",
@@ -58,6 +59,7 @@ const rtScopedPermissions = new Set<Permission>([
   "payment:verify",
   "payment:reject",
   "payment:record_cash",
+  "payment:reverse",
   "waiver:manage",
 ]);
 

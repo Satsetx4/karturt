@@ -13,6 +13,7 @@ on:
       - "feat/phase-7-reject-cancel"
       - "fix/phase-7-1-post-resolution-lifecycle"
       - "feat/phase-8-cash-payment"
+      - "feat/phase-9-payment-reversal"
     paths-ignore:
       - "docs/test-gate-a-report.md"
   pull_request:

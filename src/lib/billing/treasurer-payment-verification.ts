@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
 import {
+  activeDueSettlements,
   billingYears,
   monthlyDues,
   paymentAllocations,
@@ -218,13 +219,25 @@ export async function verifyTreasurerPaymentRequest(
         throw new TreasurerPaymentLedgerInvariantError("Payment ledger was not created.");
       }
 
-      await transaction.insert(paymentAllocations).values(items.map((item) => ({
+      const allocations = await transaction.insert(paymentAllocations).values(items.map((item) => ({
         rtUnitId: request.rtUnitId,
         householdId: request.householdId,
         paymentRequestId: request.id,
         paymentId: payment.id,
         monthlyDueId: item.monthlyDueId,
         amount: item.amount,
+      }))).returning({ id: paymentAllocations.id, monthlyDueId: paymentAllocations.monthlyDueId, amount: paymentAllocations.amount });
+      if (allocations.length !== items.length) {
+        throw new TreasurerPaymentLedgerInvariantError("Payment allocation count does not match the request snapshot.");
+      }
+
+      await transaction.insert(activeDueSettlements).values(allocations.map((allocation) => ({
+        rtUnitId: request.rtUnitId,
+        householdId: request.householdId,
+        paymentId: payment.id,
+        allocationId: allocation.id,
+        monthlyDueId: allocation.monthlyDueId,
+        amount: allocation.amount,
       })));
 
       const paidDues = await transaction

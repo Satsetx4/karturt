@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import {
+  activeDueSettlements,
   appAccounts,
   billingYears,
   feeRates,
@@ -78,7 +79,7 @@ describe("legacy billing migration upgrade", () => {
     expect(migrated).toEqual({ status: "not_due", waived_reason: null });
   });
 
-  it("upgrades a verified transfer ledger to 0009 without rewriting it, then records cash", async () => {
+  it("upgrades intact transfer and cash history from 0009 to 0010, backfills owners, then records cash", async () => {
     const upgradeClient = new PGlite();
     try {
       const migrationFolder = resolve(process.cwd(), "drizzle");
@@ -141,7 +142,7 @@ describe("legacy billing migration upgrade", () => {
         effectiveMonth: 1,
         monthlyAmount: 40000,
       }).returning({ id: feeRates.id });
-      await db.insert(monthlyDues).values([1, 2].map((month) => ({
+      const duesBeforeUpgrade = await db.insert(monthlyDues).values([1, 2, 3].map((month) => ({
         rtUnitId,
         householdId: household.householdId,
         billingYearId: year!.id,
@@ -150,7 +151,7 @@ describe("legacy billing migration upgrade", () => {
         amount: 40000,
         dueDate: `2026-${String(month).padStart(2, "0")}-10`,
         status: "unpaid" as const,
-      })));
+      }))).returning({ id: monthlyDues.id, month: monthlyDues.month });
 
       const request = await createResidentPaymentRequest(db as unknown as AppDatabase, residentPrincipal, {
         period: "2026-01",
@@ -197,8 +198,52 @@ describe("legacy billing migration upgrade", () => {
 
       await upgradeClient.exec(readFileSync(resolve(migrationFolder, cashMigration), "utf8"));
 
-      const [transferAfter] = await db.select().from(payments);
-      const [transferAllocationAfter] = await db.select().from(paymentAllocations);
+      const cashPaymentId = randomUUID();
+      const cashKey = randomUUID();
+      const cashDueId = duesBeforeUpgrade.find((due) => due.month === 2)!.id;
+      await db.transaction(async (transaction) => {
+        await transaction.execute(sql`
+          INSERT INTO payments (
+            id, rt_unit_id, household_id, payment_request_id, amount, method,
+            verified_by_account_id, verified_by_account_type,
+            cash_idempotency_key, cash_idempotency_fingerprint
+          ) VALUES (
+            ${cashPaymentId}, ${rtUnitId}, ${household.householdId}, NULL, 40000, 'cash',
+            ${treasurerAccount!.id}, 'official', ${cashKey}, ${"d".repeat(64)}
+          )
+        `);
+        await transaction.execute(sql`
+          INSERT INTO payment_allocations (
+            rt_unit_id, household_id, payment_request_id, payment_id, monthly_due_id, amount
+          ) VALUES (
+            ${rtUnitId}, ${household.householdId}, NULL, ${cashPaymentId}, ${cashDueId}, 40000
+          )
+        `);
+        await transaction.execute(sql`UPDATE monthly_dues SET status = 'paid' WHERE id = ${cashDueId}`);
+        await transaction.execute(sql`
+          INSERT INTO audit_events (actor_app_account_id, action, entity_type, entity_id, reason, context)
+          VALUES (
+            ${treasurerAccount!.id}, 'payment.cash_recorded', 'payment', ${cashPaymentId}, NULL,
+            jsonb_build_object('itemCount', 1, 'method', 'cash', 'totalAmount', 40000)
+          )
+        `);
+      });
+
+      const [cashBefore] = await db.select().from(payments).where(eq(payments.id, cashPaymentId));
+      const [cashAllocationBefore] = await db.select().from(paymentAllocations)
+        .where(eq(paymentAllocations.paymentId, cashPaymentId));
+      expect(cashBefore).toBeDefined();
+      expect(cashAllocationBefore).toBeDefined();
+
+      const reversalMigration = "0010_phase_9_payment_reversal.sql";
+      await upgradeClient.exec(readFileSync(resolve(migrationFolder, reversalMigration), "utf8"));
+
+      const [transferAfter] = await db.select().from(payments).where(eq(payments.id, transferPaymentId));
+      const [transferAllocationAfter] = await db.select().from(paymentAllocations)
+        .where(eq(paymentAllocations.paymentId, transferPaymentId));
+      const [cashAfter] = await db.select().from(payments).where(eq(payments.id, cashPaymentId));
+      const [cashAllocationAfter] = await db.select().from(paymentAllocations)
+        .where(eq(paymentAllocations.paymentId, cashPaymentId));
       expect(transferAfter).toMatchObject({
         id: transferBefore!.id,
         paymentRequestId: transferBefore!.payment_request_id,
@@ -214,14 +259,21 @@ describe("legacy billing migration upgrade", () => {
         paymentId: transferAllocationBefore!.paymentId,
         amount: 40000,
       });
+      expect(cashAfter).toEqual(cashBefore);
+      expect(cashAllocationAfter).toEqual(cashAllocationBefore);
+      expect(await db.select().from(activeDueSettlements)).toHaveLength(2);
+      expect(await db.select().from(activeDueSettlements)
+        .where(eq(activeDueSettlements.paymentId, transferPaymentId))).toHaveLength(1);
+      expect(await db.select().from(activeDueSettlements)
+        .where(eq(activeDueSettlements.paymentId, cashPaymentId))).toHaveLength(1);
 
       const cash = await recordTreasurerCashPayment(db as unknown as AppDatabase, treasurerPrincipal, {
         householdId: household.householdId,
-        period: "2026-02",
+        period: "2026-03",
         idempotencyKey: randomUUID(),
       }, "2026-06-01");
-      expect(cash.periods).toEqual(["2026-02"]);
-      expect((await db.select().from(payments)).filter((payment) => payment.method === "cash")).toHaveLength(1);
+      expect(cash.periods).toEqual(["2026-03"]);
+      expect((await db.select().from(payments)).filter((payment) => payment.method === "cash")).toHaveLength(2);
       expect((await db.select().from(payments)).filter((payment) => payment.method === "transfer")).toHaveLength(1);
     } finally {
       await upgradeClient.close();

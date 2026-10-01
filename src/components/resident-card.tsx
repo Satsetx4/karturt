@@ -19,6 +19,7 @@ import {
   type ResidentDue,
   type ResidentStatusToken,
 } from "@/lib/billing/resident-card";
+import { ResidentPaymentHistory } from "@/components/resident-payment-history";
 const icons: Record<ResidentStatusToken, LucideIcon> = {
   PAID: CheckCircle,
   UNPAID: CircleAlert,
@@ -632,10 +633,7 @@ export function ResidentCard({
             </>
           ) : (
             <>
-              <p>
-                Halaman ini menampilkan catatan iuran bulanan, bukan bukti
-                pembayaran.
-              </p>
+              <p>Halaman ini menampilkan status iuran bulanan dan riwayat pembayaran yang tercatat.</p>
               {selected.length === 0 ? (
                 <p>Belum ada catatan iuran untuk tahun ini.</p>
               ) : (
@@ -653,6 +651,7 @@ export function ResidentCard({
                     ))}
                 </ul>
               )}
+              <ResidentPaymentHistory />
             </>
           )}
         </>

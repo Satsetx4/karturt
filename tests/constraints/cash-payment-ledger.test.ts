@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  activeDueSettlements,
   appAccounts,
   auditEvents,
   billingYears,
@@ -9,12 +10,14 @@ import {
   monthlyDues,
   officialAssignments,
   paymentAllocations,
+  paymentReversals,
   paymentRequests,
   payments,
 } from "../../src/db/schema";
 import { appendAuditEvent } from "../../src/lib/audit/writer";
 import { createResidentPaymentRequest } from "../../src/lib/billing/resident-payment-request";
 import { recordTreasurerCashPayment } from "../../src/lib/billing/treasurer-cash-payments";
+import { reverseTreasurerPayment } from "../../src/lib/billing/treasurer-payment-reversal";
 import type { Principal } from "../../src/lib/auth/permissions";
 import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 
@@ -256,5 +259,98 @@ describe("cash payment ledger database constraints", () => {
       .toHaveLength(0);
     expect((await db.select().from(monthlyDues).where(eq(monthlyDues.id, scenario.dueIds[2]!)))[0]!.status)
       .toBe("unpaid");
+  });
+
+  it("protects active ownership, paid status, payment history, and reversal history at the database layer", async () => {
+    const db = testDatabase.db;
+    const [payment] = await db.select().from(payments).where(eq(payments.method, "cash"));
+    expect(payment).toBeDefined();
+    const [allocation] = await db.select().from(paymentAllocations)
+      .where(eq(paymentAllocations.paymentId, payment!.id));
+    const [owner] = await db.select().from(activeDueSettlements)
+      .where(eq(activeDueSettlements.monthlyDueId, allocation!.monthlyDueId));
+    expect(owner).toMatchObject({ paymentId: payment!.id, allocationId: allocation!.id, amount: allocation!.amount });
+
+    await expect(db.update(monthlyDues).set({ status: "unpaid" })
+      .where(eq(monthlyDues.id, allocation!.monthlyDueId))).rejects.toThrow();
+    await expect(db.delete(activeDueSettlements)
+      .where(eq(activeDueSettlements.monthlyDueId, allocation!.monthlyDueId))).rejects.toThrow();
+    await expect(db.insert(activeDueSettlements).values({
+      monthlyDueId: allocation!.monthlyDueId,
+      rtUnitId: scenario.rtUnitId,
+      householdId: scenario.householdId,
+      paymentId: payment!.id,
+      allocationId: allocation!.id,
+      amount: allocation!.amount,
+    })).rejects.toThrow();
+    await expect(db.insert(activeDueSettlements).values({
+      monthlyDueId: scenario.dueIds[1]!,
+      rtUnitId: scenario.rtUnitId,
+      householdId: scenario.householdId,
+      paymentId: payment!.id,
+      allocationId: allocation!.id,
+      amount: allocation!.amount,
+    })).rejects.toThrow();
+    await expect(db.update(payments).set({ amount: payment!.amount + 1 })
+      .where(eq(payments.id, payment!.id))).rejects.toThrow();
+    await expect(db.update(paymentAllocations).set({ amount: allocation!.amount + 1 })
+      .where(eq(paymentAllocations.id, allocation!.id))).rejects.toThrow();
+    await expect(db.delete(payments).where(eq(payments.id, payment!.id))).rejects.toThrow();
+    await expect(db.delete(paymentAllocations).where(eq(paymentAllocations.id, allocation!.id))).rejects.toThrow();
+
+    await expect(db.insert(paymentReversals).values({
+      rtUnitId: scenario.rtUnitId,
+      householdId: scenario.householdId,
+      paymentId: payment!.id,
+      reversedByAccountId: scenario.treasurerAccountId,
+      reversedByAccountType: "official",
+      reason: "",
+    })).rejects.toThrow();
+    await expect(testDatabase.client.exec(`
+      INSERT INTO public.payment_reversals
+        (rt_unit_id, household_id, payment_id, reversed_by_account_id, reversed_by_account_type)
+      VALUES
+        ('${scenario.rtUnitId}', '${scenario.householdId}', '${payment!.id}', '${scenario.treasurerAccountId}', 'official')
+    `)).rejects.toThrow();
+    await expect(db.insert(paymentReversals).values({
+      rtUnitId: scenario.rtUnitId,
+      householdId: scenario.householdId,
+      paymentId: payment!.id,
+      reversedByAccountId: randomUUID(),
+      reversedByAccountType: "official",
+      reason: "Aktor di luar cakupan",
+    })).rejects.toThrow();
+
+    await reverseTreasurerPayment(db as never, scenario.treasurerPrincipal, {
+      paymentId: payment!.id,
+      reason: "Uji pembatasan histori reversal",
+    }, "2026-06-01");
+    const [reversal] = await db.select().from(paymentReversals)
+      .where(eq(paymentReversals.paymentId, payment!.id));
+    expect(reversal).toBeDefined();
+    await expect(db.update(paymentReversals).set({ reason: "Alasan ditulis ulang" })
+      .where(eq(paymentReversals.id, reversal!.id))).rejects.toThrow();
+    await expect(db.delete(paymentReversals).where(eq(paymentReversals.id, reversal!.id))).rejects.toThrow();
+    await expect(db.insert(paymentReversals).values({
+      rtUnitId: scenario.rtUnitId,
+      householdId: scenario.householdId,
+      paymentId: payment!.id,
+      reversedByAccountId: scenario.treasurerAccountId,
+      reversedByAccountType: "official",
+      reason: "Percobaan reversal kedua",
+    })).rejects.toThrow();
+    expect(await db.select().from(paymentReversals).where(eq(paymentReversals.paymentId, payment!.id)))
+      .toHaveLength(1);
+    expect(await db.select().from(activeDueSettlements).where(eq(activeDueSettlements.paymentId, payment!.id)))
+      .toHaveLength(0);
+    await expect(db.insert(activeDueSettlements).values({
+      monthlyDueId: allocation!.monthlyDueId,
+      rtUnitId: scenario.rtUnitId,
+      householdId: scenario.householdId,
+      paymentId: payment!.id,
+      allocationId: allocation!.id,
+      amount: allocation!.amount,
+    })).rejects.toThrow();
+    await expect(testDatabase.client.exec("TRUNCATE TABLE public.payment_reversals")).rejects.toThrow();
   });
 });

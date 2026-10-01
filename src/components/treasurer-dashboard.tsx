@@ -44,6 +44,17 @@ export function TreasurerDashboard({ requests }: { requests: TreasurerPaymentReq
         </Link>
       </section>
 
+      <section className="treasurer-history-entry" aria-labelledby="treasurer-history-entry-title">
+        <div>
+          <p className="eyebrow">CATATAN PEMBAYARAN</p>
+          <h2 id="treasurer-history-entry-title">Riwayat transaksi</h2>
+          <p>Tinjau pembayaran yang sudah dicatat dan kelola pembatalan bila ada kekeliruan.</p>
+        </div>
+        <Link className="button button--secondary" href="/app/bendahara/riwayat">
+          Buka riwayat transaksi <ArrowRight size={18} aria-hidden="true" />
+        </Link>
+      </section>
+
       <div className="treasurer-queue-heading">
         <h2>Menunggu konfirmasi</h2>
         <span className="treasurer-count" aria-label={`${requests.length} permintaan menunggu`}>

@@ -52,6 +52,15 @@ describe("role authorization", () => {
     expect(canPerform(principal("system_admin", { rtUnitId: null, householdId: null, personId: null }), "payment:reject", { rtUnitId: "rt-one" })).toBe(false);
   });
 
+  it("gives payment reversal to the same-RT Treasurer only", () => {
+    expect(canPerform(principal("treasurer"), "payment:reverse", { rtUnitId: "rt-one" })).toBe(true);
+    expect(canPerform(principal("treasurer"), "payment:reverse", { rtUnitId: "rt-two" })).toBe(false);
+    expect(canPerform(principal("treasurer", { rtUnitId: null }), "payment:reverse", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("resident"), "payment:reverse", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("rt_chairman"), "payment:reverse", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("system_admin", { rtUnitId: null, householdId: null, personId: null }), "payment:reverse", { rtUnitId: "rt-one" })).toBe(false);
+  });
+
   it("allows payment requests only for a resident's own household", () => {
     expect(canPerform(principal("resident"), "payment:request:self", { rtUnitId: "rt-one", householdId: "household-one" })).toBe(true);
     expect(canPerform(principal("resident"), "payment:request:self", { rtUnitId: "rt-two", householdId: "household-one" })).toBe(false);

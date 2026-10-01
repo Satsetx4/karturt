@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import {
+  activeDueSettlements,
   appAccounts,
   auditEvents,
   billingYears,
@@ -86,11 +87,19 @@ async function createVerifiedPaidHistory(
       verifiedByAccountId: treasurerAccount!.id,
       verifiedByAccountType: "official",
     }).returning({ id: payments.id });
-    await transaction.insert(paymentAllocations).values({
+    const [allocation] = await transaction.insert(paymentAllocations).values({
       rtUnitId: input.rtUnitId,
       householdId: input.householdId,
       paymentRequestId: requestId,
       paymentId: payment!.id,
+      monthlyDueId: input.dueId,
+      amount: input.amount,
+    }).returning({ id: paymentAllocations.id });
+    await transaction.insert(activeDueSettlements).values({
+      rtUnitId: input.rtUnitId,
+      householdId: input.householdId,
+      paymentId: payment!.id,
+      allocationId: allocation!.id,
       monthlyDueId: input.dueId,
       amount: input.amount,
     });

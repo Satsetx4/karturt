@@ -426,6 +426,32 @@ export const payments = pgTable("payments", {
   check("payments_verified_by_official", sql`${table.verifiedByAccountType} = 'official'`),
 ]);
 
+export const paymentReversals = pgTable("payment_reversals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  rtUnitId: uuid("rt_unit_id").notNull(),
+  householdId: uuid("household_id").notNull(),
+  paymentId: uuid("payment_id").notNull(),
+  reversedByAccountId: uuid("reversed_by_account_id").notNull(),
+  reversedByAccountType: accountTypeEnum("reversed_by_account_type").notNull().default("official"),
+  reason: varchar("reason", { length: 500 }).notNull(),
+  reversedAt: timestamp("reversed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({
+    name: "payment_reversals_payment_scope_fk",
+    columns: [table.rtUnitId, table.householdId, table.paymentId],
+    foreignColumns: [payments.rtUnitId, payments.householdId, payments.id],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "payment_reversals_actor_scope_fk",
+    columns: [table.rtUnitId, table.reversedByAccountId, table.reversedByAccountType],
+    foreignColumns: [appAccounts.rtUnitId, appAccounts.id, appAccounts.accountType],
+  }).onDelete("restrict"),
+  uniqueIndex("payment_reversals_payment_uq").on(table.paymentId),
+  index("payment_reversals_rt_time_idx").on(table.rtUnitId, table.reversedAt),
+  check("payment_reversals_reason_not_blank", sql`length(trim(${table.reason})) > 0`),
+  check("payment_reversals_actor_official", sql`${table.reversedByAccountType} = 'official'`),
+]);
+
 export const paymentRequestItems = pgTable("payment_request_items", {
   requestId: uuid("request_id").notNull(),
   rtUnitId: uuid("rt_unit_id").notNull(),
@@ -497,8 +523,45 @@ export const paymentAllocations = pgTable("payment_allocations", {
   }).onDelete("restrict"),
   uniqueIndex("payment_allocations_payment_due_uq").on(table.paymentId, table.monthlyDueId),
   uniqueIndex("payment_allocations_request_due_uq").on(table.paymentRequestId, table.monthlyDueId),
+  unique("payment_allocations_active_owner_scope_uq").on(
+    table.id,
+    table.paymentId,
+    table.rtUnitId,
+    table.householdId,
+    table.monthlyDueId,
+  ),
   index("payment_allocations_due_history_idx").on(table.rtUnitId, table.householdId, table.monthlyDueId, table.createdAt),
   check("payment_allocations_positive_amount", sql`${table.amount} > 0`),
+]);
+
+export const activeDueSettlements = pgTable("active_due_settlements", {
+  monthlyDueId: uuid("monthly_due_id").primaryKey(),
+  rtUnitId: uuid("rt_unit_id").notNull(),
+  householdId: uuid("household_id").notNull(),
+  paymentId: uuid("payment_id").notNull(),
+  allocationId: uuid("allocation_id").notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({
+    name: "active_due_settlements_due_scope_fk",
+    columns: [table.rtUnitId, table.householdId, table.monthlyDueId],
+    foreignColumns: [monthlyDues.rtUnitId, monthlyDues.householdId, monthlyDues.id],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "active_due_settlements_payment_scope_fk",
+    columns: [table.rtUnitId, table.householdId, table.paymentId],
+    foreignColumns: [payments.rtUnitId, payments.householdId, payments.id],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "active_due_settlements_allocation_scope_fk",
+    columns: [table.allocationId, table.paymentId, table.rtUnitId, table.householdId, table.monthlyDueId],
+    foreignColumns: [paymentAllocations.id, paymentAllocations.paymentId, paymentAllocations.rtUnitId, paymentAllocations.householdId, paymentAllocations.monthlyDueId],
+  }).onDelete("restrict"),
+  uniqueIndex("active_due_settlements_allocation_uq").on(table.allocationId),
+  uniqueIndex("active_due_settlements_payment_due_uq").on(table.paymentId, table.monthlyDueId),
+  index("active_due_settlements_payment_idx").on(table.paymentId),
+  check("active_due_settlements_positive_amount", sql`${table.amount} > 0`),
 ]);
 
 export const paymentRequestClaims = pgTable("payment_request_claims", {
@@ -551,8 +614,10 @@ export const schema = {
   monthlyDues,
   paymentRequests,
   payments,
+  paymentReversals,
   paymentRequestItems,
   paymentAllocations,
+  activeDueSettlements,
   paymentRequestClaims,
   auditEvents,
 };
