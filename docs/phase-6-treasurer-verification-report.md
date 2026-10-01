@@ -2,8 +2,8 @@
 
 ## Decision
 
-- **Fase 6:** Pending GitHub Actions on `feat/phase-6-treasurer-verification`. Local, Neon development, real HTTP, and browser gates pass.
-- **Test Gate B:** Pending GitHub Actions. The real resident → request → WhatsApp → Treasurer queue/detail/verify → resident paid path, history, audit, concurrency, and authorization checks pass.
+- **Fase 6:** PASS on implementation commit `18237299b1de1c766626b730974406cc385036c8`. The local, Neon development, real HTTP, browser, and GitHub Actions gates pass.
+- **Test Gate B:** PASS. The real resident → request → WhatsApp → Treasurer queue/detail/verify → resident paid path, history, audit, concurrency, and authorization checks pass.
 - **Critical/High blockers found:** 0.
 - **Production and default branch:** Not accessed, migrated, deployed, or merged.
 
@@ -11,6 +11,7 @@
 
 - Repository: `Satsetx4/karturt`; working branch: `feat/phase-6-treasurer-verification`.
 - Baseline: `fix/phase-5-1-pre-verification-hardening` at `feaab42cb1c8c013cb40184cb9d867f6167cdff1`; Fase 5.1 implementation parent: `dd8000dd44b75d6e662ce4b688f20cd8faa28b73`.
+- Validated Fase 6 implementation commit: `18237299b1de1c766626b730974406cc385036c8`.
 - Baseline migration: `0005_phase_5_1_payment_request_items_immutable`.
 - New ledger migration: `0006_phase_6_treasurer_payment_ledger`.
 - Local toolchain used for final checks: Node.js `v24.19.0`, npm `12.0.2`.
@@ -94,4 +95,6 @@ Synthetic financial fixtures are retained on the development branch. Two earlier
 
 ## GitHub Actions
 
-The Gate A workflow now includes `feat/phase-6-treasurer-verification` in its push trigger. Branch push and Actions result: **pending**.
+The Gate A workflow includes `feat/phase-6-treasurer-verification` in its push trigger. Run [36811210539](https://github.com/Satsetx4/karturt/actions/runs/36811210539) checked the implementation SHA above and passed lint, typecheck, unit, integration/migration, constraints, authorization, full suite, Drizzle journal check, schema drift, and production build.
+
+GitHub emitted non-blocking runner notices: `actions/checkout@v4` and `actions/setup-node@v4` are being run on Node.js 24 despite their current Node.js 20 target, and `ubuntu-latest` will move to Ubuntu 26 on October 19, 2026. These notices did not fail the run.
