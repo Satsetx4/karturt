@@ -35,6 +35,15 @@ describe("role authorization", () => {
     expect(canPerform(principal("resident"), "payment:verify", { rtUnitId: "rt-one" })).toBe(false);
   });
 
+  it("allows direct cash recording only to the same-RT Treasurer", () => {
+    expect(canPerform(principal("treasurer"), "payment:record_cash", { rtUnitId: "rt-one" })).toBe(true);
+    expect(canPerform(principal("treasurer"), "payment:record_cash", { rtUnitId: "rt-two" })).toBe(false);
+    expect(canPerform(principal("resident"), "payment:record_cash", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("rt_chairman"), "payment:record_cash", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("system_admin", { rtUnitId: null, householdId: null, personId: null }), "payment:record_cash", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("treasurer", { rtUnitId: null }), "payment:record_cash", { rtUnitId: "rt-one" })).toBe(false);
+  });
+
   it("gives rejection to the active Treasurer only", () => {
     expect(canPerform(principal("treasurer"), "payment:reject", { rtUnitId: "rt-one" })).toBe(true);
     expect(canPerform(principal("treasurer"), "payment:reject", { rtUnitId: "rt-two" })).toBe(false);

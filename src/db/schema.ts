@@ -386,12 +386,14 @@ export const payments = pgTable("payments", {
   id: uuid("id").primaryKey().defaultRandom(),
   rtUnitId: uuid("rt_unit_id").notNull(),
   householdId: uuid("household_id").notNull(),
-  paymentRequestId: uuid("payment_request_id").notNull(),
+  paymentRequestId: uuid("payment_request_id"),
   amount: bigint("amount", { mode: "number" }).notNull(),
   method: varchar("method", { length: 16 }).notNull().default("transfer"),
   verifiedByAccountId: uuid("verified_by_account_id").notNull(),
   verifiedByAccountType: accountTypeEnum("verified_by_account_type").notNull().default("official"),
   verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull().defaultNow(),
+  cashIdempotencyKey: uuid("cash_idempotency_key"),
+  cashIdempotencyFingerprint: varchar("cash_idempotency_fingerprint", { length: 64 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   foreignKey({
@@ -409,8 +411,18 @@ export const payments = pgTable("payments", {
   unique("payments_id_request_scope_uq").on(table.id, table.paymentRequestId, table.rtUnitId, table.householdId),
   index("payments_household_verified_idx").on(table.rtUnitId, table.householdId, table.verifiedAt),
   index("payments_treasurer_verified_idx").on(table.rtUnitId, table.verifiedByAccountId, table.verifiedAt),
+  uniqueIndex("payments_cash_idempotency_uq")
+    .on(table.rtUnitId, table.verifiedByAccountId, table.cashIdempotencyKey)
+    .where(sql`${table.method} = 'cash'`),
   check("payments_positive_amount", sql`${table.amount} > 0`),
-  check("payments_method_transfer_only", sql`${table.method} = 'transfer'`),
+  check(
+    "payments_method_source_consistent",
+    sql`(${table.method} = 'transfer' and ${table.paymentRequestId} is not null) or (${table.method} = 'cash' and ${table.paymentRequestId} is null)`,
+  ),
+  check(
+    "payments_cash_idempotency_consistent",
+    sql`(${table.method} = 'cash' and ${table.cashIdempotencyKey} is not null and ${table.cashIdempotencyKey}::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' and ${table.cashIdempotencyFingerprint} ~ '^[0-9a-f]{64}$') or (${table.method} = 'transfer' and ${table.cashIdempotencyKey} is null and ${table.cashIdempotencyFingerprint} is null)`,
+  ),
   check("payments_verified_by_official", sql`${table.verifiedByAccountType} = 'official'`),
 ]);
 
@@ -451,7 +463,7 @@ export const paymentAllocations = pgTable("payment_allocations", {
   id: uuid("id").primaryKey().defaultRandom(),
   rtUnitId: uuid("rt_unit_id").notNull(),
   householdId: uuid("household_id").notNull(),
-  paymentRequestId: uuid("payment_request_id").notNull(),
+  paymentRequestId: uuid("payment_request_id"),
   paymentId: uuid("payment_id").notNull(),
   monthlyDueId: uuid("monthly_due_id").notNull(),
   amount: bigint("amount", { mode: "number" }).notNull(),
@@ -461,6 +473,11 @@ export const paymentAllocations = pgTable("payment_allocations", {
     name: "payment_allocations_payment_scope_fk",
     columns: [table.paymentId, table.paymentRequestId, table.rtUnitId, table.householdId],
     foreignColumns: [payments.id, payments.paymentRequestId, payments.rtUnitId, payments.householdId],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "payment_allocations_payment_household_scope_fk",
+    columns: [table.rtUnitId, table.householdId, table.paymentId],
+    foreignColumns: [payments.rtUnitId, payments.householdId, payments.id],
   }).onDelete("restrict"),
   foreignKey({
     name: "payment_allocations_request_item_scope_amount_fk",

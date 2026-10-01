@@ -95,6 +95,23 @@ function normalizeContext(action: string, context: AuditContext | undefined): Au
     return { itemCount, totalAmount };
   }
 
+  if (action === "payment.cash_recorded") {
+    if (keys.join(",") !== "itemCount,method,totalAmount") {
+      throw new Error("Audit context fields do not match the action contract.");
+    }
+    const itemCount = value.itemCount;
+    const method = value.method;
+    const totalAmount = value.totalAmount;
+    if (typeof itemCount !== "number" || !Number.isSafeInteger(itemCount) || itemCount <= 0) {
+      throw new Error("Audit payment item count must be a positive safe integer.");
+    }
+    if (method !== "cash") throw new Error("Cash payment audit method must be cash.");
+    if (typeof totalAmount !== "number" || !Number.isSafeInteger(totalAmount) || totalAmount <= 0) {
+      throw new Error("Audit payment total must be a positive safe integer.");
+    }
+    return { itemCount, method, totalAmount };
+  }
+
   if (action === "resident.pin.reset" || recoveryActions.has(action)) {
     if (keys.join(",") !== "recoveryReference,revokedSessionCount") {
       throw new Error("Audit context fields do not match the action contract.");
@@ -152,6 +169,9 @@ export async function appendAuditEvent<TTransaction extends TransactionExecutor>
   }
   if (!actionPattern.test(action) || !entityTypePattern.test(entityType)) {
     throw new Error("Audit action and entity type must use canonical identifiers.");
+  }
+  if (action === "payment.cash_recorded" && (entityType !== "payment" || reason !== null)) {
+    throw new Error("Cash payment audit requires a payment entity and no reason.");
   }
   const safeContext = normalizeContext(action, input.context);
   if (Buffer.byteLength(JSON.stringify(safeContext), "utf8") > 2048) {

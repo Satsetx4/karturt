@@ -1,7 +1,28 @@
+import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
+import { drizzle } from "drizzle-orm/pglite";
+import {
+  appAccounts,
+  billingYears,
+  feeRates,
+  monthlyDues,
+  officialAssignments,
+  paymentAllocations,
+  paymentRequestClaims,
+  paymentRequestItems,
+  paymentRequests,
+  payments,
+  relationalSchema,
+} from "../../src/db/schema";
+import type { AppDatabase } from "../../src/db/client";
+import type { Principal } from "../../src/lib/auth/permissions";
+import { createResidentPaymentRequest } from "../../src/lib/billing/resident-payment-request";
+import { recordTreasurerCashPayment } from "../../src/lib/billing/treasurer-cash-payments";
+import { createAuthUser, createHousehold, createRt } from "../helpers/database";
 
 describe("legacy billing migration upgrade", () => {
   let client: PGlite;
@@ -55,5 +76,155 @@ describe("legacy billing migration upgrade", () => {
       [due!.id],
     )).rows;
     expect(migrated).toEqual({ status: "not_due", waived_reason: null });
+  });
+
+  it("upgrades a verified transfer ledger to 0009 without rewriting it, then records cash", async () => {
+    const upgradeClient = new PGlite();
+    try {
+      const migrationFolder = resolve(process.cwd(), "drizzle");
+      const migrations = readdirSync(migrationFolder)
+        .filter((name) => name.endsWith(".sql"))
+        .sort();
+      const cashMigration = "0009_phase_8_cash_payment.sql";
+      for (const name of migrations.filter((migration) => migration < cashMigration)) {
+        await upgradeClient.exec(readFileSync(resolve(migrationFolder, name), "utf8"));
+      }
+
+      const db = drizzle(upgradeClient, { schema: relationalSchema });
+      const rtUnitId = await createRt(db);
+      const household = await createHousehold(db, rtUnitId);
+      const residentUser = await createAuthUser(db);
+      const [residentAccount] = await db.insert(appAccounts).values({
+        rtUnitId,
+        authUserId: residentUser.id,
+        accountType: "resident",
+        loginIdentifier: `resident-${residentUser.id}`,
+        personId: household.personId,
+        householdId: household.householdId,
+      }).returning({ id: appAccounts.id });
+      const residentPrincipal: Principal = {
+        authUserId: residentUser.id,
+        appAccountId: residentAccount!.id,
+        role: "resident",
+        rtUnitId,
+        householdId: household.householdId,
+        personId: household.personId,
+      };
+
+      const treasurerUser = await createAuthUser(db);
+      const [treasurerAccount] = await db.insert(appAccounts).values({
+        rtUnitId,
+        authUserId: treasurerUser.id,
+        accountType: "official",
+        loginIdentifier: `treasurer-${treasurerUser.id}`,
+        personId: household.personId,
+      }).returning({ id: appAccounts.id });
+      await db.insert(officialAssignments).values({
+        rtUnitId,
+        appAccountId: treasurerAccount!.id,
+        role: "treasurer",
+        startsOn: "2020-01-01",
+      });
+      const treasurerPrincipal: Principal = {
+        authUserId: treasurerUser.id,
+        appAccountId: treasurerAccount!.id,
+        role: "treasurer",
+        rtUnitId,
+        householdId: null,
+        personId: household.personId,
+      };
+      const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" })
+        .returning({ id: billingYears.id });
+      const [feeRate] = await db.insert(feeRates).values({
+        rtUnitId,
+        billingYearId: year!.id,
+        effectiveMonth: 1,
+        monthlyAmount: 40000,
+      }).returning({ id: feeRates.id });
+      await db.insert(monthlyDues).values([1, 2].map((month) => ({
+        rtUnitId,
+        householdId: household.householdId,
+        billingYearId: year!.id,
+        feeRateId: feeRate!.id,
+        month,
+        amount: 40000,
+        dueDate: `2026-${String(month).padStart(2, "0")}-10`,
+        status: "unpaid" as const,
+      })));
+
+      const request = await createResidentPaymentRequest(db as unknown as AppDatabase, residentPrincipal, {
+        period: "2026-01",
+        idempotencyKey: randomUUID(),
+      });
+      const [requestRow] = await db.select().from(paymentRequests)
+        .where(eq(paymentRequests.requestCode, request.requestCode));
+      const [requestItem] = await db.select().from(paymentRequestItems)
+        .where(eq(paymentRequestItems.requestId, requestRow!.id));
+      const transferPaymentId = randomUUID();
+      await db.transaction(async (transaction) => {
+        await transaction.execute(sql`
+          INSERT INTO payments (id, rt_unit_id, household_id, payment_request_id, amount, method, verified_by_account_id, verified_by_account_type)
+          VALUES (${transferPaymentId}, ${rtUnitId}, ${household.householdId}, ${requestRow!.id}, 40000, 'transfer', ${treasurerAccount!.id}, 'official')
+        `);
+        await transaction.execute(sql`
+          INSERT INTO payment_allocations (rt_unit_id, household_id, payment_request_id, payment_id, monthly_due_id, amount)
+          VALUES (${rtUnitId}, ${household.householdId}, ${requestRow!.id}, ${transferPaymentId}, ${requestItem!.monthlyDueId}, 40000)
+        `);
+        await transaction.execute(sql`
+          UPDATE monthly_dues SET status = 'paid' WHERE id = ${requestItem!.monthlyDueId}
+        `);
+        await transaction.execute(sql`
+          UPDATE payment_requests
+          SET status = 'verified', verified_at = now(), verified_by_account_id = ${treasurerAccount!.id}, verified_by_account_type = 'official'
+          WHERE id = ${requestRow!.id}
+        `);
+        await transaction.delete(paymentRequestClaims).where(eq(paymentRequestClaims.requestId, requestRow!.id));
+        await transaction.execute(sql`
+          INSERT INTO audit_events (actor_app_account_id, action, entity_type, entity_id, reason, context)
+          VALUES (
+            ${treasurerAccount!.id}, 'payment_request.verified', 'payment_request', ${requestRow!.id}, NULL,
+            jsonb_build_object('itemCount', 1, 'totalAmount', 40000)
+          )
+        `);
+      });
+      const [transferBefore] = (await upgradeClient.query<{
+        id: string;
+        payment_request_id: string;
+        amount: number;
+        method: string;
+      }>("SELECT id, payment_request_id, amount, method FROM payments WHERE id = $1", [transferPaymentId])).rows;
+      const [transferAllocationBefore] = await db.select().from(paymentAllocations);
+
+      await upgradeClient.exec(readFileSync(resolve(migrationFolder, cashMigration), "utf8"));
+
+      const [transferAfter] = await db.select().from(payments);
+      const [transferAllocationAfter] = await db.select().from(paymentAllocations);
+      expect(transferAfter).toMatchObject({
+        id: transferBefore!.id,
+        paymentRequestId: transferBefore!.payment_request_id,
+        amount: 40000,
+        method: "transfer",
+        verifiedByAccountId: treasurerAccount!.id,
+        cashIdempotencyKey: null,
+        cashIdempotencyFingerprint: null,
+      });
+      expect(transferAllocationAfter).toMatchObject({
+        id: transferAllocationBefore!.id,
+        paymentRequestId: transferAllocationBefore!.paymentRequestId,
+        paymentId: transferAllocationBefore!.paymentId,
+        amount: 40000,
+      });
+
+      const cash = await recordTreasurerCashPayment(db as unknown as AppDatabase, treasurerPrincipal, {
+        householdId: household.householdId,
+        period: "2026-02",
+        idempotencyKey: randomUUID(),
+      }, "2026-06-01");
+      expect(cash.periods).toEqual(["2026-02"]);
+      expect((await db.select().from(payments)).filter((payment) => payment.method === "cash")).toHaveLength(1);
+      expect((await db.select().from(payments)).filter((payment) => payment.method === "transfer")).toHaveLength(1);
+    } finally {
+      await upgradeClient.close();
+    }
   });
 });
