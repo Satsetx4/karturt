@@ -335,6 +335,10 @@ export const paymentRequests = pgTable("payment_requests", {
   verifiedByAccountId: uuid("verified_by_account_id"),
   verifiedByAccountType: accountTypeEnum("verified_by_account_type").notNull().default("official"),
   verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  resolvedByAccountId: uuid("resolved_by_account_id"),
+  resolvedByAccountType: accountTypeEnum("resolved_by_account_type"),
+  resolutionReason: varchar("resolution_reason", { length: 500 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   foreignKey({
@@ -353,9 +357,15 @@ export const paymentRequests = pgTable("payment_requests", {
     columns: [table.rtUnitId, table.verifiedByAccountId, table.verifiedByAccountType],
     foreignColumns: [appAccounts.rtUnitId, appAccounts.id, appAccounts.accountType],
   }).onDelete("restrict"),
+  foreignKey({
+    name: "payment_requests_resolved_by_scope_fk",
+    columns: [table.rtUnitId, table.resolvedByAccountId, table.resolvedByAccountType],
+    foreignColumns: [appAccounts.rtUnitId, appAccounts.id, appAccounts.accountType],
+  }).onDelete("restrict"),
   uniqueIndex("payment_requests_request_code_uq").on(table.requestCode),
   uniqueIndex("payment_requests_requester_idempotency_uq").on(table.requestedByAccountId, table.idempotencyKey),
   index("payment_requests_household_status_created_idx").on(table.rtUnitId, table.householdId, table.status, table.createdAt),
+  index("payment_requests_requester_created_idx").on(table.requestedByAccountId, table.createdAt),
   check("payment_requests_resident_only", sql`${table.requestedByAccountType} = 'resident'`),
   check("payment_requests_idempotency_key_uuid", sql`${table.idempotencyKey} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`),
   check("payment_requests_fingerprint_sha256", sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`),
@@ -365,6 +375,10 @@ export const paymentRequests = pgTable("payment_requests", {
   check(
     "payment_requests_verification_metadata_consistent",
     sql`(${table.status} = 'verified' and ${table.verifiedAt} is not null and ${table.verifiedByAccountId} is not null) or (${table.status} <> 'verified' and ${table.verifiedAt} is null and ${table.verifiedByAccountId} is null)`,
+  ),
+  check(
+    "payment_requests_resolution_metadata_consistent",
+    sql`(${table.status} in ('pending', 'verified') and ${table.resolvedAt} is null and ${table.resolvedByAccountId} is null and ${table.resolvedByAccountType} is null and ${table.resolutionReason} is null) or (${table.status} = 'rejected' and ${table.resolvedAt} is not null and ${table.resolvedByAccountId} is not null and ${table.resolvedByAccountType} = 'official' and ${table.resolutionReason} is not null and length(trim(${table.resolutionReason})) > 0) or (${table.status} = 'cancelled' and ${table.resolvedAt} is not null and ${table.resolvedByAccountId} = ${table.requestedByAccountId} and ${table.resolvedByAccountType} = 'resident' and ${table.resolutionReason} is null)`,
   ),
 ]);
 

@@ -21,6 +21,8 @@ export type TreasurerPaymentRequest = {
   houseNumber: string;
   createdAt: Date;
   verifiedAt: Date | null;
+  resolvedAt: Date | null;
+  resolutionReason: string | null;
   totalAmount: number;
   items: TreasurerRequestItem[];
 };
@@ -33,11 +35,12 @@ export async function assertActiveTreasurer(
   database: TreasurerAuthDatabase,
   principal: Principal,
   businessDate = jakartaBusinessDate(),
+  permission: "payment:verify" | "payment:reject" = "payment:verify",
 ) {
   if (principal.role !== "treasurer" || !principal.rtUnitId) {
     throw new Error("Forbidden: only an active Treasurer may access payment verification.");
   }
-  assertCanPerform(principal, "payment:verify", { rtUnitId: principal.rtUnitId });
+  assertCanPerform(principal, permission, { rtUnitId: principal.rtUnitId });
 
   const [account] = await database
     .select({ id: appAccounts.id, status: appAccounts.status })
@@ -119,6 +122,8 @@ export async function getTreasurerPaymentRequestQueue(
       houseNumber: houses.number,
       createdAt: paymentRequests.createdAt,
       verifiedAt: paymentRequests.verifiedAt,
+      resolvedAt: paymentRequests.resolvedAt,
+      resolutionReason: paymentRequests.resolutionReason,
       totalAmount: paymentRequests.totalAmount,
       itemCount: paymentRequests.itemCount,
     })
@@ -157,6 +162,8 @@ export async function getTreasurerPaymentRequestQueue(
       houseNumber: request.houseNumber,
       createdAt: request.createdAt,
       verifiedAt: request.verifiedAt,
+      resolvedAt: request.resolvedAt,
+      resolutionReason: request.resolutionReason,
       totalAmount: request.totalAmount,
       items,
     };
@@ -179,6 +186,8 @@ export async function getTreasurerPaymentRequestDetail(
       houseNumber: houses.number,
       createdAt: paymentRequests.createdAt,
       verifiedAt: paymentRequests.verifiedAt,
+      resolvedAt: paymentRequests.resolvedAt,
+      resolutionReason: paymentRequests.resolutionReason,
       totalAmount: paymentRequests.totalAmount,
       itemCount: paymentRequests.itemCount,
     })
@@ -217,6 +226,8 @@ export async function getTreasurerPaymentRequestDetail(
     houseNumber: request.houseNumber,
     createdAt: request.createdAt,
     verifiedAt: request.verifiedAt,
+    resolvedAt: request.resolvedAt,
+    resolutionReason: request.resolutionReason,
     totalAmount: request.totalAmount,
     items,
   };

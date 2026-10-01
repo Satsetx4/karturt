@@ -56,6 +56,7 @@ let nextProcess: ChildProcess | undefined;
 let chromeProcess: ChildProcess | undefined;
 let devtoolsSocket: WebSocket | undefined;
 let browserProfile: string | undefined;
+let currentSmokeStage = "initialization";
 
 type FixturePerson = {
   accountId: string;
@@ -203,6 +204,96 @@ function cookiePairs(cookie: string) {
   });
 }
 
+async function postJson(url: string, cookie: string | undefined, origin: string | undefined, body: unknown) {
+  const headers = new Headers({ "content-type": "application/json" });
+  if (cookie) headers.set("cookie", cookie);
+  if (origin) headers.set("origin", origin);
+  if (new URL(url).pathname === "/api/resident/payment-requests") headers.set("idempotency-key", randomUUID());
+  return fetch(url, { method: "POST", headers, body: JSON.stringify(body), cache: "no-store" });
+}
+
+async function createRequestOverHttp(baseUrl: string, residentCookie: string, period: string) {
+  const response = await postJson(`${baseUrl}/api/resident/payment-requests`, residentCookie, baseUrl, { period });
+  assert.equal(response.status, 200, `Resident must be able to request ${period} over HTTP.`);
+  const result = await response.json() as { requestCode: string; status: string; periods: string[]; totalAmount: number };
+  assert.equal(result.status, "pending");
+  assert.ok(result.requestCode);
+  return result;
+}
+
+async function readRequestArtifacts(db: ReturnType<typeof getDb>, requestCode: string) {
+  const [request] = await db.select().from(paymentRequests)
+    .where(eq(paymentRequests.requestCode, requestCode));
+  assert.ok(request, `Request ${requestCode} must exist in Neon development.`);
+  const items = await db.select().from(paymentRequestItems)
+    .where(eq(paymentRequestItems.requestId, request.id));
+  const [paymentRows, allocationRows, claimRows, auditRows] = await Promise.all([
+    db.select().from(payments).where(eq(payments.paymentRequestId, request.id)),
+    db.select().from(paymentAllocations).where(eq(paymentAllocations.paymentRequestId, request.id)),
+    db.select().from(paymentRequestClaims).where(eq(paymentRequestClaims.requestId, request.id)),
+    db.select().from(auditEvents).where(and(
+      eq(auditEvents.entityType, "payment_request"),
+      eq(auditEvents.entityId, request.id),
+      inArray(auditEvents.action, ["payment_request.verified", "payment_request.rejected", "payment_request.cancelled"]),
+    )),
+  ]);
+  const dueRows = items.length
+    ? await db.select().from(monthlyDues).where(inArray(monthlyDues.id, items.map((item) => item.monthlyDueId)))
+    : [];
+  return { request, items, payments: paymentRows, allocations: allocationRows, claims: claimRows, audits: auditRows, dues: dueRows };
+}
+
+function assertNoPaymentResolution(
+  artifacts: Awaited<ReturnType<typeof readRequestArtifacts>>,
+  status: "rejected" | "cancelled",
+  action: "payment_request.rejected" | "payment_request.cancelled",
+  reason: string | null,
+) {
+  assert.equal(artifacts.request.status, status);
+  assert.equal(artifacts.items.length, artifacts.request.itemCount, "Terminal request item history must be retained.");
+  assert.equal(artifacts.payments.length, 0);
+  assert.equal(artifacts.allocations.length, 0);
+  assert.equal(artifacts.claims.length, 0);
+  assert.ok(artifacts.dues.every((due) => due.status === "unpaid"));
+  assert.equal(artifacts.audits.length, 1);
+  assert.equal(artifacts.audits[0]!.action, action);
+  assert.equal(artifacts.audits[0]!.reason, reason);
+  assert.deepEqual(artifacts.audits[0]!.context, {
+    itemCount: artifacts.request.itemCount,
+    totalAmount: artifacts.request.totalAmount,
+  });
+}
+
+async function assertRaceWinner(
+  db: ReturnType<typeof getDb>,
+  requestCode: string,
+  winningAction: "payment_request.verified" | "payment_request.rejected" | "payment_request.cancelled",
+  rejectReason: string,
+) {
+  const artifacts = await readRequestArtifacts(db, requestCode);
+  assert.equal(artifacts.audits.length, 1, "Exactly one terminal audit event may win a race.");
+  assert.equal(artifacts.audits[0]!.action, winningAction);
+  assert.equal(artifacts.items.length, artifacts.request.itemCount, "Race must preserve request item history.");
+  assert.equal(artifacts.claims.length, 0, "Race winner must release all claims.");
+  if (winningAction === "payment_request.verified") {
+    assert.equal(artifacts.request.status, "verified");
+    assert.equal(artifacts.payments.length, 1);
+    assert.equal(artifacts.allocations.length, artifacts.items.length);
+    assert.equal(artifacts.allocations.reduce((sum, allocation) => sum + allocation.amount, 0), artifacts.request.totalAmount);
+    assert.ok(artifacts.dues.every((due) => due.status === "paid"));
+    assert.equal(artifacts.audits[0]!.reason, null);
+  } else {
+    const status = winningAction === "payment_request.rejected" ? "rejected" : "cancelled";
+    assertNoPaymentResolution(
+      artifacts,
+      status,
+      winningAction,
+      winningAction === "payment_request.rejected" ? rejectReason : null,
+    );
+  }
+  return artifacts.request.status;
+}
+
 async function runBrowserSmoke(
   baseUrl: string,
   treasurerCookie: string,
@@ -210,6 +301,13 @@ async function runBrowserSmoke(
   residentCookie: string,
   firstCode: string,
   secondCode: string,
+  phase7: {
+    residentCookie: string;
+    treasurerCookie: string;
+    pendingCode: string;
+    cancelledCode: string;
+    rejectedCode: string;
+  },
 ) {
   const tempRoot = resolve(tmpdir());
   browserProfile = mkdtempSync(join(tempRoot, "karturt-phase-6-chrome-"));
@@ -238,6 +336,8 @@ async function runBrowserSmoke(
   devtoolsSocket = new WebSocket(pageTarget.webSocketDebuggerUrl);
   const pending = new Map<number, (value: Record<string, unknown>) => void>();
   const requestedVerifyUrls: string[] = [];
+  const requestedCancelUrls: string[] = [];
+  const requestedRejectUrls: string[] = [];
   const pageErrors: string[] = [];
   let commandId = 0;
   devtoolsSocket.addEventListener("message", (event) => {
@@ -245,6 +345,8 @@ async function runBrowserSmoke(
     if (message.method === "Network.requestWillBeSent") {
       const request = message.params?.request as { url?: string } | undefined;
       if (request?.url?.includes("/api/treasurer/payment-requests/") && request.url.endsWith("/verify")) requestedVerifyUrls.push(request.url);
+      if (request?.url?.includes("/api/resident/payment-requests/") && request.url.endsWith("/cancel")) requestedCancelUrls.push(request.url);
+      if (request?.url?.includes("/api/treasurer/payment-requests/") && request.url.endsWith("/reject")) requestedRejectUrls.push(request.url);
     }
     if (message.method === "Runtime.exceptionThrown") pageErrors.push("Uncaught browser exception");
     if (message.method === "Log.entryAdded") {
@@ -308,6 +410,15 @@ async function runBrowserSmoke(
     const imagePath = join(directory, `${new Date().toISOString().replace(/[:.]/g, "-")}-${name}.png`);
     writeFileSync(imagePath, Buffer.from(data as string, "base64"), { flag: "wx" });
   };
+  const capturePhase7 = async (name: string) => {
+    const response = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false, fromSurface: true });
+    const data = (response.result as { data?: unknown } | undefined)?.data;
+    assert.equal(typeof data, "string", "Chrome did not return Phase 7 screenshot evidence.");
+    const directory = resolve(root, "docs", "phase-7-evidence");
+    mkdirSync(directory, { recursive: true });
+    const imagePath = join(directory, `${new Date().toISOString().replace(/[:.]/g, "-")}-${name}.png`);
+    writeFileSync(imagePath, Buffer.from(data as string, "base64"), { flag: "wx" });
+  };
 
   await command("Page.enable");
   await command("Runtime.enable");
@@ -325,8 +436,8 @@ async function runBrowserSmoke(
       codes: [...document.querySelectorAll('.treasurer-request-code')].map(item => item.textContent.trim()),
       overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
     }))()`);
-    assert.equal(queue.count, 2);
-    assert.deepEqual(queue.codes, [firstCode, secondCode], "Visible HTTP queue must preserve oldest-first ordering.");
+    assert.equal(queue.count, 3);
+    assert.deepEqual(queue.codes, [firstCode, secondCode, phase7.pendingCode], "Visible HTTP queue must preserve oldest-first ordering.");
     assert.equal(queue.overflow, false, `Queue has horizontal overflow at ${viewport.width}px.`);
     if (viewport.width === 390) await capture("treasurer-queue-390x844");
 
@@ -429,15 +540,166 @@ async function runBrowserSmoke(
   assert.ok(history.rows.every((row) => row.includes("Sudah bayar")));
   assert.equal(history.overflow, false);
   await capture("resident-paid-history-390x844");
+
+  for (const { name, value } of cookiePairs(phase7.residentCookie)) {
+    await command("Network.setCookie", { name, value, url: baseUrl, sameSite: "Lax" });
+  }
+  await evaluate(`localStorage.setItem("karturt:resident-tab", "card")`);
+  for (const viewport of browserViewports) {
+    await navigate(`${baseUrl}/app`, viewport);
+    await waitFor("document.querySelector('.payment-request-history') !== null", "Resident payment-request history did not render in the browser.");
+    const panel = await evaluate<{
+      cancelled: boolean;
+      rejected: boolean;
+      reason: boolean;
+      pending: boolean;
+      cancelButtonHeight: number;
+      overflow: boolean;
+      technicalCopy: boolean;
+    }>(`(() => {
+      const text = document.body.innerText;
+      const cancelButton = [...document.querySelectorAll('.payment-request-history-list button')]
+        .find(button => button.textContent.trim() === 'Batalkan permintaan');
+      return {
+        cancelled: text.includes('${phase7.cancelledCode}') && text.includes('Dibatalkan'),
+        rejected: text.includes('${phase7.rejectedCode}') && text.includes('Ditolak'),
+        reason: text.includes('Bukti transfer belum terbaca.'),
+        pending: text.includes('${phase7.pendingCode}') && Boolean(cancelButton),
+        cancelButtonHeight: cancelButton ? Math.round(cancelButton.getBoundingClientRect().height) : 0,
+        overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+        technicalCopy: /SQLSTATE|undefined|null|internal server error/i.test(text),
+      };
+    })()`);
+    assert.equal(panel.cancelled, true);
+    assert.equal(panel.rejected, true);
+    assert.equal(panel.reason, true);
+    assert.equal(panel.pending, true);
+    assert.ok(panel.cancelButtonHeight >= 44, `Resident cancel control is below 44px at ${viewport.width}px.`);
+    assert.equal(panel.overflow, false, `Resident payment-request history has horizontal overflow at ${viewport.width}px.`);
+    assert.equal(panel.technicalCopy, false);
+    if (viewport.width === 390) await capturePhase7("resident-request-history-pending-390x844");
+  }
+
+  const cancelCountBefore = requestedCancelUrls.length;
+  await evaluate(`(() => [...document.querySelectorAll('.payment-request-history-list button')]
+    .find(button => button.textContent.trim() === 'Batalkan permintaan')?.click())()`);
+  await waitFor("document.querySelector('.payment-request-cancel-confirm') !== null", "Resident cancel confirmation did not render.");
+  assert.equal(await evaluate<boolean>("document.body.innerText.includes('Setelah dibatalkan, bulan kembali menjadi Belum bayar dan bisa diajukan lagi.')"), true);
+  await evaluate(`(() => [...document.querySelectorAll('.payment-request-cancel-confirm button')]
+    .find(button => button.textContent.trim() === 'Ya, batalkan permintaan')?.click())()`);
+  await waitFor("document.querySelector('.payment-request-cancel-feedback')?.textContent.includes('Permintaan dibatalkan')", "Resident cancel action did not reach success state.");
+  assert.equal(requestedCancelUrls.length - cancelCountBefore, 1, "Resident cancel action must issue one request.");
+  await waitFor("document.querySelectorAll('.due-status.status-pending').length === 0", "Cancelled resident request remained pending on the due card.");
+  assert.equal(await evaluate<boolean>("document.querySelector('.resident-summary')?.innerText.includes('Rp 18.000')"), true);
+  assert.equal(await evaluate<boolean>(`[...document.querySelectorAll('.payment-request-history-list li')]
+    .some(item => item.innerText.includes('${phase7.pendingCode}') && item.innerText.includes('Dibatalkan'))`), true);
+  await capturePhase7("resident-request-cancelled-390x844");
+
+  await evaluate(`(() => {
+    const select = document.querySelector('#payment-request-period');
+    const setValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setValue.call(select, '2026-08');
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
+  await waitFor("document.querySelector('.payment-request-action') && !document.querySelector('.payment-request-action').disabled", "Cancelled month could not be selected for a new request.");
+  await evaluate(`document.querySelector('.payment-request-action').click()`);
+  await waitFor("[...document.querySelectorAll('.payment-request-confirm-actions button')].some(button => button.textContent.includes('Konfirmasi dan ajukan'))", "New resident request confirmation did not render.");
+  await evaluate(`([...document.querySelectorAll('.payment-request-confirm-actions button')].find(button => button.textContent.includes('Konfirmasi dan ajukan'))).click()`);
+  await waitFor("document.querySelector('.payment-request-success')?.innerText.includes('Nomor pengajuan')", "Resident re-request after cancellation did not succeed in the browser.");
+  const uiRequestCode = await evaluate<string>(`document.querySelector('.payment-request-success')?.innerText.match(/KRT-[A-F0-9]{16}/)?.[0] ?? ''`);
+  assert.match(uiRequestCode, /^KRT-[A-F0-9]{16}$/);
+  assert.notEqual(uiRequestCode, phase7.pendingCode);
+  assert.notEqual(uiRequestCode, phase7.cancelledCode);
+  assert.notEqual(uiRequestCode, phase7.rejectedCode);
+
+  for (const { name, value } of cookiePairs(phase7.treasurerCookie)) {
+    await command("Network.setCookie", { name, value, url: baseUrl, sameSite: "Lax" });
+  }
+  const uiRejectReason = "Bukti transfer belum terbaca.";
+  for (const viewport of browserViewports) {
+    await navigate(`${baseUrl}/app/bendahara/${uiRequestCode}`, viewport);
+    await waitFor("document.querySelector('.treasurer-reject-form textarea') !== null", "Treasurer reject form did not render in the browser.");
+    const form = await evaluate<{ required: boolean; disabled: boolean; verify: boolean; overflow: boolean }>(`(() => ({
+      required: document.querySelector('.treasurer-reject-form textarea').required,
+      disabled: document.querySelector('.treasurer-reject-button').disabled,
+      verify: Boolean(document.querySelector('.treasurer-confirm-button')),
+      overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+    }))()`);
+    assert.equal(form.required, true);
+    assert.equal(form.disabled, true, "Reject control must remain disabled until a reason is entered.");
+    assert.equal(form.verify, true);
+    assert.equal(form.overflow, false, `Treasurer reject form has horizontal overflow at ${viewport.width}px.`);
+    if (viewport.width === 390) await capturePhase7("treasurer-reject-required-390x844");
+  }
+  await evaluate("document.querySelector('.treasurer-reject-form textarea').focus()");
+  await command("Input.insertText", { text: uiRejectReason });
+  await waitFor("!document.querySelector('.treasurer-reject-button').disabled", "Treasurer reject reason was not accepted by the browser form.");
+  const rejectCountBefore = requestedRejectUrls.length;
+  await evaluate("document.querySelector('.treasurer-reject-button').click()");
+  await waitFor("document.body.innerText.includes('Permintaan ditolak. Warga dapat mengajukan ulang bulan tersebut.')", "Treasurer reject form did not reach its success state.");
+  await waitFor("document.querySelector('.treasurer-status--done') && document.body.innerText.includes('Ditolak')", "Rejected status did not refresh in the browser detail.");
+  assert.equal(requestedRejectUrls.length - rejectCountBefore, 1, "Treasurer reject action must issue one request.");
+  assert.equal(await evaluate<boolean>(`document.body.innerText.includes('${uiRejectReason}') &&
+    !document.querySelector('.treasurer-confirm-button') && !document.querySelector('.treasurer-reject-form')`), true);
+  await capturePhase7("treasurer-request-rejected-390x844");
+  for (const viewport of browserViewports) {
+    await navigate(`${baseUrl}/app/bendahara/${uiRequestCode}`, viewport);
+    await waitFor("document.querySelector('.treasurer-status--done') !== null", "Rejected processed state did not render at every viewport.");
+    const detail = await evaluate<{ reason: boolean; noActions: boolean; overflow: boolean; forbiddenDate: boolean; uuid: boolean }>(`(() => {
+      const text = document.body.innerText;
+      return {
+        reason: text.includes('${uiRejectReason}'),
+        noActions: !document.querySelector('.treasurer-confirm-button') && !document.querySelector('.treasurer-reject-form'),
+        overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+        forbiddenDate: /\b10 (Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)\b/i.test(text),
+        uuid: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.test(text),
+      };
+    })()`);
+    assert.equal(detail.reason, true);
+    assert.equal(detail.noActions, true);
+    assert.equal(detail.overflow, false, `Rejected detail has horizontal overflow at ${viewport.width}px.`);
+    assert.equal(detail.forbiddenDate, false);
+    assert.equal(detail.uuid, false);
+  }
+  for (const { name, value } of cookiePairs(phase7.residentCookie)) {
+    await command("Network.setCookie", { name, value, url: baseUrl, sameSite: "Lax" });
+  }
+  for (const viewport of browserViewports) {
+    await navigate(`${baseUrl}/app`, viewport);
+    await waitFor("document.querySelector('.payment-request-history') && document.body.innerText.includes('Ditolak')", "Resident did not see the rejected request after a browser rejection.");
+    const residentFinal = await evaluate<{ latestRequest: boolean; reason: boolean; noPending: boolean; unpaid: boolean; cancelButton: boolean; overflow: boolean }>(`(() => {
+      const text = document.body.innerText;
+      const latest = [...document.querySelectorAll('.payment-request-history-list li')][0];
+      return {
+        latestRequest: Boolean(latest?.innerText.includes('${uiRequestCode}') && latest.innerText.includes('Ditolak')),
+        reason: Boolean(latest?.innerText.includes('${uiRejectReason}')),
+        noPending: document.querySelectorAll('.due-status.status-pending').length === 0,
+        unpaid: document.querySelector('.resident-summary')?.innerText.includes('Rp 18.000') ?? false,
+        cancelButton: [...document.querySelectorAll('.payment-request-history-list button')].some(button => button.textContent.trim() === 'Batalkan permintaan'),
+        overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      };
+    })()`);
+    assert.equal(residentFinal.latestRequest, true);
+    assert.equal(residentFinal.reason, true);
+    assert.equal(residentFinal.noPending, true);
+    assert.equal(residentFinal.unpaid, true);
+    assert.equal(residentFinal.cancelButton, false);
+    assert.equal(residentFinal.overflow, false, `Resident rejected history has horizontal overflow at ${viewport.width}px.`);
+    if (viewport.width === 390) await capturePhase7("resident-request-rejected-history-390x844");
+  }
   assert.deepEqual(pageErrors, [], "Browser page and console errors must remain clear.");
   devtoolsSocket.close();
   devtoolsSocket = undefined;
-  return concurrentResponses.map((response) => response.status);
+  return {
+    verifyStatuses: concurrentResponses.map((response) => response.status),
+    phase7RejectedRequestCode: uiRequestCode,
+  };
 }
 
 async function main() {
   loadEnvConfig(root);
   const { baseUrl, databaseHost } = assertDevelopmentTarget();
+  currentSmokeStage = "starting local Next server";
   await startNext(baseUrl);
   const db = getDb();
   const suffix = randomBytes(5).toString("hex").toUpperCase();
@@ -509,6 +771,7 @@ async function main() {
     status: "unpaid" as const,
   })));
 
+  currentSmokeStage = "signing in Gate B resident";
   const residentCookie = await signIn(baseUrl, "resident", residentHouseNumber, residentPin);
   const initialDues = await fetch(`${baseUrl}/api/resident/monthly-dues`, { headers: { cookie: residentCookie }, cache: "no-store" });
   assert.equal(initialDues.status, 200);
@@ -574,6 +837,36 @@ async function main() {
     idempotencyKey: randomUUID(),
   });
 
+  const phase7Password = randomBytes(16).toString("base64url");
+  const phase7HouseNumber = `P7-${suffix}`;
+  const phase7Identifier = `p7-resident-${suffix.toLowerCase()}`;
+  const phase7Resident = await createPerson(db, rtUnitId, {
+    houseNumber: phase7HouseNumber,
+    name: `Phase 7 smoke resident ${suffix}`,
+    loginIdentifier: phase7Identifier,
+    accountType: "resident",
+  });
+  await db.insert(authAccount).values({
+    id: randomUUID(),
+    accountId: phase7Resident.userId,
+    providerId: "credential",
+    userId: phase7Resident.userId,
+    password: await hashPassword(phase7Password),
+  });
+  await db.insert(monthlyDues).values({
+    rtUnitId,
+    householdId: phase7Resident.householdId,
+    billingYearId: billingYear!.id,
+    feeRateId: feeRate!.id,
+    month: 8,
+    amount: 18000,
+    dueDate: "2026-08-10",
+    status: "unpaid",
+  });
+  currentSmokeStage = "signing in Phase 7 resident";
+  const phase7ResidentCookie = await signIn(baseUrl, "resident", phase7HouseNumber, phase7Password);
+
+  currentSmokeStage = "signing in Treasurer sessions";
   const treasurerCookie = await signIn(baseUrl, "official", treasurerIdentifier, treasurerPassword);
   const secondTreasurerCookie = await signIn(baseUrl, "official", treasurerIdentifier, treasurerPassword);
   const queueResponse = await fetch(`${baseUrl}/api/treasurer/payment-requests`, {
@@ -628,15 +921,200 @@ async function main() {
   });
   assert.equal(massAssignmentRefusal.status, 400);
 
-  const concurrentStatuses = await runBrowserSmoke(
+  currentSmokeStage = "Phase 7 cancel and reject HTTP flows";
+  const initialPhase7Request = await createRequestOverHttp(baseUrl, phase7ResidentCookie, "2026-08");
+  assert.deepEqual(initialPhase7Request.periods, ["2026-08"]);
+  assert.equal(initialPhase7Request.totalAmount, 18000);
+  const initialHistoryResponse = await fetch(`${baseUrl}/api/resident/payment-requests`, {
+    headers: { cookie: phase7ResidentCookie },
+    cache: "no-store",
+  });
+  assert.equal(initialHistoryResponse.status, 200);
+  const initialHistory = await initialHistoryResponse.json() as {
+    requests: Array<{ requestCode: string; status: string; createdAt: string; resolvedAt: string | null; items: Array<{ period: string; amount: number }>; totalAmount: number; resolutionReason: string | null }>;
+    nextCursor: string | null;
+  };
+  assert.equal(initialHistory.requests.length, 1);
+  assert.deepEqual(Object.keys(initialHistory.requests[0]!).sort(), [
+    "createdAt", "items", "requestCode", "resolutionReason", "resolvedAt", "status", "totalAmount",
+  ]);
+  assert.deepEqual(Object.keys(initialHistory.requests[0]!.items[0]!).sort(), ["amount", "period"]);
+  assert.equal(initialHistory.requests[0]!.requestCode, initialPhase7Request.requestCode);
+  assert.equal(initialHistory.requests[0]!.status, "pending");
+  assert.doesNotMatch(JSON.stringify(initialHistory), /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i);
+
+  const initialCancelUrl = `${baseUrl}/api/resident/payment-requests/${initialPhase7Request.requestCode}/cancel`;
+  assert.equal((await postJson(initialCancelUrl, undefined, baseUrl, {})).status, 401, "Unauthenticated residents must not cancel requests.");
+  assert.equal((await postJson(initialCancelUrl, residentCookie, baseUrl, {})).status, 404, "Another resident must not learn that a request exists.");
+  assert.equal((await postJson(initialCancelUrl, treasurerCookie, baseUrl, {})).status, 403, "Treasurer must not use resident cancellation.");
+  assert.equal((await postJson(initialCancelUrl, phase7ResidentCookie, "https://example.invalid", {})).status, 403);
+  assert.equal((await postJson(initialCancelUrl, phase7ResidentCookie, baseUrl, { reason: "mass assignment" })).status, 400);
+  const initialCancelResponse = await postJson(initialCancelUrl, phase7ResidentCookie, baseUrl, {});
+  assert.equal(initialCancelResponse.status, 200);
+  assert.equal((await initialCancelResponse.json() as { status: string }).status, "cancelled");
+  const cancelledArtifacts = await readRequestArtifacts(db, initialPhase7Request.requestCode);
+  assertNoPaymentResolution(cancelledArtifacts, "cancelled", "payment_request.cancelled", null);
+  const duplicateCancel = await postJson(initialCancelUrl, phase7ResidentCookie, baseUrl, {});
+  assert.equal(duplicateCancel.status, 409);
+  assert.equal((await duplicateCancel.json() as { code?: string }).code, "already_processed");
+  const cancelledDuesResponse = await fetch(`${baseUrl}/api/resident/monthly-dues`, {
+    headers: { cookie: phase7ResidentCookie },
+    cache: "no-store",
+  });
+  assert.equal(cancelledDuesResponse.status, 200);
+  const cancelledDues = await cancelledDuesResponse.json() as { dues: Array<{ month: number; status: string; paymentRequestStatus: string | null }> };
+  assert.deepEqual(cancelledDues.dues.filter((due) => due.month === 8).map(({ status, paymentRequestStatus }) => ({ status, paymentRequestStatus })), [
+    { status: "unpaid", paymentRequestStatus: null },
+  ]);
+
+  const phase7RequestAfterCancel = await createRequestOverHttp(baseUrl, phase7ResidentCookie, "2026-08");
+  assert.notEqual(phase7RequestAfterCancel.requestCode, initialPhase7Request.requestCode);
+  const secondCancelUrl = `${baseUrl}/api/resident/payment-requests/${phase7RequestAfterCancel.requestCode}/cancel`;
+  const rejectUrl = `${baseUrl}/api/treasurer/payment-requests/${phase7RequestAfterCancel.requestCode}/reject`;
+  const rejectReason = "Bukti transfer belum terbaca.";
+  assert.equal((await postJson(rejectUrl, undefined, baseUrl, { reason: rejectReason })).status, 401);
+  assert.equal((await postJson(rejectUrl, phase7ResidentCookie, baseUrl, { reason: rejectReason })).status, 403);
+  assert.equal((await postJson(rejectUrl, residentCookie, baseUrl, { reason: rejectReason })).status, 403);
+  assert.equal((await postJson(rejectUrl, treasurerCookie, "https://example.invalid", { reason: rejectReason })).status, 403);
+  assert.equal((await postJson(rejectUrl, treasurerCookie, baseUrl, { reason: "   " })).status, 400);
+  assert.equal((await postJson(rejectUrl, treasurerCookie, baseUrl, { reason: "x".repeat(501) })).status, 400);
+  assert.equal((await postJson(rejectUrl, treasurerCookie, baseUrl, { reason: rejectReason, actorId: treasurer.accountId, rtUnitId })).status, 400);
+  const treasurerCancelRefusal = await postJson(secondCancelUrl, treasurerCookie, baseUrl, {});
+  assert.equal(treasurerCancelRefusal.status, 403);
+  const crossOriginRejectRefusal = await postJson(rejectUrl, treasurerCookie, "https://example.invalid", { reason: rejectReason });
+  assert.equal(crossOriginRejectRefusal.status, 403);
+  const rejectionResponse = await postJson(rejectUrl, treasurerCookie, baseUrl, { reason: rejectReason });
+  assert.equal(rejectionResponse.status, 200);
+  assert.equal((await rejectionResponse.json() as { status: string }).status, "rejected");
+  const rejectedArtifacts = await readRequestArtifacts(db, phase7RequestAfterCancel.requestCode);
+  assertNoPaymentResolution(rejectedArtifacts, "rejected", "payment_request.rejected", rejectReason);
+
+  const phase7RequestAfterReject = await createRequestOverHttp(baseUrl, phase7ResidentCookie, "2026-08");
+  assert.notEqual(phase7RequestAfterReject.requestCode, phase7RequestAfterCancel.requestCode);
+  assert.notEqual(phase7RequestAfterReject.requestCode, initialPhase7Request.requestCode);
+  const finalPhase7HistoryResponse = await fetch(`${baseUrl}/api/resident/payment-requests`, {
+    headers: { cookie: phase7ResidentCookie },
+    cache: "no-store",
+  });
+  assert.equal(finalPhase7HistoryResponse.status, 200);
+  const finalPhase7History = await finalPhase7HistoryResponse.json() as {
+    requests: Array<{ requestCode: string; status: string; resolutionReason: string | null }>;
+  };
+  assert.deepEqual(finalPhase7History.requests.map(({ status }) => status), ["pending", "rejected", "cancelled"]);
+  assert.equal(finalPhase7History.requests[0]!.requestCode, phase7RequestAfterReject.requestCode);
+  assert.equal(finalPhase7History.requests[1]!.requestCode, phase7RequestAfterCancel.requestCode);
+  assert.equal(finalPhase7History.requests[1]!.resolutionReason, rejectReason);
+  assert.equal(finalPhase7History.requests[2]!.requestCode, initialPhase7Request.requestCode);
+  const otherResidentHistoryResponse = await fetch(`${baseUrl}/api/resident/payment-requests`, {
+    headers: { cookie: residentCookie },
+    cache: "no-store",
+  });
+  assert.equal(otherResidentHistoryResponse.status, 200);
+  assert.doesNotMatch(await otherResidentHistoryResponse.text(), /KRT-[A-F0-9]{16}/);
+
+  const racePassword = randomBytes(16).toString("base64url");
+  const createRaceFixture = async (label: string, month: number) => {
+    const houseNumber = `${label}-${suffix}`;
+    const identifier = `${label.toLowerCase()}-${suffix.toLowerCase()}`;
+    const resident = await createPerson(db, rtUnitId, {
+      houseNumber,
+      name: `Phase 7 ${label} race resident ${suffix}`,
+      loginIdentifier: identifier,
+      accountType: "resident",
+    });
+    await db.insert(authAccount).values({
+      id: randomUUID(),
+      accountId: resident.userId,
+      providerId: "credential",
+      userId: resident.userId,
+      password: await hashPassword(racePassword),
+    });
+    await db.insert(monthlyDues).values({
+      rtUnitId,
+      householdId: resident.householdId,
+      billingYearId: billingYear!.id,
+      feeRateId: feeRate!.id,
+      month,
+      amount: 18000,
+      dueDate: `2026-${String(month).padStart(2, "0")}-10`,
+      status: "unpaid",
+    });
+    const cookie = await signIn(baseUrl, "resident", houseNumber, racePassword);
+    const request = await createRequestOverHttp(baseUrl, cookie, `2026-${String(month).padStart(2, "0")}`);
+    return { cookie, request };
+  };
+
+  currentSmokeStage = "Phase 7 HTTP concurrency races";
+  const raceCases = [
+    { name: "cancel-vs-verify", fixture: await createRaceFixture("P7A", 8), rejectReason: "Race cancellation review reason." },
+    { name: "reject-vs-verify", fixture: await createRaceFixture("P7B", 9), rejectReason: "Race rejection review reason." },
+    { name: "cancel-vs-reject", fixture: await createRaceFixture("P7C", 10), rejectReason: "Race terminal review reason." },
+  ];
+  const concurrencyResults: Array<{ name: string; requestCode: string; winnerAction: string; finalStatus: string; statuses: number[] }> = [];
+  const runRace = async (
+    name: string,
+    fixture: (typeof raceCases)[number]["fixture"],
+    rejectReasonForRace: string,
+    operations: Array<{ action: "payment_request.verified" | "payment_request.rejected" | "payment_request.cancelled"; url: string; cookie: string; body: unknown }>,
+  ) => {
+    const responses = await Promise.all(operations.map((operation) => postJson(operation.url, operation.cookie, baseUrl, operation.body)));
+    const statuses = responses.map((response) => response.status).sort((a, b) => a - b);
+    assert.deepEqual(statuses, [200, 409], `${name} must serialize to one winner and one already-processed loser.`);
+    const loserIndex = responses.findIndex((response) => response.status === 409);
+    const loserBody = await responses[loserIndex]!.json() as { code?: string };
+    assert.equal(loserBody.code, "already_processed", `${name} loser must receive safe already-processed feedback.`);
+    const winnerIndex = responses.findIndex((response) => response.status === 200);
+    const winnerBody = await responses[winnerIndex]!.json() as { status?: string };
+    const winningAction = operations[winnerIndex]!.action;
+    const expectedStatus = winningAction === "payment_request.verified"
+      ? "verified"
+      : winningAction === "payment_request.rejected"
+        ? "rejected"
+        : "cancelled";
+    assert.equal(winnerBody.status, expectedStatus);
+    const finalStatus = await assertRaceWinner(db, fixture.request.requestCode, winningAction, rejectReasonForRace);
+    assert.equal(finalStatus, expectedStatus);
+    concurrencyResults.push({
+      name,
+      requestCode: fixture.request.requestCode,
+      winnerAction: winningAction,
+      finalStatus,
+      statuses,
+    });
+  };
+
+  await runRace("cancel-vs-verify", raceCases[0]!.fixture, raceCases[0]!.rejectReason, [
+    { action: "payment_request.cancelled", url: `${baseUrl}/api/resident/payment-requests/${raceCases[0]!.fixture.request.requestCode}/cancel`, cookie: raceCases[0]!.fixture.cookie, body: {} },
+    { action: "payment_request.verified", url: `${baseUrl}/api/treasurer/payment-requests/${raceCases[0]!.fixture.request.requestCode}/verify`, cookie: treasurerCookie, body: {} },
+  ]);
+  await runRace("reject-vs-verify", raceCases[1]!.fixture, raceCases[1]!.rejectReason, [
+    { action: "payment_request.rejected", url: `${baseUrl}/api/treasurer/payment-requests/${raceCases[1]!.fixture.request.requestCode}/reject`, cookie: treasurerCookie, body: { reason: raceCases[1]!.rejectReason } },
+    { action: "payment_request.verified", url: `${baseUrl}/api/treasurer/payment-requests/${raceCases[1]!.fixture.request.requestCode}/verify`, cookie: secondTreasurerCookie, body: {} },
+  ]);
+  await runRace("cancel-vs-reject", raceCases[2]!.fixture, raceCases[2]!.rejectReason, [
+    { action: "payment_request.cancelled", url: `${baseUrl}/api/resident/payment-requests/${raceCases[2]!.fixture.request.requestCode}/cancel`, cookie: raceCases[2]!.fixture.cookie, body: {} },
+    { action: "payment_request.rejected", url: `${baseUrl}/api/treasurer/payment-requests/${raceCases[2]!.fixture.request.requestCode}/reject`, cookie: treasurerCookie, body: { reason: raceCases[2]!.rejectReason } },
+  ]);
+
+  currentSmokeStage = "browser viewport and UI smoke";
+  const browserSmoke = await runBrowserSmoke(
     baseUrl,
     treasurerCookie,
     secondTreasurerCookie,
     residentCookie,
     primaryRequest.requestCode,
     secondRequest.requestCode,
+    {
+      residentCookie: phase7ResidentCookie,
+      treasurerCookie,
+      pendingCode: phase7RequestAfterReject.requestCode,
+      cancelledCode: initialPhase7Request.requestCode,
+      rejectedCode: phase7RequestAfterCancel.requestCode,
+    },
   );
-  assert.deepEqual(concurrentStatuses.sort(), [200, 409]);
+  assert.deepEqual(browserSmoke.verifyStatuses.sort(), [200, 409]);
+  const browserRejectedArtifacts = await readRequestArtifacts(db, browserSmoke.phase7RejectedRequestCode);
+  assertNoPaymentResolution(browserRejectedArtifacts, "rejected", "payment_request.rejected", "Bukti transfer belum terbaca.");
 
   const refreshedResponse = await fetch(`${baseUrl}/api/resident/monthly-dues`, {
     headers: { cookie: residentCookie },
@@ -699,21 +1177,27 @@ async function main() {
   assert.equal(secondaryAudit.length, 1);
 
   console.info(JSON.stringify({
-    event: "phase_6.real_http_browser_smoke",
+    event: "phase_7.real_http_browser_and_gate_b_smoke",
     environment: "development",
     projectId: target.projectId,
     branchName: "karturt-development",
     branchId: target.branchId,
     endpointId: target.endpointId,
     databaseHost,
-    migrationHead: "0006_phase_6_treasurer_payment_ledger",
-    authentication: "Normal Better Auth resident and active Treasurer sessions; two Treasurer sessions used for concurrent verify.",
-    realHttp: "Resident monthly dues -> payment request -> WhatsApp deep link -> Treasurer queue/detail -> concurrent verify -> resident monthly dues refresh.",
+    migrationHead: "0007_phase_7_reject_cancel",
+    authentication: "Normal Better Auth resident and active same-RT Treasurer sessions; no bypass sessions.",
+    realHttp: "Gate B resident request -> WhatsApp -> Treasurer verify; Phase 7 resident request -> cancel -> same-period re-request -> reject -> re-request; pairwise HTTP races.",
     requestSnapshot: { itemCount: requestItems.length, totalAmount: requestRow!.totalAmount },
-    concurrency: concurrentStatuses,
+    gateBVerifyRace: browserSmoke.verifyStatuses,
+    phase7: {
+      cancelledRequest: { status: cancelledArtifacts.request.status, claims: cancelledArtifacts.claims.length, payments: cancelledArtifacts.payments.length, allocations: cancelledArtifacts.allocations.length, audits: cancelledArtifacts.audits.length },
+      rejectedRequest: { status: rejectedArtifacts.request.status, reasonRecorded: rejectedArtifacts.audits[0]?.reason === rejectReason, claims: rejectedArtifacts.claims.length, payments: rejectedArtifacts.payments.length, allocations: rejectedArtifacts.allocations.length, audits: rejectedArtifacts.audits.length },
+      reRequestAfterBoth: { distinctCodes: new Set([initialPhase7Request.requestCode, phase7RequestAfterCancel.requestCode, phase7RequestAfterReject.requestCode]).size === 3, finalBrowserRequestRejected: browserRejectedArtifacts.request.status === "rejected" },
+      pairwiseRaces: concurrencyResults,
+    },
     ledger: { payments: paymentRows.length, allocations: allocations.length, claimsRemaining: claims.length, verifiedAuditEvents: auditRows.length, dueStatusesPaid: dueRows.every((due) => due.status === "paid") },
     residentStatus: { summary: "Sudah bayar", paidMonths: primaryDues.length, pendingMonths: primaryDues.filter((due) => due.paymentRequestStatus === "pending").length },
-    browser: { actualNextRoutesAndNeonDevelopment: true, viewports: browserViewports, doubleClickVerifyRequests: 1, evidenceDirectory: "docs/phase-6-evidence" },
+    browser: { actualNextRoutesAndNeonDevelopment: true, viewports: browserViewports, doubleClickVerifyRequests: 1, cancelAndReRequestVerified: true, requiredReasonAndProcessedStateVerified: true, evidenceDirectories: ["docs/phase-6-evidence", "docs/phase-7-evidence"] },
     syntheticFinancialFixtures: "Retained on development to preserve payment and audit history; only smoke authentication sessions are removed.",
   }));
 }
@@ -727,7 +1211,7 @@ async function stopChild(child: ChildProcess | undefined) {
 main()
   .catch((error: unknown) => {
     const message = error instanceof Error ? error.message : "Unexpected Phase 6 smoke failure.";
-    console.error(`Phase 6 development smoke failed: ${message}`);
+    console.error(`Phase 7 development smoke failed during ${currentSmokeStage}: ${message}`);
     process.exitCode = 1;
   })
   .finally(async () => {

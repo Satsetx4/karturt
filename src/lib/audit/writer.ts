@@ -80,6 +80,21 @@ function normalizeContext(action: string, context: AuditContext | undefined): Au
     return { itemCount, totalAmount };
   }
 
+  if (action === "payment_request.rejected" || action === "payment_request.cancelled") {
+    if (keys.join(",") !== "itemCount,totalAmount") {
+      throw new Error("Audit context fields do not match the action contract.");
+    }
+    const itemCount = value.itemCount;
+    const totalAmount = value.totalAmount;
+    if (typeof itemCount !== "number" || !Number.isSafeInteger(itemCount) || itemCount <= 0) {
+      throw new Error("Audit payment item count must be a positive safe integer.");
+    }
+    if (typeof totalAmount !== "number" || !Number.isSafeInteger(totalAmount) || totalAmount <= 0) {
+      throw new Error("Audit payment total must be a positive safe integer.");
+    }
+    return { itemCount, totalAmount };
+  }
+
   if (action === "resident.pin.reset" || recoveryActions.has(action)) {
     if (keys.join(",") !== "recoveryReference,revokedSessionCount") {
       throw new Error("Audit context fields do not match the action contract.");
@@ -112,6 +127,14 @@ function assertSafeReason(reason: string | null) {
   }
 }
 
+export function normalizeAuditReason(value: string | null | undefined) {
+  const reason = value?.trim() || null;
+  if (value != null && !reason) throw new Error("Audit reason cannot be blank.");
+  if ((reason?.length ?? 0) > 500) throw new Error("Audit reason exceeds the supported length.");
+  assertSafeReason(reason);
+  return reason;
+}
+
 export async function appendAuditEvent<TTransaction extends TransactionExecutor>(
   transaction: TTransaction,
   input: AppendAuditEventInput,
@@ -119,10 +142,9 @@ export async function appendAuditEvent<TTransaction extends TransactionExecutor>
   const action = input.action.trim();
   const entityType = input.entityType.trim();
   const entityId = input.entityId.trim();
-  const reason = input.reason?.trim() || null;
+  const reason = normalizeAuditReason(input.reason);
   if (!action || !entityType || !entityId) throw new Error("Audit action and entity identity are required.");
-  if (input.reason != null && !reason) throw new Error("Audit reason cannot be blank.");
-  if (action.length > 120 || entityType.length > 80 || entityId.length > 160 || (reason?.length ?? 0) > 500) {
+  if (action.length > 120 || entityType.length > 80 || entityId.length > 160) {
     throw new Error("Audit event fields exceed the supported length.");
   }
   if (!uuidPattern.test(input.actorAppAccountId) || !uuidPattern.test(entityId)) {
@@ -131,7 +153,6 @@ export async function appendAuditEvent<TTransaction extends TransactionExecutor>
   if (!actionPattern.test(action) || !entityTypePattern.test(entityType)) {
     throw new Error("Audit action and entity type must use canonical identifiers.");
   }
-  assertSafeReason(reason);
   const safeContext = normalizeContext(action, input.context);
   if (Buffer.byteLength(JSON.stringify(safeContext), "utf8") > 2048) {
     throw new Error("Audit context exceeds the supported size.");

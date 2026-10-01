@@ -4,6 +4,8 @@ export type AppRole = "resident" | OfficialRole | "system_admin";
 export type Permission =
   | "billing:read:self"
   | "payment:request:self"
+  | "payment:history:self"
+  | "payment:cancel:self"
   | "billing:read:rt"
   | "billing:generate"
   | "fee_rate:manage"
@@ -12,6 +14,7 @@ export type Permission =
   | "resident:reset_credential"
   | "official:manage"
   | "payment:verify"
+  | "payment:reject"
   | "payment:record_cash"
   | "waiver:manage"
   | "audit:read"
@@ -28,8 +31,8 @@ export interface Principal {
 }
 
 const permissions: Record<AppRole, ReadonlySet<Permission>> = {
-  resident: new Set(["billing:read:self", "payment:request:self"]),
-  treasurer: new Set(["billing:read:rt", "resident:read:rt", "payment:verify", "payment:record_cash"]),
+  resident: new Set(["billing:read:self", "payment:request:self", "payment:history:self", "payment:cancel:self"]),
+  treasurer: new Set(["billing:read:rt", "resident:read:rt", "payment:verify", "payment:reject", "payment:record_cash"]),
   rt_chairman: new Set([
     "billing:read:rt",
     "billing:generate",
@@ -53,6 +56,7 @@ const rtScopedPermissions = new Set<Permission>([
   "resident:reset_credential",
   "official:manage",
   "payment:verify",
+  "payment:reject",
   "payment:record_cash",
   "waiver:manage",
 ]);
@@ -64,7 +68,12 @@ export function canPerform(
 ) {
   if (!permissions[principal.role].has(permission)) return false;
   if (principal.role === "resident") {
-    if (permission !== "billing:read:self" && permission !== "payment:request:self") return false;
+    if (
+      permission !== "billing:read:self" &&
+      permission !== "payment:request:self" &&
+      permission !== "payment:history:self" &&
+      permission !== "payment:cancel:self"
+    ) return false;
     if (!principal.rtUnitId || !principal.householdId) return false;
     if (!scope?.householdId || !scope.rtUnitId) return false;
     if (scope.householdId !== principal.householdId || scope.rtUnitId !== principal.rtUnitId) return false;

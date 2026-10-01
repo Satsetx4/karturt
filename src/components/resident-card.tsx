@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CheckCircle,
   Clock,
@@ -52,6 +52,46 @@ type PaymentRequestResponse = {
   message: string;
 };
 
+type PaymentRequestHistoryItem = {
+  requestCode: string;
+  status: "pending" | "verified" | "rejected" | "cancelled";
+  createdAt: string;
+  resolvedAt: string | null;
+  items: Array<{ period: string; amount: number }>;
+  totalAmount: number;
+  resolutionReason: string | null;
+};
+
+type PaymentRequestHistoryResponse = {
+  requests: PaymentRequestHistoryItem[];
+  nextCursor: string | null;
+};
+
+async function readResidentPaymentRequestHistory(cursor?: string): Promise<PaymentRequestHistoryResponse> {
+  const url = new URL("/api/resident/payment-requests", window.location.origin);
+  if (cursor) url.searchParams.set("cursor", cursor);
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error("Riwayat permintaan belum dapat dimuat.");
+  return response.json() as Promise<PaymentRequestHistoryResponse>;
+}
+
+function paymentRequestStatusLabel(status: PaymentRequestHistoryItem["status"]) {
+  return {
+    pending: "Menunggu konfirmasi",
+    verified: "Sudah dikonfirmasi",
+    rejected: "Ditolak",
+    cancelled: "Dibatalkan",
+  }[status];
+}
+
+function requestHistoryDate(value: string) {
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(value));
+}
+
 export function ResidentPaymentRequestPanel({
   dues,
   onCreated,
@@ -65,7 +105,16 @@ export function ResidentPaymentRequestPanel({
   const [message, setMessage] = useState("");
   const [sessionExpired, setSessionExpired] = useState(false);
   const [result, setResult] = useState<PaymentRequestResponse | null>(null);
+  const [history, setHistory] = useState<PaymentRequestHistoryItem[]>([]);
+  const [historyStatus, setHistoryStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [historyError, setHistoryError] = useState("");
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null);
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const [cancellingCode, setCancellingCode] = useState<string | null>(null);
+  const [cancelFeedback, setCancelFeedback] = useState("");
   const inFlight = useRef(false);
+  const cancelInFlight = useRef(false);
   const idempotencyKey = useRef<string | null>(null);
   const requestableDues = dues.filter((due) =>
     due.status === "unpaid" && due.paymentRequestStatus !== "pending",
@@ -75,6 +124,40 @@ export function ResidentPaymentRequestPanel({
     selectedPeriod !== "" && duePeriod(due) <= selectedPeriod,
   );
   const totalAmount = selectedDues.reduce((total, due) => total + due.amount, 0);
+
+  const refreshHistory = useCallback(async (cursor?: string, append = false) => {
+    if (append) setHistoryLoadingMore(true);
+    else setHistoryStatus("loading");
+    setHistoryError("");
+    try {
+      const data = await readResidentPaymentRequestHistory(cursor);
+      setHistory((current) => append ? [...current, ...data.requests] : data.requests);
+      setHistoryCursor(data.nextCursor);
+      setHistoryStatus("ready");
+    } catch {
+      setHistoryError("Riwayat permintaan belum dapat dimuat.");
+      setHistoryStatus((current) => current === "ready" ? current : "error");
+    } finally {
+      setHistoryLoadingMore(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void readResidentPaymentRequestHistory()
+      .then((data) => {
+        if (!active) return;
+        setHistory(data.requests);
+        setHistoryCursor(data.nextCursor);
+        setHistoryStatus("ready");
+      })
+      .catch(() => {
+        if (!active) return;
+        setHistoryError("Riwayat permintaan belum dapat dimuat.");
+        setHistoryStatus("error");
+      });
+    return () => { active = false; };
+  }, []);
 
   function changePeriod(period: string) {
     setSelectedPeriod(period);
@@ -125,6 +208,7 @@ export function ResidentPaymentRequestPanel({
       setMessage(created.message);
       idempotencyKey.current = null;
       onCreated();
+      void refreshHistory();
     } catch {
       setMessage("Belum tersambung. Periksa internet lalu coba lagi.");
     } finally {
@@ -133,22 +217,40 @@ export function ResidentPaymentRequestPanel({
     }
   }
 
-  if (requestableDues.length === 0 && !result) {
-    return (
-      <section className="payment-request-panel" aria-labelledby="payment-request-title">
-        <h2 id="payment-request-title">Ajukan pembayaran</h2>
-        {dues.some((due) => due.paymentRequestStatus === "pending") ? (
-          <p>Permintaan yang ada sedang menunggu konfirmasi.</p>
-        ) : (
-          <p>Belum ada bulan dengan status Belum bayar yang dapat diajukan.</p>
-        )}
-      </section>
-    );
+  async function cancelRequest(requestCode: string) {
+    if (cancelInFlight.current) return;
+    cancelInFlight.current = true;
+    setCancellingCode(requestCode);
+    setCancelFeedback("");
+    try {
+      const response = await fetch(`/api/resident/payment-requests/${encodeURIComponent(requestCode)}/cancel`, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await response.json().catch(() => ({})) as { message?: string };
+      if (!response.ok) {
+        setCancelFeedback(data.message ?? "Permintaan belum dapat dibatalkan. Muat ulang riwayat lalu coba lagi.");
+        return;
+      }
+      setCancelFeedback(data.message ?? "Permintaan dibatalkan. Bulan kembali Belum bayar.");
+      setCancelTarget(null);
+      await refreshHistory();
+      onCreated();
+    } catch {
+      setCancelFeedback("Sambungan terputus. Muat ulang riwayat untuk memeriksa status terbaru.");
+    } finally {
+      cancelInFlight.current = false;
+      setCancellingCode(null);
+    }
   }
 
   return (
     <section className="payment-request-panel" aria-labelledby="payment-request-title">
       <h2 id="payment-request-title">Ajukan pembayaran</h2>
+      {requestableDues.length > 0 ? (
+        <>
       <p>Pilih bulan. Iuran Belum bayar yang lebih lama dan belum diajukan ikut dihitung otomatis.</p>
       <label className="payment-request-label" htmlFor="payment-request-period">Bulan terakhir yang ingin diajukan</label>
       <select
@@ -218,6 +320,93 @@ export function ResidentPaymentRequestPanel({
           </button>
         </div>
       )}
+        </>
+      ) : (
+        <p>{dues.some((due) => due.paymentRequestStatus === "pending")
+          ? "Permintaan yang ada sedang menunggu konfirmasi."
+          : "Belum ada bulan dengan status Belum bayar yang dapat diajukan."}</p>
+      )}
+
+      <section className="payment-request-history" aria-labelledby="payment-request-history-title">
+        <h3 id="payment-request-history-title">Riwayat permintaan</h3>
+        {historyStatus === "loading" ? (
+          <p role="status">Memuat riwayat…</p>
+        ) : historyStatus === "error" ? (
+          <div role="alert">
+            <p>{historyError}</p>
+            <button className="button" type="button" onClick={() => void refreshHistory()}>Coba lagi</button>
+          </div>
+        ) : history.length === 0 ? (
+          <p>Belum ada permintaan pembayaran.</p>
+        ) : (
+          <ol className="payment-request-history-list">
+            {history.map((request) => (
+              <li key={request.requestCode}>
+                <div className="payment-request-history-topline">
+                  <strong>{paymentRequestStatusLabel(request.status)}</strong>
+                  <time dateTime={request.createdAt}>{requestHistoryDate(request.createdAt)}</time>
+                </div>
+                <p>{request.items.map((item) => periodLabel(item.period)).join(", ")}</p>
+                <div className="payment-request-history-total">
+                  <span>{request.requestCode}</span>
+                  <strong>{rupiah(request.totalAmount)}</strong>
+                </div>
+                {request.resolutionReason && (
+                  <p className="payment-request-reason"><strong>Alasan:</strong> {request.resolutionReason}</p>
+                )}
+                {request.resolvedAt && (
+                  <time className="payment-request-resolved-time" dateTime={request.resolvedAt}>
+                    Diproses {requestHistoryDate(request.resolvedAt)}
+                  </time>
+                )}
+                {request.status === "pending" && (
+                  <div className="payment-request-cancel-actions">
+                    {cancelTarget === request.requestCode ? (
+                      <div className="payment-request-cancel-confirm" role="group" aria-label="Konfirmasi pembatalan">
+                        <p>Setelah dibatalkan, bulan kembali menjadi Belum bayar dan bisa diajukan lagi.</p>
+                        <button
+                          className="button button--danger"
+                          type="button"
+                          disabled={cancellingCode !== null}
+                          onClick={() => void cancelRequest(request.requestCode)}
+                        >
+                          {cancellingCode === request.requestCode ? "Membatalkan…" : "Ya, batalkan permintaan"}
+                        </button>
+                        <button className="text-button" type="button" disabled={cancellingCode !== null} onClick={() => setCancelTarget(null)}>
+                          Kembali
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        className="button button--secondary"
+                        type="button"
+                        disabled={cancellingCode !== null}
+                        onClick={() => {
+                          setCancelFeedback("");
+                          setCancelTarget(request.requestCode);
+                        }}
+                      >
+                        Batalkan permintaan
+                      </button>
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+        {cancelFeedback && <p className="payment-request-cancel-feedback" role="status">{cancelFeedback}</p>}
+        {historyCursor && (
+          <button
+            className="button button--secondary payment-request-history-more"
+            type="button"
+            disabled={historyLoadingMore}
+            onClick={() => void refreshHistory(historyCursor, true)}
+          >
+            {historyLoadingMore ? "Memuat…" : "Riwayat sebelumnya"}
+          </button>
+        )}
+      </section>
     </section>
   );
 }

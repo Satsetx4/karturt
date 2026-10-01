@@ -22,6 +22,7 @@
     "smoke:phase-5-browser": "tsx scripts/phase-5-payment-request-browser-smoke.ts",
     "smoke:phase-5-1-http": "tsx scripts/phase-5-1-http-smoke.ts",
     "smoke:phase-6-http": "tsx scripts/phase-6-treasurer-verification-http-smoke.ts",
+    "smoke:phase-7-http": "tsx scripts/phase-6-treasurer-verification-http-smoke.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:check": "tsx scripts/check-db.ts",

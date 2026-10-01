@@ -6,6 +6,7 @@ import { Brand } from "@/components/brand";
 import { SiteFooter } from "@/components/site-footer";
 import { SignOutButton } from "@/components/sign-out-button";
 import { TreasurerVerificationButton } from "@/components/treasurer-verification-button";
+import { TreasurerRejectionForm } from "@/components/treasurer-rejection-form";
 import { getDb } from "@/db/client";
 import { getCurrentPrincipal, MfaEnrollmentRequiredError, UnauthenticatedError } from "@/lib/auth/principal";
 import { getTreasurerPaymentRequestDetail } from "@/lib/billing/treasurer-payment-requests";
@@ -84,7 +85,13 @@ export default async function TreasurerPaymentRequestDetailPage({
         <section className="treasurer-detail-card" aria-label="Data warga dan permintaan">
           <div className={processed ? "treasurer-status treasurer-status--done" : "treasurer-status"}>
             {processed ? <CheckCircle2 size={19} aria-hidden="true" /> : <Clock3 size={19} aria-hidden="true" />}
-            <span>{paymentRequest.status === "verified" ? "Sudah dikonfirmasi" : processed ? "Sudah diproses" : "Menunggu konfirmasi"}</span>
+            <span>{paymentRequest.status === "verified"
+              ? "Sudah dikonfirmasi"
+              : paymentRequest.status === "rejected"
+                ? "Ditolak"
+                : paymentRequest.status === "cancelled"
+                  ? "Dibatalkan warga"
+                  : "Menunggu konfirmasi"}</span>
           </div>
           <h2>{paymentRequest.residentName}</h2>
           <p className="treasurer-house"><Home size={17} aria-hidden="true" /> Rumah {paymentRequest.houseNumber}</p>
@@ -110,14 +117,24 @@ export default async function TreasurerPaymentRequestDetailPage({
           {paymentRequest.status === "verified" && paymentRequest.verifiedAt && (
             <p className="treasurer-verified-time">Dikonfirmasi {requestDate(paymentRequest.verifiedAt)}</p>
           )}
+          {paymentRequest.status === "rejected" && paymentRequest.resolvedAt && (
+            <p className="treasurer-verified-time">
+              Ditolak {requestDate(paymentRequest.resolvedAt)}
+              {paymentRequest.resolutionReason && <><br /><strong>Alasan:</strong> {paymentRequest.resolutionReason}</>}
+            </p>
+          )}
+          {paymentRequest.status === "cancelled" && paymentRequest.resolvedAt && (
+            <p className="treasurer-verified-time">Dibatalkan warga {requestDate(paymentRequest.resolvedAt)}</p>
+          )}
 
           {!processed ? (
             <>
               <p className="treasurer-warning">Pastikan transfer sudah diterima sebelum mengonfirmasi.</p>
               <TreasurerVerificationButton requestCode={paymentRequest.requestCode} />
+              <TreasurerRejectionForm requestCode={paymentRequest.requestCode} />
             </>
           ) : (
-            <p className="treasurer-processed-note" role="status">Permintaan ini tidak dapat dikonfirmasi lagi.</p>
+            <p className="treasurer-processed-note" role="status">Permintaan ini sudah diproses dan tidak dapat diubah.</p>
           )}
         </section>
       </section>

@@ -18,6 +18,9 @@ describe("role authorization", () => {
   it("limits residents to their own household and RT", () => {
     const resident = principal("resident");
     expect(canPerform(resident, "billing:read:self", { rtUnitId: "rt-one", householdId: "household-one" })).toBe(true);
+    expect(canPerform(resident, "payment:history:self", { rtUnitId: "rt-one", householdId: "household-one" })).toBe(true);
+    expect(canPerform(resident, "payment:cancel:self", { rtUnitId: "rt-one", householdId: "household-one" })).toBe(true);
+    expect(canPerform(resident, "payment:cancel:self", { rtUnitId: "rt-one", householdId: "household-two" })).toBe(false);
     expect(canPerform(resident, "billing:read:self", { householdId: "household-two" })).toBe(false);
     expect(canPerform(resident, "billing:read:self", { rtUnitId: "rt-two" })).toBe(false);
     expect(canPerform(resident, "resident:manage")).toBe(false);
@@ -30,6 +33,14 @@ describe("role authorization", () => {
     expect(canPerform(principal("rt_chairman"), "payment:verify", { rtUnitId: "rt-one" })).toBe(false);
     expect(canPerform(principal("system_admin", { rtUnitId: null, householdId: null, personId: null }), "payment:verify", { rtUnitId: "rt-one" })).toBe(false);
     expect(canPerform(principal("resident"), "payment:verify", { rtUnitId: "rt-one" })).toBe(false);
+  });
+
+  it("gives rejection to the active Treasurer only", () => {
+    expect(canPerform(principal("treasurer"), "payment:reject", { rtUnitId: "rt-one" })).toBe(true);
+    expect(canPerform(principal("treasurer"), "payment:reject", { rtUnitId: "rt-two" })).toBe(false);
+    expect(canPerform(principal("resident"), "payment:reject", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("rt_chairman"), "payment:reject", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("system_admin", { rtUnitId: null, householdId: null, personId: null }), "payment:reject", { rtUnitId: "rt-one" })).toBe(false);
   });
 
   it("allows payment requests only for a resident's own household", () => {

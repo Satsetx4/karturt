@@ -50,6 +50,13 @@
       "when": 1790821534571,
       "tag": "0006_phase_6_treasurer_payment_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790828222424,
+      "tag": "0007_phase_7_reject_cancel",
+      "breakpoints": true
     }
   ]
 }

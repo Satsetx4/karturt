@@ -16,6 +16,7 @@ import {
   PaymentRequestPeriodUnavailableError,
 } from "@/lib/billing/resident-payment-request";
 import { createResidentPaymentWhatsAppLink } from "@/lib/billing/resident-payment-whatsapp";
+import { getResidentPaymentRequestHistory, InvalidResidentPaymentHistoryCursorError } from "@/lib/billing/resident-payment-request-history";
 
 export const runtime = "nodejs";
 
@@ -106,5 +107,28 @@ export async function POST(request: Request) {
       return response("Pengajuan pembayaran hanya tersedia untuk akun warga yang aktif.", 403);
     }
     return response("Permintaan belum dapat disimpan. Periksa sambungan internet lalu coba lagi.", 500);
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const principal = await getCurrentPrincipal();
+    if (principal.role !== "resident") {
+      return response("Riwayat permintaan hanya tersedia untuk akun warga.", 403);
+    }
+    const cursor = new URL(request.url).searchParams.get("cursor") ?? undefined;
+    const history = await getResidentPaymentRequestHistory(getDb(), principal, cursor);
+    return NextResponse.json(history, { headers: { "cache-control": "no-store" } });
+  } catch (error) {
+    if (error instanceof UnauthenticatedError || error instanceof MfaEnrollmentRequiredError) {
+      return response("Sesi berakhir. Silakan masuk kembali.", 401);
+    }
+    if (error instanceof InvalidResidentPaymentHistoryCursorError) {
+      return response("Riwayat permintaan belum dapat dimuat. Muat ulang halaman.", 400);
+    }
+    if (error instanceof Error && error.message.startsWith("Forbidden:")) {
+      return response("Riwayat permintaan hanya tersedia untuk akun warga aktif.", 403);
+    }
+    return response("Riwayat permintaan belum dapat dimuat.", 500);
   }
 }
