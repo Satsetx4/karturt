@@ -18,6 +18,8 @@ import {
   paymentRequests,
   payments,
   relationalSchema,
+  waiverActions,
+  waiverItems,
 } from "../../src/db/schema";
 import type { AppDatabase } from "../../src/db/client";
 import type { Principal } from "../../src/lib/auth/permissions";
@@ -79,7 +81,7 @@ describe("legacy billing migration upgrade", () => {
     expect(migrated).toEqual({ status: "not_due", waived_reason: null });
   });
 
-  it("upgrades intact transfer and cash history from 0009 to 0010, backfills owners, then records cash", async () => {
+  it("upgrades intact transfer and cash history from 0009 through 0011, preserving owners and then recording cash", async () => {
     const upgradeClient = new PGlite();
     try {
       const migrationFolder = resolve(process.cwd(), "drizzle");
@@ -237,6 +239,8 @@ describe("legacy billing migration upgrade", () => {
 
       const reversalMigration = "0010_phase_9_payment_reversal.sql";
       await upgradeClient.exec(readFileSync(resolve(migrationFolder, reversalMigration), "utf8"));
+      const waiverMigration = "0011_phase_10_waiver.sql";
+      await upgradeClient.exec(readFileSync(resolve(migrationFolder, waiverMigration), "utf8"));
 
       const [transferAfter] = await db.select().from(payments).where(eq(payments.id, transferPaymentId));
       const [transferAllocationAfter] = await db.select().from(paymentAllocations)
@@ -262,6 +266,8 @@ describe("legacy billing migration upgrade", () => {
       expect(cashAfter).toEqual(cashBefore);
       expect(cashAllocationAfter).toEqual(cashAllocationBefore);
       expect(await db.select().from(activeDueSettlements)).toHaveLength(2);
+      expect(await db.select().from(waiverActions)).toHaveLength(0);
+      expect(await db.select().from(waiverItems)).toHaveLength(0);
       expect(await db.select().from(activeDueSettlements)
         .where(eq(activeDueSettlements.paymentId, transferPaymentId))).toHaveLength(1);
       expect(await db.select().from(activeDueSettlements)
@@ -275,6 +281,56 @@ describe("legacy billing migration upgrade", () => {
       expect(cash.periods).toEqual(["2026-03"]);
       expect((await db.select().from(payments)).filter((payment) => payment.method === "cash")).toHaveLength(2);
       expect((await db.select().from(payments)).filter((payment) => payment.method === "transfer")).toHaveLength(1);
+      expect((await db.select().from(monthlyDues)
+        .where(eq(monthlyDues.id, duesBeforeUpgrade.find((due) => due.month === 1)!.id)))[0]!.status).toBe("paid");
+    } finally {
+      await upgradeClient.close();
+    }
+  });
+
+  it("refuses 0010 to 0011 when a legacy WAIVED due has no structured history", async () => {
+    const upgradeClient = new PGlite();
+    try {
+      const migrationFolder = resolve(process.cwd(), "drizzle");
+      const migrations = readdirSync(migrationFolder)
+        .filter((name) => name.endsWith(".sql"))
+        .sort();
+      for (const name of migrations.filter((migration) => migration < "0011_phase_10_waiver.sql")) {
+        await upgradeClient.exec(readFileSync(resolve(migrationFolder, name), "utf8"));
+      }
+
+      const db = drizzle(upgradeClient, { schema: relationalSchema });
+      const rtUnitId = await createRt(db);
+      const household = await createHousehold(db, rtUnitId);
+      const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" })
+        .returning({ id: billingYears.id });
+      const [rate] = await db.insert(feeRates).values({
+        rtUnitId,
+        billingYearId: year!.id,
+        effectiveMonth: 1,
+        monthlyAmount: 40000,
+      }).returning({ id: feeRates.id });
+      await db.insert(monthlyDues).values({
+        rtUnitId,
+        householdId: household.householdId,
+        billingYearId: year!.id,
+        feeRateId: rate!.id,
+        month: 1,
+        amount: 40000,
+        dueDate: "2026-01-10",
+        status: "waived",
+        waivedReason: "Legacy row without action history",
+      });
+
+      await expect(upgradeClient.exec(readFileSync(
+        resolve(migrationFolder, "0011_phase_10_waiver.sql"),
+        "utf8",
+      ))).rejects.toThrow(/legacy WAIVED dues have no structured waiver history/i);
+      const tables = await upgradeClient.query<{ table_name: string }>(`
+        SELECT table_name FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name IN ('waiver_actions', 'waiver_items')
+      `);
+      expect(tables.rows).toHaveLength(0);
     } finally {
       await upgradeClient.close();
     }

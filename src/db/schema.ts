@@ -7,6 +7,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -452,6 +453,68 @@ export const paymentReversals = pgTable("payment_reversals", {
   check("payment_reversals_actor_official", sql`${table.reversedByAccountType} = 'official'`),
 ]);
 
+export const waiverActions = pgTable("waiver_actions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  rtUnitId: uuid("rt_unit_id").notNull(),
+  householdId: uuid("household_id").notNull(),
+  waivedByAccountId: uuid("waived_by_account_id").notNull(),
+  waivedByAccountType: accountTypeEnum("waived_by_account_type").notNull().default("official"),
+  reason: varchar("reason", { length: 500 }).notNull(),
+  itemCount: integer("item_count").notNull(),
+  totalAmount: bigint("total_amount", { mode: "number" }).notNull(),
+  idempotencyKey: uuid("idempotency_key").notNull(),
+  requestFingerprint: varchar("request_fingerprint", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({
+    name: "waiver_actions_rt_household_fk",
+    columns: [table.rtUnitId, table.householdId],
+    foreignColumns: [households.rtUnitId, households.id],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "waiver_actions_actor_scope_fk",
+    columns: [table.rtUnitId, table.waivedByAccountId, table.waivedByAccountType],
+    foreignColumns: [appAccounts.rtUnitId, appAccounts.id, appAccounts.accountType],
+  }).onDelete("restrict"),
+  unique("waiver_actions_rt_household_id_uq").on(table.rtUnitId, table.householdId, table.id),
+  uniqueIndex("waiver_actions_rt_actor_idempotency_uq")
+    .on(table.rtUnitId, table.waivedByAccountId, table.idempotencyKey),
+  index("waiver_actions_household_created_idx").on(table.rtUnitId, table.householdId, table.createdAt),
+  check("waiver_actions_actor_official", sql`${table.waivedByAccountType} = 'official'`),
+  check("waiver_actions_reason_not_blank", sql`length(trim(${table.reason})) > 0`),
+  check("waiver_actions_positive_item_count", sql`${table.itemCount} > 0`),
+  check("waiver_actions_positive_total", sql`${table.totalAmount} > 0`),
+  check("waiver_actions_idempotency_key_uuid", sql`${table.idempotencyKey}::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`),
+  check("waiver_actions_fingerprint_sha256", sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`),
+]);
+
+export const waiverItems = pgTable("waiver_items", {
+  waiverActionId: uuid("waiver_action_id").notNull(),
+  rtUnitId: uuid("rt_unit_id").notNull(),
+  householdId: uuid("household_id").notNull(),
+  monthlyDueId: uuid("monthly_due_id").notNull(),
+  period: varchar("period", { length: 7 }).notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ name: "waiver_items_pk", columns: [table.waiverActionId, table.monthlyDueId] }),
+  foreignKey({
+    name: "waiver_items_action_scope_fk",
+    columns: [table.waiverActionId, table.rtUnitId, table.householdId],
+    foreignColumns: [waiverActions.id, waiverActions.rtUnitId, waiverActions.householdId],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "waiver_items_due_scope_fk",
+    columns: [table.rtUnitId, table.householdId, table.monthlyDueId],
+    foreignColumns: [monthlyDues.rtUnitId, monthlyDues.householdId, monthlyDues.id],
+  }).onDelete("restrict"),
+  uniqueIndex("waiver_items_monthly_due_uq").on(table.monthlyDueId),
+  uniqueIndex("waiver_items_action_period_uq").on(table.waiverActionId, table.period),
+  index("waiver_items_household_period_idx").on(table.rtUnitId, table.householdId, table.period),
+  check("waiver_items_period_valid", sql`${table.period} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("waiver_items_amount_positive", sql`${table.amount} > 0`),
+]);
+
 export const paymentRequestItems = pgTable("payment_request_items", {
   requestId: uuid("request_id").notNull(),
   rtUnitId: uuid("rt_unit_id").notNull(),
@@ -620,6 +683,8 @@ export const schema = {
   activeDueSettlements,
   paymentRequestClaims,
   auditEvents,
+  waiverActions,
+  waiverItems,
 };
 
 export const relationalSchema = {
