@@ -18,6 +18,7 @@
     "test:authorization": "vitest run tests/authorization",
     "db:test-audit-neon": "tsx scripts/phase-4-5-neon-audit-check.ts",
     "db:test-payment-request-neon": "tsx scripts/phase-5-neon-payment-request-smoke.ts",
+    "db:test-waiver-neon": "tsx scripts/phase-10-waiver-http-smoke.ts",
     "smoke:resident-card": "tsx scripts/phase-4-1-browser-smoke.tsx",
     "smoke:phase-5-browser": "tsx scripts/phase-5-payment-request-browser-smoke.ts",
     "smoke:phase-5-1-http": "tsx scripts/phase-5-1-http-smoke.ts",
