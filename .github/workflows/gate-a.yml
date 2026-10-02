@@ -14,6 +14,7 @@ on:
       - "fix/phase-7-1-post-resolution-lifecycle"
       - "feat/phase-8-cash-payment"
       - "feat/phase-9-payment-reversal"
+      - "feat/phase-10-waiver"
     paths-ignore:
       - "docs/test-gate-a-report.md"
   pull_request:
