@@ -132,6 +132,27 @@ describe("resident card semantics", () => {
     });
   });
 
+  it("keeps a waived amount out of paid, pending, and unpaid totals", () => {
+    expect(duesSummary([
+      { ...due("paid", 3), amount: 10000 },
+      { ...due("unpaid", 6), amount: 20000, paymentRequestStatus: "pending" },
+      { ...due("unpaid", 7), amount: 30000 },
+      { ...due("waived", 4), amount: 65000 },
+    ])).toEqual({ paid: 10000, pending: 20000, unpaid: 30000 });
+  });
+
+  it("renders a waived month as Dibebaskan without exposing waiver metadata", () => {
+    const markup = renderToStaticMarkup(createElement(ResidentMonthCard, {
+      name: "April",
+      due: { ...due("waived", 4), amount: 65000 },
+    }));
+    const text = visibleText(markup);
+
+    expect(text).toContain("Dibebaskan");
+    expect(text).not.toMatch(/\bWAIVED\b|Alasan|Ketua RT/i);
+    expect(markup).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i);
+  });
+
   it("sums mixed dues across billing years without merging pending into unpaid", () => {
     expect(duesSummary([
       { ...due("unpaid", 12), billingYear: 2025, amount: 25000 },

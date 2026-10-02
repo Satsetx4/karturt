@@ -361,6 +361,107 @@ button { color: inherit; }
 .cash-entry-link:hover { border-color: var(--teal); background: var(--teal-wash); }
 .cash-entry-link:active, .cash-household-option:active:not(:disabled), .cash-primary-button:active:not(:disabled), .cash-secondary-button:active:not(:disabled) { transform: scale(.97); }
 
+.chairman-waiver-entry { margin: 24px 0 12px; padding: 17px; display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: start; gap: 11px 13px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); box-shadow: 0 4px 16px rgb(25 55 65 / 5%); }
+.chairman-waiver-entry-icon { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 12px; color: var(--teal); background: var(--teal-wash); }
+.chairman-waiver-entry-copy h2 { margin: 1px 0 4px; font-size: 18px; line-height: 1.25; }
+.chairman-waiver-entry-copy p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.chairman-waiver-entry-link { grid-column: 1 / -1; min-width: 0; min-height: 48px; padding: 10px 13px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--navy); background: var(--surface-raised); font-weight: 750; transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease; }
+.chairman-waiver-entry-link:hover { border-color: var(--teal); background: var(--teal-wash); }
+.chairman-waiver-entry-link:active { transform: scale(.97); }
+
+.waiver-area { width: min(100%, 780px); min-width: 0; margin: 25px auto 54px; }
+.waiver-back-link { min-height: 44px; margin: 0 0 13px; display: inline-flex; align-items: center; gap: 8px; color: var(--teal); font-weight: 750; }
+.waiver-back-link svg { flex: 0 0 auto; }
+.waiver-heading { margin-bottom: 23px; }
+.waiver-heading .eyebrow { margin-bottom: 11px; }
+.waiver-heading h1 { margin: 0; font-size: clamp(31px, 7vw, 43px); line-height: 1.08; letter-spacing: -.04em; }
+.waiver-heading > p:last-child { max-width: 650px; margin: 12px 0 0; color: var(--muted); line-height: 1.5; }
+.waiver-step, .waiver-success, .waiver-history { min-width: 0; margin-top: 16px; padding: clamp(16px, 4vw, 24px); display: grid; gap: 15px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 26px rgb(25 55 65 / 5%); }
+.waiver-step-heading { min-width: 0; display: flex; align-items: flex-start; gap: 11px; }
+.waiver-step-number { width: 36px; height: 36px; flex: 0 0 36px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 12px; color: var(--teal); background: var(--teal-wash); font-size: 14px; font-weight: 800; }
+.waiver-step-heading h2 { margin: 1px 0 4px; font-size: clamp(19px, 4.8vw, 23px); line-height: 1.25; overflow-wrap: anywhere; }
+.waiver-step-heading p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.waiver-field-label { margin-bottom: -7px; font-size: 14px; font-weight: 750; }
+.waiver-search-control { min-height: 52px; padding: 0 13px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line-strong); border-radius: 11px; color: var(--muted); background: var(--surface-raised); }
+.waiver-search-control:focus-within { border-color: var(--teal); outline: 3px solid color-mix(in srgb, var(--teal) 24%, transparent); outline-offset: 2px; }
+.waiver-search-control input { width: 100%; min-width: 0; min-height: 50px; padding: 7px 0; border: 0; outline: 0; color: var(--ink); background: transparent; }
+.waiver-search-control input::placeholder { color: var(--muted); opacity: .8; }
+.waiver-inline-note { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.waiver-household-results, .waiver-due-list, .waiver-confirm-periods, .waiver-history-list { min-width: 0; margin: 0; padding: 0; display: grid; gap: 9px; list-style: none; }
+.waiver-household-results li, .waiver-due-list li, .waiver-confirm-periods li { min-width: 0; }
+.waiver-household-option { width: 100%; min-width: 0; min-height: 68px; padding: 11px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--line); border-radius: 12px; text-align: left; background: var(--surface-raised); cursor: pointer; transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+.waiver-household-option:hover, .waiver-household-option.is-selected { border-color: var(--teal); box-shadow: 0 3px 12px rgb(39 111 104 / 10%); }
+.waiver-household-option:active { transform: scale(.97); }
+.waiver-household-option > svg { flex: 0 0 auto; color: var(--teal); }
+.waiver-household-identity { min-width: 0; display: flex; align-items: flex-start; gap: 10px; }
+.waiver-household-icon { width: 38px; height: 38px; flex: 0 0 38px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 11px; color: var(--teal); background: var(--surface); }
+.waiver-household-copy { min-width: 0; display: grid; gap: 2px; }
+.waiver-household-copy > strong { color: var(--ink); font-size: 16px; line-height: 1.3; }
+.waiver-household-copy > span { color: var(--muted); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.waiver-household-copy > .waiver-history-household { width: fit-content; max-width: 100%; margin-top: 4px; padding: 3px 7px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 12px; font-weight: 700; }
+.waiver-selected-household { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); }
+.waiver-period-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.waiver-period-fieldset legend { margin-bottom: 9px; }
+.waiver-due-list { gap: 8px; }
+.waiver-due-option { min-width: 0; min-height: 72px; padding: 10px 11px; display: grid; grid-template-columns: 25px minmax(0, 1fr) auto; align-items: center; gap: 8px 10px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-raised); cursor: pointer; transition: border-color 160ms ease, background-color 160ms ease; }
+.waiver-due-option.is-eligible { cursor: pointer; }
+.waiver-due-option.is-eligible:hover { border-color: var(--teal); }
+.waiver-due-option.is-checked { border-color: var(--teal); background: var(--teal-wash); }
+.waiver-due-option.is-disabled { cursor: not-allowed; }
+.waiver-due-option input { width: 22px; height: 22px; margin: 0; accent-color: var(--teal); }
+.waiver-due-copy { min-width: 0; display: grid; gap: 3px; }
+.waiver-due-copy > strong { line-height: 1.3; overflow-wrap: anywhere; }
+.waiver-status { width: fit-content; max-width: 100%; padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); font-size: 12px; font-weight: 750; line-height: 1.35; }
+.waiver-status--eligible { border-color: color-mix(in srgb, var(--teal) 38%, var(--line)); color: var(--teal); background: var(--surface); }
+.waiver-due-explanation { color: var(--muted); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.waiver-due-amount { max-width: 120px; color: var(--ink); font-size: 14px; font-weight: 750; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+.waiver-reason-input { width: 100%; min-width: 0; min-height: 110px; padding: 11px 12px; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--ink); background: var(--surface); font: inherit; resize: vertical; }
+.waiver-reason-input:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+.waiver-total-row, .waiver-history-total { min-width: 0; padding-top: 12px; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 5px 12px; border-top: 1px solid var(--line); color: var(--muted); font-weight: 750; }
+.waiver-total-row strong, .waiver-history-total strong { color: var(--ink); font-size: clamp(19px, 5vw, 24px); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.waiver-primary-button, .waiver-secondary-button { width: 100%; min-width: 0; min-height: 52px; padding: 11px 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line-strong); border-radius: 11px; text-align: center; font: inherit; font-size: 15px; font-weight: 800; line-height: 1.35; cursor: pointer; transition: transform 180ms ease, opacity 180ms ease, background-color 180ms ease, border-color 180ms ease; }
+.waiver-primary-button { border-color: var(--navy); color: var(--surface); background: var(--navy); }
+.waiver-primary-button:hover:not(:disabled) { border-color: var(--navy-hover); background: var(--navy-hover); }
+.waiver-secondary-button { color: var(--ink); background: var(--surface); }
+.waiver-secondary-button:hover:not(:disabled) { border-color: var(--teal); background: var(--teal-wash); }
+.waiver-primary-button:active:not(:disabled), .waiver-secondary-button:active:not(:disabled) { transform: scale(.97); }
+.waiver-primary-button:disabled, .waiver-secondary-button:disabled { opacity: .62; cursor: wait; }
+.waiver-confirmation { min-width: 0; margin-top: 5px; padding: 15px; display: grid; gap: 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-raised); }
+.waiver-confirm-periods li { min-height: 46px; padding: 9px 11px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.waiver-confirm-periods li span { min-width: 0; overflow-wrap: anywhere; }
+.waiver-confirm-periods strong { font-variant-numeric: tabular-nums; }
+.waiver-history-note, .waiver-audit-note { margin: 0; padding: 11px 12px; display: flex; align-items: flex-start; gap: 8px; border: 1px solid #ead79b; border-left: 4px solid #c19a24; border-radius: 9px; color: var(--ink); background: #fff9e3; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.dark .waiver-history-note, .dark .waiver-audit-note { border-color: #78652e; border-left-color: #d4b654; background: #302b1b; }
+.waiver-audit-note { border-color: var(--line); border-left-color: var(--teal); background: var(--teal-wash); }
+.waiver-audit-note svg { flex: 0 0 auto; margin-top: 2px; color: var(--teal); }
+.waiver-reason-summary, .waiver-history-reason { min-width: 0; display: grid; gap: 5px; }
+.waiver-reason-summary > span, .waiver-history-reason > span { color: var(--muted); font-size: 13px; font-weight: 750; }
+.waiver-reason-summary p, .waiver-history-reason p { margin: 0; overflow-wrap: anywhere; line-height: 1.5; }
+.waiver-actions { display: grid; gap: 9px; }
+.waiver-error { margin: 0; padding: 12px 13px; border: 1px solid #dfaaa3; border-left: 4px solid #b95448; border-radius: 10px; color: #883c35; background: #fff0ed; line-height: 1.5; overflow-wrap: anywhere; }
+.dark .waiver-error { border-color: #804941; color: #f4b5ad; background: #3a2928; }
+.waiver-success { border-color: color-mix(in srgb, var(--teal) 34%, var(--line)); }
+.waiver-success > svg { color: var(--teal); }
+.waiver-success h2 { margin: -5px 0 0; font-size: clamp(22px, 5vw, 28px); line-height: 1.2; }
+.waiver-success > p { margin: 0; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+.waiver-success-periods { color: var(--ink) !important; font-weight: 750; }
+.waiver-success-total { color: var(--teal) !important; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.waiver-reason-value { padding-top: 11px; border-top: 1px solid var(--line); }
+.waiver-history { margin-top: 28px; }
+.waiver-history-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.waiver-history-heading .eyebrow { margin: 0 0 5px; }
+.waiver-history-heading h2 { margin: 0 0 5px; font-size: clamp(20px, 4.8vw, 25px); }
+.waiver-history-heading p:last-child { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.waiver-history-heading > svg { flex: 0 0 auto; color: var(--teal); }
+.waiver-history-list { gap: 11px; }
+.waiver-history-card { min-width: 0; padding: 14px; display: grid; gap: 12px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-raised); }
+.waiver-history-card-topline { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px 10px; }
+.waiver-history-card-topline time, .waiver-history-card-topline > span:last-child { color: var(--muted); font-size: 12px; }
+.waiver-history-status { display: inline-flex; align-items: center; gap: 5px; color: var(--teal); font-size: 13px; font-weight: 800; }
+.waiver-history-periods { margin: 0; color: var(--ink); font-weight: 750; line-height: 1.45; overflow-wrap: anywhere; }
+.waiver-history-total { padding-top: 10px; }
+.waiver-history-total strong { font-size: 18px; }
+
 .cash-payment-area { width: min(100%, 760px); min-width: 0; margin: 30px auto 54px; }
 .cash-payment-heading { margin-bottom: 26px; }
 .cash-payment-step, .cash-payment-success { min-width: 0; margin-top: 18px; padding: clamp(17px, 4vw, 25px); display: grid; gap: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 26px rgb(25 55 65 / 5%); }
@@ -485,7 +586,10 @@ button { color: inherit; }
   .treasurer-request-card h3 { font-size: 22px; }
   .cash-entry-card { padding: 20px; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; }
   .cash-entry-link { grid-column: auto; min-width: 240px; }
+  .chairman-waiver-entry { padding: 20px; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; }
+  .chairman-waiver-entry-link { grid-column: auto; min-width: 220px; }
   .cash-flow-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .waiver-actions { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
   .treasurer-history-entry { padding: 20px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
   .treasurer-history-entry > .button { width: auto; min-width: 230px; }
   .payment-history-card { padding: 20px; }
@@ -502,12 +606,17 @@ button { color: inherit; }
   .treasurer-request-card { padding: 14px; }
   .treasurer-request-total strong, .treasurer-detail-total strong { font-size: 19px; }
   .cash-entry-card { margin-top: 21px; padding: 15px; }
+  .chairman-waiver-entry { margin-top: 21px; padding: 15px; }
   .cash-payment-area { margin-top: 24px; }
+  .waiver-area { margin-top: 23px; }
+  .waiver-due-option { grid-template-columns: 25px minmax(0, 1fr); }
+  .waiver-due-amount { grid-column: 2; max-width: none; text-align: left; }
   .payment-history-card { padding: 14px; }
   .payment-history-identity h3 { font-size: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cash-entry-link, .cash-household-option, .cash-primary-button, .cash-secondary-button,
+  .chairman-waiver-entry-link, .waiver-household-option, .waiver-primary-button, .waiver-secondary-button,
   .payment-history-actions .button, .payment-history-more, .resident-payment-history-more { transition-duration: .01ms; }
 }
 .due-card:has(.status-paid) { border-top: 3px solid #27805e; }

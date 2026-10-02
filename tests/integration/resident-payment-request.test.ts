@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import {
   activeDueSettlements,
@@ -15,9 +15,12 @@ import {
   paymentAllocations,
   payments,
   people,
+  waiverActions,
+  waiverItems,
 } from "../../src/db/schema";
 import { resolvePrincipalForUser } from "../../src/lib/auth/principal";
 import { getResidentMonthlyDues } from "../../src/lib/billing/resident-dues";
+import { getResidentPaymentHistory } from "../../src/lib/billing/payment-history";
 import { createResidentPaymentWhatsAppLink } from "../../src/lib/billing/resident-payment-whatsapp";
 import {
   createResidentPaymentRequest,
@@ -134,6 +137,7 @@ async function createResident(
 
   const periods = new Set((options.dues ?? []).map(({ period }) => Number(period.slice(0, 4))));
   const years = new Map<number, { id: string; feeRateId: string }>();
+  const waivedFixtureRows: Array<{ id: string; period: string; amount: number }> = [];
   for (const year of [...periods].sort((a, b) => a - b)) {
     const [billingYear] = await database.insert(billingYears).values({
       rtUnitId,
@@ -163,9 +167,12 @@ async function createResident(
       month,
       amount: noObligation ? 0 : due.amount ?? 40000,
       dueDate: `${yearText}-${monthText}-10`,
-      status: status === "paid" ? "unpaid" : status,
-      waivedReason: status === "waived" ? "approved waiver" : null,
+      status: status === "paid" || status === "waived" ? "unpaid" : status,
+      waivedReason: null,
     }).returning({ id: monthlyDues.id });
+    if (status === "waived") {
+      waivedFixtureRows.push({ id: createdDue!.id, period: due.period, amount: due.amount ?? 40000 });
+    }
     if (status === "paid") {
       await createVerifiedPaidHistory(database, {
         rtUnitId,
@@ -179,8 +186,74 @@ async function createResident(
     }
   }
 
+  let waiverActorAccountId: string | null = null;
+  if (waivedFixtureRows.length > 0) {
+    const chairmanUser = await createAuthUser(database, "Ketua RT Fixture");
+    const [chairmanAccount] = await database.insert(appAccounts).values({
+      rtUnitId,
+      authUserId: chairmanUser.id,
+      accountType: "official",
+      loginIdentifier: `chairman-${randomUUID().slice(0, 12)}`,
+      personId: household.personId,
+    }).returning({ id: appAccounts.id });
+    waiverActorAccountId = chairmanAccount!.id;
+    await database.insert(officialAssignments).values({
+      rtUnitId,
+      appAccountId: chairmanAccount!.id,
+      role: "rt_chairman",
+      startsOn: "2020-01-01",
+    });
+
+    const reason = "approved waiver";
+    const periods = waivedFixtureRows.map((row) => row.period).sort();
+    const totalAmount = waivedFixtureRows.reduce((total, row) => total + row.amount, 0);
+    const actionId = randomUUID();
+    await database.transaction(async (transaction) => {
+      await transaction.insert(waiverActions).values({
+        id: actionId,
+        rtUnitId,
+        householdId: household.householdId,
+        waivedByAccountId: chairmanAccount!.id,
+        waivedByAccountType: "official",
+        reason,
+        itemCount: waivedFixtureRows.length,
+        totalAmount,
+        idempotencyKey: randomUUID(),
+        requestFingerprint: createHash("sha256")
+          .update(JSON.stringify({ fixture: true, householdId: household.householdId, periods, reason }))
+          .digest("hex"),
+      });
+      await transaction.insert(waiverItems).values(waivedFixtureRows.map((row) => ({
+        waiverActionId: actionId,
+        rtUnitId,
+        householdId: household.householdId,
+        monthlyDueId: row.id,
+        period: row.period,
+        amount: row.amount,
+      })));
+      await transaction.update(monthlyDues)
+        .set({ status: "waived", waivedReason: reason })
+        .where(inArray(monthlyDues.id, waivedFixtureRows.map((row) => row.id)));
+      await transaction.insert(auditEvents).values({
+        actorAppAccountId: chairmanAccount!.id,
+        action: "waiver.created",
+        entityType: "waiver_action",
+        entityId: actionId,
+        reason,
+        context: { itemCount: waivedFixtureRows.length, periods: periods.join(","), totalAmount },
+      });
+    });
+  }
+
   const principal = await resolvePrincipalForUser(database as never, user.id, "2026-06-18");
-  return { rtUnitId, householdId: household.householdId, personId: household.personId, accountId: account.id, principal };
+  return {
+    rtUnitId,
+    householdId: household.householdId,
+    personId: household.personId,
+    accountId: account.id,
+    principal,
+    waiverActorAccountId,
+  };
 }
 
 describe("resident payment request transactions", () => {
@@ -237,6 +310,23 @@ describe("resident payment request transactions", () => {
     const readModel = await getResidentMonthlyDues(db as never, resident.principal);
     const pendingDue = readModel.find((due) => due.billingYear === 2024 && due.month === 11);
     expect(pendingDue).toMatchObject({ status: "unpaid", paymentRequestStatus: "pending" });
+    const waivedDue = readModel.find((due) => due.billingYear === 2026 && due.month === 4);
+    expect(waivedDue).toMatchObject({ status: "waived", amount: 40000 });
+    expect(Object.keys(waivedDue ?? {})).not.toContain("waivedReason");
+    expect(Object.keys(waivedDue ?? {})).not.toContain("waivedByAccountId");
+    expect(Object.keys(waivedDue ?? {})).not.toContain("actorAppAccountId");
+    expect(result.periods).not.toContain("2026-04");
+
+    const residentPaymentHistory = await getResidentPaymentHistory(db as never, resident.principal);
+    expect(residentPaymentHistory.payments).toHaveLength(1);
+    expect(residentPaymentHistory.payments[0]?.periods).toEqual(["2026-03"]);
+    expect(residentPaymentHistory.payments.some((payment) => payment.periods.includes("2026-04"))).toBe(false);
+    const residentVisibleData = JSON.stringify({ dues: readModel, paymentHistory: residentPaymentHistory });
+    expect(residentVisibleData).not.toContain("approved waiver");
+    expect(resident.waiverActorAccountId).not.toBeNull();
+    expect(residentVisibleData).not.toContain(resident.waiverActorAccountId!);
+    expect(residentVisibleData).not.toMatch(/waivedReason|waivedByAccountId|actorAppAccountId/i);
+
     const persistedDues = await db.select({ status: monthlyDues.status }).from(monthlyDues)
       .where(eq(monthlyDues.householdId, resident.householdId));
     expect(persistedDues.filter((due) => due.status === "unpaid")).toHaveLength(4);

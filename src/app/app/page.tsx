@@ -8,6 +8,8 @@ import { Brand } from "@/components/brand";
 import { SiteFooter } from "@/components/site-footer";
 import { SignOutButton } from "@/components/sign-out-button";
 import { TreasurerDashboard } from "@/components/treasurer-dashboard";
+import Link from "next/link";
+import { ArrowRight, ShieldCheck } from "lucide-react";
 import { getDb } from "@/db/client";
 import { authUser } from "@/db/schema";
 import {
@@ -76,6 +78,20 @@ export default async function AccountHomePage() {
             Akun Anda aktif. Informasi pada halaman ini mengikuti akses akun
             Anda.
           </p>
+          {principal.role === "rt_chairman" && (
+            <section className="chairman-waiver-entry" aria-labelledby="chairman-waiver-entry-title">
+              <div className="chairman-waiver-entry-icon">
+                <ShieldCheck size={22} aria-hidden="true" />
+              </div>
+              <div className="chairman-waiver-entry-copy">
+                <h2 id="chairman-waiver-entry-title">Pemutihan iuran</h2>
+                <p>Pilih bulan yang belum dibayar, catat alasan, dan tinjau riwayat keputusan.</p>
+              </div>
+              <Link className="chairman-waiver-entry-link" href="/app/pemutihan">
+                Buka pemutihan iuran <ArrowRight size={18} aria-hidden="true" />
+              </Link>
+            </section>
+          )}
           {principal.role === "system_admin" && (
             <>
               <hr className="status-rule" />
