@@ -49,13 +49,13 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Unit tests
-        run: npm run test:unit
+        run: npm run test:unit -- --maxWorkers=1
       - name: Integration and migration tests
         run: npm run test:integration -- --maxWorkers=1
       - name: Database constraint tests
-        run: npm run test:constraints
+        run: npm run test:constraints -- --maxWorkers=1
       - name: Authorization tests
-        run: npm run test:authorization
+        run: npm run test:authorization -- --maxWorkers=1
       - name: Full test suite
         run: npm test -- --maxWorkers=1
       - name: Drizzle migration journal consistency
