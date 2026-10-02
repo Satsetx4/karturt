@@ -6,7 +6,6 @@ import {
   appAccounts,
   auditEvents,
   billingYears,
-  feeRates,
   monthlyDues,
   officialAssignments,
   paymentAllocations,
@@ -28,7 +27,7 @@ import {
 } from "@/lib/billing/payment-request-resolution";
 import { TreasurerPaymentRequestAlreadyProcessedError, verifyTreasurerPaymentRequest } from "@/lib/billing/treasurer-payment-verification";
 import { getTreasurerPaymentRequestDetail } from "@/lib/billing/treasurer-payment-requests";
-import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
+import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase, ensureTestChairman } from "../helpers/database";
 
 type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
 
@@ -120,12 +119,12 @@ describe("payment request reject and cancel", () => {
       year: 2026,
       status: "open",
     }).returning({ id: billingYears.id });
-    const [feeRate] = await testDatabase.db.insert(feeRates).values({
+    const [feeRate] = await createFeeRateFixture(testDatabase.db, {
       rtUnitId,
       billingYearId: billingYear!.id,
       effectiveMonth: 1,
       monthlyAmount: 40000,
-    }).returning({ id: feeRates.id });
+    });
     const dueRows = await testDatabase.db.insert(monthlyDues).values(months.map((month) => ({
       rtUnitId,
       householdId: residentHousehold.householdId,
@@ -446,7 +445,7 @@ describe("payment request reject and cancel", () => {
             resolutionReason: "Bukti belum terbaca.",
           })
           .where(eq(paymentRequests.id, paidDueScenario.requestId));
-      }), "Requested dues must still be unpaid");
+      }), "Requested dues must remain unpaid and match their immutable outstanding snapshot");
       await expectStillPending(paidDueScenario);
 
       const incompleteClaimsScenario = await createScenario();
@@ -584,25 +583,13 @@ describe("payment request reject and cancel", () => {
 
   it("denies an inactive Treasurer and non-Treasurer roles", async () => {
     const scenario = await createScenario();
-    const [chairmanAccount] = await testDatabase.db.insert(appAccounts).values({
-      rtUnitId: scenario.rtUnitId,
-      authUserId: (await createAuthUser(testDatabase.db)).id,
-      accountType: "official",
-      loginIdentifier: `chairman-${randomUUID()}`,
-      personId: scenario.residentPrincipal.personId!,
-    }).returning({ id: appAccounts.id });
-    const [chairmanUser] = await testDatabase.db.select({ authUserId: appAccounts.authUserId })
+    const chairmanAccountId = await ensureTestChairman(testDatabase.db, scenario.rtUnitId);
+    const [chairmanAccount] = await testDatabase.db.select({ authUserId: appAccounts.authUserId })
       .from(appAccounts)
-      .where(eq(appAccounts.id, chairmanAccount!.id));
-    await testDatabase.db.insert(officialAssignments).values({
-      rtUnitId: scenario.rtUnitId,
-      appAccountId: chairmanAccount!.id,
-      role: "rt_chairman",
-      startsOn: "2020-01-01",
-    });
+      .where(eq(appAccounts.id, chairmanAccountId));
     const chairman: Principal = {
-      authUserId: chairmanUser!.authUserId,
-      appAccountId: chairmanAccount!.id,
+      authUserId: chairmanAccount!.authUserId,
+      appAccountId: chairmanAccountId,
       role: "rt_chairman",
       rtUnitId: scenario.rtUnitId,
       householdId: null,

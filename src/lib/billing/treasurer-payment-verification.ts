@@ -12,6 +12,7 @@ import {
 } from "@/db/schema";
 import { appendAuditEvent } from "@/lib/audit/writer";
 import { assertCanPerform, type Principal } from "@/lib/auth/permissions";
+import { getDueFinancialBalances } from "@/lib/billing/due-balance";
 import { jakartaBusinessDate } from "@/lib/officials/lifecycle";
 import { assertActiveTreasurer } from "@/lib/billing/treasurer-payment-requests";
 
@@ -127,7 +128,6 @@ export async function verifyTreasurerPaymentRequest(
           householdId: monthlyDues.householdId,
           billingYear: billingYears.year,
           month: monthlyDues.month,
-          amount: monthlyDues.amount,
           status: monthlyDues.status,
         })
         .from(monthlyDues)
@@ -154,6 +154,12 @@ export async function verifyTreasurerPaymentRequest(
         throw new TreasurerPaymentRequestConflictError("The requested dues changed. Reload the payment queue.");
       }
 
+      const balances = await getDueFinancialBalances(transactionDb, itemDueIds);
+      if (balances.length !== itemDueIds.length) {
+        throw new TreasurerPaymentLedgerInvariantError("A requested due balance could not be loaded.");
+      }
+      const balanceByDueId = new Map(balances.map((balance) => [balance.monthlyDueId, balance]));
+
       const dueById = new Map(dues.map((due) => [due.id, due]));
       const totalAmount = items.reduce((total, item) => total + item.amount, 0);
       if (
@@ -166,6 +172,7 @@ export async function verifyTreasurerPaymentRequest(
 
       for (const item of items) {
         const due = dueById.get(item.monthlyDueId);
+        const balance = balanceByDueId.get(item.monthlyDueId);
         const [yearText, monthText] = item.period.split("-");
         const year = Number(yearText);
         const month = Number(monthText);
@@ -174,10 +181,13 @@ export async function verifyTreasurerPaymentRequest(
           item.rtUnitId !== request.rtUnitId ||
           item.householdId !== request.householdId ||
           !due ||
+          !balance ||
           due.rtUnitId !== request.rtUnitId ||
           due.householdId !== request.householdId ||
           due.status !== "unpaid" ||
-          due.amount !== item.amount ||
+          balance.status !== "unpaid" ||
+          balance.outstanding !== item.amount ||
+          !balance.hasPendingRequest ||
           due.billingYear !== year ||
           due.month !== month ||
           item.period !== canonicalPeriod(due.billingYear, due.month)

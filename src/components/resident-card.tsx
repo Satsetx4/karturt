@@ -118,13 +118,13 @@ export function ResidentPaymentRequestPanel({
   const cancelInFlight = useRef(false);
   const idempotencyKey = useRef<string | null>(null);
   const requestableDues = dues.filter((due) =>
-    due.status === "unpaid" && due.paymentRequestStatus !== "pending",
+    due.status === "unpaid" && due.outstanding > 0 && due.paymentRequestStatus !== "pending",
   );
   const requestablePeriods = new Set(requestableDues.map(duePeriod));
   const selectedDues = requestableDues.filter((due) =>
     selectedPeriod !== "" && duePeriod(due) <= selectedPeriod,
   );
-  const totalAmount = selectedDues.reduce((total, due) => total + due.amount, 0);
+  const totalAmount = selectedDues.reduce((total, due) => total + due.outstanding, 0);
 
   const refreshHistory = useCallback(async (cursor?: string, append = false) => {
     if (append) setHistoryLoadingMore(true);
@@ -281,26 +281,6 @@ export function ResidentPaymentRequestPanel({
         </div>
       )}
 
-      {message && (
-        <div className={result ? "payment-request-success" : "payment-request-error"} role={result ? "status" : "alert"}>
-          <p>{message}</p>
-          {sessionExpired && <a className="button button--primary" href="/login/warga">Masuk kembali</a>}
-          {result && (
-            <>
-              <p>Nomor pengajuan: <strong>{result.requestCode}</strong></p>
-              <ResidentDueStatus token="PENDING" />
-              {result.whatsappUrl ? (
-                <a className="button button--primary" href={result.whatsappUrl} target="_blank" rel="noreferrer">
-                  Buka WhatsApp Bendahara
-                </a>
-              ) : (
-                <p>{result.contactMessage ?? "Permintaan Anda tetap tercatat."}</p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
       {!confirming ? (
         <button
           className="button button--primary payment-request-action"
@@ -326,6 +306,26 @@ export function ResidentPaymentRequestPanel({
         <p>{dues.some((due) => due.paymentRequestStatus === "pending")
           ? "Permintaan yang ada sedang menunggu konfirmasi."
           : "Belum ada bulan dengan status Belum bayar yang dapat diajukan."}</p>
+      )}
+
+      {message && (
+        <div className={result ? "payment-request-success" : "payment-request-error"} role={result ? "status" : "alert"}>
+          <p>{message}</p>
+          {sessionExpired && <a className="button button--primary" href="/login/warga">Masuk kembali</a>}
+          {result && (
+            <>
+              <p>Nomor pengajuan: <strong>{result.requestCode}</strong></p>
+              <ResidentDueStatus token="PENDING" />
+              {result.whatsappUrl ? (
+                <a className="button button--primary" href={result.whatsappUrl} target="_blank" rel="noreferrer">
+                  Buka WhatsApp Bendahara
+                </a>
+              ) : (
+                <p>{result.contactMessage ?? "Permintaan Anda tetap tercatat."}</p>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       <section className="payment-request-history" aria-labelledby="payment-request-history-title">
@@ -436,13 +436,21 @@ export function ResidentMonthCard({
   due?: ResidentDue;
 }) {
   const token = due ? dueToken(due) : "MISSING";
+  const displayAmount = due
+    ? due.status === "unpaid" ? due.outstanding : due.effectiveTarget
+    : null;
+  const adjustmentMessage = due && due.status === "unpaid" && due.activeReceived > 0 &&
+    due.adjustmentTotal > 0 && due.outstanding > 0
+    ? `Penyesuaian bersih ${rupiah(due.adjustmentTotal)}. Sisa kewajiban ${rupiah(due.outstanding)} belum dibayar.`
+    : null;
   return (
     <li className="due-card">
       <h2>{name}</h2>
       <ResidentDueStatus token={token} />
       <strong>
-        {due && due.status !== "not_due" ? rupiah(due.amount) : "—"}
+        {due && due.status !== "not_due" ? rupiah(displayAmount ?? 0) : "—"}
       </strong>
+      {adjustmentMessage && <p>{adjustmentMessage}</p>}
     </li>
   );
 }
@@ -645,8 +653,16 @@ export function ResidentCard({
                         <strong>{monthNames[d.month - 1]}</strong>
                         <span>
                           {residentStatusLabels[dueToken(d)]} ·{" "}
-                          {d.status === "not_due" ? "—" : rupiah(d.amount)}
+                          {d.status === "not_due"
+                            ? "—"
+                            : rupiah(d.status === "unpaid" ? d.outstanding : d.effectiveTarget)}
                         </span>
+                        {d.status === "unpaid" && d.activeReceived > 0 &&
+                          d.adjustmentTotal > 0 && d.outstanding > 0 && (
+                            <small>
+                              Penyesuaian bersih {rupiah(d.adjustmentTotal)}. Sisa kewajiban {rupiah(d.outstanding)} belum dibayar.
+                            </small>
+                          )}
                       </li>
                     ))}
                 </ul>

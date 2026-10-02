@@ -269,6 +269,10 @@ export const feeRates = pgTable("fee_rates", {
   billingYearId: uuid("billing_year_id").notNull(),
   effectiveMonth: smallint("effective_month").notNull(),
   monthlyAmount: integer("monthly_amount").notNull(),
+  createdByAccountId: uuid("created_by_account_id"),
+  createdByAccountType: accountTypeEnum("created_by_account_type"),
+  idempotencyKey: uuid("idempotency_key"),
+  requestFingerprint: varchar("request_fingerprint", { length: 64 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   foreignKey({
@@ -276,10 +280,26 @@ export const feeRates = pgTable("fee_rates", {
     columns: [table.rtUnitId, table.billingYearId],
     foreignColumns: [billingYears.rtUnitId, billingYears.id],
   }).onDelete("restrict"),
+  foreignKey({
+    name: "fee_rates_creator_scope_fk",
+    columns: [table.rtUnitId, table.createdByAccountId, table.createdByAccountType],
+    foreignColumns: [appAccounts.rtUnitId, appAccounts.id, appAccounts.accountType],
+  }).onDelete("restrict"),
   uniqueIndex("fee_rates_year_month_uq").on(table.billingYearId, table.effectiveMonth),
+  uniqueIndex("fee_rates_rt_actor_idempotency_uq")
+    .on(table.rtUnitId, table.createdByAccountId, table.idempotencyKey)
+    .where(sql`${table.idempotencyKey} is not null`),
   unique("fee_rates_year_id_uq").on(table.billingYearId, table.id),
   check("fee_rates_effective_month_valid", sql`${table.effectiveMonth} between 1 and 12`),
   check("fee_rates_positive_amount", sql`${table.monthlyAmount} > 0`),
+  check(
+    "fee_rates_f11_audit_metadata_complete",
+    sql`(${table.createdByAccountId} is null and ${table.createdByAccountType} is null and ${table.idempotencyKey} is null and ${table.requestFingerprint} is null) or (${table.createdByAccountId} is not null and ${table.createdByAccountType} = 'official' and ${table.idempotencyKey} is not null and ${table.requestFingerprint} ~ '^[0-9a-f]{64}$')`,
+  ),
+  check(
+    "fee_rates_idempotency_key_uuid",
+    sql`${table.idempotencyKey} is null or ${table.idempotencyKey}::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`,
+  ),
 ]);
 
 export const monthlyDues = pgTable("monthly_dues", {
@@ -319,6 +339,45 @@ export const monthlyDues = pgTable("monthly_dues", {
     "monthly_dues_status_amount_consistent",
     sql`(${table.status} = 'not_due' and ${table.amount} = 0 and ${table.feeRateId} is null and ${table.waivedReason} is null) or (${table.status} in ('unpaid', 'paid') and ${table.amount} > 0 and ${table.feeRateId} is not null and ${table.waivedReason} is null) or (${table.status} = 'waived' and ${table.amount} > 0 and ${table.feeRateId} is not null and ${table.waivedReason} is not null and length(trim(${table.waivedReason})) > 0)`,
   ),
+]);
+
+export const dueAdjustments = pgTable("due_adjustments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  rtUnitId: uuid("rt_unit_id").notNull(),
+  householdId: uuid("household_id").notNull(),
+  monthlyDueId: uuid("monthly_due_id").notNull(),
+  amountDelta: bigint("amount_delta", { mode: "number" }).notNull(),
+  effectiveTargetAfter: bigint("effective_target_after", { mode: "number" }).notNull(),
+  reason: varchar("reason", { length: 500 }).notNull(),
+  adjustedByAccountId: uuid("adjusted_by_account_id").notNull(),
+  adjustedByAccountType: accountTypeEnum("adjusted_by_account_type").notNull().default("official"),
+  idempotencyKey: uuid("idempotency_key").notNull(),
+  requestFingerprint: varchar("request_fingerprint", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({
+    name: "due_adjustments_due_scope_fk",
+    columns: [table.rtUnitId, table.householdId, table.monthlyDueId],
+    foreignColumns: [monthlyDues.rtUnitId, monthlyDues.householdId, monthlyDues.id],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "due_adjustments_actor_scope_fk",
+    columns: [table.rtUnitId, table.adjustedByAccountId, table.adjustedByAccountType],
+    foreignColumns: [appAccounts.rtUnitId, appAccounts.id, appAccounts.accountType],
+  }).onDelete("restrict"),
+  uniqueIndex("due_adjustments_rt_actor_idempotency_uq")
+    .on(table.rtUnitId, table.adjustedByAccountId, table.idempotencyKey),
+  index("due_adjustments_due_created_idx").on(table.rtUnitId, table.householdId, table.monthlyDueId, table.createdAt),
+  check("due_adjustments_amount_delta_nonzero", sql`${table.amountDelta} <> 0`),
+  check("due_adjustments_effective_target_positive", sql`${table.effectiveTargetAfter} > 0`),
+  check("due_adjustments_effective_target_integer_range", sql`${table.effectiveTargetAfter} <= 2147483647`),
+  check("due_adjustments_reason_not_blank", sql`length(trim(${table.reason})) > 0`),
+  check("due_adjustments_actor_official", sql`${table.adjustedByAccountType} = 'official'`),
+  check(
+    "due_adjustments_idempotency_key_uuid",
+    sql`${table.idempotencyKey}::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`,
+  ),
+  check("due_adjustments_fingerprint_sha256", sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`),
 ]);
 
 export const paymentRequests = pgTable("payment_requests", {
@@ -598,11 +657,11 @@ export const paymentAllocations = pgTable("payment_allocations", {
 ]);
 
 export const activeDueSettlements = pgTable("active_due_settlements", {
-  monthlyDueId: uuid("monthly_due_id").primaryKey(),
+  monthlyDueId: uuid("monthly_due_id").notNull(),
   rtUnitId: uuid("rt_unit_id").notNull(),
   householdId: uuid("household_id").notNull(),
   paymentId: uuid("payment_id").notNull(),
-  allocationId: uuid("allocation_id").notNull(),
+  allocationId: uuid("allocation_id").primaryKey(),
   amount: bigint("amount", { mode: "number" }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
@@ -621,8 +680,8 @@ export const activeDueSettlements = pgTable("active_due_settlements", {
     columns: [table.allocationId, table.paymentId, table.rtUnitId, table.householdId, table.monthlyDueId],
     foreignColumns: [paymentAllocations.id, paymentAllocations.paymentId, paymentAllocations.rtUnitId, paymentAllocations.householdId, paymentAllocations.monthlyDueId],
   }).onDelete("restrict"),
-  uniqueIndex("active_due_settlements_allocation_uq").on(table.allocationId),
   uniqueIndex("active_due_settlements_payment_due_uq").on(table.paymentId, table.monthlyDueId),
+  index("active_due_settlements_due_idx").on(table.rtUnitId, table.householdId, table.monthlyDueId),
   index("active_due_settlements_payment_idx").on(table.paymentId),
   check("active_due_settlements_positive_amount", sql`${table.amount} > 0`),
 ]);
@@ -675,6 +734,7 @@ export const schema = {
   billingYears,
   feeRates,
   monthlyDues,
+  dueAdjustments,
   paymentRequests,
   payments,
   paymentReversals,

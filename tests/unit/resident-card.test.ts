@@ -20,6 +20,11 @@ const due = (status: ResidentDue["status"], month: number): ResidentDue => ({
   month,
   billingYear: 2026,
   amount: status === "not_due" ? 0 : 40000,
+  originalAmount: status === "not_due" ? 0 : 40000,
+  adjustmentTotal: 0,
+  effectiveTarget: status === "not_due" ? 0 : 40000,
+  activeReceived: status === "paid" ? 40000 : 0,
+  outstanding: status === "unpaid" ? 40000 : 0,
   dueDate: `2026-${String(month).padStart(2, "0")}-10`,
 });
 
@@ -124,6 +129,45 @@ describe("resident card semantics", () => {
     });
   });
 
+  it("shows the new outstanding after a positive adjustment to a previously paid month", () => {
+    const adjustedDue: ResidentDue = {
+      ...due("unpaid", 8),
+      amount: 50000,
+      originalAmount: 40000,
+      adjustmentTotal: 10000,
+      effectiveTarget: 50000,
+      activeReceived: 40000,
+      outstanding: 10000,
+    };
+
+    expect(duesSummary([adjustedDue])).toEqual({ paid: 40000, pending: 0, unpaid: 10000 });
+    const text = visibleText(renderToStaticMarkup(createElement(ResidentMonthCard, {
+      name: "Agustus",
+      due: adjustedDue,
+    }))).replace(/\u00a0/g, " ");
+    expect(text).toContain("Belum bayar");
+    expect(text).toContain("Rp 10.000");
+    expect(text).toContain("Penyesuaian bersih Rp 10.000. Sisa kewajiban Rp 10.000 belum dibayar.");
+  });
+
+  it("distinguishes a partial adjustment total from the remaining balance", () => {
+    const adjustedDue: ResidentDue = {
+      ...due("unpaid", 8),
+      amount: 30000,
+      originalAmount: 40000,
+      adjustmentTotal: 10000,
+      effectiveTarget: 50000,
+      activeReceived: 20000,
+      outstanding: 30000,
+    };
+    const text = renderToStaticMarkup(createElement(ResidentMonthCard, {
+      name: "Agustus",
+      due: adjustedDue,
+    })).replace(/\u00a0/g, " ");
+    expect(text).toContain("Penyesuaian bersih Rp 10.000. Sisa kewajiban Rp 30.000 belum dibayar.");
+    expect(text).not.toContain("Penyesuaian bersih Rp30.000");
+  });
+
   it("excludes waived and not-due obligations from the three totals", () => {
     expect(duesSummary([due("waived", 4), due("not_due", 5)])).toEqual({
       paid: 0,
@@ -134,9 +178,9 @@ describe("resident card semantics", () => {
 
   it("keeps a waived amount out of paid, pending, and unpaid totals", () => {
     expect(duesSummary([
-      { ...due("paid", 3), amount: 10000 },
-      { ...due("unpaid", 6), amount: 20000, paymentRequestStatus: "pending" },
-      { ...due("unpaid", 7), amount: 30000 },
+      { ...due("paid", 3), amount: 10000, activeReceived: 10000, effectiveTarget: 10000 },
+      { ...due("unpaid", 6), amount: 20000, effectiveTarget: 20000, outstanding: 20000, paymentRequestStatus: "pending" },
+      { ...due("unpaid", 7), amount: 30000, effectiveTarget: 30000, outstanding: 30000 },
       { ...due("waived", 4), amount: 65000 },
     ])).toEqual({ paid: 10000, pending: 20000, unpaid: 30000 });
   });
@@ -155,10 +199,10 @@ describe("resident card semantics", () => {
 
   it("sums mixed dues across billing years without merging pending into unpaid", () => {
     expect(duesSummary([
-      { ...due("unpaid", 12), billingYear: 2025, amount: 25000 },
-      { ...due("unpaid", 1), billingYear: 2026, amount: 30000, paymentRequestStatus: "pending" },
-      { ...due("unpaid", 2), billingYear: 2026, amount: 45000 },
-      { ...due("paid", 11), billingYear: 2024, amount: 10000 },
+      { ...due("unpaid", 12), billingYear: 2025, amount: 25000, effectiveTarget: 25000, outstanding: 25000 },
+      { ...due("unpaid", 1), billingYear: 2026, amount: 30000, effectiveTarget: 30000, outstanding: 30000, paymentRequestStatus: "pending" },
+      { ...due("unpaid", 2), billingYear: 2026, amount: 45000, effectiveTarget: 45000, outstanding: 45000 },
+      { ...due("paid", 11), billingYear: 2024, amount: 10000, effectiveTarget: 10000, activeReceived: 10000 },
       { ...due("waived", 10), billingYear: 2025, amount: 50000 },
       { ...due("not_due", 3), billingYear: 2026, amount: 0 },
     ])).toEqual({

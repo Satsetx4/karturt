@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AppDatabase } from "@/db/client";
@@ -7,7 +7,7 @@ import {
   appAccounts,
   auditEvents,
   billingYears,
-  feeRates,
+  dueAdjustments,
   monthlyDues,
   officialAssignments,
   paymentAllocations,
@@ -23,6 +23,7 @@ import {
   ChairmanWaiverConflictError,
   ChairmanWaiverIdempotencyConflictError,
   createChairmanWaiver,
+  getChairmanWaiverHousehold,
 } from "@/lib/billing/chairman-waiver";
 import {
   createResidentPaymentRequest,
@@ -35,7 +36,7 @@ import {
 import { cancelResidentPaymentRequest, rejectTreasurerPaymentRequest } from "@/lib/billing/payment-request-resolution";
 import { reverseTreasurerPayment } from "@/lib/billing/treasurer-payment-reversal";
 import { verifyTreasurerPaymentRequest } from "@/lib/billing/treasurer-payment-verification";
-import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
+import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 
 type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
 type Scenario = {
@@ -143,12 +144,12 @@ describe("Chairman waiver transaction and concurrency", () => {
       year: 2026,
       status: "open",
     }).returning({ id: billingYears.id });
-    const [feeRate] = await testDatabase.db.insert(feeRates).values({
+    const [feeRate] = await createFeeRateFixture(testDatabase.db, {
       rtUnitId,
       billingYearId: billingYear!.id,
       effectiveMonth: 1,
       monthlyAmount: 40000,
-    }).returning({ id: feeRates.id });
+    });
     const dueRows = await testDatabase.db.insert(monthlyDues).values(months.map((month) => {
       const notDue = notDueMonths.has(month);
       return {
@@ -180,6 +181,38 @@ describe("Chairman waiver transaction and concurrency", () => {
       reason,
       idempotencyKey,
     }, businessDate);
+  }
+
+  async function addAdjustment(scenario: Scenario, dueId: string, amountDelta: number, effectiveTargetAfter: number) {
+    const id = randomUUID();
+    const reason = "Penyesuaian sebelum pemutihan";
+    await testDatabase.db.transaction(async (transaction) => {
+      await transaction.insert(dueAdjustments).values({
+        id,
+        rtUnitId: scenario.rtUnitId,
+        householdId: scenario.householdId,
+        monthlyDueId: dueId,
+        amountDelta,
+        effectiveTargetAfter,
+        reason,
+        adjustedByAccountId: scenario.chairmanPrincipal.appAccountId,
+        adjustedByAccountType: "official",
+        idempotencyKey: randomUUID(),
+        requestFingerprint: createHash("sha256").update(`${id}:${amountDelta}`).digest("hex"),
+      });
+      await transaction.insert(auditEvents).values({
+        actorAppAccountId: scenario.chairmanPrincipal.appAccountId,
+        action: "billing.adjustment_created",
+        entityType: "due_adjustment",
+        entityId: id,
+        reason,
+        context: {
+          amountDelta,
+          effectiveTargetAfter,
+          originalAmount: 40000,
+        },
+      });
+    });
   }
 
   async function expectNoNewWaiver(scenario: Scenario) {
@@ -221,6 +254,31 @@ describe("Chairman waiver transaction and concurrency", () => {
       .where(inArray(activeDueSettlements.monthlyDueId, [...scenario.dueIds.values()]))).toHaveLength(0);
     expect(await testDatabase.db.select().from(paymentRequestClaims)
       .where(inArray(paymentRequestClaims.monthlyDueId, [...scenario.dueIds.values()]))).toHaveLength(0);
+  });
+
+  it("shows and snapshots effective target when an adjusted unpaid due is waived", async () => {
+    const scenario = await createScenario({ months: [1] });
+    const dueId = scenario.dueIds.get(1)!;
+    await addAdjustment(scenario, dueId, 15000, 55000);
+
+    const detail = await getChairmanWaiverHousehold(
+      database,
+      scenario.chairmanPrincipal,
+      scenario.householdId,
+      businessDate,
+    );
+    expect(detail.dues).toMatchObject([
+      { period: "2026-01", amount: 55000, statusLabel: "Belum bayar", selectable: true },
+    ]);
+
+    const result = await waiver(scenario, ["2026-01"]);
+    const [item] = await testDatabase.db.select().from(waiverItems)
+      .where(eq(waiverItems.monthlyDueId, dueId));
+    const [action] = await testDatabase.db.select().from(waiverActions)
+      .where(eq(waiverActions.householdId, scenario.householdId));
+    expect(result.totalAmount).toBe(55000);
+    expect(item?.amount).toBe(55000);
+    expect(action?.totalAmount).toBe(55000);
   });
 
   it("rolls back the entire batch when any selected period is paid, pending, not due, or already waived", async () => {

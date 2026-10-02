@@ -6,7 +6,6 @@ import {
   appAccounts,
   auditEvents,
   billingYears,
-  feeRates,
   monthlyDues,
   officialAssignments,
   paymentAllocations,
@@ -19,7 +18,7 @@ import { createResidentPaymentRequest } from "../../src/lib/billing/resident-pay
 import { recordTreasurerCashPayment } from "../../src/lib/billing/treasurer-cash-payments";
 import { reverseTreasurerPayment } from "../../src/lib/billing/treasurer-payment-reversal";
 import type { Principal } from "../../src/lib/auth/permissions";
-import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
+import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 
 describe("cash payment ledger database constraints", () => {
   let testDatabase: Awaited<ReturnType<typeof createTestDatabase>>;
@@ -64,12 +63,12 @@ describe("cash payment ledger database constraints", () => {
     });
     const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" })
       .returning({ id: billingYears.id });
-    const [rate] = await db.insert(feeRates).values({
+    const [rate] = await createFeeRateFixture(db, {
       rtUnitId,
       billingYearId: year!.id,
       effectiveMonth: 1,
       monthlyAmount: 40000,
-    }).returning({ id: feeRates.id });
+    });
     const dueRows = await db.insert(monthlyDues).values([1, 2, 3].map((month) => ({
       rtUnitId,
       householdId: household.householdId,

@@ -26,6 +26,7 @@ import {
 } from "@/db/schema";
 import { appendAuditEvent, normalizeAuditReason } from "@/lib/audit/writer";
 import { canPerform, type Principal } from "@/lib/auth/permissions";
+import { getDueFinancialBalances } from "@/lib/billing/due-balance";
 import { jakartaBusinessDate, officialAssignmentActiveOn } from "@/lib/officials/lifecycle";
 
 const periodPattern = /^(\d{4})-(0[1-9]|1[0-2])$/;
@@ -333,35 +334,35 @@ export async function getChairmanWaiverHousehold(
   const residents = await readHouseholdResidents(database, rtUnitId, householdId);
   const dueRows = await database
     .select({
+      id: monthlyDues.id,
       year: billingYears.year,
       month: monthlyDues.month,
-      amount: monthlyDues.amount,
       status: monthlyDues.status,
-      hasSettlement: sql<boolean>`${activeDueSettlements.monthlyDueId} is not null`,
-      claimRequestStatus: paymentRequests.status,
     })
     .from(monthlyDues)
     .innerJoin(billingYears, and(
       eq(billingYears.id, monthlyDues.billingYearId),
       eq(billingYears.rtUnitId, monthlyDues.rtUnitId),
     ))
-    .leftJoin(paymentRequestClaims, eq(paymentRequestClaims.monthlyDueId, monthlyDues.id))
-    .leftJoin(paymentRequests, and(
-      eq(paymentRequests.id, paymentRequestClaims.requestId),
-      eq(paymentRequests.rtUnitId, rtUnitId),
-      eq(paymentRequests.householdId, householdId),
-    ))
-    .leftJoin(activeDueSettlements, eq(activeDueSettlements.monthlyDueId, monthlyDues.id))
     .where(and(eq(monthlyDues.rtUnitId, rtUnitId), eq(monthlyDues.householdId, householdId)))
     .orderBy(asc(billingYears.year), asc(monthlyDues.month), asc(monthlyDues.id));
+  const balances = await getDueFinancialBalances(database, dueRows.map((due) => due.id));
+  const balancesByDueId = new Map(balances.map((balance) => [balance.monthlyDueId, balance]));
+  if (balancesByDueId.size !== dueRows.length) {
+    throw new ChairmanWaiverLedgerInvariantError("Waiver household balance read did not match the due list.");
+  }
 
   const dues: ChairmanWaiverDueView[] = dueRows.map((due) => {
+    const balance = balancesByDueId.get(due.id);
+    if (!balance || balance.rtUnitId !== rtUnitId || balance.householdId !== householdId) {
+      throw new ChairmanWaiverLedgerInvariantError("Waiver household balance scope did not match the selected household.");
+    }
     let statusLabel: ChairmanWaiverDueView["statusLabel"];
     let selectable = false;
-    if (due.status === "unpaid" && !due.hasSettlement && !due.claimRequestStatus) {
+    if (due.status === "unpaid" && balance.outstanding > 0 && balance.activeReceived === 0 && !balance.hasPendingRequest) {
       statusLabel = "Belum bayar";
-      selectable = due.amount > 0;
-    } else if (due.status === "unpaid" && due.claimRequestStatus === "pending") {
+      selectable = balance.effectiveTarget > 0;
+    } else if (due.status === "unpaid" && balance.hasPendingRequest) {
       statusLabel = "Menunggu konfirmasi";
     } else if (due.status === "paid") {
       statusLabel = "Sudah bayar";
@@ -374,7 +375,7 @@ export async function getChairmanWaiverHousehold(
     }
     return {
       period: canonicalPeriod(due.year, due.month),
-      amount: due.amount,
+      amount: balance.effectiveTarget,
       statusLabel,
       selectable,
     };
@@ -579,7 +580,6 @@ export async function createChairmanWaiver(
           householdId: monthlyDues.householdId,
           year: billingYears.year,
           month: monthlyDues.month,
-          amount: monthlyDues.amount,
           status: monthlyDues.status,
         })
         .from(monthlyDues)
@@ -592,7 +592,7 @@ export async function createChairmanWaiver(
           eq(monthlyDues.householdId, normalized.householdId),
           periodFilter,
         ))
-        .orderBy(asc(billingYears.year), asc(monthlyDues.month), asc(monthlyDues.id))
+        .orderBy(asc(monthlyDues.id))
         .for("update", { of: monthlyDues });
 
       const duesByPeriod = new Map(dues.map((due) => [canonicalPeriod(due.year, due.month), due]));
@@ -602,9 +602,7 @@ export async function createChairmanWaiver(
       if (dues.some((due) =>
         due.rtUnitId !== rtUnitId ||
         due.householdId !== normalized.householdId ||
-        due.status !== "unpaid" ||
-        !Number.isSafeInteger(due.amount) ||
-        due.amount <= 0
+        due.status !== "unpaid"
       )) {
         throw new ChairmanWaiverConflictError("Satu atau beberapa periode bukan tagihan belum bayar yang dapat diputihkan.");
       }
@@ -623,7 +621,7 @@ export async function createChairmanWaiver(
           eq(paymentRequests.householdId, normalized.householdId),
         ))
         .where(inArray(paymentRequestClaims.monthlyDueId, dueIds))
-        .orderBy(asc(paymentRequestClaims.monthlyDueId))
+        .orderBy(asc(paymentRequestClaims.monthlyDueId), asc(paymentRequestClaims.requestId))
         .for("update", { of: paymentRequestClaims });
       if (claims.some((claim) => claim.requestStatus === "pending")) {
         throw new ChairmanWaiverConflictError("Ada permintaan pembayaran yang masih menunggu untuk salah satu periode.");
@@ -633,16 +631,37 @@ export async function createChairmanWaiver(
       }
 
       const settlements = await transaction
-        .select({ monthlyDueId: activeDueSettlements.monthlyDueId })
+        .select({
+          monthlyDueId: activeDueSettlements.monthlyDueId,
+          allocationId: activeDueSettlements.allocationId,
+        })
         .from(activeDueSettlements)
         .where(inArray(activeDueSettlements.monthlyDueId, dueIds))
-        .orderBy(asc(activeDueSettlements.monthlyDueId))
+        .orderBy(asc(activeDueSettlements.monthlyDueId), asc(activeDueSettlements.allocationId))
         .for("update");
+      const balances = await getDueFinancialBalances(transactionDatabase, dueIds);
+      const balancesByDueId = new Map(balances.map((balance) => [balance.monthlyDueId, balance]));
+      if (
+        balancesByDueId.size !== dues.length ||
+        dues.some((due) => {
+          const balance = balancesByDueId.get(due.id);
+          return !balance ||
+            balance.rtUnitId !== rtUnitId ||
+            balance.householdId !== normalized.householdId ||
+            balance.status !== "unpaid" ||
+            balance.outstanding <= 0 ||
+            balance.effectiveTarget <= 0 ||
+            balance.activeReceived > 0 ||
+            balance.hasPendingRequest;
+        })
+      ) {
+        throw new ChairmanWaiverConflictError("Satu atau beberapa periode bukan tagihan belum bayar yang dapat diputihkan.");
+      }
       if (settlements.length > 0) {
         throw new ChairmanWaiverConflictError("Satu atau beberapa periode sedang dimiliki pembayaran aktif.");
       }
 
-      const totalAmount = dues.reduce((total, due) => total + due.amount, 0);
+      const totalAmount = dues.reduce((total, due) => total + (balancesByDueId.get(due.id)?.effectiveTarget ?? 0), 0);
       if (!Number.isSafeInteger(totalAmount) || totalAmount <= 0) {
         throw new ChairmanWaiverPeriodUnavailableError("Jumlah pemutihan belum dapat dihitung.");
       }
@@ -669,7 +688,7 @@ export async function createChairmanWaiver(
         householdId: normalized.householdId,
         monthlyDueId: due.id,
         period: canonicalPeriod(due.year, due.month),
-        amount: due.amount,
+        amount: balancesByDueId.get(due.id)!.effectiveTarget,
       })));
 
       const updatedDues = await transaction

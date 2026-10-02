@@ -9,7 +9,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SignOutButton } from "@/components/sign-out-button";
 import { TreasurerDashboard } from "@/components/treasurer-dashboard";
 import Link from "next/link";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, Banknote, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { getDb } from "@/db/client";
 import { authUser } from "@/db/schema";
 import {
@@ -79,18 +79,38 @@ export default async function AccountHomePage() {
             Anda.
           </p>
           {principal.role === "rt_chairman" && (
-            <section className="chairman-waiver-entry" aria-labelledby="chairman-waiver-entry-title">
-              <div className="chairman-waiver-entry-icon">
-                <ShieldCheck size={22} aria-hidden="true" />
-              </div>
-              <div className="chairman-waiver-entry-copy">
-                <h2 id="chairman-waiver-entry-title">Pemutihan iuran</h2>
-                <p>Pilih bulan yang belum dibayar, catat alasan, dan tinjau riwayat keputusan.</p>
-              </div>
-              <Link className="chairman-waiver-entry-link" href="/app/pemutihan">
-                Buka pemutihan iuran <ArrowRight size={18} aria-hidden="true" />
-              </Link>
-            </section>
+            <div className="chairman-tools-grid" aria-label="Pengelolaan iuran">
+              <section className="chairman-tool-card" aria-labelledby="chairman-rate-entry-title">
+                <div className="chairman-tool-icon"><Banknote size={22} aria-hidden="true" /></div>
+                <div className="chairman-tool-copy">
+                  <h2 id="chairman-rate-entry-title">Tarif iuran</h2>
+                  <p>Jadwalkan tarif untuk bulan mendatang dan tinjau riwayat tarif.</p>
+                </div>
+                <Link className="chairman-tool-link" href="/app/tarif">
+                  Buka tarif iuran <ArrowRight size={18} aria-hidden="true" />
+                </Link>
+              </section>
+              <section className="chairman-tool-card" aria-labelledby="chairman-adjustment-entry-title">
+                <div className="chairman-tool-icon"><SlidersHorizontal size={22} aria-hidden="true" /></div>
+                <div className="chairman-tool-copy">
+                  <h2 id="chairman-adjustment-entry-title">Penyesuaian kewajiban</h2>
+                  <p>Tinjau saldo tagihan dan catat perubahan dengan alasan.</p>
+                </div>
+                <Link className="chairman-tool-link" href="/app/penyesuaian">
+                  Buka penyesuaian <ArrowRight size={18} aria-hidden="true" />
+                </Link>
+              </section>
+              <section className="chairman-tool-card" aria-labelledby="chairman-waiver-entry-title">
+                <div className="chairman-tool-icon"><ShieldCheck size={22} aria-hidden="true" /></div>
+                <div className="chairman-tool-copy">
+                  <h2 id="chairman-waiver-entry-title">Pemutihan iuran</h2>
+                  <p>Pilih bulan yang belum dibayar, catat alasan, dan tinjau riwayat keputusan.</p>
+                </div>
+                <Link className="chairman-tool-link" href="/app/pemutihan">
+                  Buka pemutihan iuran <ArrowRight size={18} aria-hidden="true" />
+                </Link>
+              </section>
+            </div>
           )}
           {principal.role === "system_admin" && (
             <>

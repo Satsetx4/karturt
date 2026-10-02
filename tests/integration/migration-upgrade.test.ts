@@ -9,7 +9,7 @@ import {
   activeDueSettlements,
   appAccounts,
   billingYears,
-  feeRates,
+  dueAdjustments,
   monthlyDues,
   officialAssignments,
   paymentAllocations,
@@ -23,7 +23,6 @@ import {
 } from "../../src/db/schema";
 import type { AppDatabase } from "../../src/db/client";
 import type { Principal } from "../../src/lib/auth/permissions";
-import { createResidentPaymentRequest } from "../../src/lib/billing/resident-payment-request";
 import { recordTreasurerCashPayment } from "../../src/lib/billing/treasurer-cash-payments";
 import { createAuthUser, createHousehold, createRt } from "../helpers/database";
 
@@ -81,7 +80,38 @@ describe("legacy billing migration upgrade", () => {
     expect(migrated).toEqual({ status: "not_due", waived_reason: null });
   });
 
-  it("upgrades intact transfer and cash history from 0009 through 0011, preserving owners and then recording cash", async () => {
+  it("applies the clean migration chain through 0012", async () => {
+    const cleanClient = new PGlite();
+    try {
+      const migrationFolder = resolve(process.cwd(), "drizzle");
+      const migrations = readdirSync(migrationFolder)
+        .filter((name) => name.endsWith(".sql"))
+        .sort();
+      for (const name of migrations) {
+        await cleanClient.exec(readFileSync(resolve(migrationFolder, name), "utf8"));
+      }
+      const tables = await cleanClient.query<{ table_name: string }>(`
+        SELECT table_name FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'due_adjustments'
+      `);
+      expect(tables.rows).toHaveLength(1);
+      const ownershipKey = await cleanClient.query<{ column_name: string }>(`
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON kcu.constraint_name = tc.constraint_name
+         AND kcu.table_schema = tc.table_schema
+        WHERE tc.table_schema = 'public'
+          AND tc.table_name = 'active_due_settlements'
+          AND tc.constraint_type = 'PRIMARY KEY'
+      `);
+      expect(ownershipKey.rows.map((row) => row.column_name)).toEqual(["allocation_id"]);
+    } finally {
+      await cleanClient.close();
+    }
+  });
+
+  it("upgrades intact transfer and cash history through 0012, preserving owners and then recording cash", async () => {
     const upgradeClient = new PGlite();
     try {
       const migrationFolder = resolve(process.cwd(), "drizzle");
@@ -105,15 +135,6 @@ describe("legacy billing migration upgrade", () => {
         personId: household.personId,
         householdId: household.householdId,
       }).returning({ id: appAccounts.id });
-      const residentPrincipal: Principal = {
-        authUserId: residentUser.id,
-        appAccountId: residentAccount!.id,
-        role: "resident",
-        rtUnitId,
-        householdId: household.householdId,
-        personId: household.personId,
-      };
-
       const treasurerUser = await createAuthUser(db);
       const [treasurerAccount] = await db.insert(appAccounts).values({
         rtUnitId,
@@ -138,12 +159,10 @@ describe("legacy billing migration upgrade", () => {
       };
       const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" })
         .returning({ id: billingYears.id });
-      const [feeRate] = await db.insert(feeRates).values({
-        rtUnitId,
-        billingYearId: year!.id,
-        effectiveMonth: 1,
-        monthlyAmount: 40000,
-      }).returning({ id: feeRates.id });
+      const [feeRate] = (await upgradeClient.query<{ id: string }>(
+        "INSERT INTO fee_rates (rt_unit_id, billing_year_id, effective_month, monthly_amount) VALUES ($1, $2, 1, 40000) RETURNING id",
+        [rtUnitId, year!.id],
+      )).rows;
       const duesBeforeUpgrade = await db.insert(monthlyDues).values([1, 2, 3].map((month) => ({
         rtUnitId,
         householdId: household.householdId,
@@ -155,12 +174,35 @@ describe("legacy billing migration upgrade", () => {
         status: "unpaid" as const,
       }))).returning({ id: monthlyDues.id, month: monthlyDues.month });
 
-      const request = await createResidentPaymentRequest(db as unknown as AppDatabase, residentPrincipal, {
-        period: "2026-01",
-        idempotencyKey: randomUUID(),
+      const requestId = randomUUID();
+      const requestCode = `UPG-${requestId.slice(0, 16)}`;
+      const requestDueId = duesBeforeUpgrade.find((due) => due.month === 1)!.id;
+      await db.transaction(async (transaction) => {
+        await transaction.insert(paymentRequests).values({
+          id: requestId,
+          requestCode,
+          rtUnitId,
+          householdId: household.householdId,
+          requestedByAccountId: residentAccount!.id,
+          requestedByAccountType: "resident",
+          status: "pending",
+          idempotencyKey: randomUUID(),
+          requestFingerprint: "a".repeat(64),
+          totalAmount: 40000,
+          itemCount: 1,
+        });
+        await transaction.insert(paymentRequestItems).values({
+          requestId,
+          rtUnitId,
+          householdId: household.householdId,
+          monthlyDueId: requestDueId,
+          period: "2026-01",
+          amount: 40000,
+        });
+        await transaction.insert(paymentRequestClaims).values({ requestId, monthlyDueId: requestDueId });
       });
       const [requestRow] = await db.select().from(paymentRequests)
-        .where(eq(paymentRequests.requestCode, request.requestCode));
+        .where(eq(paymentRequests.id, requestId));
       const [requestItem] = await db.select().from(paymentRequestItems)
         .where(eq(paymentRequestItems.requestId, requestRow!.id));
       const transferPaymentId = randomUUID();
@@ -241,6 +283,8 @@ describe("legacy billing migration upgrade", () => {
       await upgradeClient.exec(readFileSync(resolve(migrationFolder, reversalMigration), "utf8"));
       const waiverMigration = "0011_phase_10_waiver.sql";
       await upgradeClient.exec(readFileSync(resolve(migrationFolder, waiverMigration), "utf8"));
+      const tariffAdjustmentMigration = "0012_phase_11_tariff_adjustment.sql";
+      await upgradeClient.exec(readFileSync(resolve(migrationFolder, tariffAdjustmentMigration), "utf8"));
 
       const [transferAfter] = await db.select().from(payments).where(eq(payments.id, transferPaymentId));
       const [transferAllocationAfter] = await db.select().from(paymentAllocations)
@@ -265,6 +309,7 @@ describe("legacy billing migration upgrade", () => {
       });
       expect(cashAfter).toEqual(cashBefore);
       expect(cashAllocationAfter).toEqual(cashAllocationBefore);
+      expect(await db.select().from(dueAdjustments)).toHaveLength(0);
       expect(await db.select().from(activeDueSettlements)).toHaveLength(2);
       expect(await db.select().from(waiverActions)).toHaveLength(0);
       expect(await db.select().from(waiverItems)).toHaveLength(0);
@@ -304,12 +349,10 @@ describe("legacy billing migration upgrade", () => {
       const household = await createHousehold(db, rtUnitId);
       const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" })
         .returning({ id: billingYears.id });
-      const [rate] = await db.insert(feeRates).values({
-        rtUnitId,
-        billingYearId: year!.id,
-        effectiveMonth: 1,
-        monthlyAmount: 40000,
-      }).returning({ id: feeRates.id });
+      const [rate] = (await upgradeClient.query<{ id: string }>(
+        "INSERT INTO fee_rates (rt_unit_id, billing_year_id, effective_month, monthly_amount) VALUES ($1, $2, 1, 40000) RETURNING id",
+        [rtUnitId, year!.id],
+      )).rows;
       await db.insert(monthlyDues).values({
         rtUnitId,
         householdId: household.householdId,

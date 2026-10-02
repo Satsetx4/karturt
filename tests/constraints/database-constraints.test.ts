@@ -4,7 +4,6 @@ import { eq } from "drizzle-orm";
 import {
   appAccounts,
   billingYears,
-  feeRates,
   households,
   houses,
   monthlyDues,
@@ -12,7 +11,7 @@ import {
   people,
   rtSettings,
 } from "../../src/db/schema";
-import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
+import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 
 describe("PostgreSQL constraints", () => {
   let testDatabase: Awaited<ReturnType<typeof createTestDatabase>>;
@@ -152,7 +151,7 @@ describe("PostgreSQL constraints", () => {
     const rtUnitId = await createRt(db);
     const household = await createHousehold(db, rtUnitId);
     const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" }).returning({ id: billingYears.id });
-    const [rate] = await db.insert(feeRates).values({ rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 }).returning({ id: feeRates.id });
+    const [rate] = await createFeeRateFixture(db, { rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 });
     const row = { rtUnitId, householdId: household.householdId, billingYearId: year.id, feeRateId: rate.id, month: 1, amount: 40_000, dueDate: "2026-01-10", status: "unpaid" as const, waivedReason: null };
     await db.insert(monthlyDues).values(row);
     await expect(db.insert(monthlyDues).values(row)).rejects.toThrow();
@@ -163,7 +162,7 @@ describe("PostgreSQL constraints", () => {
     const rtUnitId = await createRt(db);
     const household = await createHousehold(db, rtUnitId);
     const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" }).returning({ id: billingYears.id });
-    const [rate] = await db.insert(feeRates).values({ rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 }).returning({ id: feeRates.id });
+    const [rate] = await createFeeRateFixture(db, { rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 });
 
     await expect(db.insert(monthlyDues).values({
       rtUnitId,
@@ -206,7 +205,7 @@ describe("PostgreSQL constraints", () => {
     const rtTwo = await createRt(db);
     const household = await createHousehold(db, rtOne);
     const [year] = await db.insert(billingYears).values({ rtUnitId: rtTwo, year: 2026, status: "open" }).returning({ id: billingYears.id });
-    const [rate] = await db.insert(feeRates).values({ rtUnitId: rtTwo, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 }).returning({ id: feeRates.id });
+    const [rate] = await createFeeRateFixture(db, { rtUnitId: rtTwo, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 });
 
     await expect(db.insert(monthlyDues).values({
       rtUnitId: rtOne,
@@ -225,7 +224,7 @@ describe("PostgreSQL constraints", () => {
     const rtUnitId = await createRt(db);
     const household = await createHousehold(db, rtUnitId);
     const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" }).returning({ id: billingYears.id });
-    const [rate] = await db.insert(feeRates).values({ rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 }).returning({ id: feeRates.id });
+    const [rate] = await createFeeRateFixture(db, { rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 });
     await expect(db.insert(monthlyDues).values({
       rtUnitId,
       householdId: household.householdId,
@@ -243,7 +242,7 @@ describe("PostgreSQL constraints", () => {
     const rtUnitId = await createRt(db);
     const household = await createHousehold(db, rtUnitId);
     const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" }).returning({ id: billingYears.id });
-    const [rate] = await db.insert(feeRates).values({ rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 }).returning({ id: feeRates.id });
+    const [rate] = await createFeeRateFixture(db, { rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 });
     const common = {
       rtUnitId,
       householdId: household.householdId,

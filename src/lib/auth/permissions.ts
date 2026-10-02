@@ -9,6 +9,7 @@ export type Permission =
   | "billing:read:rt"
   | "billing:generate"
   | "fee_rate:manage"
+  | "due_adjustment:manage"
   | "resident:read:rt"
   | "resident:manage"
   | "resident:reset_credential"
@@ -38,6 +39,7 @@ const permissions: Record<AppRole, ReadonlySet<Permission>> = {
     "billing:read:rt",
     "billing:generate",
     "fee_rate:manage",
+    "due_adjustment:manage",
     "resident:read:rt",
     "resident:manage",
     "resident:reset_credential",
@@ -52,6 +54,7 @@ const rtScopedPermissions = new Set<Permission>([
   "billing:read:rt",
   "billing:generate",
   "fee_rate:manage",
+  "due_adjustment:manage",
   "resident:read:rt",
   "resident:manage",
   "resident:reset_credential",

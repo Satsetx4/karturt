@@ -4,9 +4,12 @@ import {
   activeDueSettlements,
   monthlyDues,
   paymentAllocations,
+  paymentRequestClaims,
+  paymentRequests,
   paymentReversals,
   payments,
 } from "@/db/schema";
+import { getDueFinancialBalances } from "@/lib/billing/due-balance";
 import { appendAuditEvent, normalizeAuditReason } from "@/lib/audit/writer";
 import { assertCanPerform, type Principal } from "@/lib/auth/permissions";
 import { jakartaBusinessDate } from "@/lib/officials/lifecycle";
@@ -148,7 +151,6 @@ export async function reverseTreasurerPayment(
           id: monthlyDues.id,
           rtUnitId: monthlyDues.rtUnitId,
           householdId: monthlyDues.householdId,
-          amount: monthlyDues.amount,
           status: monthlyDues.status,
         })
         .from(monthlyDues)
@@ -159,6 +161,27 @@ export async function reverseTreasurerPayment(
         ))
         .orderBy(asc(monthlyDues.id))
         .for("update", { of: monthlyDues });
+
+      const claims = await transaction
+        .select({
+          monthlyDueId: paymentRequestClaims.monthlyDueId,
+          requestStatus: paymentRequests.status,
+        })
+        .from(paymentRequestClaims)
+        .innerJoin(paymentRequests, and(
+          eq(paymentRequests.id, paymentRequestClaims.requestId),
+          eq(paymentRequests.rtUnitId, payment.rtUnitId),
+          eq(paymentRequests.householdId, payment.householdId),
+        ))
+        .where(inArray(paymentRequestClaims.monthlyDueId, dueIds))
+        .orderBy(asc(paymentRequestClaims.monthlyDueId), asc(paymentRequestClaims.requestId))
+        .for("update", { of: paymentRequestClaims });
+      if (claims.some((claim) => claim.requestStatus === "pending")) {
+        throw new TreasurerPaymentReversalConflictError("Payment reversal is blocked while a due has a pending request.");
+      }
+      if (claims.length > 0) {
+        throw new TreasurerPaymentReversalInvariantError("A terminal payment request retained an active claim.");
+      }
 
       const settlements = await transaction
         .select({
@@ -174,30 +197,39 @@ export async function reverseTreasurerPayment(
           eq(activeDueSettlements.paymentId, payment.id),
           inArray(activeDueSettlements.monthlyDueId, dueIds),
         ))
-        .orderBy(asc(activeDueSettlements.monthlyDueId))
+        .orderBy(asc(activeDueSettlements.monthlyDueId), asc(activeDueSettlements.allocationId))
         .for("update");
 
       const dueById = new Map(dues.map((due) => [due.id, due]));
-      const settlementByDueId = new Map(settlements.map((settlement) => [settlement.monthlyDueId, settlement]));
+      const settlementByAllocationId = new Map(settlements.map((settlement) => [settlement.allocationId, settlement]));
+      const balances = await getDueFinancialBalances(transactionDatabase, dueIds);
+      const balancesByDueId = new Map(balances.map((balance) => [balance.monthlyDueId, balance]));
       if (
         dues.length !== allocations.length ||
         settlements.length !== allocations.length ||
+        balancesByDueId.size !== dues.length ||
         allocations.some((allocation) => {
           const due = dueById.get(allocation.monthlyDueId);
-          const settlement = settlementByDueId.get(allocation.monthlyDueId);
+          const settlement = settlementByAllocationId.get(allocation.id);
+          const balance = balancesByDueId.get(allocation.monthlyDueId);
           return !due || !settlement ||
-            due.status !== "paid" ||
+            !balance ||
+            (due.status !== "paid" && due.status !== "unpaid") ||
             due.rtUnitId !== payment.rtUnitId ||
             due.householdId !== payment.householdId ||
-            due.amount !== allocation.amount ||
+            balance.status !== due.status ||
+            (due.status === "paid" && balance.outstanding !== 0) ||
+            (due.status === "unpaid" && balance.outstanding <= 0) ||
+            balance.hasPendingRequest ||
             settlement.paymentId !== payment.id ||
             settlement.allocationId !== allocation.id ||
+            settlement.monthlyDueId !== allocation.monthlyDueId ||
             settlement.rtUnitId !== payment.rtUnitId ||
             settlement.householdId !== payment.householdId ||
             settlement.amount !== allocation.amount;
         })
       ) {
-        throw new TreasurerPaymentReversalInvariantError("Payment no longer owns every paid due through its active settlement rows.");
+        throw new TreasurerPaymentReversalInvariantError("Payment no longer owns every allocation through its active settlement rows.");
       }
 
       const [reversal] = await transaction
@@ -213,29 +245,44 @@ export async function reverseTreasurerPayment(
         .returning({ reversedAt: paymentReversals.reversedAt });
       if (!reversal) throw new TreasurerPaymentReversalInvariantError("Payment reversal record was not created.");
 
-      const unpaidDues = await transaction
-        .update(monthlyDues)
-        .set({ status: "unpaid" })
-        .where(and(
-          eq(monthlyDues.rtUnitId, payment.rtUnitId),
-          eq(monthlyDues.householdId, payment.householdId),
-          eq(monthlyDues.status, "paid"),
-          inArray(monthlyDues.id, dueIds),
-        ))
-        .returning({ id: monthlyDues.id });
-      if (unpaidDues.length !== allocations.length) {
-        throw new TreasurerPaymentReversalConflictError("One or more paid months changed before reversal.");
-      }
-
       const releasedSettlements = await transaction
         .delete(activeDueSettlements)
         .where(and(
           eq(activeDueSettlements.paymentId, payment.id),
           inArray(activeDueSettlements.monthlyDueId, dueIds),
         ))
-        .returning({ monthlyDueId: activeDueSettlements.monthlyDueId });
-      if (releasedSettlements.length !== allocations.length) {
+        .returning({ allocationId: activeDueSettlements.allocationId });
+      if (
+        releasedSettlements.length !== allocations.length ||
+        releasedSettlements.some((settlement) => !allocations.some((allocation) => allocation.id === settlement.allocationId))
+      ) {
         throw new TreasurerPaymentReversalInvariantError("Active settlement ownership changed during reversal.");
+      }
+
+      const postReversalBalances = await getDueFinancialBalances(transactionDatabase, dueIds);
+      const postBalancesByDueId = new Map(postReversalBalances.map((balance) => [balance.monthlyDueId, balance]));
+      if (postBalancesByDueId.size !== dueIds.length || postReversalBalances.some((balance) =>
+        balance.rtUnitId !== payment.rtUnitId ||
+        balance.householdId !== payment.householdId ||
+        balance.hasPendingRequest ||
+        (balance.status !== "paid" && balance.status !== "unpaid") ||
+        balance.outstanding < 0
+      )) {
+        throw new TreasurerPaymentReversalInvariantError("Due balance could not be recomputed after reversal.");
+      }
+      for (const balance of postReversalBalances) {
+        const [updatedDue] = await transaction
+          .update(monthlyDues)
+          .set({ status: balance.outstanding === 0 ? "paid" : "unpaid" })
+          .where(and(
+            eq(monthlyDues.id, balance.monthlyDueId),
+            eq(monthlyDues.rtUnitId, payment.rtUnitId),
+            eq(monthlyDues.householdId, payment.householdId),
+          ))
+          .returning({ id: monthlyDues.id });
+        if (!updatedDue) {
+          throw new TreasurerPaymentReversalConflictError("One or more due statuses changed before reversal completed.");
+        }
       }
 
       await appendAuditEvent(transaction, {

@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { appAccounts, billingYears, feeRates, monthlyDues } from "../../src/db/schema";
+import { appAccounts, billingYears, monthlyDues } from "../../src/db/schema";
 import { resolvePrincipalForUser } from "../../src/lib/auth/principal";
 import { getResidentMonthlyDues } from "../../src/lib/billing/resident-dues";
-import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
+import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 
 describe("resident monthly-dues authorization", () => {
   let testDatabase: Awaited<ReturnType<typeof createTestDatabase>>;
@@ -24,8 +24,8 @@ describe("resident monthly-dues authorization", () => {
     const otherRtHousehold = await createHousehold(db, rtTwo);
     const [yearOne] = await db.insert(billingYears).values({ rtUnitId: rtOne, year: 2026, status: "open" }).returning({ id: billingYears.id });
     const [yearTwo] = await db.insert(billingYears).values({ rtUnitId: rtTwo, year: 2026, status: "open" }).returning({ id: billingYears.id });
-    const [rateOne] = await db.insert(feeRates).values({ rtUnitId: rtOne, billingYearId: yearOne.id, effectiveMonth: 1, monthlyAmount: 40_000 }).returning({ id: feeRates.id });
-    const [rateTwo] = await db.insert(feeRates).values({ rtUnitId: rtTwo, billingYearId: yearTwo.id, effectiveMonth: 1, monthlyAmount: 50_000 }).returning({ id: feeRates.id });
+    const [rateOne] = await createFeeRateFixture(db, { rtUnitId: rtOne, billingYearId: yearOne.id, effectiveMonth: 1, monthlyAmount: 40_000 });
+    const [rateTwo] = await createFeeRateFixture(db, { rtUnitId: rtTwo, billingYearId: yearTwo.id, effectiveMonth: 1, monthlyAmount: 50_000 });
     await db.insert(monthlyDues).values([
       {
         rtUnitId: rtOne,
@@ -87,10 +87,15 @@ describe("resident monthly-dues authorization", () => {
       [2026, 5, "unpaid"],
     ]);
     expect(Object.keys(dues[0]).sort()).toEqual([
+      "activeReceived",
+      "adjustmentTotal",
       "amount",
       "billingYear",
       "dueDate",
+      "effectiveTarget",
       "month",
+      "originalAmount",
+      "outstanding",
       "paymentRequestStatus",
       "status",
     ]);

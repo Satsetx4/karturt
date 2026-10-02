@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import { appendAuditEvent, normalizeAuditReason } from "@/lib/audit/writer";
 import { assertCanPerform, type Principal } from "@/lib/auth/permissions";
+import { getDueFinancialBalances } from "@/lib/billing/due-balance";
 import { jakartaBusinessDate } from "@/lib/officials/lifecycle";
 import { assertActiveTreasurer } from "@/lib/billing/treasurer-payment-requests";
 
@@ -177,7 +178,6 @@ async function resolvePendingRequest(
         householdId: monthlyDues.householdId,
         billingYear: billingYears.year,
         month: monthlyDues.month,
-        amount: monthlyDues.amount,
         status: monthlyDues.status,
       })
       .from(monthlyDues)
@@ -204,6 +204,12 @@ async function resolvePendingRequest(
       throw new PaymentRequestResolutionConflictError("The requested dues or claims changed. Reload the payment request.");
     }
 
+    const balances = await getDueFinancialBalances(transactionDb, itemDueIds);
+    if (balances.length !== itemDueIds.length) {
+      throw new PaymentRequestResolutionInvariantError("A requested due balance could not be loaded.");
+    }
+    const balanceByDueId = new Map(balances.map((balance) => [balance.monthlyDueId, balance]));
+
     const totalAmount = items.reduce((total, item) => total + item.amount, 0);
     if (!Number.isSafeInteger(totalAmount) || totalAmount <= 0 || totalAmount !== request.totalAmount) {
       throw new PaymentRequestResolutionInvariantError("Payment request total does not match its immutable items.");
@@ -212,16 +218,20 @@ async function resolvePendingRequest(
     const dueById = new Map(dues.map((due) => [due.id, due]));
     for (const item of items) {
       const due = dueById.get(item.monthlyDueId);
+      const balance = balanceByDueId.get(item.monthlyDueId);
       const [yearText, monthText] = item.period.split("-");
       if (
         item.requestId !== request.id ||
         item.rtUnitId !== request.rtUnitId ||
         item.householdId !== request.householdId ||
         !due ||
+        !balance ||
         due.rtUnitId !== request.rtUnitId ||
         due.householdId !== request.householdId ||
         due.status !== "unpaid" ||
-        due.amount !== item.amount ||
+        balance.status !== "unpaid" ||
+        balance.outstanding !== item.amount ||
+        !balance.hasPendingRequest ||
         due.billingYear !== Number(yearText) ||
         due.month !== Number(monthText) ||
         item.period !== canonicalPeriod(due.billingYear, due.month)

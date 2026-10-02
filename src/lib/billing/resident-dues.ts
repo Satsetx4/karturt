@@ -1,6 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
-import { billingYears, monthlyDues, paymentRequestClaims, paymentRequests } from "@/db/schema";
+import { billingYears, monthlyDues } from "@/db/schema";
+import { getDueFinancialBalances } from "@/lib/billing/due-balance";
 import { assertCanPerform, type Principal } from "@/lib/auth/permissions";
 
 export async function getResidentMonthlyDues(database: AppDatabase, principal: Principal) {
@@ -12,28 +13,49 @@ export async function getResidentMonthlyDues(database: AppDatabase, principal: P
     householdId: principal.householdId,
   });
 
-  return database
+  const dues = await database
     .select({
+      id: monthlyDues.id,
       billingYear: billingYears.year,
       month: monthlyDues.month,
-      amount: monthlyDues.amount,
       dueDate: monthlyDues.dueDate,
-      status: monthlyDues.status,
-      paymentRequestStatus: paymentRequests.status,
     })
     .from(monthlyDues)
     .innerJoin(billingYears, and(
       eq(billingYears.id, monthlyDues.billingYearId),
       eq(billingYears.rtUnitId, principal.rtUnitId),
     ))
-    .leftJoin(paymentRequestClaims, eq(paymentRequestClaims.monthlyDueId, monthlyDues.id))
-    .leftJoin(paymentRequests, and(
-      eq(paymentRequests.id, paymentRequestClaims.requestId),
-      eq(paymentRequests.status, "pending"),
-    ))
     .where(and(
       eq(monthlyDues.rtUnitId, principal.rtUnitId),
       eq(monthlyDues.householdId, principal.householdId),
     ))
-    .orderBy(asc(billingYears.year), asc(monthlyDues.month));
+    .orderBy(asc(billingYears.year), asc(monthlyDues.month), asc(monthlyDues.id));
+
+  if (dues.length === 0) return [];
+  const balances = await getDueFinancialBalances(database, dues.map((due) => due.id));
+  const balancesByDueId = new Map(balances.map((balance) => [balance.monthlyDueId, balance]));
+  if (balancesByDueId.size !== dues.length) {
+    throw new Error("Resident due balance read did not match the requested dues.");
+  }
+
+  return dues.map((due) => {
+    const balance = balancesByDueId.get(due.id);
+    if (!balance || balance.rtUnitId !== principal.rtUnitId || balance.householdId !== principal.householdId) {
+      throw new Error("Resident due balance scope did not match the requested household.");
+    }
+    return {
+      billingYear: due.billingYear,
+      month: due.month,
+      // Preserve the legacy amount field as the effective obligation amount.
+      amount: balance.effectiveTarget,
+      originalAmount: balance.originalAmount,
+      adjustmentTotal: balance.adjustmentTotal,
+      effectiveTarget: balance.effectiveTarget,
+      activeReceived: balance.activeReceived,
+      outstanding: balance.outstanding,
+      dueDate: due.dueDate,
+      status: balance.status,
+      paymentRequestStatus: balance.hasPendingRequest ? "pending" as const : null,
+    };
+  });
 }

@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { AppDatabase } from "../../src/db/client";
-import { billingYears, feeRates, households, monthlyDues } from "../../src/db/schema";
+import { billingYears, households, monthlyDues } from "../../src/db/schema";
 import { activateBillingYear } from "../../src/lib/billing/activation";
 import { generateHouseholdDues } from "../../src/lib/billing/generator";
-import { createHousehold, createRt, createTestDatabase } from "../helpers/database";
+import { createFeeRateFixture, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 import type { Principal } from "../../src/lib/auth/permissions";
 
 function chairmanFor(rtUnitId: string): Principal {
@@ -23,8 +23,8 @@ describe("monthly-dues database integration", () => {
     const chairman = chairmanFor(rtUnitId);
     const household = await createHousehold(db, rtUnitId, { number: "C-01", startsOn: "2026-05-15" });
     const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026 }).returning({ id: billingYears.id });
-    const [firstRate] = await db.insert(feeRates).values({ rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 }).returning({ id: feeRates.id });
-    await db.insert(feeRates).values({ rtUnitId, billingYearId: year.id, effectiveMonth: 7, monthlyAmount: 50_000 });
+    const [firstRate] = await createFeeRateFixture(db, { rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 });
+    await createFeeRateFixture(db, { rtUnitId, billingYearId: year.id, effectiveMonth: 7, monthlyAmount: 50_000 });
 
     await expect(generateHouseholdDues(db as unknown as AppDatabase, chairman, { householdId: household.householdId, billingYearId: year.id })).rejects.toThrow("open billing year");
     await expect(activateBillingYear(db as unknown as AppDatabase, chairman, { billingYearId: year.id })).resolves.toMatchObject({ id: year.id, status: "open" });
@@ -54,11 +54,11 @@ describe("monthly-dues database integration", () => {
     const chairman = chairmanFor(rtUnitId);
     const [firstYear] = await db.insert(billingYears).values({ rtUnitId, year: 2026 }).returning({ id: billingYears.id });
     const [secondYear] = await db.insert(billingYears).values({ rtUnitId, year: 2027 }).returning({ id: billingYears.id });
-    await db.insert(feeRates).values({ rtUnitId, billingYearId: firstYear.id, effectiveMonth: 2, monthlyAmount: 40_000 });
-    await db.insert(feeRates).values({ rtUnitId, billingYearId: secondYear.id, effectiveMonth: 1, monthlyAmount: 45_000 });
+    await createFeeRateFixture(db, { rtUnitId, billingYearId: firstYear.id, effectiveMonth: 2, monthlyAmount: 40_000 });
+    await createFeeRateFixture(db, { rtUnitId, billingYearId: secondYear.id, effectiveMonth: 1, monthlyAmount: 45_000 });
 
     await expect(activateBillingYear(db as unknown as AppDatabase, chairman, { billingYearId: firstYear.id })).rejects.toThrow("January fee rate");
-    await db.insert(feeRates).values({ rtUnitId, billingYearId: firstYear.id, effectiveMonth: 1, monthlyAmount: 40_000 });
+    await createFeeRateFixture(db, { rtUnitId, billingYearId: firstYear.id, effectiveMonth: 1, monthlyAmount: 40_000 });
     const activationAttempts = await Promise.allSettled([
       activateBillingYear(db as unknown as AppDatabase, chairman, { billingYearId: firstYear.id }),
       activateBillingYear(db as unknown as AppDatabase, chairman, { billingYearId: secondYear.id }),
@@ -79,7 +79,7 @@ describe("monthly-dues database integration", () => {
     await db.update(households).set({ status: "inactive", endsOn: "2026-06-30" }).where((await import("drizzle-orm")).eq(households.id, household.householdId));
 
     const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026 }).returning({ id: billingYears.id });
-    await db.insert(feeRates).values({ rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 });
+    await createFeeRateFixture(db, { rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 });
     await activateBillingYear(db as unknown as AppDatabase, chairman, { billingYearId: year.id });
 
     const result = await generateHouseholdDues(db as unknown as AppDatabase, chairman, {
@@ -100,7 +100,7 @@ describe("monthly-dues database integration", () => {
     const chairman = chairmanFor(rtUnitId);
     const household = await createHousehold(db, rtUnitId, { startsOn: "2027-03-01" });
     const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026 }).returning({ id: billingYears.id });
-    await db.insert(feeRates).values({ rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 });
+    await createFeeRateFixture(db, { rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 });
     await activateBillingYear(db as unknown as AppDatabase, chairman, { billingYearId: year.id });
 
     await expect(generateHouseholdDues(db as unknown as AppDatabase, chairman, {
@@ -117,7 +117,7 @@ describe("monthly-dues database integration", () => {
     const otherRtUnitId = await createRt(db);
     const household = await createHousehold(db, rtUnitId);
     const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026 }).returning({ id: billingYears.id });
-    await db.insert(feeRates).values({ rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 });
+    await createFeeRateFixture(db, { rtUnitId, billingYearId: year.id, effectiveMonth: 1, monthlyAmount: 40_000 });
     const forbiddenPrincipals: Principal[] = [
       { ...chairmanFor(rtUnitId), role: "treasurer" },
       { ...chairmanFor(rtUnitId), role: "resident", householdId: household.householdId },

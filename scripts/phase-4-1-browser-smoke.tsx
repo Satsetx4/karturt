@@ -55,6 +55,11 @@ const due = (status: ResidentDue["status"], month: number): ResidentDue => ({
   billingYear: 2026,
   month,
   amount: status === "not_due" ? 0 : 40000,
+  originalAmount: status === "not_due" ? 0 : 40000,
+  adjustmentTotal: 0,
+  effectiveTarget: status === "not_due" ? 0 : 40000,
+  activeReceived: status === "paid" ? 40000 : 0,
+  outstanding: status === "unpaid" ? 40000 : 0,
   dueDate: `2026-${String(month).padStart(2, "0")}-10`,
   status,
 });

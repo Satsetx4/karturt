@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, eq, inArray, lt, lte, or } from "drizzle-orm";
+import { and, asc, eq, lt, lte, or } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
 import {
   billingYears,
@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import { appendAuditEvent } from "@/lib/audit/writer";
 import { assertCanPerform, type Principal } from "@/lib/auth/permissions";
+import { getDueFinancialBalances } from "@/lib/billing/due-balance";
 
 const periodPattern = /^(\d{4})-(0[1-9]|1[0-2])$/;
 const idempotencyKeyPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -152,7 +153,6 @@ export async function createResidentPaymentRequest(
           id: monthlyDues.id,
           billingYear: billingYears.year,
           month: monthlyDues.month,
-          amount: monthlyDues.amount,
           status: monthlyDues.status,
         })
         .from(monthlyDues)
@@ -168,7 +168,7 @@ export async function createResidentPaymentRequest(
             and(eq(billingYears.year, target.year), lte(monthlyDues.month, target.month)),
           ),
         ))
-        .orderBy(asc(billingYears.year), asc(monthlyDues.month))
+        .orderBy(asc(monthlyDues.id))
         .for("update", { of: monthlyDues });
 
       const replayAfterLock = await findIdempotentRequest(
@@ -179,20 +179,28 @@ export async function createResidentPaymentRequest(
       );
       if (replayAfterLock) return replayAfterLock;
 
+      const balances = await getDueFinancialBalances(
+        transaction as unknown as AppDatabase,
+        lockedDues.map((due) => due.id),
+      );
+      if (balances.length !== lockedDues.length) {
+        throw new PaymentRequestPeriodUnavailableError("Saldo iuran belum dapat dimuat. Silakan muat ulang halaman.");
+      }
+      const balanceByDueId = new Map(balances.map((balance) => [balance.monthlyDueId, balance]));
+
       const targetDue = lockedDues.find((due) => due.billingYear === target.year && due.month === target.month);
-      if (!targetDue || targetDue.status !== "unpaid" || targetDue.amount <= 0) {
+      const targetBalance = targetDue ? balanceByDueId.get(targetDue.id) : undefined;
+      if (!targetDue || !targetBalance || targetDue.status !== "unpaid" || targetBalance.outstanding <= 0) {
         throw new PaymentRequestPeriodUnavailableError("Bulan ini tidak dapat diajukan. Pilih bulan dengan status Belum bayar.");
       }
 
-      const unpaidDues = lockedDues.filter((due) => due.status === "unpaid" && due.amount > 0);
-      const dueIds = unpaidDues.map((due) => due.id);
-      const existingClaims = dueIds.length === 0
-        ? []
-        : await transaction
-            .select({ monthlyDueId: paymentRequestClaims.monthlyDueId })
-            .from(paymentRequestClaims)
-            .where(inArray(paymentRequestClaims.monthlyDueId, dueIds));
-      const claimedIds = new Set(existingClaims.map((claim) => claim.monthlyDueId));
+      const unpaidDues = lockedDues.filter((due) => {
+        const balance = balanceByDueId.get(due.id);
+        return due.status === "unpaid" && balance !== undefined && balance.outstanding > 0;
+      }).sort((left, right) => left.billingYear - right.billingYear || left.month - right.month);
+      const claimedIds = new Set(unpaidDues
+        .filter((due) => balanceByDueId.get(due.id)?.hasPendingRequest)
+        .map((due) => due.id));
       if (claimedIds.has(targetDue.id)) {
         throw new PaymentRequestConflictError("Bulan ini sudah menunggu konfirmasi.");
       }
@@ -202,7 +210,10 @@ export async function createResidentPaymentRequest(
         throw new PaymentRequestConflictError("Bulan ini sudah menunggu konfirmasi.");
       }
       const periods = eligibleDues.map((due) => canonicalPeriod(due.billingYear, due.month));
-      const totalAmount = eligibleDues.reduce((total, due) => total + due.amount, 0);
+      const totalAmount = eligibleDues.reduce(
+        (total, due) => total + (balanceByDueId.get(due.id)?.outstanding ?? 0),
+        0,
+      );
       if (!Number.isSafeInteger(totalAmount) || totalAmount <= 0) {
         throw new PaymentRequestPeriodUnavailableError("Jumlah iuran belum dapat dihitung. Silakan hubungi pengurus RT.");
       }
@@ -249,7 +260,7 @@ export async function createResidentPaymentRequest(
         householdId,
         monthlyDueId: due.id,
         period: periods[index],
-        amount: due.amount,
+        amount: balanceByDueId.get(due.id)!.outstanding,
       })));
 
       await transaction.insert(paymentRequestClaims).values(eligibleDues.map((due) => ({

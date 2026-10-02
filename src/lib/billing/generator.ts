@@ -112,43 +112,48 @@ export async function generateHouseholdDues(
   if (household.status === "active" && household.endsOn !== null) throw new Error("Active households cannot have an end date.");
   if (household.status === "inactive" && household.endsOn === null) throw new Error("Inactive households require an end date.");
 
-  const [year] = await database
-    .select({ id: billingYears.id, year: billingYears.year, status: billingYears.status, rtUnitId: billingYears.rtUnitId })
-    .from(billingYears)
-    .where(and(eq(billingYears.id, input.billingYearId), eq(billingYears.rtUnitId, rtUnitId)))
-    .limit(1);
-  if (!year) throw new Error("Billing year was not found in this RT.");
-  if (year.status !== "open") throw new Error("Monthly dues can only be generated for an open billing year.");
+  return database.transaction(async (transaction) => {
+    // Tariff inserts take FOR UPDATE on this row. Holding a share lock across
+    // the rate read and due inserts prevents a stale schedule from being used.
+    const [year] = await transaction
+      .select({ id: billingYears.id, year: billingYears.year, status: billingYears.status, rtUnitId: billingYears.rtUnitId })
+      .from(billingYears)
+      .where(and(eq(billingYears.id, input.billingYearId), eq(billingYears.rtUnitId, rtUnitId)))
+      .limit(1)
+      .for("share");
+    if (!year) throw new Error("Billing year was not found in this RT.");
+    if (year.status !== "open") throw new Error("Monthly dues can only be generated for an open billing year.");
 
-  const [settings] = await database
-    .select({ dueDay: rtSettings.dueDay })
-    .from(rtSettings)
-    .where(eq(rtSettings.rtUnitId, rtUnitId))
-    .limit(1);
-  if (!settings) throw new Error("RT billing settings were not found.");
+    const [settings] = await transaction
+      .select({ dueDay: rtSettings.dueDay })
+      .from(rtSettings)
+      .where(eq(rtSettings.rtUnitId, rtUnitId))
+      .limit(1);
+    if (!settings) throw new Error("RT billing settings were not found.");
 
-  const rates = await database
-    .select({ id: feeRates.id, effectiveMonth: feeRates.effectiveMonth, monthlyAmount: feeRates.monthlyAmount })
-    .from(feeRates)
-    .where(and(eq(feeRates.rtUnitId, rtUnitId), eq(feeRates.billingYearId, year.id)))
-    .orderBy(feeRates.effectiveMonth);
+    const rates = await transaction
+      .select({ id: feeRates.id, effectiveMonth: feeRates.effectiveMonth, monthlyAmount: feeRates.monthlyAmount })
+      .from(feeRates)
+      .where(and(eq(feeRates.rtUnitId, rtUnitId), eq(feeRates.billingYearId, year.id)))
+      .orderBy(feeRates.effectiveMonth);
 
-  const proposed = buildAnnualDues({
-    rtUnitId,
-    ...input,
-    year: year.year,
-    householdStartsOn: household.startsOn,
-    householdEndsOn: household.endsOn,
-    dueDay: settings.dueDay,
-    feeRates: rates,
+    const proposed = buildAnnualDues({
+      rtUnitId,
+      ...input,
+      year: year.year,
+      householdStartsOn: household.startsOn,
+      householdEndsOn: household.endsOn,
+      dueDay: settings.dueDay,
+      feeRates: rates,
+    });
+    const inserted = await transaction
+      .insert(monthlyDues)
+      .values(proposed)
+      .onConflictDoNothing({
+        target: [monthlyDues.householdId, monthlyDues.billingYearId, monthlyDues.month],
+      })
+      .returning({ id: monthlyDues.id, month: monthlyDues.month, status: monthlyDues.status });
+
+    return { insertedCount: inserted.length, rows: inserted };
   });
-  const inserted = await database
-    .insert(monthlyDues)
-    .values(proposed)
-    .onConflictDoNothing({
-      target: [monthlyDues.householdId, monthlyDues.billingYearId, monthlyDues.month],
-    })
-    .returning({ id: monthlyDues.id, month: monthlyDues.month, status: monthlyDues.status });
-
-  return { insertedCount: inserted.length, rows: inserted };
 }

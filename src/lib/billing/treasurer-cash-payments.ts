@@ -16,6 +16,7 @@ import {
 } from "@/db/schema";
 import { appendAuditEvent } from "@/lib/audit/writer";
 import type { Principal } from "@/lib/auth/permissions";
+import { getDueFinancialBalances } from "@/lib/billing/due-balance";
 import { jakartaBusinessDate } from "@/lib/officials/lifecycle";
 import { assertActiveTreasurer } from "@/lib/billing/treasurer-payment-requests";
 
@@ -186,20 +187,12 @@ async function readCashHousehold(
       year: billingYears.year,
       month: monthlyDues.month,
       dueId: monthlyDues.id,
-      amount: monthlyDues.amount,
-      hasClaim: sql<boolean>`${paymentRequestClaims.monthlyDueId} is not null and ${paymentRequests.id} is not null`,
-      requestStatus: paymentRequests.status,
+      status: monthlyDues.status,
     })
     .from(monthlyDues)
     .innerJoin(billingYears, and(
       eq(billingYears.id, monthlyDues.billingYearId),
       eq(billingYears.rtUnitId, monthlyDues.rtUnitId),
-    ))
-    .leftJoin(paymentRequestClaims, eq(paymentRequestClaims.monthlyDueId, monthlyDues.id))
-    .leftJoin(paymentRequests, and(
-      eq(paymentRequests.id, paymentRequestClaims.requestId),
-      eq(paymentRequests.rtUnitId, monthlyDues.rtUnitId),
-      eq(paymentRequests.householdId, monthlyDues.householdId),
     ))
     .where(and(
       eq(monthlyDues.rtUnitId, rtUnitId),
@@ -207,14 +200,23 @@ async function readCashHousehold(
       eq(monthlyDues.status, "unpaid"),
     ))
     .orderBy(asc(billingYears.year), asc(monthlyDues.month), asc(monthlyDues.id));
+  const balances = await getDueFinancialBalances(database, dues.map((due) => due.dueId));
+  if (balances.length !== dues.length) {
+    throw new CashPaymentLedgerInvariantError("Cash payment balances could not be loaded.");
+  }
+  const balanceByDueId = new Map(balances.map((balance) => [balance.monthlyDueId, balance]));
 
   return {
     ...normalizeHousehold(household),
-    unpaidPeriods: dues.map((due) => ({
-      period: canonicalPeriod(due.year, due.month),
-      amount: due.amount,
-      pendingConflict: Boolean(due.hasClaim && due.requestStatus === "pending"),
-    })),
+    unpaidPeriods: dues.flatMap((due) => {
+      const balance = balanceByDueId.get(due.dueId);
+      if (!balance || due.status !== "unpaid" || balance.status !== "unpaid" || balance.outstanding <= 0) return [];
+      return [{
+        period: canonicalPeriod(due.year, due.month),
+        amount: balance.outstanding,
+        pendingConflict: balance.hasPendingRequest,
+      }];
+    }),
   };
 }
 
@@ -381,12 +383,26 @@ export async function recordTreasurerCashPayment(
         .orderBy(asc(monthlyDues.id))
         .for("update", { of: monthlyDues });
 
+      const balances = await getDueFinancialBalances(transactionDatabase, lockedDues.map((due) => due.id));
+      if (balances.length !== lockedDues.length) {
+        throw new CashPaymentLedgerInvariantError("Cash payment balances could not be loaded.");
+      }
+      const balanceByDueId = new Map(balances.map((balance) => [balance.monthlyDueId, balance]));
+      if (lockedDues.some((due) => {
+        const balance = balanceByDueId.get(due.id);
+        return !balance || balance.status !== due.status ||
+          (due.status === "paid" ? balance.outstanding !== 0 : balance.outstanding <= 0);
+      })) {
+        throw new CashPaymentLedgerInvariantError("Due status does not match its current balance.");
+      }
+
       const targetDue = lockedDues.find((due) => due.year === targetYear && due.month === targetMonth);
-      if (!targetDue || targetDue.status !== "unpaid") {
+      const targetBalance = targetDue ? balanceByDueId.get(targetDue.id) : undefined;
+      if (!targetDue || !targetBalance || targetDue.status !== "unpaid" || targetBalance.outstanding <= 0) {
         throw new CashPaymentDueConflictError("Bulan yang dipilih tidak lagi memiliki tagihan belum lunas. Muat ulang data rumah.");
       }
       const dues = lockedDues
-        .filter((due) => due.status === "unpaid")
+        .filter((due) => due.status === "unpaid" && (balanceByDueId.get(due.id)?.outstanding ?? 0) > 0)
         .sort((left, right) => canonicalPeriod(left.year, left.month).localeCompare(canonicalPeriod(right.year, right.month)));
       if (dues.length === 0 || lockedDues.some((due) =>
         !["unpaid", "paid"].includes(due.status) || due.rtUnitId !== rtUnitId || due.householdId !== input.householdId ||
@@ -420,11 +436,14 @@ export async function recordTreasurerCashPayment(
       if (claims.some((claim) => claim.status === "pending")) {
         throw new CashPaymentPendingRequestConflictError("Ada permintaan pembayaran yang masih menunggu untuk bulan ini. Selesaikan atau tolak/batalkan permintaan tersebut lebih dulu.");
       }
+      if (dues.some((due) => balanceByDueId.get(due.id)?.hasPendingRequest)) {
+        throw new CashPaymentPendingRequestConflictError("Ada permintaan pembayaran yang masih menunggu untuk bulan ini. Selesaikan atau tolak/batalkan permintaan tersebut lebih dulu.");
+      }
       if (claims.length > 0) {
         throw new CashPaymentLedgerInvariantError("A terminal payment request retained an active claim.");
       }
 
-      const totalAmount = dues.reduce((sum, due) => sum + due.amount, 0);
+      const totalAmount = dues.reduce((sum, due) => sum + balanceByDueId.get(due.id)!.outstanding, 0);
       if (!Number.isSafeInteger(totalAmount) || totalAmount <= 0) {
         throw new CashPaymentLedgerInvariantError("Cash payment total is invalid.");
       }
@@ -451,7 +470,7 @@ export async function recordTreasurerCashPayment(
         paymentRequestId: null,
         paymentId: payment.id,
         monthlyDueId: due.id,
-        amount: due.amount,
+        amount: balanceByDueId.get(due.id)!.outstanding,
       }))).returning({ id: paymentAllocations.id, monthlyDueId: paymentAllocations.monthlyDueId, amount: paymentAllocations.amount });
       if (allocations.length !== dues.length) {
         throw new CashPaymentLedgerInvariantError("Cash payment allocation count does not match selected dues.");

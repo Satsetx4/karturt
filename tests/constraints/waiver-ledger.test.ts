@@ -5,7 +5,6 @@ import {
   appAccounts,
   auditEvents,
   billingYears,
-  feeRates,
   monthlyDues,
   officialAssignments,
   paymentRequests,
@@ -15,7 +14,7 @@ import {
 import { createResidentPaymentRequest } from "../../src/lib/billing/resident-payment-request";
 import { recordTreasurerCashPayment } from "../../src/lib/billing/treasurer-cash-payments";
 import type { Principal } from "../../src/lib/auth/permissions";
-import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
+import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 
 describe("waiver ledger database constraints", () => {
   let testDatabase: Awaited<ReturnType<typeof createTestDatabase>>;
@@ -37,12 +36,12 @@ describe("waiver ledger database constraints", () => {
     }).returning({ id: appAccounts.id });
     const [year] = await db.insert(billingYears).values({ rtUnitId, year: 2026, status: "open" })
       .returning({ id: billingYears.id });
-    const [rate] = await db.insert(feeRates).values({
+    const [rate] = await createFeeRateFixture(db, {
       rtUnitId,
       billingYearId: year!.id,
       effectiveMonth: 1,
       monthlyAmount: 40000,
-    }).returning({ id: feeRates.id });
+    });
     const dues = await db.insert(monthlyDues).values(months.map((month) => ({
       rtUnitId,
       householdId: household.householdId,
@@ -279,11 +278,19 @@ describe("waiver ledger database constraints", () => {
     })).rejects.toThrow();
 
     const notDueScenario = await createScenario([10]);
-    await testDatabase.db.update(monthlyDues).set({ status: "not_due", amount: 0, feeRateId: null })
-      .where(eq(monthlyDues.id, notDueScenario.dues[0]!.id));
+    const [notDueRow] = await testDatabase.db.insert(monthlyDues).values({
+      rtUnitId: notDueScenario.rtUnitId,
+      householdId: notDueScenario.householdId,
+      billingYearId: notDueScenario.billingYearId,
+      feeRateId: null,
+      month: 11,
+      amount: 0,
+      dueDate: "2026-11-10",
+      status: "not_due",
+    }).returning({ id: monthlyDues.id });
     await expect(testDatabase.db.update(monthlyDues)
       .set({ status: "waived", waivedReason: "Bukan kewajiban" })
-      .where(eq(monthlyDues.id, notDueScenario.dues[0]!.id))).rejects.toThrow();
+      .where(eq(monthlyDues.id, notDueRow!.id))).rejects.toThrow();
 
     const paidScenario = await createScenario([9]);
     const db = testDatabase.db;

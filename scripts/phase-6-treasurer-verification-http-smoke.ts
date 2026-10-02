@@ -34,7 +34,7 @@ import {
 import { requireDatabaseEnvironment } from "@/lib/env";
 import type { Principal } from "@/lib/auth/permissions";
 import { createResidentPaymentRequest } from "@/lib/billing/resident-payment-request";
-import { dueToken, duesSummary, residentStatusLabels } from "@/lib/billing/resident-card";
+import { dueToken, duesSummary, residentStatusLabels, type ResidentDue } from "@/lib/billing/resident-card";
 
 const target = {
   projectId: "billowing-base-57949906",
@@ -1357,10 +1357,17 @@ async function main() {
     cache: "no-store",
   });
   assert.equal(refreshedResponse.status, 200);
-  const refreshed = await refreshedResponse.json() as { dues: Array<{ billingYear: number; month: number; amount: number; dueDate: string; status: "paid" | "unpaid" | "waived" | "not_due"; paymentRequestStatus: "pending" | null }> };
+  const refreshed = await refreshedResponse.json() as { dues: ResidentDue[] };
   const primaryDues = refreshed.dues.filter((due) => [4, 5, 6].includes(due.month));
   assert.equal(primaryDues.length, 3);
   assert.ok(primaryDues.every((due) => due.status === "paid" && due.paymentRequestStatus === null));
+  assert.ok(primaryDues.every((due) =>
+    due.originalAmount === due.amount &&
+    due.adjustmentTotal === 0 &&
+    due.effectiveTarget === due.originalAmount &&
+    due.activeReceived === due.effectiveTarget &&
+    due.outstanding === 0
+  ));
   assert.equal(duesSummary(primaryDues).paid, 54000);
   assert.ok(primaryDues.every((due) => residentStatusLabels[dueToken(due)] === "Sudah bayar"));
 

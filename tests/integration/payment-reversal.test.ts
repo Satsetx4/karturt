@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AppDatabase } from "@/db/client";
@@ -7,7 +7,7 @@ import {
   appAccounts,
   auditEvents,
   billingYears,
-  feeRates,
+  dueAdjustments,
   monthlyDues,
   officialAssignments,
   paymentAllocations,
@@ -18,6 +18,8 @@ import {
 } from "@/db/schema";
 import type { Principal } from "@/lib/auth/permissions";
 import { getResidentPaymentHistory, getTreasurerPaymentHistory } from "@/lib/billing/payment-history";
+import { getDueFinancialBalances } from "@/lib/billing/due-balance";
+import { cancelResidentPaymentRequest } from "@/lib/billing/payment-request-resolution";
 import {
   createResidentPaymentRequest,
   PaymentRequestPeriodUnavailableError,
@@ -31,8 +33,9 @@ import {
   reverseTreasurerPayment,
   TreasurerPaymentAlreadyReversedError,
   TreasurerPaymentNotFoundError,
+  TreasurerPaymentReversalConflictError,
 } from "@/lib/billing/treasurer-payment-reversal";
-import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
+import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase, ensureTestChairman } from "../helpers/database";
 
 type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
 
@@ -98,12 +101,12 @@ describe("Treasurer payment reversal", () => {
       year: 2026,
       status: "open",
     }).returning({ id: billingYears.id });
-    const [feeRate] = await testDatabase.db.insert(feeRates).values({
+    const [feeRate] = await createFeeRateFixture(testDatabase.db, {
       rtUnitId,
       billingYearId: billingYear!.id,
       effectiveMonth: 1,
       monthlyAmount: 40000,
-    }).returning({ id: feeRates.id });
+    });
     const dueRows = await testDatabase.db.insert(monthlyDues).values(months.map((month) => ({
       rtUnitId,
       householdId: household.householdId,
@@ -241,6 +244,95 @@ describe("Treasurer payment reversal", () => {
       .where(eq(paymentReversals.paymentId, originalPayment!.id))).length).toBe(1);
     expect(activeOwners).toHaveLength(3);
     expect(activeOwners.every((owner) => owner.paymentId === replacement.id)).toBe(true);
+  });
+
+  it("releases only the reversed allocation after a paid due is adjusted and settled twice", async () => {
+    const scenario = await createScenario([1]);
+    const firstPaymentResult = await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: scenario.householdId,
+      period: "2026-01",
+      idempotencyKey: randomUUID(),
+    }, "2026-10-02");
+    const [firstPayment] = await testDatabase.db.select().from(payments)
+      .where(and(eq(payments.rtUnitId, scenario.rtUnitId), eq(payments.method, "cash")));
+
+    const chairmanAccountId = await ensureTestChairman(testDatabase.db, scenario.rtUnitId);
+    const dueId = scenario.dueIds[0]!;
+    const adjustmentId = randomUUID();
+    const adjustmentReason = "Penyesuaian setelah pembayaran pertama";
+    await testDatabase.db.transaction(async (transaction) => {
+      await transaction.insert(dueAdjustments).values({
+        id: adjustmentId,
+        rtUnitId: scenario.rtUnitId,
+        householdId: scenario.householdId,
+        monthlyDueId: dueId,
+        amountDelta: 10000,
+        effectiveTargetAfter: 50000,
+        reason: adjustmentReason,
+        adjustedByAccountId: chairmanAccountId,
+        adjustedByAccountType: "official",
+        idempotencyKey: randomUUID(),
+        requestFingerprint: createHash("sha256").update(adjustmentId).digest("hex"),
+      });
+      await transaction.update(monthlyDues).set({ status: "unpaid" })
+        .where(eq(monthlyDues.id, dueId));
+      await transaction.insert(auditEvents).values({
+        actorAppAccountId: chairmanAccountId,
+        action: "billing.adjustment_created",
+        entityType: "due_adjustment",
+        entityId: adjustmentId,
+        reason: adjustmentReason,
+        context: { amountDelta: 10000, effectiveTargetAfter: 50000, originalAmount: 40000 },
+      });
+    });
+
+    const pendingRequest = await createResidentPaymentRequest(database, scenario.residentPrincipal, {
+      period: "2026-01",
+      idempotencyKey: randomUUID(),
+    });
+    await expect(reverseTreasurerPayment(database, scenario.treasurerPrincipal, {
+      paymentId: firstPayment!.id,
+      reason: "Uji blokir reversal saat klaim aktif",
+    }, "2026-10-02")).rejects.toBeInstanceOf(TreasurerPaymentReversalConflictError);
+    expect(await testDatabase.db.select().from(paymentReversals)
+      .where(eq(paymentReversals.paymentId, firstPayment!.id))).toHaveLength(0);
+    await cancelResidentPaymentRequest(database, scenario.residentPrincipal, pendingRequest.requestCode);
+
+    const secondPaymentResult = await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: scenario.householdId,
+      period: "2026-01",
+      idempotencyKey: randomUUID(),
+    }, "2026-10-02");
+    const cashPayments = await testDatabase.db.select().from(payments)
+      .where(and(eq(payments.rtUnitId, scenario.rtUnitId), eq(payments.method, "cash")));
+    const currentSecondPayment = cashPayments.find((payment) => payment.id !== firstPayment!.id);
+    const firstAllocation = await testDatabase.db.select().from(paymentAllocations)
+      .where(eq(paymentAllocations.paymentId, firstPayment!.id));
+    const secondAllocation = await testDatabase.db.select().from(paymentAllocations)
+      .where(eq(paymentAllocations.paymentId, currentSecondPayment!.id));
+
+    await reverseTreasurerPayment(database, scenario.treasurerPrincipal, {
+      paymentId: firstPayment!.id,
+      reason: "Membalik penerimaan pertama untuk pemeriksaan saldo",
+    }, "2026-10-02");
+
+    const remainingOwners = await testDatabase.db.select().from(activeDueSettlements)
+      .where(eq(activeDueSettlements.monthlyDueId, dueId));
+    const [balance] = await getDueFinancialBalances(database, [dueId]);
+    const [due] = await testDatabase.db.select().from(monthlyDues).where(eq(monthlyDues.id, dueId));
+
+    expect(firstPaymentResult.totalAmount).toBe(40000);
+    expect(secondPaymentResult.totalAmount).toBe(10000);
+    expect(cashPayments).toHaveLength(2);
+    expect(firstAllocation).toMatchObject([{ amount: 40000 }]);
+    expect(secondAllocation).toMatchObject([{ amount: 10000 }]);
+    expect(remainingOwners).toMatchObject([{
+      allocationId: secondAllocation[0]!.id,
+      paymentId: currentSecondPayment!.id,
+      amount: 10000,
+    }]);
+    expect(balance).toMatchObject({ originalAmount: 40000, adjustmentTotal: 10000, effectiveTarget: 50000, activeReceived: 10000, outstanding: 40000 });
+    expect(due?.status).toBe("unpaid");
   });
 
   it("serializes concurrent reversals to one record and one audit, then rejects replay", async () => {

@@ -85,6 +85,13 @@
       "when": 1790911995336,
       "tag": "0011_phase_10_waiver",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790954578486,
+      "tag": "0012_phase_11_tariff_adjustment",
+      "breakpoints": true
     }
   ]
 }

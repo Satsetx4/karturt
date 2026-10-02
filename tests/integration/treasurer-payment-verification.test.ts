@@ -25,7 +25,7 @@ import {
 } from "@/lib/billing/treasurer-payment-verification";
 import { createResidentPaymentRequest } from "@/lib/billing/resident-payment-request";
 import { duesSummary } from "@/lib/billing/resident-card";
-import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
+import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 
 type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
 
@@ -91,12 +91,12 @@ describe("Treasurer payment verification", () => {
       year: 2026,
       status: "open",
     }).returning({ id: billingYears.id });
-    const [feeRate] = await testDatabase.db.insert(feeRates).values({
+    const [feeRate] = await createFeeRateFixture(testDatabase.db, {
       rtUnitId,
       billingYearId: billingYear!.id,
       effectiveMonth: 1,
       monthlyAmount: 40000,
-    }).returning({ id: feeRates.id });
+    });
     const dueRows = await testDatabase.db.insert(monthlyDues).values(months.map((month) => ({
       rtUnitId,
       householdId: residentHousehold.householdId,

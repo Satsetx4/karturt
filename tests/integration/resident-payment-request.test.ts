@@ -6,7 +6,7 @@ import {
   appAccounts,
   auditEvents,
   billingYears,
-  feeRates,
+  dueAdjustments,
   monthlyDues,
   officialAssignments,
   paymentRequestClaims,
@@ -22,13 +22,14 @@ import { resolvePrincipalForUser } from "../../src/lib/auth/principal";
 import { getResidentMonthlyDues } from "../../src/lib/billing/resident-dues";
 import { getResidentPaymentHistory } from "../../src/lib/billing/payment-history";
 import { createResidentPaymentWhatsAppLink } from "../../src/lib/billing/resident-payment-whatsapp";
+import { verifyTreasurerPaymentRequest } from "../../src/lib/billing/treasurer-payment-verification";
 import {
   createResidentPaymentRequest,
   PaymentRequestConflictError,
   PaymentRequestIdempotencyConflictError,
   PaymentRequestPeriodUnavailableError,
 } from "../../src/lib/billing/resident-payment-request";
-import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
+import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase, ensureTestChairman } from "../helpers/database";
 
 type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
 type DueInput = { period: string; status?: "unpaid" | "paid" | "waived" | "not_due"; amount?: number };
@@ -64,14 +65,11 @@ async function createVerifiedPaidHistory(
       householdId: input.householdId,
       requestedByAccountId: input.residentAccountId,
       requestedByAccountType: "resident",
-      status: "verified",
+      status: "pending",
       idempotencyKey: randomUUID(),
       requestFingerprint: createHash("sha256").update(`fixture:${requestCode}`).digest("hex"),
       totalAmount: input.amount,
       itemCount: 1,
-      verifiedByAccountId: treasurerAccount!.id,
-      verifiedByAccountType: "official",
-      verifiedAt: new Date(),
     });
     await transaction.insert(paymentRequestItems).values({
       requestId,
@@ -80,6 +78,10 @@ async function createVerifiedPaidHistory(
       monthlyDueId: input.dueId,
       period: input.period,
       amount: input.amount,
+    });
+    await transaction.insert(paymentRequestClaims).values({
+      requestId,
+      monthlyDueId: input.dueId,
     });
     const [payment] = await transaction.insert(payments).values({
       rtUnitId: input.rtUnitId,
@@ -113,9 +115,65 @@ async function createVerifiedPaidHistory(
       entityId: requestId,
       context: { itemCount: 1, totalAmount: input.amount },
     });
+    await transaction.update(paymentRequests).set({
+      status: "verified",
+      verifiedByAccountId: treasurerAccount!.id,
+      verifiedByAccountType: "official",
+      verifiedAt: new Date(),
+    }).where(eq(paymentRequests.id, requestId));
+    await transaction.delete(paymentRequestClaims).where(eq(paymentRequestClaims.requestId, requestId));
     await transaction.update(monthlyDues)
       .set({ status: "paid" })
       .where(eq(monthlyDues.id, input.dueId));
+  });
+}
+
+async function applyDueAdjustment(
+  database: TestDatabase["db"],
+  input: {
+    rtUnitId: string;
+    householdId: string;
+    dueId: string;
+    chairmanAccountId: string;
+    originalAmount: number;
+    amountDelta: number;
+    effectiveTargetAfter: number;
+    nextStatus?: "unpaid" | "paid";
+  },
+) {
+  const id = randomUUID();
+  const reason = "Penyesuaian iuran untuk skenario integrasi";
+  await database.transaction(async (transaction) => {
+    await transaction.insert(dueAdjustments).values({
+      id,
+      rtUnitId: input.rtUnitId,
+      householdId: input.householdId,
+      monthlyDueId: input.dueId,
+      amountDelta: input.amountDelta,
+      effectiveTargetAfter: input.effectiveTargetAfter,
+      reason,
+      adjustedByAccountId: input.chairmanAccountId,
+      adjustedByAccountType: "official",
+      idempotencyKey: randomUUID(),
+      requestFingerprint: createHash("sha256").update(`${id}:${input.amountDelta}`).digest("hex"),
+    });
+    if (input.nextStatus) {
+      await transaction.update(monthlyDues)
+        .set({ status: input.nextStatus })
+        .where(eq(monthlyDues.id, input.dueId));
+    }
+    await transaction.insert(auditEvents).values({
+      actorAppAccountId: input.chairmanAccountId,
+      action: "billing.adjustment_created",
+      entityType: "due_adjustment",
+      entityId: id,
+      reason,
+      context: {
+        amountDelta: input.amountDelta,
+        effectiveTargetAfter: input.effectiveTargetAfter,
+        originalAmount: input.originalAmount,
+      },
+    });
   });
 }
 
@@ -136,6 +194,7 @@ async function createResident(
   }).returning({ id: appAccounts.id });
 
   const periods = new Set((options.dues ?? []).map(({ period }) => Number(period.slice(0, 4))));
+  const chairmanAccountId = await ensureTestChairman(database, rtUnitId);
   const years = new Map<number, { id: string; feeRateId: string }>();
   const waivedFixtureRows: Array<{ id: string; period: string; amount: number }> = [];
   for (const year of [...periods].sort((a, b) => a - b)) {
@@ -144,12 +203,12 @@ async function createResident(
       year,
       status: year === Math.max(...periods) ? (options.latestBillingYearStatus ?? "open") : "closed",
     }).returning({ id: billingYears.id });
-    const [feeRate] = await database.insert(feeRates).values({
+    const [feeRate] = await createFeeRateFixture(database, {
       rtUnitId,
       billingYearId: billingYear.id,
       effectiveMonth: 1,
       monthlyAmount: 40000,
-    }).returning({ id: feeRates.id });
+    });
     years.set(year, { id: billingYear.id, feeRateId: feeRate.id });
   }
 
@@ -188,21 +247,7 @@ async function createResident(
 
   let waiverActorAccountId: string | null = null;
   if (waivedFixtureRows.length > 0) {
-    const chairmanUser = await createAuthUser(database, "Ketua RT Fixture");
-    const [chairmanAccount] = await database.insert(appAccounts).values({
-      rtUnitId,
-      authUserId: chairmanUser.id,
-      accountType: "official",
-      loginIdentifier: `chairman-${randomUUID().slice(0, 12)}`,
-      personId: household.personId,
-    }).returning({ id: appAccounts.id });
-    waiverActorAccountId = chairmanAccount!.id;
-    await database.insert(officialAssignments).values({
-      rtUnitId,
-      appAccountId: chairmanAccount!.id,
-      role: "rt_chairman",
-      startsOn: "2020-01-01",
-    });
+    waiverActorAccountId = chairmanAccountId;
 
     const reason = "approved waiver";
     const periods = waivedFixtureRows.map((row) => row.period).sort();
@@ -213,7 +258,7 @@ async function createResident(
         id: actionId,
         rtUnitId,
         householdId: household.householdId,
-        waivedByAccountId: chairmanAccount!.id,
+        waivedByAccountId: chairmanAccountId,
         waivedByAccountType: "official",
         reason,
         itemCount: waivedFixtureRows.length,
@@ -235,7 +280,7 @@ async function createResident(
         .set({ status: "waived", waivedReason: reason })
         .where(inArray(monthlyDues.id, waivedFixtureRows.map((row) => row.id)));
       await transaction.insert(auditEvents).values({
-        actorAppAccountId: chairmanAccount!.id,
+        actorAppAccountId: chairmanAccountId,
         action: "waiver.created",
         entityType: "waiver_action",
         entityId: actionId,
@@ -330,6 +375,105 @@ describe("resident payment request transactions", () => {
     const persistedDues = await db.select({ status: monthlyDues.status }).from(monthlyDues)
       .where(eq(monthlyDues.householdId, resident.householdId));
     expect(persistedDues.filter((due) => due.status === "unpaid")).toHaveLength(4);
+  });
+
+  it("snapshots the full effective outstanding after an adjustment made before payment", async () => {
+    const { db } = testDatabase;
+    const resident = await createResident(db, { dues: [
+      { period: "2026-01", amount: 40000 },
+      { period: "2026-12", status: "waived", amount: 40000 },
+    ] });
+    const [dueRow] = await db.select({ id: monthlyDues.id }).from(monthlyDues).where(and(
+      eq(monthlyDues.householdId, resident.householdId),
+      eq(monthlyDues.month, 1),
+    ));
+    await applyDueAdjustment(db, {
+      rtUnitId: resident.rtUnitId,
+      householdId: resident.householdId,
+      dueId: dueRow!.id,
+      chairmanAccountId: resident.waiverActorAccountId!,
+      originalAmount: 40000,
+      amountDelta: 10000,
+      effectiveTargetAfter: 50000,
+    });
+
+    const request = await createResidentPaymentRequest(db as never, resident.principal, {
+      period: "2026-01",
+      idempotencyKey: key(),
+    });
+    const [requestRow] = await db.select().from(paymentRequests)
+      .where(eq(paymentRequests.requestCode, request.requestCode));
+    const items = await db.select().from(paymentRequestItems)
+      .where(eq(paymentRequestItems.requestId, requestRow!.id));
+    const [residentDue] = await getResidentMonthlyDues(db as never, resident.principal);
+
+    expect(request.totalAmount).toBe(50000);
+    expect(items).toMatchObject([{ amount: 50000, period: "2026-01" }]);
+    expect(residentDue).toMatchObject({
+      originalAmount: 40000,
+      adjustmentTotal: 10000,
+      effectiveTarget: 50000,
+      activeReceived: 0,
+      outstanding: 50000,
+      paymentRequestStatus: "pending",
+    });
+  });
+
+  it("keeps an old paid amount immutable and requests only the new outstanding after adjustment", async () => {
+    const { db } = testDatabase;
+    const resident = await createResident(db, { dues: [
+      { period: "2026-01", status: "paid", amount: 40000 },
+      { period: "2026-12", status: "waived", amount: 40000 },
+    ] });
+    const [dueRow] = await db.select({ id: monthlyDues.id }).from(monthlyDues).where(and(
+      eq(monthlyDues.householdId, resident.householdId),
+      eq(monthlyDues.month, 1),
+    ));
+    await applyDueAdjustment(db, {
+      rtUnitId: resident.rtUnitId,
+      householdId: resident.householdId,
+      dueId: dueRow!.id,
+      chairmanAccountId: resident.waiverActorAccountId!,
+      originalAmount: 40000,
+      amountDelta: 10000,
+      effectiveTargetAfter: 50000,
+      nextStatus: "unpaid",
+    });
+
+    const request = await createResidentPaymentRequest(db as never, resident.principal, {
+      period: "2026-01",
+      idempotencyKey: key(),
+    });
+    const [treasurerAssignment] = await db.select({ appAccountId: officialAssignments.appAccountId })
+      .from(officialAssignments)
+      .where(and(
+        eq(officialAssignments.rtUnitId, resident.rtUnitId),
+        eq(officialAssignments.role, "treasurer"),
+      ))
+      .limit(1);
+    const [treasurerAccount] = await db.select({ authUserId: appAccounts.authUserId })
+      .from(appAccounts)
+      .where(eq(appAccounts.id, treasurerAssignment!.appAccountId));
+    const treasurerPrincipal = await resolvePrincipalForUser(db as never, treasurerAccount!.authUserId, "2026-06-18");
+    await verifyTreasurerPaymentRequest(db as never, treasurerPrincipal, request.requestCode, "2026-06-18");
+    const [requestRow] = await db.select().from(paymentRequests)
+      .where(eq(paymentRequests.requestCode, request.requestCode));
+    const items = await db.select().from(paymentRequestItems)
+      .where(eq(paymentRequestItems.requestId, requestRow!.id));
+    const history = await getResidentPaymentHistory(db as never, resident.principal);
+    const allDueAllocations = await db.select({ amount: paymentAllocations.amount })
+      .from(paymentAllocations)
+      .where(eq(paymentAllocations.monthlyDueId, dueRow!.id));
+
+    expect(request.totalAmount).toBe(10000);
+    expect(request.status).toBe("pending");
+    expect(items).toMatchObject([{ amount: 10000, period: "2026-01" }]);
+    expect(history.payments.map((payment) => payment.totalAmount).sort((left, right) => left - right)).toEqual([10000, 40000]);
+    expect(allDueAllocations.map((allocation) => allocation.amount).sort((left, right) => left - right)).toEqual([10000, 40000]);
+    expect(await db.select({ amount: monthlyDues.amount }).from(monthlyDues)
+      .where(eq(monthlyDues.id, dueRow!.id))).toMatchObject([{ amount: 40000 }]);
+    expect((await db.select({ status: monthlyDues.status }).from(monthlyDues)
+      .where(eq(monthlyDues.id, dueRow!.id)))[0]?.status).toBe("paid");
   });
 
   it("replays the same request for the same key and rejects a changed payload", async () => {

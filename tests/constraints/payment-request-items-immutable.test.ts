@@ -9,7 +9,6 @@ import {
   appAccounts,
   auditEvents,
   billingYears,
-  feeRates,
   monthlyDues,
   paymentRequestClaims,
   paymentRequestItems,
@@ -63,18 +62,18 @@ describe("payment request item snapshot migration", () => {
       year: 2026,
       status: "open",
     }).returning({ id: billingYears.id });
-    const [feeRate] = await database.insert(feeRates).values({
-      rtUnitId,
-      billingYearId: billingYear.id,
-      effectiveMonth: 1,
-      monthlyAmount: 40000,
-    }).returning({ id: feeRates.id });
+    const feeRateResult = await client.query<{ id: string }>(`
+      INSERT INTO fee_rates (rt_unit_id, billing_year_id, effective_month, monthly_amount)
+      VALUES ($1, $2, 1, 40000)
+      RETURNING id
+    `, [rtUnitId, billingYear.id]);
+    const feeRate = feeRateResult.rows[0];
 
     await database.insert(monthlyDues).values([1, 2].map((month) => ({
       rtUnitId,
       householdId: household.householdId,
       billingYearId: billingYear.id,
-      feeRateId: feeRate.id,
+      feeRateId: feeRate!.id,
       month,
       amount: 40000,
       dueDate: `2026-${String(month).padStart(2, "0")}-10`,
@@ -113,6 +112,10 @@ describe("payment request item snapshot migration", () => {
     await client.exec(readFileSync(resolve(migrationFolder, "0006_phase_6_treasurer_payment_ledger.sql"), "utf8"));
     await client.exec(readFileSync(resolve(migrationFolder, "0007_phase_7_reject_cancel.sql"), "utf8"));
     await client.exec(readFileSync(resolve(migrationFolder, "0008_phase_7_1_post_resolution_lifecycle.sql"), "utf8"));
+    await client.exec(readFileSync(resolve(migrationFolder, "0009_phase_8_cash_payment.sql"), "utf8"));
+    await client.exec(readFileSync(resolve(migrationFolder, "0010_phase_9_payment_reversal.sql"), "utf8"));
+    await client.exec(readFileSync(resolve(migrationFolder, "0011_phase_10_waiver.sql"), "utf8"));
+    await client.exec(readFileSync(resolve(migrationFolder, "0012_phase_11_tariff_adjustment.sql"), "utf8"));
 
     const principal = await resolvePrincipalForUser(database as never, auth.id, "2026-06-18");
 

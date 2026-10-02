@@ -12,12 +12,15 @@ import {
 } from "node:fs";
 import { once } from "node:events";
 import { tmpdir } from "node:os";
-import { basename, join, resolve, sep } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { build } from "esbuild";
 
 const root = process.cwd();
-const evidenceDirectory = resolve(root, "docs", "phase-5-1-evidence");
+const evidenceDirectory = resolve(root, process.env.KARTURT_BROWSER_EVIDENCE_DIR ?? "docs/phase-5-1-evidence");
+if (!evidenceDirectory.startsWith(`${root}${sep}`)) {
+  throw new Error("Browser smoke evidence must remain inside the repository.");
+}
 const screenshotRunId = new Date().toISOString().replace(/[:.]/g, "-");
 const savedScreenshots: string[] = [];
 const cssDirectory = join(root, ".next", "static", "chunks");
@@ -46,19 +49,55 @@ type FixtureDue = {
   billingYear: number;
   month: number;
   amount: number;
+  originalAmount: number;
+  adjustmentTotal: number;
+  effectiveTarget: number;
+  activeReceived: number;
+  outstanding: number;
   dueDate: string;
   status: "paid" | "unpaid" | "waived" | "not_due";
   paymentRequestStatus: "pending" | null;
 };
 
+function fixtureDue(
+  billingYear: number,
+  month: number,
+  amount: number,
+  status: FixtureDue["status"],
+  paymentRequestStatus: FixtureDue["paymentRequestStatus"] = null,
+): FixtureDue {
+  const activeReceived = status === "paid" ? amount : 0;
+  return {
+    billingYear,
+    month,
+    amount,
+    originalAmount: amount,
+    adjustmentTotal: 0,
+    effectiveTarget: amount,
+    activeReceived,
+    outstanding: amount - activeReceived,
+    dueDate: `${billingYear}-${String(month).padStart(2, "0")}-10`,
+    status,
+    paymentRequestStatus,
+  };
+}
+
 const dues: FixtureDue[] = [
-  { billingYear: 2025, month: 12, amount: 30000, dueDate: "2025-12-10", status: "unpaid", paymentRequestStatus: null },
-  { billingYear: 2026, month: 1, amount: 40000, dueDate: "2026-01-10", status: "paid", paymentRequestStatus: null },
-  { billingYear: 2026, month: 2, amount: 30000, dueDate: "2026-02-10", status: "unpaid", paymentRequestStatus: "pending" },
-  { billingYear: 2026, month: 3, amount: 40000, dueDate: "2026-03-10", status: "unpaid", paymentRequestStatus: null },
-  { billingYear: 2026, month: 4, amount: 40000, dueDate: "2026-04-10", status: "unpaid", paymentRequestStatus: null },
-  { billingYear: 2026, month: 5, amount: 40000, dueDate: "2026-05-10", status: "waived", paymentRequestStatus: null },
-  { billingYear: 2026, month: 6, amount: 0, dueDate: "2026-06-10", status: "not_due", paymentRequestStatus: null },
+  fixtureDue(2025, 12, 30000, "unpaid"),
+  fixtureDue(2026, 1, 40000, "paid"),
+  fixtureDue(2026, 2, 30000, "unpaid", "pending"),
+  fixtureDue(2026, 3, 40000, "unpaid"),
+  fixtureDue(2026, 4, 40000, "unpaid"),
+  fixtureDue(2026, 5, 40000, "waived"),
+  fixtureDue(2026, 6, 0, "not_due"),
+  {
+    ...fixtureDue(2026, 7, 50000, "unpaid"),
+    originalAmount: 40000,
+    adjustmentTotal: 10000,
+    effectiveTarget: 50000,
+    activeReceived: 40000,
+    outstanding: 10000,
+  },
 ];
 const originalPending = new Set(["2026-02"]);
 const claimedPeriods = new Set(originalPending);
@@ -105,6 +144,10 @@ function createMockServer(bundlePath: string) {
       json(response, 200, { dues: currentDues() });
       return;
     }
+    if (request.method === "GET" && url.pathname === "/api/resident/payment-history") {
+      json(response, 200, { payments: [], nextPage: null });
+      return;
+    }
     if (request.method === "POST" && url.pathname === "/api/resident/payment-requests") {
       postCount += 1;
       lastIdempotencyKey = String(request.headers["idempotency-key"] ?? "");
@@ -125,8 +168,8 @@ function createMockServer(bundlePath: string) {
         return;
       }
       const periods = dues
-        .filter((due) => due.status === "unpaid")
-        .map((due) => ({ period: `${due.billingYear}-${String(due.month).padStart(2, "0")}`, amount: due.amount }))
+        .filter((due) => due.status === "unpaid" && due.outstanding > 0)
+        .map((due) => ({ period: `${due.billingYear}-${String(due.month).padStart(2, "0")}`, amount: due.outstanding }))
         .filter((due) => due.period <= payload.period! && !claimedPeriods.has(due.period));
       if (!periods.some((due) => due.period === payload.period)) {
         json(response, 409, { message: "Bulan iuran berubah. Muat ulang halaman lalu periksa kembali." });
@@ -266,7 +309,9 @@ async function runBrowserSmoke() {
         if (await evaluate(expression)) return;
         await delay(100);
       }
-      throw new Error(message);
+      const currentText = await evaluate("document.body.innerText");
+      const metrics = await evaluate("fetch('/__metrics').then(response => response.json())");
+      throw new Error(`${message} Current page text: ${JSON.stringify(currentText)}; mock metrics: ${JSON.stringify(metrics)}.`);
     };
     const captureEvidence = async (name: string) => {
       const response = await command("Page.captureScreenshot", {
@@ -279,7 +324,7 @@ async function runBrowserSmoke() {
       mkdirSync(evidenceDirectory, { recursive: true });
       const filename = `${screenshotRunId}-${name}.png`;
       writeFileSync(join(evidenceDirectory, filename), Buffer.from(data as string, "base64"), { flag: "wx" });
-      savedScreenshots.push(join("docs", "phase-5-1-evidence", filename));
+      savedScreenshots.push(relative(root, join(evidenceDirectory, filename)));
     };
 
     await command("Page.enable");
@@ -298,10 +343,11 @@ async function runBrowserSmoke() {
       item.querySelector('strong').textContent,
     ]))()`);
     assert.deepEqual(initialSummary, [
-      ["Belum bayar", "Rp 110.000"],
+      ["Belum bayar", "Rp 120.000"],
       ["Menunggu konfirmasi", "Rp 30.000"],
-      ["Sudah bayar", "Rp 40.000"],
+      ["Sudah bayar", "Rp 80.000"],
     ]);
+    assert.match(String(await evaluate("document.body.innerText")), /Penyesuaian bersih Rp[\s\u00a0]10\.000\. Sisa kewajiban Rp[\s\u00a0]10\.000 belum dibayar\./);
     await captureEvidence("mobile-summary-390x844");
 
     const selection = await evaluate(`(() => {
@@ -335,7 +381,11 @@ async function runBrowserSmoke() {
       lastPayload: unknown;
       lastIdempotencyKey: string;
     };
-    assert.equal((result as { requestCode: boolean }).requestCode, true);
+    assert.equal(
+      (result as { requestCode: boolean }).requestCode,
+      true,
+      `Success state disappeared after its wait condition. Page text: ${JSON.stringify(await evaluate("document.body.innerText"))}`,
+    );
     assert.equal((result as { pendingText: boolean }).pendingText, true);
     assert.equal((result as { pendingIcon: boolean }).pendingIcon, true);
     assert.match(String((result as { whatsappHref: string }).whatsappHref), /^https:\/\/wa\.me\/628123456789\?text=/);
@@ -344,7 +394,10 @@ async function runBrowserSmoke() {
     assert.match(metrics.lastIdempotencyKey, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
 
     await command("Page.reload", { ignoreCache: true });
-    await waitFor("document.body.innerText.includes('Belum ada bulan dengan status') || document.body.innerText.includes('sedang menunggu konfirmasi')", "Read model did not reload after refresh.");
+    await waitFor(
+      "document.querySelectorAll('.due-card .status-pending').length === 3 && document.body.innerText.includes('Penyesuaian bersih')",
+      "Adjusted and pending balance read model did not reload after refresh.",
+    );
     const persisted = await evaluate(`(() => ({
       pendingCount: document.querySelectorAll('.due-card .status-pending').length,
       pendingText: [...document.querySelectorAll('.due-card .status-pending span')].map(item => item.textContent),
@@ -357,9 +410,9 @@ async function runBrowserSmoke() {
     assert.equal((persisted as { pendingCount: number }).pendingCount, 3, "Pending month status did not persist after refresh.");
     assert.deepEqual((persisted as { pendingText: string[] }).pendingText, ["Menunggu konfirmasi", "Menunggu konfirmasi", "Menunggu konfirmasi"]);
     assert.deepEqual((persisted as { summary: string[][] }).summary, [
-      ["Belum bayar", "Rp 0"],
+      ["Belum bayar", "Rp 10.000"],
       ["Menunggu konfirmasi", "Rp 140.000"],
-      ["Sudah bayar", "Rp 40.000"],
+      ["Sudah bayar", "Rp 80.000"],
     ]);
 
     for (const viewport of viewports) {
@@ -417,9 +470,11 @@ async function runBrowserSmoke() {
       assert.doesNotMatch(measured.text, /tanggal 10|jatuh tempo|2026-\d{2}-10|\b(PAID|UNPAID|WAIVED|NOT_DUE|PENDING)\b|payment_request/i);
       assert.doesNotMatch(measured.text, /Tunggakan|Total belum dibayar|Total sudah dibayar/i);
       assert.deepEqual(measured.summary.map(([label]) => label), ["Belum bayar", "Menunggu konfirmasi", "Sudah bayar"]);
-      assert.equal(measured.summary[0]?.[1], "Rp 0", "Pending amount leaked into Belum bayar.");
+      assert.equal(measured.summary[0]?.[1], "Rp 10.000", "Adjusted outstanding did not remain in Belum bayar.");
       assert.equal(measured.summary[1]?.[1], "Rp 140.000");
+      assert.equal(measured.summary[2]?.[1], "Rp 80.000");
       assert.match(measured.text, /Menunggu konfirmasi/);
+      assert.match(measured.text, /Penyesuaian bersih Rp[\s\u00a0]10\.000\. Sisa kewajiban Rp[\s\u00a0]10\.000 belum dibayar\./);
       if (viewport.width === 1440) await captureEvidence("desktop-pending-1440x900");
       console.info(`${viewport.width}x${viewport.height}: PASS, no overflow, 44px+ touch targets, icon+text pending status, no due date or technical token.`);
     }

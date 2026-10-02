@@ -131,6 +131,40 @@ function normalizeContext(action: string, context: AuditContext | undefined): Au
     return { itemCount, method, totalAmount };
   }
 
+  if (action === "fee_rate.created") {
+    if (keys.join(",") !== "monthlyAmount,period") {
+      throw new Error("Audit context fields do not match the action contract.");
+    }
+    const period = value.period;
+    const monthlyAmount = value.monthlyAmount;
+    if (typeof period !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+      throw new Error("Tariff audit period must be canonical.");
+    }
+    if (typeof monthlyAmount !== "number" || !Number.isSafeInteger(monthlyAmount) || monthlyAmount <= 0) {
+      throw new Error("Tariff audit amount must be a positive safe integer.");
+    }
+    return { period, monthlyAmount };
+  }
+
+  if (action === "billing.adjustment_created") {
+    if (keys.join(",") !== "amountDelta,effectiveTargetAfter,originalAmount") {
+      throw new Error("Audit context fields do not match the action contract.");
+    }
+    const amountDelta = value.amountDelta;
+    const effectiveTargetAfter = value.effectiveTargetAfter;
+    const originalAmount = value.originalAmount;
+    if (typeof amountDelta !== "number" || !Number.isSafeInteger(amountDelta) || amountDelta === 0) {
+      throw new Error("Adjustment audit delta must be a nonzero safe integer.");
+    }
+    if (typeof effectiveTargetAfter !== "number" || !Number.isSafeInteger(effectiveTargetAfter) || effectiveTargetAfter <= 0) {
+      throw new Error("Adjustment audit target must be a positive safe integer.");
+    }
+    if (typeof originalAmount !== "number" || !Number.isSafeInteger(originalAmount) || originalAmount <= 0) {
+      throw new Error("Adjustment audit original amount must be a positive safe integer.");
+    }
+    return { amountDelta, effectiveTargetAfter, originalAmount };
+  }
+
   if (action === "waiver.created") {
     if (keys.join(",") !== "itemCount,periods,totalAmount") {
       throw new Error("Audit context fields do not match the action contract.");
@@ -221,6 +255,12 @@ export async function appendAuditEvent<TTransaction extends TransactionExecutor>
   }
   if (action === "waiver.created" && (entityType !== "waiver_action" || reason === null)) {
     throw new Error("Waiver audit requires a waiver action entity and a reason.");
+  }
+  if (action === "fee_rate.created" && (entityType !== "fee_rate" || reason !== null)) {
+    throw new Error("Tariff creation audit requires a fee rate entity and no reason.");
+  }
+  if (action === "billing.adjustment_created" && (entityType !== "due_adjustment" || reason === null)) {
+    throw new Error("Adjustment audit requires a due adjustment entity and a mandatory reason.");
   }
   const safeContext = normalizeContext(action, input.context);
   if (Buffer.byteLength(JSON.stringify(safeContext), "utf8") > 2048) {

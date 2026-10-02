@@ -26,6 +26,7 @@
     "smoke:phase-7-http": "tsx scripts/phase-6-treasurer-verification-http-smoke.ts",
     "smoke:phase-8-http": "tsx scripts/phase-8-cash-payment-http-smoke.ts",
     "smoke:phase-9-http": "tsx scripts/phase-9-payment-reversal-http-smoke.ts",
+    "smoke:phase-11-http": "tsx scripts/phase-11-tariff-adjustment-http-smoke.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:check": "tsx scripts/check-db.ts",

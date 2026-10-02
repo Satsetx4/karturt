@@ -1,7 +1,13 @@
 export type ResidentDue = {
   billingYear: number;
   month: number;
+  /** Compatibility alias for the current effective target shown as the obligation amount. */
   amount: number;
+  originalAmount: number;
+  adjustmentTotal: number;
+  effectiveTarget: number;
+  activeReceived: number;
+  outstanding: number;
   dueDate: string;
   status: "paid" | "unpaid" | "waived" | "not_due";
   paymentRequestStatus?: "pending" | "verified" | "rejected" | "cancelled" | null;
@@ -67,16 +73,16 @@ export function yearMonths(dues: ResidentDue[], year: number) {
 export function duesSummary(dues: ResidentDue[]) {
   return dues.reduce(
     (total, due) => ({
-      paid: total.paid + (due.status === "paid" ? due.amount : 0),
+      paid: total.paid + (due.status === "paid" || due.status === "unpaid" ? due.activeReceived : 0),
       pending:
         total.pending +
         (due.status === "unpaid" && due.paymentRequestStatus === "pending"
-          ? due.amount
+          ? due.outstanding
           : 0),
       unpaid:
         total.unpaid +
         (due.status === "unpaid" && due.paymentRequestStatus !== "pending"
-          ? due.amount
+          ? due.outstanding
           : 0),
     }),
     { paid: 0, pending: 0, unpaid: 0 },

@@ -6,7 +6,6 @@ import {
   appAccounts,
   auditEvents,
   billingYears,
-  feeRates,
   monthlyDues,
   officialAssignments,
   paymentAllocations,
@@ -31,7 +30,7 @@ import {
   recordTreasurerCashPayment,
   searchTreasurerCashPaymentHouseholds,
 } from "@/lib/billing/treasurer-cash-payments";
-import { createAuthUser, createHousehold, createRt, createTestDatabase } from "../helpers/database";
+import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 
 type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
 
@@ -99,12 +98,12 @@ describe("Treasurer direct cash payment", () => {
         year,
         status: years.size === 0 ? "open" : "closed",
       }).returning({ id: billingYears.id });
-      const [feeRate] = await testDatabase.db.insert(feeRates).values({
+      const [feeRate] = await createFeeRateFixture(testDatabase.db, {
         rtUnitId,
         billingYearId: billingYear!.id,
         effectiveMonth: 1,
         monthlyAmount: 40000,
-      }).returning({ id: feeRates.id });
+      });
       years.set(year, `${billingYear!.id}:${feeRate!.id}`);
     }
     const dueRows = await testDatabase.db.insert(monthlyDues).values(periods.map((period) => {

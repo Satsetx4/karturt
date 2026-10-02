@@ -15,6 +15,7 @@ on:
       - "feat/phase-8-cash-payment"
       - "feat/phase-9-payment-reversal"
       - "feat/phase-10-waiver"
+      - "feat/phase-11-tariff-adjustment"
     paths-ignore:
       - "docs/test-gate-a-report.md"
   pull_request:

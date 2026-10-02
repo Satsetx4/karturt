@@ -6,7 +6,6 @@ import {
   appAccounts,
   auditEvents,
   billingYears,
-  feeRates,
   monthlyDues,
   officialAssignments,
   waiverActions,
@@ -24,6 +23,7 @@ import {
 import { isSameOriginMutation } from "@/app/api/chairman/waivers/response";
 import {
   createAuthUser,
+  createFeeRateFixture,
   createHousehold,
   createRt,
   createTestDatabase,
@@ -208,12 +208,12 @@ describe("waiver security and adversarial inputs", () => {
       year: 2026,
       status: "open",
     }).returning({ id: billingYears.id });
-    const [feeRate] = await testDatabase.db.insert(feeRates).values({
+    const [feeRate] = await createFeeRateFixture(testDatabase.db, {
       rtUnitId: fixture.rtUnitId,
       billingYearId: billingYear!.id,
       effectiveMonth: 1,
       monthlyAmount: 40000,
-    }).returning({ id: feeRates.id });
+    });
     await testDatabase.db.insert(monthlyDues).values({
       rtUnitId: fixture.rtUnitId,
       householdId: fixture.householdId,
