@@ -78,6 +78,19 @@ describe("role authorization", () => {
     expect(canPerform(principal("treasurer"), "resident:reset_credential", { rtUnitId: "rt-one" })).toBe(false);
   });
 
+  it("limits waiver management to a Chairman scoped to the same RT", () => {
+    expect(canPerform(principal("rt_chairman"), "waiver:manage", { rtUnitId: "rt-one" })).toBe(true);
+    expect(canPerform(principal("rt_chairman"), "waiver:manage", { rtUnitId: "rt-two" })).toBe(false);
+    expect(canPerform(principal("rt_chairman", { rtUnitId: null }), "waiver:manage", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("treasurer"), "waiver:manage", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("resident"), "waiver:manage", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(
+      principal("system_admin", { rtUnitId: null, householdId: null, personId: null }),
+      "waiver:manage",
+      { rtUnitId: "rt-one" },
+    )).toBe(false);
+  });
+
   it("limits System Admin to system recovery and auditing", () => {
     const administrator = principal("system_admin", { rtUnitId: null, householdId: null, personId: null });
     expect(canPerform(administrator, "system:recover")).toBe(true);

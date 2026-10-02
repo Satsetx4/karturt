@@ -131,6 +131,30 @@ function normalizeContext(action: string, context: AuditContext | undefined): Au
     return { itemCount, method, totalAmount };
   }
 
+  if (action === "waiver.created") {
+    if (keys.join(",") !== "itemCount,periods,totalAmount") {
+      throw new Error("Audit context fields do not match the action contract.");
+    }
+    const itemCount = value.itemCount;
+    const periods = value.periods;
+    const totalAmount = value.totalAmount;
+    const periodList = typeof periods === "string" ? periods.split(",") : [];
+    if (
+      periodList.length === 0 ||
+      periodList.some((period) => !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) ||
+      periodList.some((period, index) => index > 0 && periodList[index - 1] >= period)
+    ) {
+      throw new Error("Audit waiver periods must be canonical and ordered.");
+    }
+    if (typeof itemCount !== "number" || !Number.isSafeInteger(itemCount) || itemCount !== periodList.length) {
+      throw new Error("Audit waiver item count must match its periods.");
+    }
+    if (typeof totalAmount !== "number" || !Number.isSafeInteger(totalAmount) || totalAmount <= 0) {
+      throw new Error("Audit waiver total must be a positive safe integer.");
+    }
+    return { itemCount, periods: periods as string, totalAmount };
+  }
+
   if (action === "resident.pin.reset" || recoveryActions.has(action)) {
     if (keys.join(",") !== "recoveryReference,revokedSessionCount") {
       throw new Error("Audit context fields do not match the action contract.");
@@ -194,6 +218,9 @@ export async function appendAuditEvent<TTransaction extends TransactionExecutor>
   }
   if (action === "payment.reversed" && (entityType !== "payment" || reason === null)) {
     throw new Error("Payment reversal audit requires a payment entity and a reason.");
+  }
+  if (action === "waiver.created" && (entityType !== "waiver_action" || reason === null)) {
+    throw new Error("Waiver audit requires a waiver action entity and a reason.");
   }
   const safeContext = normalizeContext(action, input.context);
   if (Buffer.byteLength(JSON.stringify(safeContext), "utf8") > 2048) {
