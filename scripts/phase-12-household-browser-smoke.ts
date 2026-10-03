@@ -217,9 +217,28 @@ async function savedCookieGet(path: string, cookie: string) {
 
 async function loginThroughBrowser(kind: "warga" | "pengurus", identifier: string, password: string) {
   await navigate("/login/" + kind, { width: 390, height: 844 });
-  await setInput("#login-identifier", identifier);
-  await setInput("#login-password", password);
+  await waitFor("Boolean(document.querySelector('#login-identifier') && document.querySelector('#login-password') && document.querySelector('button.login-submit'))", "Login form controls were not ready.");
+  await delay(350);
+  assert.equal(await setInput("#login-identifier", identifier), true, "Login identifier control was unavailable.");
+  assert.equal(await setInput("#login-password", password), true, "Login password control was unavailable.");
   await click("button.login-submit");
+  try {
+    await waitFor("location.pathname.startsWith('/app') || Boolean(document.querySelector('[role=alert]'))", "Login response was not rendered.");
+  } catch {
+    safeDiagnostics = {
+      loginPath: "/login/" + kind,
+      browserPath: await evaluate<string>("location.pathname"),
+      loginFormVisible: await evaluate<boolean>("Boolean(document.querySelector('#login-identifier'))"),
+      friendlyAlertVisible: await evaluate<boolean>("Boolean(document.querySelector('[role=alert]'))"),
+      loginApiStatuses: authStatuses,
+    };
+    throw new Error("Login response was not rendered.");
+  }
+  const loginOutcome = await evaluate<{ path: string; alertVisible: boolean }>("({path:location.pathname,alertVisible:Boolean(document.querySelector('[role=alert]'))})");
+  if (!loginOutcome.path.startsWith("/app")) {
+    safeDiagnostics = { loginPath: "/login/" + kind, browserPath: loginOutcome.path, friendlyAlertVisible: loginOutcome.alertVisible, loginApiStatuses: authStatuses };
+    throw new Error("Synthetic login was rejected.");
+  }
 }
 
 async function reuseSyntheticChairmanFixture(rotateCredential = true) {
