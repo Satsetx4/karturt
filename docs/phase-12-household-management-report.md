@@ -13,7 +13,8 @@ Implementasi tersedia pada branch fitur dan seluruh pemeriksaan lokal serta audi
 - Branch: `feat/phase-12-household-management`
 - Commit implementasi: `16f4b4b87b8e2c9d7070bb7dc8a0d2edc18b3e17`
 - Commit message: `feat: implement phase 12 household management`
-- CI Gate A run pada SHA implementasi: [37109357295](https://github.com/Satsetx4/karturt/actions/runs/37109357295) — status terakhir saat penulisan: **in progress**.
+- CI Gate A pada SHA implementasi lulus: [run 37109357295](https://github.com/Satsetx4/karturt/actions/runs/37109357295). Full suite, migration journal/drift checks, dan production build berhasil.
+- CI Gate A pada revisi laporan pertama `e636f681a1dd2b884821f124d34ae3e0ec4505b0` juga lulus: [run 37109493645](https://github.com/Satsetx4/karturt/actions/runs/37109493645).
 - Tidak ada perubahan atau merge ke `main`; production tidak disentuh; F13 tidak dimulai.
 - Source contract yang dibekukan sebelum implementasi: [phase-12-household-management-design.md](phase-12-household-management-design.md).
 
@@ -71,7 +72,8 @@ Tanggal mulai tidak dapat diedit setelah pembuatan. Deactivate dan replace memer
 | Schema drift generation check | PASS — tidak ada perubahan schema baru |
 | Clean migration dan upgrade | PASS |
 | Targeted lifecycle/history/security/concurrency suites | PASS |
-| GitHub Actions pada commit implementasi | **In progress saat laporan disiapkan** |
+| GitHub Actions pada commit implementasi | PASS — run 37109357295 |
+| GitHub Actions pada revisi laporan pertama | PASS — run 37109493645 |
 
 ## HTTP dan browser
 
