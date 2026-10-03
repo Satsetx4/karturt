@@ -215,15 +215,19 @@ async function savedCookieGet(path: string, cookie: string) {
   return response.status;
 }
 
-async function loginThroughBrowser(kind: "warga" | "pengurus", identifier: string, password: string) {
+async function loginThroughBrowser(kind: "warga" | "pengurus", identifier: string, password: string, expectedOutcome: "success" | "failure" = "success") {
   await navigate("/login/" + kind, { width: 390, height: 844 });
   await waitFor("Boolean(document.querySelector('#login-identifier') && document.querySelector('#login-password') && document.querySelector('button.login-submit'))", "Login form controls were not ready.");
   await delay(350);
   assert.equal(await setInput("#login-identifier", identifier), true, "Login identifier control was unavailable.");
   assert.equal(await setInput("#login-password", password), true, "Login password control was unavailable.");
   await click("button.login-submit");
+  const expectedApiPath = kind === "warga" ? "/api/login/resident" : "/api/login/official";
+  const expectedResponseStatus = expectedOutcome === "success" ? 200 : 401;
   try {
-    await waitFor("location.pathname.startsWith('/app') || Boolean(document.querySelector('[role=alert]'))", "Login response was not rendered.");
+    await waitFor(expectedOutcome === "success"
+      ? "location.pathname.startsWith('/app')"
+      : "Boolean(document.querySelector('[role=alert]'))", "Expected login outcome was not rendered.");
   } catch {
     safeDiagnostics = {
       loginPath: "/login/" + kind,
@@ -232,12 +236,16 @@ async function loginThroughBrowser(kind: "warga" | "pengurus", identifier: strin
       friendlyAlertVisible: await evaluate<boolean>("Boolean(document.querySelector('[role=alert]'))"),
       loginApiStatuses: authStatuses,
     };
-    throw new Error("Login response was not rendered.");
+    throw new Error("Expected login outcome was not rendered.");
   }
   const loginOutcome = await evaluate<{ path: string; alertVisible: boolean }>("({path:location.pathname,alertVisible:Boolean(document.querySelector('[role=alert]'))})");
-  if (!loginOutcome.path.startsWith("/app")) {
-    safeDiagnostics = { loginPath: "/login/" + kind, browserPath: loginOutcome.path, friendlyAlertVisible: loginOutcome.alertVisible, loginApiStatuses: authStatuses };
-    throw new Error("Synthetic login was rejected.");
+  const responseStatus = authStatuses[expectedApiPath]?.at(-1) ?? null;
+  const outcomeMatches = expectedOutcome === "success"
+    ? loginOutcome.path.startsWith("/app") && responseStatus === expectedResponseStatus
+    : loginOutcome.alertVisible && responseStatus === expectedResponseStatus;
+  if (!outcomeMatches) {
+    safeDiagnostics = { loginPath: "/login/" + kind, expectedOutcome, browserPath: loginOutcome.path, friendlyAlertVisible: loginOutcome.alertVisible, responseStatus };
+    throw new Error("Synthetic login did not match its expected outcome.");
   }
 }
 
@@ -1652,7 +1660,7 @@ async function main() {
     const editPersistedInDatabase = postHouse.resident?.fullName === rename;
     assert.equal(editPersistedInDatabase, true, "Resident edit did not persist the synthetic resident name in the development database.");
     stage = "resident authenticates with original PIN in browser";
-    await loginThroughBrowser("warga", newHouseNumber, newPin);
+    await loginThroughBrowser("warga", newHouseNumber, newPin, "failure");
     await waitFor("location.pathname === '/app'", "Synthetic resident login with the original PIN did not complete.");
     const oldResidentCookie = await currentResidentSessionCookie();
     const oldSessionCountBeforeReset = await activeResidentSessionCount(postHouse.resident.authUserId!);
