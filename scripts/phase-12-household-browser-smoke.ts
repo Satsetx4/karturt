@@ -1139,7 +1139,12 @@ async function continueHouseholdLifecycleSmoke(sourceHead: string) {
     await setInput("#household-replace-pin", replacementPin);
     await setInput("#household-replace-reason", "F12 QA same-house boundary replacement");
     await click("button", "Tinjau pergantian");
-    await waitFor("Boolean(document.querySelector('.chairman-household-confirm')?.innerText.includes('tunggakan dan pembayaran lama tidak dipindahkan'))", "Same-house replacement confirmation did not explain debt preservation.");
+    try {
+      await waitFor("Boolean(document.querySelector('.chairman-household-confirm')?.innerText.match(/tunggakan dan pembayaran lama tidak dipindahkan/i))", "Same-house replacement confirmation did not explain debt preservation.");
+    } catch {
+      safeDiagnostics = await evaluate<Record<string, unknown>>("(() => {const text=document.querySelector('.chairman-household-confirm')?.innerText||'';const form=document.querySelector('.chairman-household-inline-form');return {path:location.pathname,replacementFormVisible:Boolean(document.querySelector('#household-replace-month')),confirmationVisible:Boolean(document.querySelector('.chairman-household-confirm')),debtPreservationCopyVisible:/tunggakan dan pembayaran lama tidak dipindahkan/i.test(text),friendlyAlertVisible:Boolean(document.querySelector('[role=alert]')),invalidControlIds:[...document.querySelectorAll('.chairman-household-inline-form input,.chairman-household-inline-form select')].filter(e=>!e.checkValidity()).map(e=>e.id).filter(Boolean),replacementFormMounted:Boolean(form)};})()");
+      throw new Error("Same-house replacement confirmation did not explain debt preservation.");
+    }
     formViewportResults.push(...await checkCurrentViewports("same-house replacement confirmation"));
     const replacementReviewFacts = await evaluate<{ confirmationVisible: boolean; monthVisible: boolean; doubleClickButtonVisible: boolean; internalErrorVisible: boolean }>("(() => {const text=document.querySelector('.chairman-household-confirm')?.innerText||'';const page=document.body.innerText||'';return {confirmationVisible:Boolean(document.querySelector('.chairman-household-confirm')),monthVisible:/Desember 2026|December 2026/i.test(text),doubleClickButtonVisible:[...document.querySelectorAll('button')].some(e=>e.textContent?.includes('Ya, ganti warga')),internalErrorVisible:/SQLSTATE|stack trace|DATABASE_URL|postgres/i.test(page)}})()");
     assert.equal(replacementReviewFacts.confirmationVisible, true, "Replacement review confirmation is not visible.");
