@@ -1660,7 +1660,7 @@ async function main() {
     const editPersistedInDatabase = postHouse.resident?.fullName === rename;
     assert.equal(editPersistedInDatabase, true, "Resident edit did not persist the synthetic resident name in the development database.");
     stage = "resident authenticates with original PIN in browser";
-    await loginThroughBrowser("warga", newHouseNumber, newPin, "failure");
+    await loginThroughBrowser("warga", newHouseNumber, newPin);
     await waitFor("location.pathname === '/app'", "Synthetic resident login with the original PIN did not complete.");
     const oldResidentCookie = await currentResidentSessionCookie();
     const oldSessionCountBeforeReset = await activeResidentSessionCount(postHouse.resident.authUserId!);
@@ -1719,7 +1719,7 @@ async function main() {
     };
     writeEvidence("agent-a-" + runId + "-pin-session-evidence.json", pinSessionEvidence);
     stage = "old PIN is rejected after reset";
-    await loginThroughBrowser("warga", newHouseNumber, newPin);
+    await loginThroughBrowser("warga", newHouseNumber, newPin, "failure");
     await waitFor("Boolean(document.querySelector('.login-form [role=alert]'))", "Old resident PIN unexpectedly succeeded after reset.");
     const oldPinErrorIsGeneric = await evaluate<boolean>("/belum cocok|periksa kembali/i.test(document.querySelector('.login-form [role=alert]')?.innerText||'')");
     assert.equal(oldPinErrorIsGeneric, true, "Old PIN rejection did not use a generic safe login error.");
