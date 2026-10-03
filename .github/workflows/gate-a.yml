@@ -17,6 +17,7 @@ on:
       - "feat/phase-10-waiver"
       - "feat/phase-11-tariff-adjustment"
       - "feat/phase-12-household-management"
+      - "fix/phase-12-1-acceptance-closure"
     paths-ignore:
       - "docs/test-gate-a-report.md"
   pull_request:
