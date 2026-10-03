@@ -55,6 +55,8 @@ active received = 40,000 + 50,000 + 40,000 = 130,000
 outstanding = 260,000 - 130,000 = 130,000 (Apr 40,000 + May 40,000 + Aug 50,000)
 ```
 
+The PGlite balance-oracle fixture materializes these eight periods across eight isolated households so each business-flow cash call targets exactly one due. This changes fixture identity only; every period amount, status, adjustment, receipt, and aggregate above remains the same. The resident read-model comparison therefore reads each period for its corresponding fixture household rather than testing a single household's multi-period screen.
+
 The balance-oracle test must compare (1) these constants and per-period expectations, (2) an independently authored SQL aggregation over the test database, and (3) the application read model. Any variation required by fixture constraints must preserve this exact arithmetic/status meaning and be disclosed here and in the final report before the test is accepted.
 
 ## Work ownership and subagent checkpoints

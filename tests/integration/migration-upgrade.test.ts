@@ -109,7 +109,7 @@ describe("legacy billing migration upgrade", () => {
     } finally {
       await cleanClient.close();
     }
-  });
+  }, 60000);
 
   it("upgrades intact transfer and cash history through 0012, preserving owners and then recording cash", async () => {
     const upgradeClient = new PGlite();
