@@ -534,7 +534,8 @@ async function readQaTreasurer(rtUnitId: string, businessDate: string) {
     JOIN public.official_assignments assignment
       ON assignment.rt_unit_id = account.rt_unit_id AND assignment.app_account_id = account.id
     WHERE account.rt_unit_id = '${rtUnitId}'::uuid AND account.account_type = 'official'
-      AND account.status = 'active' AND assignment.role = 'treasurer'
+      AND account.status = 'active' AND account.login_identifier LIKE 'F12QA-TREASURER-%'
+      AND assignment.role = 'treasurer'
       AND assignment.starts_on <= '${businessDate}'::date
       AND (assignment.ends_on IS NULL OR assignment.ends_on >= '${businessDate}'::date)
     ORDER BY account.created_at LIMIT 1
@@ -831,8 +832,11 @@ async function continueHouseholdLifecycleSmoke(sourceHead: string) {
   if (!deactivationCandidate) throw new Error("No separate synthetic QA household was available for deactivation.");
   const foreignTarget = await readForeignQaHousehold(fixture.rtUnitId);
   const treasurerOverlapBefore = await treasurerOverlapCount(fixture.rtUnitId);
-  if (treasurerOverlapBefore !== 0) throw new Error("A Treasurer assignment overlaps the proposed QA date range; no Treasurer fixture mutation was started.");
-  if (await readQaTreasurer(fixture.rtUnitId, "2026-11-11")) throw new Error("An active synthetic Treasurer already exists for the simulated business date; no credential was changed.");
+  const reusableTreasurerBefore = await readQaTreasurer(fixture.rtUnitId, "2026-11-11");
+  if ((treasurerOverlapBefore === 0 && reusableTreasurerBefore) ||
+      (treasurerOverlapBefore !== 0 && (treasurerOverlapBefore !== 1 || !reusableTreasurerBefore))) {
+    throw new Error("A real or ambiguous Treasurer assignment overlaps the proposed QA date range; no Treasurer fixture credential was changed.");
+  }
   const screenshotNames: string[] = [];
   const formViewportResults: Array<{ state: string; width: number; height: number; overflow: boolean; undersizedTargets: UndersizedTarget[] }> = [];
   const results: Record<string, unknown> = {
@@ -842,11 +846,13 @@ async function continueHouseholdLifecycleSmoke(sourceHead: string) {
   const resetPin = String(randomInt(100000, 1000000));
   const replacementPin = String(randomInt(100000, 1000000));
   const deactivationPin = String(randomInt(100000, 1000000));
+  const treasurerProbePin = String(randomInt(100000, 1000000));
   const replacementName = "F12 QA replacement Resident " + runId.slice(0, 8).toUpperCase();
   const beforeConflictState = await readLifecycleState(conflictCandidate.household_id);
   const beforeReplacementState = await readLifecycleState(replacementCandidate.household_id);
   const beforeDeactivationState = await readLifecycleState(deactivationCandidate.household_id);
   if (!beforeConflictState.personId || !beforeConflictState.accountId || beforeConflictState.accountStatus !== "active" ||
+      !beforeConflictState.authUserId ||
       !beforeReplacementState.personId || !beforeReplacementState.accountId || beforeReplacementState.accountStatus !== "active" ||
       !beforeDeactivationState.personId || !beforeDeactivationState.accountId || beforeDeactivationState.accountStatus !== "active") {
     throw new Error("A reusable synthetic QA lifecycle fixture did not have one active resident account.");
@@ -881,7 +887,11 @@ async function continueHouseholdLifecycleSmoke(sourceHead: string) {
     profile = await startBrowser();
     stage = "repeat Treasurer interval and assignment preflight immediately before writes";
     const treasurerOverlapAtMutation = await treasurerOverlapCount(fixture.rtUnitId);
-    if (treasurerOverlapAtMutation !== 0 || await readQaTreasurer(fixture.rtUnitId, "2026-11-11")) {
+    const reusableTreasurerAtMutation = await readQaTreasurer(fixture.rtUnitId, "2026-11-11");
+    if ((treasurerOverlapAtMutation === 0 && reusableTreasurerAtMutation) ||
+        (treasurerOverlapAtMutation !== 0 && (treasurerOverlapAtMutation !== 1 || !reusableTreasurerAtMutation ||
+          reusableTreasurerAtMutation.account_id !== reusableTreasurerBefore?.account_id ||
+          reusableTreasurerAtMutation.auth_user_id !== reusableTreasurerBefore?.auth_user_id))) {
       throw new Error("Treasurer assignment preflight changed before fixture setup; no credential or assignment write was started.");
     }
     stage = "rotate only the selected synthetic Chairman credential after all read-only prerequisites pass";
@@ -889,12 +899,22 @@ async function continueHouseholdLifecycleSmoke(sourceHead: string) {
       .where(and(eq(authAccount.userId, fixture.authUserId), eq(authAccount.providerId, "credential")))
       .returning({ id: authAccount.id });
     if (chairmanCredentialRows.length !== 1) throw new Error("Synthetic Chairman credential was not uniquely reusable after preflight.");
-    stage = "create isolated synthetic Treasurer after proving no overlapping assignment";
-    const createdTreasurer = await createSyntheticTreasurer(fixture.rtUnitId, fixture.personId);
-    treasurerPassword = createdTreasurer.password;
-    treasurer = await readQaTreasurer(fixture.rtUnitId, "2026-11-11");
-    if (!treasurer || treasurer.account_id !== createdTreasurer.accountId || treasurer.auth_user_id !== createdTreasurer.authUserId || treasurer.login_identifier !== createdTreasurer.loginIdentifier) {
-      throw new Error("Synthetic Treasurer assignment did not become valid for the simulated business date.");
+    if (reusableTreasurerAtMutation) {
+      stage = "rotate credential for the existing synthetic Treasurer only";
+      treasurerPassword = randomBytes(24).toString("base64url");
+      const credentialRows = await getDb().update(authAccount).set({ password: await hashPassword(treasurerPassword) })
+        .where(and(eq(authAccount.userId, reusableTreasurerAtMutation.auth_user_id), eq(authAccount.providerId, "credential")))
+        .returning({ id: authAccount.id });
+      if (credentialRows.length !== 1) throw new Error("Synthetic Treasurer credential was not uniquely reusable.");
+      treasurer = reusableTreasurerAtMutation;
+    } else {
+      stage = "create isolated synthetic Treasurer after proving no overlapping assignment";
+      const createdTreasurer = await createSyntheticTreasurer(fixture.rtUnitId, fixture.personId);
+      treasurerPassword = createdTreasurer.password;
+      treasurer = await readQaTreasurer(fixture.rtUnitId, "2026-11-11");
+      if (!treasurer || treasurer.account_id !== createdTreasurer.accountId || treasurer.auth_user_id !== createdTreasurer.authUserId || treasurer.login_identifier !== createdTreasurer.loginIdentifier) {
+        throw new Error("Synthetic Treasurer assignment did not become valid for the simulated business date.");
+      }
     }
     stage = "Chairman login and household list for lifecycle continuation";
     await loginThroughBrowser("pengurus", fixture.identifier, fixture.password);
@@ -992,13 +1012,20 @@ async function continueHouseholdLifecycleSmoke(sourceHead: string) {
     let treasurerEvidence: Record<string, unknown>;
     if (treasurer) {
       stage = "verify synthetic Treasurer household and PIN reset authorization denials";
-      const resetEventsBefore = await residentAuditState(beforeReplacementState.accountId);
-      const residentSessionsBefore = await activeResidentSessionCount(beforeReplacementState.authUserId!);
+      const resetEventsBefore = await residentAuditState(beforeConflictState.accountId!);
+      const residentSessionsBefore = await activeResidentSessionCount(beforeConflictState.authUserId!);
       await loginThroughBrowser("pengurus", treasurer.login_identifier, treasurerPassword);
       await waitFor("location.pathname.startsWith('/app')", "Synthetic Treasurer login did not complete.");
-      const treasurerAccess = await evaluate<{ householdStatus: number; householdGeneric: boolean; resetStatus: number; resetGeneric: boolean; responseLeak: boolean }>("(async()=>{const list=await fetch('/api/chairman/households',{cache:'no-store'});const reset=await fetch(" + JSON.stringify("/api/residents/" + beforeReplacementState.accountId + "/reset-pin") + ",{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({})});const listBody=await list.text(),resetBody=await reset.text(),generic=/pengelolaan rumah|tidak memiliki|tidak berwenang|tidak diizinkan|akses|forbidden|unauthorized|silakan masuk/i;return {householdStatus:list.status,householdGeneric:generic.test(listBody),resetStatus:reset.status,resetGeneric:generic.test(resetBody),responseLeak:/SQLSTATE|stack trace|DATABASE_URL|postgres|relation .* does not exist/i.test(listBody+' '+resetBody)}})()");
-      const resetEventsAfter = await residentAuditState(beforeReplacementState.accountId);
-      const residentSessionsAfter = await activeResidentSessionCount(beforeReplacementState.authUserId!);
+      const treasurerAccess = await evaluate<{ householdStatus: number; householdGeneric: boolean; resetStatus: number; resetGeneric: boolean; responseLeak: boolean }>("(async()=>{const list=await fetch('/api/chairman/households',{cache:'no-store'});const reset=await fetch(" + JSON.stringify("/api/residents/" + beforeConflictState.accountId + "/reset-pin") + ",{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({pin:" + JSON.stringify(treasurerProbePin) + ",reason:'F12 QA synthetic Treasurer authorization probe'})});const listBody=await list.text(),resetBody=await reset.text(),generic=/pengelolaan rumah|tidak memiliki|tidak berwenang|tidak diizinkan|akses|forbidden|unauthorized|silakan masuk/i;return {householdStatus:list.status,householdGeneric:generic.test(listBody),resetStatus:reset.status,resetGeneric:generic.test(resetBody),responseLeak:/SQLSTATE|stack trace|DATABASE_URL|postgres|relation .* does not exist/i.test(listBody+' '+resetBody)}})()");
+      const resetEventsAfter = await residentAuditState(beforeConflictState.accountId!);
+      const residentSessionsAfter = await activeResidentSessionCount(beforeConflictState.authUserId!);
+      safeDiagnostics = {
+        treasurerAuthorization: treasurerAccess,
+        resetAuditCountBefore: resetEventsBefore.resetActionCount,
+        resetAuditCountAfter: resetEventsAfter.resetActionCount,
+        residentSessionCountBefore: residentSessionsBefore,
+        residentSessionCountAfter: residentSessionsAfter,
+      };
       assert.ok([401, 403].includes(treasurerAccess.householdStatus) && [401, 403].includes(treasurerAccess.resetStatus), "Treasurer access to household management or resident PIN reset was not denied.");
       assert.equal(treasurerAccess.householdGeneric, true, "Treasurer household denial was not generic.");
       assert.equal(treasurerAccess.resetGeneric, true, "Treasurer PIN reset denial was not generic.");
