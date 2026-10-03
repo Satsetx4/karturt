@@ -465,6 +465,8 @@ describe("Gate C payment ledger invariants", () => {
     expect(settlementSums.rows.every((row) => Number(row.owner_total) === Number(row.active_received))).toBe(true);
 
     const paymentToReverse = cashRowsBeforeReversal.find((payment) => payment.amount === 10000)!;
+    const survivingCashPayment = cashRowsBeforeReversal.find((payment) => payment.amount === originalAmount);
+    expect(survivingCashPayment).toBeTruthy();
     const allocationsBeforeReversal = await db.select().from(paymentAllocations)
       .where(eq(paymentAllocations.paymentId, paymentToReverse.id));
     const allHistoricalPaymentsBeforeReversal = await db.select().from(payments);
@@ -484,7 +486,7 @@ describe("Gate C payment ledger invariants", () => {
       .where(eq(activeDueSettlements.monthlyDueId, scenario.dueIds.adjusted));
     expect(adjustedOwnersAfterReversal).toHaveLength(1);
     expect(adjustedOwnersAfterReversal[0]).toMatchObject({ amount: originalAmount });
-    expect(await db.select().from(activeDueSettlements).where(eq(activeDueSettlements.paymentId, cashRowsBeforeReversal[0]!.id)))
+    expect(await db.select().from(activeDueSettlements).where(eq(activeDueSettlements.paymentId, survivingCashPayment!.id)))
       .toHaveLength(1);
 
     await expectOwnershipMatchesActiveAllocations();

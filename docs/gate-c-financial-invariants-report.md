@@ -95,7 +95,7 @@ The local production build compiled and generated all routes. Turbopack emitted 
 - **Critical product defects:** 0
 - **High product defects:** 0
 - **Medium financial integrity defects:** 0
-- **Low verification-harness issues corrected:** the balance-oracle fixture gained explicit TypeScript collection types; the Neon audit CTE gained its selected `waived_reason` field and exact one-item waiver cardinality check; the clean-chain PGlite test timeout increased from 30s to 60s after one aggregate-suite timeout, then passed both in isolation and in the complete 263-test rerun.
+- **Low verification-harness issues corrected:** the balance-oracle fixture gained explicit TypeScript collection types; the Neon audit CTE gained its selected `waived_reason` field and exact one-item waiver cardinality check; the clean-chain PGlite test timeout increased from 30s to 60s after one aggregate-suite timeout, then passed both in isolation and in the complete 263-test rerun. The initial GitHub run also exposed a test that selected the surviving cash payment by unspecified database row order; it now selects by the expected amount and the local constraint suite passes 38/38.
 - No product/source issue was repaired in this branch. No migration 0013, F12 work, default-branch merge, deployment, or Neon production mutation occurred.
 - Residual scope limit: the resident visual check is a controlled component-level browser render, not a logged-in production-like resident route session. Real development HTTP/Better Auth business flows and the separate adjustment browser flow did run.
 
