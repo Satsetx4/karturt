@@ -1525,12 +1525,25 @@ async function main() {
     const viewports = [{ width: 360, height: 800 }, { width: 390, height: 844 }, { width: 430, height: 900 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }];
     for (const viewport of viewports) {
       stage = "check household list viewport " + viewport.width + "x" + viewport.height;
-      await navigate("/app/rumah", viewport);
-      await waitFor("Boolean(document.querySelector('.chairman-household-empty') || document.querySelector('.chairman-household-list'))", "Household list was not ready at a requested viewport.");
-      const view = await inspectViewportTargets();
-      assert.equal(view.overflow, false, "Horizontal overflow at " + viewport.width + "px.");
-      assert.equal(view.undersizedTargets.length, 0, "Visible actionable target is under 44px at " + viewport.width + "px.");
-      viewportResults.push({ ...viewport, overflow: view.overflow, undersizedTargets: view.undersizedTargets });
+      await setViewport(viewport);
+      try {
+        await waitFor("location.pathname === '/app/rumah' && Boolean(document.querySelector('#chairman-household-title')) && Boolean(document.querySelector('.chairman-household-empty') || document.querySelector('.chairman-household-list'))", "Household list was not ready at a requested viewport.");
+        const view = await inspectViewportTargets();
+        assert.equal(view.overflow, false, "Horizontal overflow at " + viewport.width + "px.");
+        assert.equal(view.undersizedTargets.length, 0, "Visible actionable target is under 44px at " + viewport.width + "px.");
+        viewportResults.push({ ...viewport, overflow: view.overflow, undersizedTargets: view.undersizedTargets });
+      } catch {
+        const pageFacts = await evaluate<{ path: string; titleVisible: boolean; listVisible: boolean; emptyVisible: boolean; loadingVisible: boolean; friendlyErrorVisible: boolean }>("(() => ({path:location.pathname,titleVisible:Boolean(document.querySelector('#chairman-household-title')),listVisible:Boolean(document.querySelector('.chairman-household-list')),emptyVisible:Boolean(document.querySelector('.chairman-household-empty')),loadingVisible:[...document.querySelectorAll('[role=status]')].some(e=>/memuat/i.test(e.innerText||'')),friendlyErrorVisible:Boolean(document.querySelector('.chairman-household-alert'))}))()");
+        const view = await inspectViewportTargets();
+        safeDiagnostics = {
+          viewport,
+          ...pageFacts,
+          latestHouseholdListApiStatus: apiStatuses["/api/chairman/households"]?.at(-1) ?? null,
+          overflow: view.overflow,
+          undersizedTargets: view.undersizedTargets,
+        };
+        throw new Error("Household list viewport failed a sanitized DOM or layout check.");
+      }
       if (viewport.width === 390) await screenshot("390x844-chairman-list");
       if (viewport.width === 1440) await screenshot("1440x900-chairman-list");
     }
