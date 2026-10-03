@@ -10,7 +10,7 @@ This report applies to the recorded F11 contract, with adjustments blocked once 
 - Baseline F11 Actions run: `37057834512` — success on the exact baseline SHA
 - Migration head before and after verification: `0012_phase_11_tariff_adjustment`; no `0013` was created
 - Neon development journal: 13 entries, final hash `cd5459a3497fd70444e1d51cafa2f8408e9db3fe2e70de53ecbeb702cf8ebe54`
-- Final Gate C branch SHA and its Actions run are recorded in the accompanying final handoff after branch CI completes.
+- Gate C verification implementation SHA: `00754ba72829d52192785d8797d0327de1be9f34`; GitHub Actions run `37098745533` passed on this exact SHA. The final report-closeout HEAD is a documentation-only follow-up and is recorded in the accompanying handoff.
 - No `src/`, Drizzle schema, migration, financial service, or product UI feature was changed. The only edits outside new verification assets are the documented fixture typing correction and a 60-second timeout for the full-chain migration test after one aggregate-suite timeout; the migration replay itself passed in isolation and on the complete-suite rerun.
 
 ## Contract interpretation
@@ -86,7 +86,7 @@ The live browser flow reported no page errors or horizontal overflow at 360x800,
 | Neon dev global audit | PASS — 32/32 categories zero |
 | Neon dev real HTTP/Better Auth smoke | PASS |
 | Resident derived-state visual smoke | PASS at 390x844 and 1440x900; no horizontal overflow |
-| Final Gate C GitHub Actions | Final run is linked in the accompanying handoff for the exact branch HEAD |
+| Final Gate C GitHub Actions | `37098745533` PASS on implementation SHA `00754ba72829d52192785d8797d0327de1be9f34`; documentation closeout HEAD is checked separately before handoff |
 
 The local production build compiled and generated all routes. Turbopack emitted a cache-persistence warning because the D: volume had roughly 60 MB free; the final GitHub Actions build is the authoritative clean build check.
 
