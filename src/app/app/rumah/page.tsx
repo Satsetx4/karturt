@@ -39,7 +39,7 @@ export default async function ChairmanHouseholdManagementPage() {
   }
 
   return (
-    <main className="page-shell">
+    <main className="page-shell chairman-household-page">
       <header className="topbar">
         <Brand compact />
         <SignOutButton />
