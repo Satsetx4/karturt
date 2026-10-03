@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
 import { appAccounts, authUser } from "@/db/schema";
 import type { AccountType } from "@/db/schema";
@@ -21,6 +21,7 @@ export async function findUniqueLoginAccount(database: AppDatabase, type: Accoun
     .where(and(
       eq(appAccounts.accountType, type),
       sql`lower(${appAccounts.loginIdentifier}) = ${identifier.toLowerCase()}`,
+      ...(type === "resident" ? [ne(appAccounts.status, "disabled")] : []),
     ))
     .limit(2);
 

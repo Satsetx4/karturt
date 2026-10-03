@@ -321,7 +321,7 @@ describe("Chairman fee rate read/write service", () => {
       personId: requestedHousehold.personId,
       householdId: requestedHousehold.householdId,
     });
-    const resident = await resolvePrincipalForUser(database, residentUser.id, businessDate);
+    const resident = await resolvePrincipalForUser(database, residentUser.id, "2026-11-01");
     const request = await createResidentPaymentRequest(database, resident, {
       period: "2026-11",
       idempotencyKey: randomUUID(),

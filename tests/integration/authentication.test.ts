@@ -202,6 +202,24 @@ describe("authentication and account-role integration", () => {
     await expect(resolvePrincipalForUser(db as unknown as AppDatabase, residentUser.id)).rejects.toBeInstanceOf(UnauthenticatedError);
   });
 
+  it("does not resolve a resident principal before the household start date", async () => {
+    const { db } = testDatabase;
+    const rtUnitId = await createRt(db);
+    const household = await createHousehold(db, rtUnitId, { startsOn: "2099-01-01" });
+    const residentUser = await createAuthUser(db, "Future resident");
+    await db.insert(appAccounts).values({
+      rtUnitId,
+      authUserId: residentUser.id,
+      accountType: "resident",
+      loginIdentifier: `F-${randomUUID().slice(0, 6)}`,
+      personId: household.personId,
+      householdId: household.householdId,
+    });
+
+    await expect(resolvePrincipalForUser(db as unknown as AppDatabase, residentUser.id))
+      .rejects.toBeInstanceOf(UnauthenticatedError);
+  });
+
   it("refuses an ambiguous resident login identifier shared by two RT units", async () => {
     const { db } = testDatabase;
     const firstRt = await createRt(db);
@@ -228,6 +246,54 @@ describe("authentication and account-role integration", () => {
     });
 
     await expect(findUniqueLoginAccount(db as unknown as AppDatabase, "resident", "C-01")).resolves.toBeNull();
+  });
+
+  it("ignores disabled historical resident accounts but still fails closed on current cross-RT ambiguity", async () => {
+    const { db } = testDatabase;
+    const firstRt = await createRt(db);
+    const secondRt = await createRt(db);
+    const oldHousehold = await createHousehold(db, firstRt, { number: "A-01" });
+    const currentHousehold = await createHousehold(db, firstRt, { number: "A-02" });
+    const otherRtHousehold = await createHousehold(db, secondRt, { number: "A-03" });
+    const oldUser = await createAuthUser(db, "Historical resident");
+    const currentUser = await createAuthUser(db, "Current resident");
+    const otherRtUser = await createAuthUser(db, "Ambiguous resident");
+
+    await db.insert(appAccounts).values({
+      rtUnitId: firstRt,
+      authUserId: oldUser.id,
+      accountType: "resident",
+      status: "disabled",
+      loginIdentifier: "A-01",
+      householdId: oldHousehold.householdId,
+      personId: oldHousehold.personId,
+    });
+    await expect(findUniqueLoginAccount(db as unknown as AppDatabase, "resident", "A-01")).resolves.toBeNull();
+    await expect(resolvePrincipalForUser(db as unknown as AppDatabase, oldUser.id)).rejects.toBeInstanceOf(UnauthenticatedError);
+
+    const [currentAccount] = await db.insert(appAccounts).values({
+      rtUnitId: firstRt,
+      authUserId: currentUser.id,
+      accountType: "resident",
+      status: "active",
+      loginIdentifier: "A-01",
+      householdId: currentHousehold.householdId,
+      personId: currentHousehold.personId,
+    }).returning({ id: appAccounts.id });
+
+    await expect(findUniqueLoginAccount(db as unknown as AppDatabase, "resident", "a-01"))
+      .resolves.toMatchObject({ id: currentAccount.id, authUserId: currentUser.id });
+
+    await db.insert(appAccounts).values({
+      rtUnitId: secondRt,
+      authUserId: otherRtUser.id,
+      accountType: "resident",
+      status: "active",
+      loginIdentifier: "A-01",
+      householdId: otherRtHousehold.householdId,
+      personId: otherRtHousehold.personId,
+    });
+    await expect(findUniqueLoginAccount(db as unknown as AppDatabase, "resident", "A-01")).resolves.toBeNull();
   });
 
   it("rate limits unmatched login identities through the same Better Auth guard", async () => {

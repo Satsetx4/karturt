@@ -73,4 +73,39 @@ describe("resident house-number and PIN login route", () => {
       .from(appAccounts);
     expect(account?.failedLoginAttempts).toBe(0);
   });
+
+  it("rejects sign-in until a future-dated household starts", async () => {
+    const rtUnitId = await createRt(testDatabase.db);
+    const household = await createHousehold(testDatabase.db, rtUnitId, { number: "FUT-01", startsOn: "2099-01-01" });
+    const user = await createAuthUser(testDatabase.db, "Future resident route fixture");
+    await testDatabase.db.insert(authAccount).values({
+      id: randomUUID(),
+      accountId: user.id,
+      providerId: "credential",
+      userId: user.id,
+      password: await hashPassword("593817"),
+    });
+    await testDatabase.db.insert(appAccounts).values({
+      rtUnitId,
+      authUserId: user.id,
+      accountType: "resident",
+      loginIdentifier: "FUT-01",
+      personId: household.personId,
+      householdId: household.householdId,
+    });
+
+    const response = await POST(new Request("http://localhost:3000/api/login/resident", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3000",
+        "x-forwarded-for": "203.0.113.78",
+      },
+      body: JSON.stringify({ identifier: "FUT-01", password: "593817" }),
+    }), { params: Promise.resolve({ type: "resident" }) });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ message: "Data masuk belum cocok atau akun belum aktif." });
+    expect(response.headers.getSetCookie()).toEqual([]);
+  });
 });

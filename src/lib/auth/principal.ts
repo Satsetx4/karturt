@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, lte } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
 import { getAuth } from "@/lib/auth/server";
 import { getDb } from "@/db/client";
@@ -55,7 +55,11 @@ export async function resolvePrincipalForUser(
         eq(people.householdId, households.id),
         eq(people.id, account.personId),
       ))
-      .where(and(eq(households.rtUnitId, account.rtUnitId), eq(households.id, account.householdId)))
+      .where(and(
+        eq(households.rtUnitId, account.rtUnitId),
+        eq(households.id, account.householdId),
+        lte(households.startsOn, businessDate),
+      ))
       .limit(1);
     if (!membership || membership.householdStatus !== "active" || !membership.personIsActive) {
       throw new UnauthenticatedError("This resident account no longer has an active household membership.");

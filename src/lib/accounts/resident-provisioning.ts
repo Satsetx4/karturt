@@ -3,7 +3,7 @@ import type { AppDatabase } from "@/db/client";
 import { houses, households, people } from "@/db/schema";
 
 export async function resolveResidentProvisioningTarget(
-  database: AppDatabase,
+  database: Pick<AppDatabase, "select">,
   input: { rtUnitId: string; householdId: string; personId: string },
 ) {
   const [target] = await database
