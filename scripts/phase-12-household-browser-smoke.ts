@@ -47,6 +47,10 @@ function writeEvidence(name: string, value: unknown) {
   return path.slice(root.length + 1).replaceAll("\\", "/");
 }
 
+function syntheticLoginSourceIp() {
+  return "198.18." + randomInt(0, 256) + "." + randomInt(0, 256);
+}
+
 function assertSource() {
   const branch = spawnSync("git", ["branch", "--show-current"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
   const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
@@ -221,31 +225,36 @@ async function loginThroughBrowser(kind: "warga" | "pengurus", identifier: strin
   await delay(350);
   assert.equal(await setInput("#login-identifier", identifier), true, "Login identifier control was unavailable.");
   assert.equal(await setInput("#login-password", password), true, "Login password control was unavailable.");
-  await click("button.login-submit");
-  const expectedApiPath = kind === "warga" ? "/api/login/resident" : "/api/login/official";
-  const expectedResponseStatus = expectedOutcome === "success" ? 200 : 401;
+  await cdp("Network.setExtraHTTPHeaders", { headers: { "x-forwarded-for": syntheticLoginSourceIp() } });
   try {
-    await waitFor(expectedOutcome === "success"
-      ? "location.pathname.startsWith('/app')"
-      : "Boolean(document.querySelector('[role=alert]'))", "Expected login outcome was not rendered.");
-  } catch {
-    safeDiagnostics = {
-      loginPath: "/login/" + kind,
-      browserPath: await evaluate<string>("location.pathname"),
-      loginFormVisible: await evaluate<boolean>("Boolean(document.querySelector('#login-identifier'))"),
-      friendlyAlertVisible: await evaluate<boolean>("Boolean(document.querySelector('[role=alert]'))"),
-      loginApiStatuses: authStatuses,
-    };
-    throw new Error("Expected login outcome was not rendered.");
-  }
-  const loginOutcome = await evaluate<{ path: string; alertVisible: boolean }>("({path:location.pathname,alertVisible:Boolean(document.querySelector('[role=alert]'))})");
-  const responseStatus = authStatuses[expectedApiPath]?.at(-1) ?? null;
-  const outcomeMatches = expectedOutcome === "success"
-    ? loginOutcome.path.startsWith("/app") && responseStatus === expectedResponseStatus
-    : loginOutcome.alertVisible && responseStatus === expectedResponseStatus;
-  if (!outcomeMatches) {
-    safeDiagnostics = { loginPath: "/login/" + kind, expectedOutcome, browserPath: loginOutcome.path, friendlyAlertVisible: loginOutcome.alertVisible, responseStatus };
-    throw new Error("Synthetic login did not match its expected outcome.");
+    await click("button.login-submit");
+    const expectedApiPath = kind === "warga" ? "/api/login/resident" : "/api/login/official";
+    const expectedResponseStatus = expectedOutcome === "success" ? 200 : 401;
+    try {
+      await waitFor(expectedOutcome === "success"
+        ? "location.pathname.startsWith('/app')"
+        : "Boolean(document.querySelector('[role=alert]'))", "Expected login outcome was not rendered.");
+    } catch {
+      safeDiagnostics = {
+        loginPath: "/login/" + kind,
+        browserPath: await evaluate<string>("location.pathname"),
+        loginFormVisible: await evaluate<boolean>("Boolean(document.querySelector('#login-identifier'))"),
+        friendlyAlertVisible: await evaluate<boolean>("Boolean(document.querySelector('[role=alert]'))"),
+        loginApiStatuses: authStatuses,
+      };
+      throw new Error("Expected login outcome was not rendered.");
+    }
+    const loginOutcome = await evaluate<{ path: string; alertVisible: boolean }>("({path:location.pathname,alertVisible:Boolean(document.querySelector('[role=alert]'))})");
+    const responseStatus = authStatuses[expectedApiPath]?.at(-1) ?? null;
+    const outcomeMatches = expectedOutcome === "success"
+      ? loginOutcome.path.startsWith("/app") && responseStatus === expectedResponseStatus
+      : loginOutcome.alertVisible && responseStatus === expectedResponseStatus;
+    if (!outcomeMatches) {
+      safeDiagnostics = { loginPath: "/login/" + kind, expectedOutcome, browserPath: loginOutcome.path, friendlyAlertVisible: loginOutcome.alertVisible, responseStatus };
+      throw new Error("Synthetic login did not match its expected outcome.");
+    }
+  } finally {
+    await cdp("Network.setExtraHTTPHeaders", { headers: {} });
   }
 }
 
@@ -1227,7 +1236,7 @@ async function continueHouseholdLifecycleSmoke(sourceHead: string) {
     assert.deepEqual(replacementOldHistoryAfter, oldHistoryBefore, "Replacement moved or changed financial history ownership.");
     const replacementNewHistory = await readFinancialOwnership({ kind: "household", rtUnitId: fixture.rtUnitId, householdId: newHouseholdId });
     assert.equal(Object.values(countOwnershipRows(replacementNewHistory)).reduce((sum, count) => sum + count, 0), 0, "New replacement household inherited financial rows.");
-    const oldResidentLoginAfterReplacement = await evaluate<{ status: number; genericError: boolean }>("(async()=>{const r=await fetch('/api/login/resident',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({identifier:" + JSON.stringify(replacementCandidate.house_number) + ",password:" + JSON.stringify(resetPin) + "})});const t=await r.text();return {status:r.status,genericError:/belum cocok|periksa kembali|tidak ditemukan/i.test(t)}})()");
+    const oldResidentLoginAfterReplacement = await evaluate<{ status: number; genericError: boolean }>("(async()=>{const r=await fetch('/api/login/resident',{method:'POST',headers:{'content-type':'application/json','x-forwarded-for':" + JSON.stringify(syntheticLoginSourceIp()) + "},body:JSON.stringify({identifier:" + JSON.stringify(replacementCandidate.house_number) + ",password:" + JSON.stringify(resetPin) + "})});const t=await r.text();return {status:r.status,genericError:/belum cocok|periksa kembali|tidak ditemukan/i.test(t)}})()");
     assert.equal(oldResidentLoginAfterReplacement.status, 401, "Old resident authentication was not rejected after replacement.");
     results.sameHouseReplacementAtBoundary = "PASS";
     await setViewport({ width: 1440, height: 900 });
