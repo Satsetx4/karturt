@@ -108,7 +108,7 @@ Synthetic disposable PGlite comparison used 50 households/600 annual dues and 50
 **Multi-RT security architecture: PRESERVED**<br>
 **READY FOR FASE 3**
 
-The completion report and sanitized evidence pack are in `docs/launch-safety-security-closure-report.md` and `docs/launch-safety-security-closure-evidence/`. The documentation-only final branch commit is still subject to its exact-SHA CI pass before delivery.
+The completion report and sanitized evidence pack are in `docs/launch-safety-security-closure-report.md` and `docs/launch-safety-security-closure-evidence/`. The documentation-only final branch commit is checked by the same exact-SHA workflow; its result is recorded in the task completion response.
 
 ## Final verdict
 

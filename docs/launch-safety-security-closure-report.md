@@ -41,7 +41,7 @@ The System Admin 2FA recovery request schema now rejects unknown fields with str
 ## Browser, session, rate-limit, and recovery proof
 
 - S10 actual Chrome, two loopback origins, authenticated cookie delivery and valid session, financial mutation and System Admin recovery both denied with 403 and no state change. Route Origin cases also deny with zero state change.
-- S11 a caller-selected fake pre-auth cookie remains unauthenticated; Better Auth issues a fresh HTTPS session cookie with `HttpOnly`, `Secure`, and validated `SameSite` attributes.
+- S11 a caller-selected fake pre-auth cookie remains unauthenticated; Better Auth issues a fresh HTTPS session cookie with `HttpOnly`, `Secure`, and `SameSite=Lax`.
 - S14 limits were read from current auth configuration and enforced at the configured N/N+1 boundary for email sign-in and System Admin TOTP, with test database limiter records observed and no useful known/unknown identity difference.
 - S15 source-configured threshold and lockout duration were exercised through the real Resident login route, including expiry, authorized reset, unknown/disabled cases, and concurrent wrong-PIN attempts.
 - S16 both recovery authorization matrices passed; authorized System Admin recovery changed only the target, revoked target sessions, updated factor state, wrote exactly one safe audit event, and rolled back fully when audit insertion failed.
