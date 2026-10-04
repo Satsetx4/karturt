@@ -5,7 +5,8 @@
 **Branch:** `fix/launch-safety-security-closure`<br>
 **Source commit tested:** `091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2`<br>
 **Source baseline:** `d3c4f6d1d03b5b94c29bc83337041657d8156c48`<br>
-**Exact source-commit CI:** run `37227655766` — PASS. Gate A and the independent PostgreSQL concurrency job both passed on the exact source SHA.
+**Exact product/security-code CI:** run `37227655766` — PASS on `091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2`; Gate A and the independent PostgreSQL concurrency job both passed.
+**Pre-cleanup branch validation:** run `37229395825` — PASS on `40ba99d2ad1e8732025d1c0ea3bd456f0bd62947`; Gate A local verification, the Launch Security Closure test step, and the independent PostgreSQL concurrency job all passed.
 
 ## Closure matrix
 
@@ -32,7 +33,7 @@ S1–S16 targeted local suite: 5 files, 22 tests PASS. Full local suite: 64 file
 
 ## Revalidation-only rows
 
-S17 payment idempotency, S18 double-submit, and S19–S23 payment verification, cash, reversal, waiver, and household lifecycle concurrency all revalidated PASS. Exact-SHA run `37227655766` passed the full Gate A workflow and independent PostgreSQL 17 concurrency job. The existing independent concurrency harness was not rewritten.
+S17 payment idempotency, S18 double-submit, and S19–S23 payment verification, cash, reversal, waiver, and household lifecycle concurrency all revalidated PASS. Product/security-code exact-SHA run `37227655766` and pre-cleanup branch exact-SHA run `37229395825` both passed the full Gate A workflow and independent PostgreSQL 17 concurrency job. The existing independent concurrency harness was not rewritten.
 
 ## Product security change
 
@@ -53,11 +54,13 @@ The System Admin 2FA recovery request schema now rejects unknown fields with str
 - Local `npm ci`, lint (0 errors; one pre-existing unused-variable warning), typecheck, unit 42, integration 190, constraints 42, authorization 125, targeted security closure 22, full suite 399, and production build PASS.
 - `npm audit --omit=dev`: 0 vulnerabilities. Full audit: five High dependency-path findings for one development-only advisory, `GHSA-vfj7-8cjw-p6xm` (`braces@3.0.3`), tracked only under `RA-2026-F12-001 — KNOWN / ACCEPTED RESIDUAL RISK — NOT RESOLVED`. No new Critical and no new unaccepted High.
 - Performance: **WARNING — remeasure in staging**. The existing local PGlite 500-household F13 report observation is approximately 11.5 seconds. F2.1 made no performance change.
+- The operational product is Single-RT. **Multi-RT user features: OUT OF MVP.** **Multi-RT security architecture: PRESERVED** only through `rt_unit_id`, tenant isolation, cross-RT constraints, cross-RT authorization, and representative security tests.
 
 ## Formal verdict
 
 F2.1 PASS<br>
 LAUNCH SAFETY PASS<br>
+FASE 2 CLOSED<br>
 BLOCKERS: 0<br>
 CRITICAL: 0<br>
 UNACCEPTED HIGH: 0<br>
@@ -66,6 +69,6 @@ Multi-RT user features: OUT OF MVP<br>
 Multi-RT security architecture: PRESERVED<br>
 READY FOR FASE 3
 
-The exact source-code SHA CI and all required local/development-only evidence passed. The documentation-only completion commit is also required to pass the exact-branch workflow before delivery; no merge or later phase work is authorized by this report.
+Exact-SHA CI for the evidence-reconciliation commit is reported in task completion; its run ID is not embedded in this commit, so no follow-up commit is needed. No merge or later-phase work is authorized by this report.
 
 Evidence files are in `docs/launch-safety-security-closure-evidence/`.

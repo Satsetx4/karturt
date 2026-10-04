@@ -4,7 +4,7 @@
 
 **Source baseline:** `d3c4f6d1d03b5b94c29bc83337041657d8156c48` (`feat/launch-safety-single-rt`). The closure branch starts at that exact commit.
 
-**Status rule:** Final statuses are only `PASS`, `FAIL`, or `NOT APPLICABLE`. All S1–S16 targeted route/input/session tests passed locally (5 files, 22 tests) and in exact-SHA CI run `37227655766`. The complete suite passed 399/399 locally and in CI. Independent PostgreSQL concurrency also passed in that exact-SHA run.
+**Status rule:** Final statuses are only `PASS`, `FAIL`, or `NOT APPLICABLE`. All S1–S16 targeted route/input/session tests passed locally (5 files, 22 tests) and in product/security-code exact-SHA CI run `37227655766`. The complete suite passed 399/399 locally and in CI. Pre-cleanup branch exact-SHA run `37229395825` also passed Gate A, the Launch Security Closure test step, and independent PostgreSQL concurrency.
 
 | ID / threat | Required proof | Existing reusable evidence | New proof required | Test file / script | Result | Residual limitation | Final status |
 |---|---|---|---|---|---|---|---|
@@ -27,7 +27,7 @@
 
 ## Revalidation-only rows S17–S23
 
-The existing PostgreSQL concurrency harness was not rewritten. These rows were revalidated by exact-SHA CI run `37227655766` at `091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2`; its sanitized artifact is `docs/launch-safety-security-closure-evidence/postgres-concurrency-summary.json`.
+The existing PostgreSQL concurrency harness was not rewritten. These rows were revalidated by product/security-code exact-SHA CI run `37227655766` at `091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2` and pre-cleanup branch exact-SHA CI run `37229395825` at `40ba99d2ad1e8732025d1c0ea3bd456f0bd62947`; the sanitized artifact is `docs/launch-safety-security-closure-evidence/postgres-concurrency-summary.json`.
 
 | ID | Required revalidation | Test / evidence | Result |
 |---|---|---|---|
@@ -41,4 +41,16 @@ The existing PostgreSQL concurrency harness was not rewritten. These rows were r
 
 ## Local closure command
 
-`npm run test:security-closure -- --maxWorkers=1` — 5 files, 22 tests passed locally and in CI. The complete suite passed 64 files, 399 tests. CI run `37227655766` and its independent PostgreSQL concurrency job both passed on the exact source SHA. The final documentation commit is checked again by the branch workflow before delivery.
+`npm run test:security-closure -- --maxWorkers=1` — 5 files, 22 tests passed locally and in CI. The complete suite passed 64 files, 399 tests. CI runs `37227655766` and `37229395825` both passed on their exact SHAs, including independent PostgreSQL concurrency. The docs-only evidence-reconciliation commit is validated by exact-SHA CI; its run ID is reported in task completion rather than embedded in the commit.
+
+## Closure-wide state
+
+- S1–S16: PASS. S17–S23: PASS.
+- Integrity: 16/16 zero. Gate C: 32/32 zero. F12 lifecycle: 11/11 zero.
+- Migration head: `0013_phase_12_household_management` (14 journal entries).
+- Production-only dependency audit: 0 vulnerabilities. Accepted development-only residual: `RA-2026-F12-001` for `braces@3.0.3`.
+- Performance: **WARNING — remeasure in staging** (approximately 11.5 seconds for the local 500-household F13 report measurement).
+- Critical: 0. Unaccepted High: 0. Blockers: 0.
+- Operational product: Single-RT. **Multi-RT user features: OUT OF MVP.** **Multi-RT security architecture: PRESERVED** only through `rt_unit_id`, tenant isolation, cross-RT constraints, cross-RT authorization, and representative security tests.
+- Production access: none. Merge to `main`: no.
+- **F2.1 PASS — LAUNCH SAFETY PASS — FASE 2 CLOSED — READY FOR FASE 3.**

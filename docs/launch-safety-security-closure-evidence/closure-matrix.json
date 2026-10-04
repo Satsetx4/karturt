@@ -13,6 +13,11 @@
   },
   "targetedSuite": { "filesPassed": 5, "testsPassed": 22 },
   "fullSuite": { "filesPassed": 64, "testsPassed": 399 },
-  "S17toS23": "PENDING EXACT BRANCH CI",
+  "S17toS23": "PASS",
+  "revalidationEvidence": {
+    "sha": "40ba99d2ad1e8732025d1c0ea3bd456f0bd62947",
+    "ciRunId": "37229395825",
+    "conclusion": "PASS"
+  },
   "productionAccess": "none"
 }

@@ -1,5 +1,7 @@
 # Launch Safety Gate Report
 
+> **Historical pre-F2.1 record — superseded.** The original Launch Safety findings below describe the state before the F2.1 security closure. The **Current / Final verdict** at the end of this file is the authoritative status.
+
 **Date:** 2026-10-05
 **Branch:** `feat/launch-safety-single-rt`
 **Launch Safety validated remediation code SHA:** `edcd071b713fe1a6db55513726810c7428521d96`
@@ -50,7 +52,7 @@ Synthetic disposable PGlite comparison used 50 households/600 annual dues and 50
 - Full `npm audit` reports five High package-path entries representing one unique development-only advisory, `GHSA-vfj7-8cjw-p6xm` for `braces@3.0.3`, covered only by accepted residual `RA-2026-F12-001`. The full audit is not clean. `npm audit --omit=dev` reports zero vulnerabilities.
 - Production database and deployment were not accessed.
 
-## Finding counts and verdict
+## Historical finding counts and verdict (pre-F2.1; superseded)
 
 - Original blocker-specific proof gaps: 0 open of 2 (independent PostgreSQL concurrency; authenticated principal/session matrix plus System Admin Origin guard).
 - Remaining blocker: wider S1–S16 security coverage is incomplete; independent audit is still required before Fase 3.
@@ -65,9 +67,10 @@ Synthetic disposable PGlite comparison used 50 households/600 annual dues and 50
 
 **Previous:** LAUNCH SAFETY FAIL — S1–S16 security coverage incomplete. The earlier FAIL history above is retained as the original Launch Safety finding.
 
-**F2.1 source branch:** `fix/launch-safety-security-closure`<br>
-**Source commit:** `091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2`<br>
-**Exact source-commit CI:** Test Gate A run `37227655766` — PASS. Gate A and independent PostgreSQL concurrency jobs passed.
+**F2.1 product/security code SHA:** `091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2`<br>
+**Exact product/security code CI:** Test Gate A run `37227655766` — PASS. Gate A and independent PostgreSQL concurrency jobs passed.
+**Pre-cleanup branch SHA:** `40ba99d2ad1e8732025d1c0ea3bd456f0bd62947`<br>
+**Exact pre-cleanup branch CI:** Test Gate A run `37229395825` — PASS. Gate A local verification, the Launch Security Closure tests, and independent PostgreSQL concurrency all passed.
 
 | Security row | F2.1 result |
 |---|---|
@@ -97,9 +100,16 @@ Synthetic disposable PGlite comparison used 50 households/600 annual dues and 50
 - Resident login rate limits and five-failure/15-minute PIN lockout passed configured-boundary, expiry, authorized reset, and concurrent-race checks.
 - Performance: **WARNING — remeasure in staging**; the existing local PGlite 500-household F13 report measured approximately 11.5 seconds. No F2.1 optimization was made.
 - Production was not accessed. The branch was not merged to `main`.
+- The operational product is Single-RT. **Multi-RT user features: OUT OF MVP.** **Multi-RT security architecture: PRESERVED** only through `rt_unit_id`, tenant isolation, cross-RT constraints, cross-RT authorization, and representative security tests.
+- The docs-only evidence-reconciliation commit is checked on its exact SHA; its CI run ID is reported in task completion and is not embedded in the commit itself.
+
+The completion report and sanitized evidence pack are in `docs/launch-safety-security-closure-report.md` and `docs/launch-safety-security-closure-evidence/`. The documentation-only final branch commit is checked by the same exact-SHA workflow; its result is recorded in the task completion response.
+
+## Current / Final verdict
 
 **F2.1 PASS**<br>
 **LAUNCH SAFETY PASS**<br>
+**FASE 2 CLOSED**<br>
 **BLOCKERS: 0**<br>
 **CRITICAL: 0**<br>
 **UNACCEPTED HIGH: 0**<br>
@@ -107,9 +117,3 @@ Synthetic disposable PGlite comparison used 50 households/600 annual dues and 50
 **Multi-RT user features: OUT OF MVP**<br>
 **Multi-RT security architecture: PRESERVED**<br>
 **READY FOR FASE 3**
-
-The completion report and sanitized evidence pack are in `docs/launch-safety-security-closure-report.md` and `docs/launch-safety-security-closure-evidence/`. The documentation-only final branch commit is checked by the same exact-SHA workflow; its result is recorded in the task completion response.
-
-## Final verdict
-
-LAUNCH SAFETY FAIL — FASE 3 NO-GO — BLOCKER: wider S1–S16 security coverage remains incomplete and requires independent audit.

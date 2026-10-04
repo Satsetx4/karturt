@@ -1,13 +1,35 @@
 {
   "schemaVersion": 1,
   "workflow": "Test Gate A",
-  "sourceCodeSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
-  "runId": "37227655766",
-  "runUrl": "https://github.com/Satsetx4/karturt/actions/runs/37227655766",
-  "conclusion": "PASS",
-  "jobs": {
-    "Gate A local verification": "PASS",
-    "Launch Safety independent PostgreSQL concurrency": "PASS"
+  "productSecurityCodeValidation": {
+    "validatedProductCodeSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+    "validatedProductCodeCiRunId": "37227655766",
+    "conclusion": "PASS",
+    "runUrl": "https://github.com/Satsetx4/karturt/actions/runs/37227655766",
+    "jobs": {
+      "Gate A local verification": "PASS",
+      "Launch Safety independent PostgreSQL concurrency": "PASS"
+    },
+    "steps": {
+      "Launch Security Closure tests": "PASS"
+    }
+  },
+  "preCleanupBranchValidation": {
+    "preCleanupBranchSha": "40ba99d2ad1e8732025d1c0ea3bd456f0bd62947",
+    "preCleanupBranchCiRunId": "37229395825",
+    "conclusion": "PASS",
+    "runUrl": "https://github.com/Satsetx4/karturt/actions/runs/37229395825",
+    "jobs": {
+      "Gate A local verification": "PASS",
+      "Launch Safety independent PostgreSQL concurrency": "PASS"
+    },
+    "steps": {
+      "Launch Security Closure tests": "PASS"
+    }
+  },
+  "evidenceReconciliationCi": {
+    "status": "REPORTED_IN_TASK_COMPLETION",
+    "reason": "Run ID exists only after this docs-only commit is created; no follow-up commit will be created solely to embed its own CI ID."
   },
   "productionAccess": "none",
   "mergeToMain": false
