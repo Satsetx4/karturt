@@ -419,7 +419,7 @@ async function testConcurrentVerification() {
     .where(eq(paymentRequestClaims.requestId, requestRow!.id))).length, 0);
   assert.equal((await fixtureDatabase.select().from(auditEvents).where(and(
     eq(auditEvents.action, "payment_request.verified"),
-    eq(auditEvents.entityId, paymentRows[0]!.id),
+    eq(auditEvents.entityId, requestRow!.id),
   ))).length, 1);
 
   return {
