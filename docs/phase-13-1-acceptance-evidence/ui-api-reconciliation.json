@@ -1,0 +1,238 @@
+{
+  "outcome": "PASS",
+  "year": 2026,
+  "availableYearCount": 1,
+  "yearly": {
+    "target": 1500000,
+    "effectiveTarget": 1500003,
+    "received": 0,
+    "outstanding": 1500003,
+    "transferReceived": 0,
+    "cashReceived": 0,
+    "waived": 0,
+    "notDueCount": 174
+  },
+  "uiApiYearlyMatch": true,
+  "monthly": [
+    {
+      "month": 1,
+      "metricsMatch": true,
+      "badgesMatch": true
+    },
+    {
+      "month": 2,
+      "metricsMatch": true,
+      "badgesMatch": true
+    },
+    {
+      "month": 3,
+      "metricsMatch": true,
+      "badgesMatch": true
+    },
+    {
+      "month": 4,
+      "metricsMatch": true,
+      "badgesMatch": true
+    },
+    {
+      "month": 5,
+      "metricsMatch": true,
+      "badgesMatch": true
+    },
+    {
+      "month": 6,
+      "metricsMatch": true,
+      "badgesMatch": true
+    },
+    {
+      "month": 7,
+      "metricsMatch": true,
+      "badgesMatch": true
+    },
+    {
+      "month": 8,
+      "metricsMatch": true,
+      "badgesMatch": true
+    },
+    {
+      "month": 9,
+      "metricsMatch": true,
+      "badgesMatch": true
+    },
+    {
+      "month": 10,
+      "metricsMatch": true,
+      "badgesMatch": true
+    },
+    {
+      "month": 11,
+      "metricsMatch": true,
+      "badgesMatch": true
+    },
+    {
+      "month": 12,
+      "metricsMatch": true,
+      "badgesMatch": true
+    }
+  ],
+  "monthlyCardCount": 12,
+  "arrears": {
+    "periodCount": 0,
+    "householdCount": 0,
+    "totalOutstanding": 0,
+    "householdCardCount": 0
+  },
+  "apiArrears": {
+    "periodCount": 0,
+    "householdCount": 0,
+    "totalOutstanding": 0,
+    "householdCardCount": 0
+  },
+  "arrearsMatch": true,
+  "identities": {
+    "yearlyTransferPlusCashEqualsReceived": true,
+    "yearlyReceivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true,
+    "monthlyChecks": [
+      {
+        "month": 1,
+        "transferPlusCashEqualsReceived": true,
+        "receivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true
+      },
+      {
+        "month": 2,
+        "transferPlusCashEqualsReceived": true,
+        "receivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true
+      },
+      {
+        "month": 3,
+        "transferPlusCashEqualsReceived": true,
+        "receivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true
+      },
+      {
+        "month": 4,
+        "transferPlusCashEqualsReceived": true,
+        "receivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true
+      },
+      {
+        "month": 5,
+        "transferPlusCashEqualsReceived": true,
+        "receivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true
+      },
+      {
+        "month": 6,
+        "transferPlusCashEqualsReceived": true,
+        "receivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true
+      },
+      {
+        "month": 7,
+        "transferPlusCashEqualsReceived": true,
+        "receivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true
+      },
+      {
+        "month": 8,
+        "transferPlusCashEqualsReceived": true,
+        "receivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true
+      },
+      {
+        "month": 9,
+        "transferPlusCashEqualsReceived": true,
+        "receivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true
+      },
+      {
+        "month": 10,
+        "transferPlusCashEqualsReceived": true,
+        "receivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true
+      },
+      {
+        "month": 11,
+        "transferPlusCashEqualsReceived": true,
+        "receivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true
+      },
+      {
+        "month": 12,
+        "transferPlusCashEqualsReceived": true,
+        "receivedPlusWaivedPlusOutstandingEqualsEffectiveTarget": true
+      }
+    ],
+    "visibleUiLabels": true
+  },
+  "independentSql": {
+    "passed": true,
+    "method": "Fresh direct SELECT-only aggregation using the independent DIRECT_COMPONENTS_SQL shape from the F13 integration oracle",
+    "businessDate": "2026-10-04",
+    "yearlyMatch": true,
+    "monthlyMonthCount": 12,
+    "monthlyAllMatch": true,
+    "monthlyChecks": [
+      {
+        "month": 1,
+        "match": true
+      },
+      {
+        "month": 2,
+        "match": true
+      },
+      {
+        "month": 3,
+        "match": true
+      },
+      {
+        "month": 4,
+        "match": true
+      },
+      {
+        "month": 5,
+        "match": true
+      },
+      {
+        "month": 6,
+        "match": true
+      },
+      {
+        "month": 7,
+        "match": true
+      },
+      {
+        "month": 8,
+        "match": true
+      },
+      {
+        "month": 9,
+        "match": true
+      },
+      {
+        "month": 10,
+        "match": true
+      },
+      {
+        "month": 11,
+        "match": true
+      },
+      {
+        "month": 12,
+        "match": true
+      }
+    ],
+    "sqlArrearsPeriodRows": 0,
+    "sqlArrearsHouseholdCount": 0,
+    "sqlArrearsTotal": 0,
+    "arrearsMatch": true,
+    "sqlYearly": {
+      "target": 1500000,
+      "effectiveTarget": 1500003,
+      "received": 0,
+      "transferReceived": 0,
+      "cashReceived": 0,
+      "waived": 0,
+      "outstanding": 1500003,
+      "obligationCount": 30,
+      "waivedCount": 0,
+      "notDueCount": 174,
+      "overdueCount": 0
+    },
+    "readOnly": true,
+    "rawIdentifiersOrResidentNamesStored": false
+  },
+  "noLedgerOrAuditMutation": true,
+  "rawIdentifiersOrResidentNamesStored": false
+}

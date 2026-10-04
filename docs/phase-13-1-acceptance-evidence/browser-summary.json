@@ -1,0 +1,40 @@
+{
+  "outcome": "PASS",
+  "branch": "fix/phase-13-1-acceptance-closure",
+  "sourceSha": "6b90bdb35f7fe15950bf809b1792dee9db2df93b",
+  "flow": [
+    "authenticated Chairman login",
+    "dashboard Reports entry",
+    "/app/laporan",
+    "same-session reports API"
+  ],
+  "year": 2026,
+  "availableYearCount": 1,
+  "reportCorrectness": true,
+  "uiApiReconciliation": true,
+  "visibleUiSafety": {
+    "uuid": false,
+    "internalError": false,
+    "credential": false
+  },
+  "liveFixtureCoverage": {
+    "waivedDueRows": 0,
+    "pendingRequests": 0,
+    "reversedPayments": 0,
+    "historicalHouseholds": 4,
+    "uiShowsWaivedConcept": true,
+    "uiShowsNotDueConcept": true,
+    "pendingUiVisible": false,
+    "historicalHouseholdUiVisible": false,
+    "activeHouseholdUiVisible": false,
+    "historicalArrearsHouseholds": 0,
+    "pendingArrearsHouseholds": 0
+  },
+  "credentialsTemporaryPasswordActive": false,
+  "cleanup": {
+    "secondRotationAndSessionRevocation": true,
+    "temporaryCredentialHashReplaced": true,
+    "remainingSessions": 0
+  },
+  "productionTouched": false
+}

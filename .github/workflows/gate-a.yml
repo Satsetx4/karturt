@@ -18,6 +18,7 @@ on:
       - "feat/phase-11-tariff-adjustment"
       - "feat/phase-12-household-management"
       - "feat/phase-13-reports"
+      - "fix/phase-13-1-acceptance-closure"
       - "integrate/f12-clean-checkpoint"
       - "main"
     paths-ignore:

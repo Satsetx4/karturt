@@ -1,0 +1,28 @@
+{
+  "testedCommit": "6b90bdb35f7fe15950bf809b1792dee9db2df93b",
+  "testedCommitIncludes": ["src/app/globals.css: chairman reports brand min-height 44px touch target"],
+  "dirtyTrackedFilesDuringChecks": [".github/workflows/gate-a.yml: closure branch push filter addition pending coordinator commit"],
+  "command": "npm run test:authorization -- --maxWorkers=1",
+  "exitCode": 0,
+  "result": "PASS",
+  "durationSeconds": 57.32,
+  "testFilesPassed": 12,
+  "testsPassed": 111,
+  "coverage": {
+    "chairmanReportRoute": [
+      "Authenticated GET is no-store; requested/default year behavior is covered.",
+      "Malformed, repeated, unsupported-year, unknown-key, tenant-spoof, and role-spoof queries are rejected before principal or database access.",
+      "Only the session-derived principal is passed to report service; spoof headers do not override it.",
+      "Service denial returns safe 403; unauthenticated returns safe 401; internal invariant errors return generic 500; only GET is exposed."
+    ],
+    "chairmanReportService": [
+      "Active Chairman can read their own RT report without changing dues, adjustments, requests, payments, allocations, reversals, waivers, or audit rows.",
+      "Disabled account, ended assignment, Treasurer, Resident, and System Admin are denied.",
+      "Forged other-RT principal is denied; available billing years from another RT are not disclosed."
+    ],
+    "reportPageBoundary": [
+      "The page derives the principal from the authenticated session, redirects unauthenticated users to /login/pengurus, routes MFA enrollment to setup, and returns not-found for users without Chairman report permission or an RT assignment."
+    ]
+  },
+  "executionPolicy": "Serial local authorization suite; no production or Neon access."
+}

@@ -127,3 +127,15 @@ Tidak ada screenshot acceptance yang diklaim. Lihat `docs/phase-13-reports-evide
 F14 belum dimulai. Tidak ada export, merge, migration, atau perubahan Neon production.
 
 F13 FAIL — F14 NO-GO — blocker: authenticated Chairman browser smoke and live negative role/cross-RT browser checks are incomplete.
+
+## Addendum F13.1 — Acceptance closure (4 Oktober 2026)
+
+Status FAIL di atas adalah catatan historis dan tidak dihapus atau ditulis ulang. Blocker awalnya adalah browser Ketua RT yang terautentikasi belum diuji. Untuk mode operasional Single-RT yang telah disetujui, manual browser cross-RT tidak lagi diwajibkan; penolakan Treasurer, Resident, System Admin, inactive/ended Chairman, cross-RT, tenant spoof, dan direct API tetap dibuktikan oleh regresi authorization otomatis.
+
+Source closure `6b90bdb35f7fe15950bf809b1792dee9db2df93b` menyelesaikan acceptance browser Ketua RT: dashboard → Laporan → `/app/laporan`, tahun 2026, 12 ringkasan bulanan, kecocokan UI dengan API pada sesi yang sama, dan kecocokan API dengan SQL SELECT independen. Lima viewport 360×800, 390×844, 430×900, 768×1024, dan 1440×900 lulus. Target sentuh minimum 44px pada link brand laporan diperbaiki sebelum gate lokal dan browser final diulang.
+
+Gate C tetap 32/32 nol; migration journal tetap 14 entri pada `0013_phase_12_household_management` tanpa `0014`; audit lifecycle F12 global tetap 11/11 nol. Uji fixture-specific F12.1 tidak dijalankan karena manifest tidak tersedia. Lihat [laporan closure F13.1](phase-13-1-acceptance-closure-report.md) dan folder `docs/phase-13-1-acceptance-evidence/` untuk rincian serta bukti kurasi.
+
+Pada source closure, seluruh gate lokal lulus. Dependency audit tetap hanya memiliki residual dev-only yang sudah diterima `RA-2026-F12-001` (`braces@3.0.3`); production-only audit 0 vulnerability. Neon development menerima hanya rotasi credential sementara dan pencabutan sesi untuk satu akun Ketua RT sintetis; rotasi cleanup terverifikasi dan jumlah sesi akhir nol. Production tidak diakses.
+
+Keputusan scope: **Single-RT MVP operational mode APPROVED; Multi-RT architecture PRESERVED; F14 DEFERRED POST-LAUNCH.** Status CI exact final branch SHA dan readiness promotion dicatat setelah push branch closure dan verifikasi GitHub Actions. Tidak ada merge ke `main`, migration baru, production work, Launch Safety, atau implementasi F14 dalam Package 1.

@@ -1,0 +1,47 @@
+{
+  "event": "f13.1_read_only_integrity_summary",
+  "verifiedOn": "2026-10-04",
+  "environment": "development",
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchName": "karturt-development",
+    "branchId": "br-crimson-band-az6i637k",
+    "endpointId": "ep-quiet-cake-azrhjiyh",
+    "database": "neondb"
+  },
+  "migrationJournalEntries": 14,
+  "migrationHead": "0013_phase_12_household_management",
+  "migrationHeadHash": "994BCC9376B207FDC0668312CC68CAB3C2CEC46BC6101EDC4C2B5EF7F51C4A85",
+  "no0014Applied": true,
+  "freshReadOnlyAudits": {
+    "gateC": { "evidence": "gate-c.json", "checks": 32, "zeroAnomalies": 32, "result": "PASS" },
+    "f12LifecycleGlobal": { "evidence": "f12-lifecycle-global-summary.json", "checks": 11, "zeroAnomalies": 11, "result": "PASS" }
+  },
+  "manualOracle": { "evidence": "manual-oracle-summary.json", "database": "local PGlite", "result": "PASS" },
+  "independentNeonSqlOracle": {
+    "status": "HISTORICAL; broad 64-RT oracle not rerun in this closure",
+    "evidence": "../phase-13-reports-evidence/independent-sql-oracle.json"
+  },
+  "freshSingleRtSameSessionSqlComparison": {
+    "status": "PASS; fresh direct SELECT-only SQL compared with authenticated same-session API",
+    "evidence": "ui-api-reconciliation.json",
+    "scope": "Selected synthetic development RT, 2026; yearly, all 12 monthly summaries, arrears",
+    "readOnly": true,
+    "rawIdentifiersOrResidentNamesStored": false
+  },
+  "neonServiceSqlComparison": {
+    "status": "HISTORICAL; no tracked live comparison harness was available to rerun",
+    "evidence": "../phase-13-reports-evidence/service-sql-comparison.json"
+  },
+  "lifecycleFixtureChecks": "NOT RUN; F12.1 manifest unavailable; only the 11 exact global SELECT predicates were rerun",
+  "accessMode": "Read-only SELECT for integrity and report comparisons; the only writes were the explicitly authorized synthetic QA Chairman credential rotations and targeted session revocations.",
+  "databaseWrites": {
+    "authorizedSyntheticQaCredentialRotation": true,
+    "authorizedTargetedSessionRevocation": true,
+    "financialLedgerOrAuditWrites": false,
+    "productionWrites": false,
+    "temporaryPasswordActive": false,
+    "remainingSyntheticUserSessions": 0
+  },
+  "productionAccessed": false
+}

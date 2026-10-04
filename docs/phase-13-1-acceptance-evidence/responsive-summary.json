@@ -1,0 +1,108 @@
+{
+  "outcome": "PASS",
+  "checks": [
+    {
+      "viewport": {
+        "width": 360,
+        "height": 800
+      },
+      "width": 360,
+      "height": 800,
+      "documentWidth": 360,
+      "overflow": false,
+      "undersizedTargets": [],
+      "clippedCurrencyCount": 0,
+      "overlappingMonthCards": false,
+      "overlappingArrearsCards": false,
+      "yearSelectorUsable": true,
+      "arrearsReadable": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "width": 390,
+      "height": 844,
+      "documentWidth": 390,
+      "overflow": false,
+      "undersizedTargets": [],
+      "clippedCurrencyCount": 0,
+      "overlappingMonthCards": false,
+      "overlappingArrearsCards": false,
+      "yearSelectorUsable": true,
+      "arrearsReadable": true
+    },
+    {
+      "viewport": {
+        "width": 430,
+        "height": 900
+      },
+      "width": 430,
+      "height": 900,
+      "documentWidth": 430,
+      "overflow": false,
+      "undersizedTargets": [],
+      "clippedCurrencyCount": 0,
+      "overlappingMonthCards": false,
+      "overlappingArrearsCards": false,
+      "yearSelectorUsable": true,
+      "arrearsReadable": true
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "width": 768,
+      "height": 1024,
+      "documentWidth": 753,
+      "overflow": false,
+      "undersizedTargets": [],
+      "clippedCurrencyCount": 0,
+      "overlappingMonthCards": false,
+      "overlappingArrearsCards": false,
+      "yearSelectorUsable": true,
+      "arrearsReadable": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1425,
+      "overflow": false,
+      "undersizedTargets": [],
+      "clippedCurrencyCount": 0,
+      "overlappingMonthCards": false,
+      "overlappingArrearsCards": false,
+      "yearSelectorUsable": true,
+      "arrearsReadable": true
+    }
+  ],
+  "requiredViewports": [
+    {
+      "width": 360,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 430,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "allPassed": true
+}

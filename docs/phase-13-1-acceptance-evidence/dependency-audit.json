@@ -1,0 +1,25 @@
+{
+  "testedCommit": "6b90bdb35f7fe15950bf809b1792dee9db2df93b",
+  "dirtyTrackedFiles": [
+    ".github/workflows/gate-a.yml"
+  ],
+  "capturedAtUtc": "2026-10-04T11:47:53.4503938Z",
+  "acceptedResidualId": "RA-2026-F12-001",
+  "uniqueAffectedPackage": "braces@3.0.3",
+  "developmentOnly": true,
+  "npmAuditHighFindingCount": 1,
+  "npmAuditHighPathEntryCount": 5,
+  "productionOnlyVulnerabilities": 0,
+  "newHighOrCritical": false,
+  "result": "PASS_WITH_ACCEPTED_RESIDUAL",
+  "full": {
+    "command": "npm audit",
+    "exitCode": 1,
+    "output": "npm warn allow-scripts .npmrc allow-scripts setting is being ignored because package.json declares its own allowScripts field\r\n# npm audit report\r\n\r\nbraces  *\r\nSeverity: high\r\nbraces vulnerable to stack-exhaustion denial of service through deeply nested patterns - https://github.com/advisories/GHSA-vfj7-8cjw-p6xm\r\nfix available via `npm audit fix --force`\r\nWill install eslint-config-next@14.2.35, which is a breaking change\r\nnode_modules/braces\r\n  micromatch  >=0.2.0\r\n  Depends on vulnerable versions of braces\r\n  node_modules/micromatch\r\n    fast-glob  *\r\n    Depends on vulnerable versions of micromatch\r\n    node_modules/fast-glob\r\n      @next/eslint-plugin-next  >=14.3.0-canary.0\r\n      Depends on vulnerable versions of fast-glob\r\n      node_modules/@next/eslint-plugin-next\r\n        eslint-config-next  >=14.3.0-canary.0\r\n        Depends on vulnerable versions of @next/eslint-plugin-next\r\n        node_modules/eslint-config-next\r\n\r\n5 high severity vulnerabilities\r\n\r\nTo address all issues (including breaking changes), run:\r\n  npm audit fix --force"
+  },
+  "productionOnly": {
+    "command": "npm audit --omit=dev",
+    "exitCode": 0,
+    "output": "npm warn allow-scripts .npmrc allow-scripts setting is being ignored because package.json declares its own allowScripts field\r\nfound 0 vulnerabilities"
+  }
+}

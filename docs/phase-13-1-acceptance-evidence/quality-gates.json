@@ -1,0 +1,57 @@
+{
+  "branch": "fix/phase-13-1-acceptance-closure",
+  "testedCommit": "6b90bdb35f7fe15950bf809b1792dee9db2df93b",
+  "testedCommitIncludes": ["src/app/globals.css: chairman reports brand min-height 44px touch target"],
+  "dirtyTrackedFilesDuringChecks": [".github/workflows/gate-a.yml: closure branch push filter addition pending coordinator commit"],
+  "workflowChange": {
+    "file": ".github/workflows/gate-a.yml",
+    "result": "PASS_PENDING_COMMIT",
+    "change": "Added fix/phase-13-1-acceptance-closure to the push branch filters so Gate A runs on branch pushes."
+  },
+  "install": {
+    "command": "npm ci",
+    "exitCode": 0,
+    "packagesAdded": 427,
+    "packagesAudited": 428,
+    "warnings": [
+      "npm reported that the .npmrc allow-scripts setting is ignored because package.json declares allowScripts.",
+      "npm emitted deprecation notices for @esbuild-kit/esm-loader, @esbuild-kit/core-utils, and eslint@9.39.5."
+    ]
+  },
+  "dependencyAudit": {
+    "result": "PASS_WITH_ACCEPTED_RESIDUAL",
+    "fullAuditExitCode": 1,
+    "acceptedResidualId": "RA-2026-F12-001",
+    "uniqueAffectedPackage": "braces@3.0.3",
+    "developmentOnly": true,
+    "highPathEntries": 5,
+    "newHighOrCritical": false,
+    "productionAuditExitCode": 0,
+    "productionOnlyVulnerabilities": 0,
+    "evidence": "dependency-audit.json"
+  },
+  "intermediateLintAttempt": {
+    "command": "npm run lint",
+    "result": "FAIL_RESOLVED_BEFORE_FINAL_RERUN",
+    "cause": "Agent B's task-only work/f13-1-authenticated-report-acceptance.tmp.ts was temporarily under work/ and ESLint included it (69 explicit-any errors, 6 warnings). The unchanged temporary TypeScript runners were moved by Agent B to node_modules/.cache/karturt-f13-1-acceptance-closure/; no source was deleted or changed."
+  },
+  "gates": [
+    { "name": "lint", "command": "npm run lint", "exitCode": 0, "result": "PASS", "warnings": ["scripts/phase-12-household-browser-smoke.ts:1005 unused pinResetAuditEvidence"] },
+    { "name": "typecheck", "command": "npm run typecheck", "exitCode": 0, "result": "PASS" },
+    { "name": "unit", "command": "npm run test:unit -- --maxWorkers=1", "exitCode": 0, "result": "PASS", "testFilesPassed": 7, "testsPassed": 42 },
+    { "name": "integration", "command": "npm run test:integration -- --maxWorkers=1", "exitCode": 0, "result": "PASS", "testFilesPassed": 31, "testsPassed": 154, "durationSeconds": 251.56 },
+    { "name": "constraints", "command": "npm run test:constraints -- --maxWorkers=1", "exitCode": 0, "result": "PASS", "testFilesPassed": 8, "testsPassed": 42, "durationSeconds": 62.34 },
+    { "name": "authorization", "command": "npm run test:authorization -- --maxWorkers=1", "exitCode": 0, "result": "PASS", "testFilesPassed": 12, "testsPassed": 111, "durationSeconds": 57.32, "evidence": "authorization-summary.json" },
+    { "name": "full-suite", "command": "npm test -- --maxWorkers=1", "exitCode": 0, "result": "PASS", "testFilesPassed": 58, "testsPassed": 349, "durationSeconds": 343.59 },
+    { "name": "drizzle-journal", "command": "npx drizzle-kit check", "exitCode": 0, "result": "PASS", "output": "Everything's fine" },
+    { "name": "schema-drift", "command": "npm run db:generate -- --name gate_a_ci_drift; git diff --exit-code -- drizzle; git status --porcelain --untracked-files=all -- drizzle", "exitCode": 0, "result": "PASS", "output": "No schema changes, nothing to migrate; tracked diff and untracked migration checks were empty." },
+    { "name": "production-build", "command": "npm run build", "exitCode": 0, "result": "PASS", "buildEnvironment": "Gate A CI-style production/build-only placeholder variables; no production credentials or deployment accessed.", "timings": { "compileSeconds": 59, "typeScriptSeconds": 49, "staticPages": 14 } }
+  ],
+  "scope": {
+    "neonQueriedByThisAgent": false,
+    "productionTouchedByThisAgent": false,
+    "mainUpdated": false,
+    "committedOrPushedByThisAgent": false
+  },
+  "finalShaCi": "Not included; coordinator will verify the exact final branch SHA after commit/push."
+}

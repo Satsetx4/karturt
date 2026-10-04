@@ -1,0 +1,43 @@
+{
+  "event": "f13.manual_oracle_focused_rerun",
+  "verifiedOn": "2026-10-04",
+  "source": {
+    "branch": "fix/phase-13-1-acceptance-closure",
+    "commit": "6b90bdb35f7fe15950bf809b1792dee9db2df93b",
+    "test": "tests/integration/phase13-reports-manual-oracle.test.ts",
+    "testSha256": "DB801DF0F204EC2061BFE9BD6AA6EC36C07DD09766DA1A5A3F5EC53108A9A367"
+  },
+  "command": "npx vitest run tests/integration/phase13-reports-manual-oracle.test.ts --maxWorkers=1",
+  "result": "PASS",
+  "exitCode": 0,
+  "testFilesPassed": 1,
+  "testsPassed": 1,
+  "durationSeconds": 11.18,
+  "verificationDatabase": "local PGlite fixture; no Neon connection",
+  "coverage": {
+    "serviceReadModel": "getRtFinancialReport",
+    "monthlyTotals": "All 12 months asserted; direct SQL monthly aggregation reconciled to the service read model and manual expected values.",
+    "yearlyTotals": "Annual total asserted against manual constants and independent direct SQL; transfer plus cash equals received.",
+    "arrears": {
+      "2026-05-20": { "outstanding": 195000, "dueCount": 5, "householdCount": 3 },
+      "2026-05-05": { "outstanding": 115000, "dueCount": 3, "householdCount": 3 }
+    },
+    "directSqlServiceComparisons": [
+      "12 monthly rows",
+      "yearly aggregates at both business dates",
+      "arrears totals and row counts at both business dates",
+      "row-by-row arrears reconciliation between direct SQL and service at 2026-05-20"
+    ],
+    "financialSemantics": {
+      "transferPlusCashEqualsReceived": true,
+      "effectiveTargetEqualsReceivedPlusWaivedPlusOutstanding": true,
+      "waivedSeparateFromNotDue": true,
+      "notDueHasZeroFinancialAmounts": true,
+      "pendingIsNotReceived": true,
+      "reversedAllocationsExcluded": true,
+      "historicalAndReplacementHouseholdsSeparate": true,
+      "reportReadDoesNotMutateFinancialOrAuditRows": true
+    }
+  },
+  "authenticatedUiOrApiAcceptance": "NOT COVERED by this local oracle"
+}
