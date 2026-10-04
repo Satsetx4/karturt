@@ -30,6 +30,7 @@ import { POST as reversePayment } from "@/app/api/treasurer/payments/[paymentId]
 import { GET as getChairmanReport } from "@/app/api/chairman/reports/route";
 import { POST as createChairmanWaiver } from "@/app/api/chairman/waivers/route";
 import { GET as getChairmanHouseholds, POST as createChairmanHousehold } from "@/app/api/chairman/households/route";
+import { POST as replaceChairmanHouseholdResident } from "@/app/api/chairman/households/[householdId]/replace/route";
 import { GET as getChairmanFeeRates, POST as createChairmanFeeRate } from "@/app/api/chairman/fee-rates/route";
 import { POST as createChairmanAdjustment } from "@/app/api/chairman/adjustments/route";
 import {
@@ -345,6 +346,32 @@ describe("System Admin recovery route cookie-session boundary", () => {
     expect(await testDatabase.db.select().from(auditEvents)).toEqual(beforeAnonymous.audits);
 
     mocks.requestHeaders = new Headers({ cookie: firstResident.cookie });
+    const spoofedResidentCreate = await createResidentRequest(new Request("http://localhost:3000/api/resident/payment-requests", {
+      method: "POST",
+      headers: {
+        origin: "http://localhost:3000",
+        "content-type": "application/json",
+        "idempotency-key": randomUUID(),
+        cookie: firstResident.cookie,
+      },
+      body: JSON.stringify({
+        period: "2026-07",
+        role: "treasurer",
+        accountType: "official",
+        rtUnitId,
+        actorAccountId: secondResident.accountId,
+        requestedByAccountId: secondResident.accountId,
+        amount: 1,
+      }),
+    }));
+    expect(spoofedResidentCreate.status).toBe(400);
+    expect(await testDatabase.db.select().from(paymentRequests)).toEqual(beforeAnonymous.requests);
+    expect(await testDatabase.db.select().from(paymentRequestItems)).toEqual(beforeAnonymous.items);
+    expect(await testDatabase.db.select().from(paymentRequestClaims)).toEqual(beforeAnonymous.claims);
+    expect(await testDatabase.db.select().from(monthlyDues)).toEqual(beforeAnonymous.dues);
+    expect(await testDatabase.db.select().from(auditEvents)).toEqual(beforeAnonymous.audits);
+
+    mocks.requestHeaders = new Headers({ cookie: firstResident.cookie });
     const firstHistory = await getResidentRequests(new Request("http://localhost:3000/api/resident/payment-requests", {
       headers: { cookie: firstResident.cookie },
     }));
@@ -357,6 +384,17 @@ describe("System Admin recovery route cookie-session boundary", () => {
     }));
     expect(secondHistory.status).toBe(200);
     expect(await secondHistory.json()).toMatchObject({ requests: [{ requestCode: secondRequest.requestCode }] });
+
+    mocks.requestHeaders = new Headers({ cookie: firstResident.cookie });
+    const foreignCursor = await getResidentRequests(new Request(
+      `http://localhost:3000/api/resident/payment-requests?cursor=${secondRequest.requestCode}`,
+      { headers: { cookie: firstResident.cookie } },
+    ));
+    expect(foreignCursor.status).toBe(400);
+    const foreignCursorBody = await foreignCursor.text();
+    expect(foreignCursorBody).not.toContain(secondRequest.requestCode);
+    expect(foreignCursorBody).not.toContain(secondRequest.requestId);
+    expect(foreignCursorBody).not.toContain(secondResident.userId);
 
     const before = {
       request: await testDatabase.db.select().from(paymentRequests).where(eq(paymentRequests.id, secondRequest.requestId)),
@@ -422,9 +460,29 @@ describe("System Admin recovery route cookie-session boundary", () => {
     const treasurer = await regularSession("Treasurer waiver attacker", "official", { role: "treasurer", rtUnitId });
     const otherRtUnitId = await createRt(testDatabase.db);
     const otherRtHousehold = await createHousehold(testDatabase.db, otherRtUnitId);
+    const otherRtResident = await regularSession("Other RT Resident target", "resident", { rtUnitId: otherRtUnitId });
     const otherRtChairman = await regularSession("Other RT Chairman", "official", {
       role: "rt_chairman",
       rtUnitId: otherRtUnitId,
+    });
+    const [otherRtBillingYear] = await testDatabase.db.insert(billingYears).values({
+      rtUnitId: otherRtUnitId,
+      year: 2026,
+      status: "open",
+    }).returning({ id: billingYears.id });
+    const [otherRtFeeRate] = await createFeeRateFixture(testDatabase.db, {
+      rtUnitId: otherRtUnitId,
+      billingYearId: otherRtBillingYear!.id,
+      effectiveMonth: 1,
+      monthlyAmount: 40000,
+    });
+    const otherRtRequest = await pendingRequestFor({
+      rtUnitId: otherRtUnitId,
+      householdId: otherRtResident.householdId!,
+      residentAccountId: otherRtResident.accountId,
+      billingYearId: otherRtBillingYear!.id,
+      feeRateId: otherRtFeeRate!.id,
+      period: "2026-08",
     });
     const [billingYear] = await testDatabase.db.insert(billingYears).values({
       rtUnitId,
@@ -483,6 +541,64 @@ describe("System Admin recovery route cookie-session boundary", () => {
     expect(await testDatabase.db.select().from(waiverItems)).toEqual(beforeDenied.items);
     expect(await testDatabase.db.select().from(auditEvents)).toEqual(beforeDenied.audits);
 
+    const foreignFinancialBefore = {
+      request: await testDatabase.db.select().from(paymentRequests).where(eq(paymentRequests.id, otherRtRequest.requestId)),
+      items: await testDatabase.db.select().from(paymentRequestItems).where(eq(paymentRequestItems.requestId, otherRtRequest.requestId)),
+      claims: await testDatabase.db.select().from(paymentRequestClaims).where(eq(paymentRequestClaims.requestId, otherRtRequest.requestId)),
+      due: await testDatabase.db.select().from(monthlyDues).where(eq(monthlyDues.id, otherRtRequest.dueId)),
+      payments: await testDatabase.db.select().from(payments).where(eq(payments.paymentRequestId, otherRtRequest.requestId)),
+      allocations: await testDatabase.db.select().from(paymentAllocations).where(eq(paymentAllocations.monthlyDueId, otherRtRequest.dueId)),
+      pin: await testDatabase.db.select({ password: authAccount.password }).from(authAccount).where(eq(authAccount.userId, otherRtResident.userId)),
+      audits: await testDatabase.db.select().from(auditEvents),
+    };
+
+    mocks.requestHeaders = new Headers({ cookie: treasurer.cookie });
+    const crossRtVerification = await verifyTreasurerPayment(new Request(
+      `http://localhost:3000/api/treasurer/payment-requests/${otherRtRequest.requestCode}/verify`,
+      {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:3000",
+          "content-type": "application/json",
+          cookie: treasurer.cookie,
+        },
+        body: "{}",
+      },
+    ), { params: Promise.resolve({ requestCode: otherRtRequest.requestCode }) });
+    expect(crossRtVerification.status).toBe(404);
+    expect(await crossRtVerification.text()).not.toContain(otherRtResident.userId);
+
+    mocks.requestHeaders = new Headers({ cookie: chairman.cookie });
+    const crossRtPinReset = await resetResidentPin(new Request(
+      `http://localhost:3000/api/residents/${otherRtResident.accountId}/reset-pin`,
+      {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:3000",
+          "content-type": "application/json",
+          cookie: chairman.cookie,
+        },
+        body: JSON.stringify({ pin: "839174", reason: "Cross-RT reset denial test" }),
+      },
+    ), { params: Promise.resolve({ accountId: otherRtResident.accountId }) });
+    expect(crossRtPinReset.status).toBe(404);
+    expect(await crossRtPinReset.text()).not.toContain(otherRtResident.userId);
+    expect(await testDatabase.db.select().from(paymentRequests).where(eq(paymentRequests.id, otherRtRequest.requestId)))
+      .toEqual(foreignFinancialBefore.request);
+    expect(await testDatabase.db.select().from(paymentRequestItems).where(eq(paymentRequestItems.requestId, otherRtRequest.requestId)))
+      .toEqual(foreignFinancialBefore.items);
+    expect(await testDatabase.db.select().from(paymentRequestClaims).where(eq(paymentRequestClaims.requestId, otherRtRequest.requestId)))
+      .toEqual(foreignFinancialBefore.claims);
+    expect(await testDatabase.db.select().from(monthlyDues).where(eq(monthlyDues.id, otherRtRequest.dueId)))
+      .toEqual(foreignFinancialBefore.due);
+    expect(await testDatabase.db.select().from(payments).where(eq(payments.paymentRequestId, otherRtRequest.requestId)))
+      .toEqual(foreignFinancialBefore.payments);
+    expect(await testDatabase.db.select().from(paymentAllocations).where(eq(paymentAllocations.monthlyDueId, otherRtRequest.dueId)))
+      .toEqual(foreignFinancialBefore.allocations);
+    expect(await testDatabase.db.select({ password: authAccount.password }).from(authAccount).where(eq(authAccount.userId, otherRtResident.userId)))
+      .toEqual(foreignFinancialBefore.pin);
+    expect(await testDatabase.db.select().from(auditEvents)).toEqual(foreignFinancialBefore.audits);
+
     const authorizedWaiver = await waiverRequest(chairman.cookie, resident.householdId!, "Approved same-RT waiver.");
     expect(authorizedWaiver.status).toBe(200);
     expect(await testDatabase.db.select({ status: monthlyDues.status }).from(monthlyDues).where(eq(monthlyDues.id, due!.id)))
@@ -508,7 +624,7 @@ describe("System Admin recovery route cookie-session boundary", () => {
       headers: { cookie: otherRtChairman.cookie },
     }));
     expect(otherRtReport.status).toBe(200);
-    await expect(otherRtReport.json()).resolves.toMatchObject({ yearly: { target: 0, waived: 0 } });
+    await expect(otherRtReport.json()).resolves.toMatchObject({ yearly: { target: 40000, waived: 0 } });
 
     mocks.requestHeaders = new Headers({ cookie: chairman.cookie });
     const spoofedReport = await getChairmanReport(new Request(
@@ -554,26 +670,156 @@ describe("System Admin recovery route cookie-session boundary", () => {
     }
   });
 
-  it("allows another verified System Admin through the direct API and revokes only the target state", async () => {
+  it("rejects invalid, missing, null, and foreign Origins on signed-in mutation route families", async () => {
+    const rtUnitId = await createRt(testDatabase.db);
+    const resident = await regularSession("Origin matrix Resident", "resident", { rtUnitId });
+    const treasurer = await regularSession("Origin matrix Treasurer", "official", { role: "treasurer", rtUnitId });
+    const chairman = await regularSession("Origin matrix Chairman", "official", { role: "rt_chairman", rtUnitId });
+    const targetAdmin = await verifiedAdminSession("Origin matrix recovery target");
+    const actorAdmin = await verifiedAdminSession("Origin matrix recovery actor");
+    const before = {
+      requests: await testDatabase.db.select().from(paymentRequests),
+      requestItems: await testDatabase.db.select().from(paymentRequestItems),
+      claims: await testDatabase.db.select().from(paymentRequestClaims),
+      dues: await testDatabase.db.select().from(monthlyDues),
+      payments: await testDatabase.db.select().from(payments),
+      allocations: await testDatabase.db.select().from(paymentAllocations),
+      waiverActions: await testDatabase.db.select().from(waiverActions),
+      waiverItems: await testDatabase.db.select().from(waiverItems),
+      accounts: await testDatabase.db.select().from(appAccounts),
+      credentials: await testDatabase.db.select().from(authAccount),
+      sessions: await testDatabase.db.select().from(authSession),
+      factors: await testDatabase.db.select().from(authTwoFactor),
+      users: await testDatabase.db.select().from(authUser),
+      audits: await testDatabase.db.select().from(auditEvents),
+    };
+    const originCases: Array<{ label: string; origin?: string }> = [
+      { label: "foreign", origin: "https://attacker.invalid" },
+      { label: "null", origin: "null" },
+      { label: "malformed", origin: "bukan-url" },
+      { label: "missing" },
+    ];
+
+    for (const originCase of originCases) {
+      const post = (path: string, cookie: string, body: unknown, extraHeaders: Record<string, string> = {}) => {
+        const headers = new Headers({
+          "content-type": "application/json",
+          cookie,
+          ...extraHeaders,
+        });
+        if (originCase.origin !== undefined) headers.set("origin", originCase.origin);
+        return new Request(`http://localhost:3000${path}`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+        });
+      };
+
+      mocks.requestHeaders = new Headers({ cookie: resident.cookie });
+      const residentRequest = await createResidentRequest(post(
+        "/api/resident/payment-requests",
+        resident.cookie,
+        { period: "2026-11" },
+        { "idempotency-key": randomUUID() },
+      ));
+      expect(residentRequest.status, `Resident request ${originCase.label} Origin`).toBe(403);
+
+      mocks.requestHeaders = new Headers({ cookie: treasurer.cookie });
+      const cashPayment = await recordCashPayment(post(
+        "/api/treasurer/cash-payments",
+        treasurer.cookie,
+        { householdId: resident.householdId, period: "2026-11" },
+        { "idempotency-key": randomUUID() },
+      ));
+      expect(cashPayment.status, `Treasurer cash ${originCase.label} Origin`).toBe(403);
+
+      mocks.requestHeaders = new Headers({ cookie: chairman.cookie });
+      const waiver = await createChairmanWaiver(post(
+        "/api/chairman/waivers",
+        chairman.cookie,
+        { householdId: resident.householdId, periods: ["2026-11"], reason: "Origin guard fixture" },
+        { "idempotency-key": randomUUID() },
+      ));
+      expect(waiver.status, `Chairman waiver ${originCase.label} Origin`).toBe(403);
+
+      mocks.requestHeaders = new Headers({ cookie: chairman.cookie });
+      const pinReset = await resetResidentPin(post(
+        `/api/residents/${resident.accountId}/reset-pin`,
+        chairman.cookie,
+        { pin: "839174", reason: "Origin guard fixture" },
+      ), { params: Promise.resolve({ accountId: resident.accountId }) });
+      expect(pinReset.status, `PIN reset ${originCase.label} Origin`).toBe(403);
+
+      mocks.requestHeaders = new Headers({ cookie: actorAdmin.cookie });
+      const recovery = await recoverTwoFactor(post(
+        `/api/system-admin/accounts/${targetAdmin.accountId}/recover-two-factor`,
+        actorAdmin.cookie,
+        { reason: "Origin guard fixture", recoveryReference: "INC-2026-240" },
+      ), { params: Promise.resolve({ accountId: targetAdmin.accountId }) });
+      expect(recovery.status, `System Admin recovery ${originCase.label} Origin`).toBe(403);
+    }
+
+    expect(await testDatabase.db.select().from(paymentRequests)).toEqual(before.requests);
+    expect(await testDatabase.db.select().from(paymentRequestItems)).toEqual(before.requestItems);
+    expect(await testDatabase.db.select().from(paymentRequestClaims)).toEqual(before.claims);
+    expect(await testDatabase.db.select().from(monthlyDues)).toEqual(before.dues);
+    expect(await testDatabase.db.select().from(payments)).toEqual(before.payments);
+    expect(await testDatabase.db.select().from(paymentAllocations)).toEqual(before.allocations);
+    expect(await testDatabase.db.select().from(waiverActions)).toEqual(before.waiverActions);
+    expect(await testDatabase.db.select().from(waiverItems)).toEqual(before.waiverItems);
+    expect(await testDatabase.db.select().from(appAccounts)).toEqual(before.accounts);
+    expect(await testDatabase.db.select().from(authAccount)).toEqual(before.credentials);
+    expect(await testDatabase.db.select().from(authSession)).toEqual(before.sessions);
+    expect(await testDatabase.db.select().from(authTwoFactor)).toEqual(before.factors);
+    expect(await testDatabase.db.select().from(authUser)).toEqual(before.users);
+    expect(await testDatabase.db.select().from(auditEvents)).toEqual(before.audits);
+  });
+
+  it("rejects spoofed recovery actors and lets another verified System Admin change only the target", async () => {
     const actor = await verifiedAdminSession("Authorized recovery actor");
     const target = await verifiedAdminSession("Authorized recovery target");
     const actorSessionsBefore = await testDatabase.db.select().from(authSession).where(eq(authSession.userId, actor.userId));
-    mocks.requestHeaders = new Headers({ cookie: actor.cookie });
-    const response = await recoverTwoFactor(new Request(
-      `http://localhost:3000/api/system-admin/accounts/${target.accountId}/recover-two-factor`,
-      {
-        method: "POST",
-        headers: {
-          origin: "http://localhost:3000",
-          "content-type": "application/json",
-          cookie: actor.cookie,
+    const targetBefore = {
+      factors: await testDatabase.db.select().from(authTwoFactor).where(eq(authTwoFactor.userId, target.userId)),
+      sessions: await testDatabase.db.select().from(authSession).where(eq(authSession.userId, target.userId)),
+      account: await testDatabase.db.select({ enabled: authUser.twoFactorEnabled }).from(authUser).where(eq(authUser.id, target.userId)),
+      audits: await testDatabase.db.select().from(auditEvents).where(and(
+        eq(auditEvents.entityId, target.accountId),
+        eq(auditEvents.action, "system_admin.two_factor.emergency_recovery"),
+      )),
+    };
+    const invoke = async (body: unknown) => {
+      mocks.requestHeaders = new Headers({ cookie: actor.cookie });
+      return recoverTwoFactor(new Request(
+        `http://localhost:3000/api/system-admin/accounts/${target.accountId}/recover-two-factor`,
+        {
+          method: "POST",
+          headers: {
+            origin: "http://localhost:3000",
+            "content-type": "application/json",
+            cookie: actor.cookie,
+          },
+          body: JSON.stringify(body),
         },
-        body: JSON.stringify({
-          reason: "Target lost the authenticator and backup codes.",
-          recoveryReference: "INC-2026-033",
-        }),
-      },
-    ), { params: Promise.resolve({ accountId: target.accountId }) });
+      ), { params: Promise.resolve({ accountId: target.accountId }) });
+    };
+    const spoofedActorResponse = await invoke({
+      reason: "Attempted actor substitution.",
+      recoveryReference: "INC-2026-033",
+      role: "resident",
+      accountType: "resident",
+      actorAccountId: target.accountId,
+      verifiedByAccountId: target.accountId,
+      createdBy: target.accountId,
+      targetAccountId: actor.accountId,
+    });
+    expect(spoofedActorResponse.status).toBe(400);
+    await assertTargetState(target.accountId, target.userId, targetBefore);
+
+    const response = await invoke({
+      reason: "Target lost the authenticator and backup codes.",
+      recoveryReference: "INC-2026-033",
+    });
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ ok: true, targetAccountId: target.accountId, sessionsRevoked: 2 });
@@ -582,10 +828,12 @@ describe("System Admin recovery route cookie-session boundary", () => {
     expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, actor.userId))).toEqual(actorSessionsBefore);
     await expect(testDatabase.db.select({ enabled: authUser.twoFactorEnabled }).from(authUser).where(eq(authUser.id, target.userId)))
       .resolves.toMatchObject([{ enabled: false }]);
-    expect(await testDatabase.db.select().from(auditEvents).where(and(
+    const recoveryAudits = await testDatabase.db.select().from(auditEvents).where(and(
       eq(auditEvents.entityId, target.accountId),
       eq(auditEvents.action, "system_admin.two_factor.emergency_recovery"),
-    ))).toMatchObject([{
+    ));
+    expect(recoveryAudits).toHaveLength(1);
+    expect(recoveryAudits).toMatchObject([{
       actorAppAccountId: actor.accountId,
       reason: "Target lost the authenticator and backup codes.",
       context: { recoveryReference: "INC-2026-033", revokedSessionCount: 2 },
@@ -628,7 +876,76 @@ describe("System Admin recovery route cookie-session boundary", () => {
     await assertTargetState(actor.accountId, actor.userId, before);
   });
 
-  it("denies authenticated wrong-role, inactive, ended-assignment, unverified, spoofed, and anonymous direct API calls without state changes", async () => {
+  it("denies disabled recovery targets and rolls back target state when the audit insert fails", async () => {
+    const actor = await verifiedAdminSession("Recovery rollback actor");
+    const target = await verifiedAdminSession("Recovery rollback target");
+    const snapshot = {
+      factors: await testDatabase.db.select().from(authTwoFactor).where(eq(authTwoFactor.userId, target.userId)),
+      sessions: await testDatabase.db.select().from(authSession).where(eq(authSession.userId, target.userId)),
+      account: await testDatabase.db.select({ enabled: authUser.twoFactorEnabled }).from(authUser).where(eq(authUser.id, target.userId)),
+      audits: await testDatabase.db.select().from(auditEvents).where(and(
+        eq(auditEvents.entityId, target.accountId),
+        eq(auditEvents.action, "system_admin.two_factor.emergency_recovery"),
+      )),
+    };
+    const invokeRecovery = async (body: unknown) => {
+      mocks.requestHeaders = new Headers({ cookie: actor.cookie });
+      return recoverTwoFactor(new Request(
+        `http://localhost:3000/api/system-admin/accounts/${target.accountId}/recover-two-factor`,
+        {
+          method: "POST",
+          headers: {
+            origin: "http://localhost:3000",
+            "content-type": "application/json",
+            cookie: actor.cookie,
+          },
+          body: JSON.stringify(body),
+        },
+      ), { params: Promise.resolve({ accountId: target.accountId }) });
+    };
+
+    expect((await invokeRecovery({ reason: "Recovery reference intentionally omitted" })).status).toBe(400);
+    await assertTargetState(target.accountId, target.userId, snapshot);
+
+    await testDatabase.db.update(appAccounts).set({ status: "disabled" }).where(eq(appAccounts.id, target.accountId));
+    const disabledResponse = await invokeRecovery({ reason: "Disabled target", recoveryReference: "INC-2026-241" });
+    expect(disabledResponse.status).toBe(404);
+    await assertTargetState(target.accountId, target.userId, snapshot);
+    await testDatabase.db.update(appAccounts).set({ status: "active" }).where(eq(appAccounts.id, target.accountId));
+
+    const functionName = `f2_1_fail_recovery_audit_${randomUUID().replaceAll("-", "")}`;
+    const triggerName = `${functionName}_trigger`;
+    await testDatabase.client.exec(`
+      CREATE FUNCTION public.${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.action = 'system_admin.two_factor.emergency_recovery' THEN
+          RAISE EXCEPTION 'forced F2.1 recovery audit failure' USING ERRCODE = '23514';
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
+      CREATE TRIGGER ${triggerName}
+      BEFORE INSERT ON public.audit_events
+      FOR EACH ROW EXECUTE FUNCTION public.${functionName}();
+    `);
+    try {
+      const failedAuditResponse = await invokeRecovery({
+        reason: "Rollback after audit failure",
+        recoveryReference: "INC-2026-242",
+      });
+      expect(failedAuditResponse.status).toBe(500);
+      const safeError = await failedAuditResponse.text();
+      expect(safeError).not.toMatch(/sql|23514|insert into|stack|secret/i);
+      await assertTargetState(target.accountId, target.userId, snapshot);
+    } finally {
+      await testDatabase.client.exec(`
+        DROP TRIGGER ${triggerName} ON public.audit_events;
+        DROP FUNCTION public.${functionName}();
+      `);
+    }
+  });
+
+  it("denies authenticated wrong-role, inactive, ended-assignment, unverified, and anonymous direct API calls without state changes", async () => {
     const target = await verifiedAdminSession("Recovery matrix target");
     const before = {
       factors: await testDatabase.db.select().from(authTwoFactor).where(eq(authTwoFactor.userId, target.userId)),
@@ -680,10 +997,6 @@ describe("System Admin recovery route cookie-session boundary", () => {
           body: JSON.stringify({
             reason: `Denied ${testCase.label} attempt.`,
             recoveryReference: "INC-2026-032",
-            role: "system_admin",
-            rtUnitId: "00000000-0000-4000-8000-000000000099",
-            actorAppAccountId: target.accountId,
-            targetAccountId: target.accountId,
           }),
         },
       ), { params: Promise.resolve({ accountId: target.accountId }) });
@@ -773,6 +1086,39 @@ describe("System Admin recovery route cookie-session boundary", () => {
     expect((await invokeWithCookie(resident.cookie, () => pinRequest(resident.cookie, otherResident.accountId))).status).toBe(403);
     expect((await invokeWithCookie(otherRtResident.cookie, () => pinRequest(otherRtResident.cookie, resident.accountId))).status).toBe(403);
 
+    const disabledTargetBefore = {
+      credential: await testDatabase.db.select({ password: authAccount.password })
+        .from(authAccount).where(eq(authAccount.userId, disabledResident.userId)),
+      sessions: await testDatabase.db.select().from(authSession).where(eq(authSession.userId, disabledResident.userId)),
+      audits: await testDatabase.db.select().from(auditEvents).where(eq(auditEvents.entityId, disabledResident.accountId)),
+    };
+    const disabledTargetReset = await invokeWithCookie(chairman.cookie, () => resetResidentPin(request(
+      `/api/residents/${disabledResident.accountId}/reset-pin`,
+      chairman.cookie,
+      "POST",
+      { pin: "839174", reason: "Disabled target recovery denial" },
+    ), { params: Promise.resolve({ accountId: disabledResident.accountId }) }));
+    expect(disabledTargetReset.status).toBe(404);
+    expect(await testDatabase.db.select({ password: authAccount.password })
+      .from(authAccount).where(eq(authAccount.userId, disabledResident.userId))).toEqual(disabledTargetBefore.credential);
+    expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, disabledResident.userId)))
+      .toEqual(disabledTargetBefore.sessions);
+    expect(await testDatabase.db.select().from(auditEvents).where(eq(auditEvents.entityId, disabledResident.accountId)))
+      .toEqual(disabledTargetBefore.audits);
+
+    const pinMassAssignment = await invokeWithCookie(chairman.cookie, () => resetResidentPin(request(
+      `/api/residents/${resident.accountId}/reset-pin`, chairman.cookie, "POST", {
+        ...pinBody,
+        role: "system_admin",
+        accountType: "system_admin",
+        rtUnitId: "00000000-0000-4000-8000-000000000099",
+        actorAccountId: resident.accountId,
+        verifiedByAccountId: resident.accountId,
+        createdBy: resident.accountId,
+      },
+    ), { params: Promise.resolve({ accountId: resident.accountId }) }));
+    expect(pinMassAssignment.status).toBe(400);
+
     expect((await invokeWithCookie(treasurer.cookie, () => getTreasurerQueue())).status).toBe(200);
     expect((await invokeWithCookie(treasurer.cookie, () => getTreasurerHistory(request("/api/treasurer/payments", treasurer.cookie)))).status).toBe(200);
     expect((await invokeWithCookie(null, () => getTreasurerQueue())).status).toBe(401);
@@ -783,6 +1129,19 @@ describe("System Admin recovery route cookie-session boundary", () => {
       "/api/treasurer/cash-payments", treasurer.cookie, "POST", cashBody,
     )));
     expect(cashResponse.status).toBe(409);
+    const cashSpoof = await invokeWithCookie(treasurer.cookie, () => recordCashPayment(request(
+      "/api/treasurer/cash-payments", treasurer.cookie, "POST", {
+        ...cashBody,
+        role: "system_admin",
+        accountType: "system_admin",
+        rtUnitId: "00000000-0000-4000-8000-000000000099",
+        actorAccountId: resident.accountId,
+        amount: 1,
+        createdBy: resident.accountId,
+        status: "paid",
+      },
+    )));
+    expect(cashSpoof.status).toBe(400);
     expect((await invokeWithCookie(null, () => recordCashPayment(request(
       "/api/treasurer/cash-payments", null, "POST", cashBody,
     )))).status).toBe(401);
@@ -793,6 +1152,15 @@ describe("System Admin recovery route cookie-session boundary", () => {
     ), { params: Promise.resolve({ paymentId }) });
     expect((await invokeWithCookie(treasurer.cookie, () => reverseHandler(treasurer.cookie))).status).toBe(404);
     expect((await invokeWithCookie(null, () => reverseHandler(null))).status).toBe(401);
+
+    const verifyAsWrongRole = async (cookie: string, label: string) => {
+      const response = await invokeWithCookie(cookie, () => verifyTreasurerPayment(request(
+        "/api/treasurer/payment-requests/KRT-0000000000000000/verify", cookie, "POST", {},
+      ), { params: Promise.resolve({ requestCode: "KRT-0000000000000000" }) }));
+      expect(response.status, `${label} cannot verify Treasurer payments`).toBe(403);
+    };
+    await verifyAsWrongRole(resident.cookie, "Resident");
+    await verifyAsWrongRole(chairman.cookie, "Chairman");
 
     const householdList = (cookie?: string) => getChairmanHouseholds(request("/api/chairman/households", cookie));
     expect((await invokeWithCookie(chairman.cookie, () => householdList(chairman.cookie))).status).toBe(200);
@@ -834,6 +1202,168 @@ describe("System Admin recovery route cookie-session boundary", () => {
     expect(await testDatabase.db.select().from(feeRates)).toEqual(before.feeRates);
     expect(await testDatabase.db.select().from(dueAdjustments)).toEqual(before.adjustments);
     expect(await testDatabase.db.select().from(auditEvents)).toEqual(before.audits);
+
+    const residentCredentialBefore = await testDatabase.db.select({ password: authAccount.password })
+      .from(authAccount).where(eq(authAccount.userId, resident.userId));
+    const chairmanSessionsBefore = await testDatabase.db.select().from(authSession).where(eq(authSession.userId, chairman.userId));
+    mocks.requestHeaders = new Headers({ cookie: chairman.cookie });
+    const authorizedPinReset = await resetResidentPin(request(
+      `/api/residents/${resident.accountId}/reset-pin`,
+      chairman.cookie,
+      "POST",
+      { pin: "839174", reason: "Authorized closure matrix reset" },
+    ), { params: Promise.resolve({ accountId: resident.accountId }) });
+    expect(authorizedPinReset.status).toBe(200);
+    expect(await testDatabase.db.select({ password: authAccount.password })
+      .from(authAccount).where(eq(authAccount.userId, resident.userId))).not.toEqual(residentCredentialBefore);
+    expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, resident.userId))).toHaveLength(0);
+    expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, chairman.userId))).toEqual(chairmanSessionsBefore);
+    expect(await testDatabase.db.select().from(auditEvents).where(and(
+      eq(auditEvents.entityId, resident.accountId),
+      eq(auditEvents.action, "resident.pin.reset"),
+    ))).toMatchObject([{ actorAppAccountId: chairman.accountId, reason: "Authorized closure matrix reset" }]);
+
+    mocks.requestHeaders = new Headers({ cookie: resident.cookie });
+    const residentAfterPinReset = await getResidentDues();
+    expect(residentAfterPinReset.status).toBe(401);
+  });
+
+  it("rejects protected actor and amount fields on actual Treasurer verification and Chairman waiver routes", async () => {
+    const rtUnitId = await createRt(testDatabase.db);
+    const resident = await regularSession("Mass assignment Resident", "resident", { rtUnitId });
+    const treasurer = await regularSession("Mass assignment Treasurer", "official", { role: "treasurer", rtUnitId });
+    const chairman = await regularSession("Mass assignment Chairman", "official", { role: "rt_chairman", rtUnitId });
+    const [billingYear] = await testDatabase.db.insert(billingYears).values({
+      rtUnitId,
+      year: 2026,
+      status: "open",
+    }).returning({ id: billingYears.id });
+    const [feeRate] = await createFeeRateFixture(testDatabase.db, {
+      rtUnitId,
+      billingYearId: billingYear!.id,
+      effectiveMonth: 1,
+      monthlyAmount: 40000,
+    });
+    const target = await pendingRequestFor({
+      rtUnitId,
+      householdId: resident.householdId!,
+      residentAccountId: resident.accountId,
+      billingYearId: billingYear!.id,
+      feeRateId: feeRate!.id,
+      period: "2026-11",
+    });
+    const before = {
+      requests: await testDatabase.db.select().from(paymentRequests),
+      items: await testDatabase.db.select().from(paymentRequestItems),
+      claims: await testDatabase.db.select().from(paymentRequestClaims),
+      dues: await testDatabase.db.select().from(monthlyDues),
+      payments: await testDatabase.db.select().from(payments),
+      allocations: await testDatabase.db.select().from(paymentAllocations),
+      waiverActions: await testDatabase.db.select().from(waiverActions),
+      waiverItems: await testDatabase.db.select().from(waiverItems),
+      audits: await testDatabase.db.select().from(auditEvents),
+    };
+    const verificationBody = {
+      role: "system_admin",
+      accountType: "system_admin",
+      actorAccountId: resident.accountId,
+      verifiedByAccountId: resident.accountId,
+      createdBy: resident.accountId,
+      amount: 1,
+      status: "paid",
+      rtUnitId: "00000000-0000-4000-8000-000000000099",
+    };
+    mocks.requestHeaders = new Headers({ cookie: treasurer.cookie });
+    const verification = await verifyTreasurerPayment(new Request(
+      `http://localhost:3000/api/treasurer/payment-requests/${target.requestCode}/verify`,
+      {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:3000",
+          "content-type": "application/json",
+          cookie: treasurer.cookie,
+        },
+        body: JSON.stringify(verificationBody),
+      },
+    ), { params: Promise.resolve({ requestCode: target.requestCode }) });
+    expect(verification.status).toBe(400);
+
+    mocks.requestHeaders = new Headers({ cookie: chairman.cookie });
+    const waiver = await createChairmanWaiver(new Request("http://localhost:3000/api/chairman/waivers", {
+      method: "POST",
+      headers: {
+        origin: "http://localhost:3000",
+        "content-type": "application/json",
+        "idempotency-key": randomUUID(),
+        cookie: chairman.cookie,
+      },
+      body: JSON.stringify({
+        householdId: resident.householdId,
+        periods: ["2026-11"],
+        reason: "Mass assignment denial fixture",
+        role: "system_admin",
+        accountType: "system_admin",
+        rtUnitId: "00000000-0000-4000-8000-000000000099",
+        actorAccountId: resident.accountId,
+        createdBy: resident.accountId,
+        amount: 1,
+        status: "waived",
+      }),
+    }));
+    expect(waiver.status).toBe(400);
+
+    expect(await testDatabase.db.select().from(paymentRequests)).toEqual(before.requests);
+    expect(await testDatabase.db.select().from(paymentRequestItems)).toEqual(before.items);
+    expect(await testDatabase.db.select().from(paymentRequestClaims)).toEqual(before.claims);
+    expect(await testDatabase.db.select().from(monthlyDues)).toEqual(before.dues);
+    expect(await testDatabase.db.select().from(payments)).toEqual(before.payments);
+    expect(await testDatabase.db.select().from(paymentAllocations)).toEqual(before.allocations);
+    expect(await testDatabase.db.select().from(waiverActions)).toEqual(before.waiverActions);
+    expect(await testDatabase.db.select().from(waiverItems)).toEqual(before.waiverItems);
+    expect(await testDatabase.db.select().from(auditEvents)).toEqual(before.audits);
+  });
+
+  it("revokes and rejects a Resident cookie after an authenticated household replacement", async () => {
+    const rtUnitId = await createRt(testDatabase.db);
+    const resident = await regularSession("Replacement old Resident", "resident", { rtUnitId });
+    const chairman = await regularSession("Replacement Chairman", "official", { role: "rt_chairman", rtUnitId });
+    const [billingYear] = await testDatabase.db.insert(billingYears).values({
+      rtUnitId,
+      year: 2026,
+      status: "open",
+    }).returning({ id: billingYears.id });
+    await createFeeRateFixture(testDatabase.db, {
+      rtUnitId,
+      billingYearId: billingYear!.id,
+      effectiveMonth: 1,
+      monthlyAmount: 40000,
+    });
+    expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, resident.userId))).not.toHaveLength(0);
+
+    mocks.requestHeaders = new Headers({ cookie: chairman.cookie });
+    const response = await replaceChairmanHouseholdResident(new Request(
+      `http://localhost:3000/api/chairman/households/${resident.householdId}/replace`,
+      {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:3000",
+          "content-type": "application/json",
+          cookie: chairman.cookie,
+        },
+        body: JSON.stringify({
+          effectiveMonth: "2026-11",
+          fullName: "Replacement fixture resident",
+          initialPin: "839174",
+          reason: "F2.1 stale session revocation fixture",
+        }),
+      },
+    ), { params: Promise.resolve({ householdId: resident.householdId! }) });
+
+    expect(response.status).toBe(200);
+    expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, resident.userId))).toHaveLength(0);
+    mocks.requestHeaders = new Headers({ cookie: resident.cookie });
+    const staleRead = await getResidentDues();
+    expect(staleRead.status).toBe(401);
   });
 
   it("crosses signed-cookie principal categories against all available representative route families", async () => {

@@ -16,6 +16,7 @@
     "test:integration": "vitest run tests/integration",
     "test:constraints": "vitest run tests/constraints",
     "test:authorization": "vitest run tests/authorization",
+    "test:security-closure": "vitest run tests/authorization/system-admin-recovery-route-session.test.ts tests/authorization/security-closure-input.test.ts tests/integration/security-closure-csrf-browser.test.ts tests/integration/security-closure-rate-limit.test.ts tests/integration/security-closure-session-fixation.test.ts",
     "test:postgres-concurrency": "tsx scripts/launch-safety-postgres-concurrency.ts",
     "db:test-audit-neon": "tsx scripts/phase-4-5-neon-audit-check.ts",
     "db:test-payment-request-neon": "tsx scripts/phase-5-neon-payment-request-smoke.ts",

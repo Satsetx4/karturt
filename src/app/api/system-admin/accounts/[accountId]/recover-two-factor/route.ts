@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 const payloadSchema = z.object({
   reason: z.string().trim().min(1).max(500),
   recoveryReference: z.string().trim().min(1).max(100),
-});
+}).strict();
 
 export async function POST(request: Request, context: { params: Promise<{ accountId: string }> }) {
   if (!isSameOriginRequest(request)) {

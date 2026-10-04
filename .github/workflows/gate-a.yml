@@ -20,6 +20,7 @@ on:
       - "feat/phase-13-reports"
       - "fix/phase-13-1-acceptance-closure"
       - "feat/launch-safety-single-rt"
+      - "fix/launch-safety-security-closure"
       - "integrate/f12-clean-checkpoint"
       - "main"
     paths-ignore:
@@ -63,6 +64,8 @@ jobs:
         run: npm run test:constraints -- --maxWorkers=1
       - name: Authorization tests
         run: npm run test:authorization -- --maxWorkers=1
+      - name: Launch Security Closure tests
+        run: npm run test:security-closure -- --maxWorkers=1
       - name: Full test suite
         run: npm test -- --maxWorkers=1
       - name: Drizzle migration journal consistency
@@ -85,7 +88,7 @@ jobs:
         run: npm run build
 
   launch-safety-postgres-concurrency:
-    if: github.ref == 'refs/heads/feat/launch-safety-single-rt' || github.head_ref == 'feat/launch-safety-single-rt'
+    if: github.ref == 'refs/heads/feat/launch-safety-single-rt' || github.head_ref == 'feat/launch-safety-single-rt' || github.ref == 'refs/heads/fix/launch-safety-security-closure' || github.head_ref == 'fix/launch-safety-security-closure'
     name: Launch Safety independent PostgreSQL concurrency
     needs: gate-a
     runs-on: ubuntu-latest
