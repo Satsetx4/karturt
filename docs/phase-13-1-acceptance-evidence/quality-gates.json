@@ -53,5 +53,5 @@
     "mainUpdated": false,
     "committedOrPushedByThisAgent": false
   },
-  "finalShaCi": "Not included; coordinator will verify the exact final branch SHA after commit/push."
+  "finalShaCi": "Coordinator verifies the exact final branch SHA after the readiness report commit/push; run identity and conclusion are included in the handover."
 }
