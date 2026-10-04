@@ -43,7 +43,7 @@ Target yang diverifikasi adalah DEVELOPMENT: project `billowing-base-57949906`, 
 
 ## Evidence
 
-Folder `docs/phase-13-1-acceptance-evidence/` berisi 13 file dengan ukuran total 556.138 byte. Isinya mencakup ringkasan browser, rekonsiliasi UI/API/SQL, lima hasil viewport, authorization, oracle manual, Gate C, lifecycle, Neon, audit dependency, gate kualitas, dan tiga screenshot kurasi. Screenshot dibuat dari server development sehingga badge `N` milik Next.js terlihat; badge itu bukan bagian dari UI produk. Bukti tidak menyimpan password, PIN, cookie, token, session secret, nama household, atau UUID.
+Folder `docs/phase-13-1-acceptance-evidence/` berisi 13 file dengan ukuran total 556.200 byte. Isinya mencakup ringkasan browser, rekonsiliasi UI/API/SQL, lima hasil viewport, authorization, oracle manual, Gate C, lifecycle, Neon, audit dependency, gate kualitas, dan tiga screenshot kurasi. Screenshot dibuat dari server development sehingga badge `N` milik Next.js terlihat; badge itu bukan bagian dari UI produk. Bukti tidak menyimpan password, PIN, cookie, token, session secret, nama household, atau UUID.
 
 ## Verdict
 
@@ -58,4 +58,4 @@ READY FOR MAIN PROMOTION: YES
 READY FOR LAUNCH SAFETY GATE: YES
 ```
 
-Gate A run `37202396608` PASS pada SHA `0093d9cb197924b4d4aaf1e338ef56aa10a6aa3f`. Perubahan readiness ini membentuk SHA branch baru; push tersebut wajib mendapat Gate A PASS pada exact SHA sebelum promotion atau memulai Launch Safety. Identitas run final exact-SHA dicatat dalam handover coordinator.
+Gate A run `37202396608` PASS pada SHA `0093d9cb197924b4d4aaf1e338ef56aa10a6aa3f`, dan run `37203099130` PASS pada SHA `3105a28c68d6f864b6482d557c7d93d98e2dee90`. Koreksi ukuran evidence ini membentuk SHA branch baru; push tersebut wajib mendapat Gate A PASS pada exact SHA sebelum promotion atau memulai Launch Safety. Identitas run final exact-SHA dicatat dalam handover coordinator.
