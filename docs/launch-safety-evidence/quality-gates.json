@@ -1,5 +1,5 @@
 {
-  "run_date": "2026-10-04",
+  "run_date": "2026-10-05",
   "environment": "local worktree; synthetic PGlite fixtures; build used inert CI-only placeholder values; no Neon or production access",
   "results": {
     "npm_ci": {
@@ -39,14 +39,14 @@
     "authorization": {
       "status": "PASS",
       "exit_code": 0,
-      "test_files": 12,
-      "tests": 111
+      "test_files": 13,
+      "tests": 119
     },
     "full_suite": {
       "status": "PASS",
       "exit_code": 0,
-      "test_files": 59,
-      "tests": 377
+      "test_files": 60,
+      "tests": 385
     },
     "production_build": {
       "status": "PASS",
@@ -86,11 +86,18 @@
       "accepted_advisory": "GHSA-vfj7-8cjw-p6xm / RA-2026-F12-001 / development-only braces@3.0.3",
       "production_only_exit_code": 0,
       "production_only_vulnerabilities": 0
+    },
+    "independent_postgres_concurrency": {
+      "status": "PASS",
+      "workflow_run_id": 37219269983,
+      "head_sha": "edcd071b713fe1a6db55513726810c7428521d96",
+      "independent_backend_count": 2,
+      "lock_contention_scenarios": 5
     }
   },
   "caveats": [
     "The initial lint run found four explicit-any errors in the new performance script; the coordinator replaced them with concrete types and reran lint successfully.",
-    "Neon script attempt failed closed before database access because APP_ENV and DATABASE_ENV were unset; this is not a Neon audit result. Coordinator is collecting Gate C and lifecycle evidence separately."
+    "An initial local Neon script attempt failed closed before database access because APP_ENV and DATABASE_ENV were unset; it was not treated as a database result. The later read-only Neon integrity, Gate C, and lifecycle results are recorded in their separate evidence files."
   ],
   "production_access": "none"
 }

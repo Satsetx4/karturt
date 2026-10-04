@@ -24,7 +24,15 @@
     "tests": 377,
     "head_sha": "7bce770cfa6086a1def7690fb582bf94dc5d412d"
   },
-  "current_full_regression_ci": "PENDING exact final remediation SHA",
+  "current_full_regression_ci": {
+    "result": "PASS",
+    "test_files": 60,
+    "tests": 385,
+    "authorization_tests": 119,
+    "workflow": "Test Gate A",
+    "run_id": 37219269983,
+    "head_sha": "edcd071b713fe1a6db55513726810c7428521d96"
+  },
   "coverage_limit": "The blocker-specific representative principal/session matrix is closed. The broader S1-S16 threat plan remains partial: not every individual endpoint has a full principal cross-product; browser-origin delivery, session fixation, brute-force boundary, PIN lockout, and broader malformed-input/SQL-injection coverage remain separately documented.",
   "system_admin_audit_route": "NOT_APPLICABLE; no HTTP audit route exists under src/app/api and F17 admin tooling is deferred",
   "production_access": "none"

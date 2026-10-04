@@ -1,8 +1,8 @@
 # Launch Safety Gate Report
 
-**Date:** 2026-10-04
+**Date:** 2026-10-05
 **Branch:** `feat/launch-safety-single-rt`
-**Launch Safety implementation commit:** `7bce770cfa6086a1def7690fb582bf94dc5d412d`
+**Launch Safety validated remediation code SHA:** `edcd071b713fe1a6db55513726810c7428521d96`
 **Promoted main SHA:** `4890678b91c4c4e2c535f1149da60dbfcde32370`
 
 ## Promotion and branch state
@@ -25,14 +25,14 @@
 
 ## Security, authorization, and concurrency
 
-The frozen plan contains 23 threat rows. Focused security and financial suites passed (40 tests across payment verification, reversal, waiver, report authorization, and financial actor authorization); same-key cash retry coverage passed (9 tests in the cash suite), including one payment, two expected allocations, one audit, and paid dues. The full authorization suite passed 111/111; the complete regression suite passed 377/377.
+The frozen plan contains 23 threat rows. Focused security and financial suites passed (40 tests across payment verification, reversal, waiver, report authorization, and financial actor authorization); same-key cash retry coverage passed (9 tests in the cash suite). The full authorization suite passed 119/119 and the complete regression suite passed 385/385 across 60 files.
 
-Two required proof gaps remain blockers:
+The two original blockers are closed with exact-SHA evidence:
 
-1. PGlite exposes one in-memory database client in these suites. `Promise.all` exercises real domain transaction paths but does not prove independent PostgreSQL backend connections or lock contention. The required independent-connection proof for payment verification, cash, reversal, waiver, and lifecycle races is unavailable under the no-shared-Neon-mutation policy.
-2. The full authenticated route/session matrix across every planned principal and route family was not executed. In particular, the System Admin two-factor recovery route has no explicit Origin guard in the inspected source; browser exploitability and SameSite/session behavior were not established.
+1. Independent PostgreSQL concurrency: Test Gate A run `37219269983` used an ephemeral PostgreSQL 17 database and two one-connection pools. Backend PIDs 100 and 101 were distinct, and PostgreSQL reported a real lock wait for each of five races: payment verification, same-key cash, reversal, waiver, and household replacement. Final ledger, allocation, and audit assertions passed. The sanitized artifact is `docs/launch-safety-evidence/postgres-independent-concurrency.json`.
+2. Authenticated route/session proof: the blocker-specific matrix passed for nine principal/session categories against representative handlers in all four available route families. It uses actual Better Auth signed cookies and System Admin TOTP. The System Admin recovery POST now applies the shared Origin check before parsing/authentication; foreign, missing, null, and malformed Origin requests return 403 without changing protected state.
 
-No confirmed Critical or unaccepted High security failure was observed in the tests that did run. This is not evidence that the unexecuted matrix is clear.
+The wider S1–S16 security plan is still partial: not every endpoint has a full principal cross-product; browser cookie delivery, session fixation/cookie attributes, brute-force boundaries, resident PIN lockout, and some malformed-input/SQL-injection cases remain untested. No confirmed Critical or unaccepted High security failure was observed in tests that ran. These remaining coverage gaps require independent audit and prevent this report from authorizing Fase 3.
 
 ## Performance smoke
 
@@ -45,21 +45,22 @@ Synthetic disposable PGlite comparison used 50 households/600 annual dues and 50
 
 ## Quality, migration, and dependency evidence
 
-- `npm ci`, lint (0 errors; one pre-existing unused-variable warning), typecheck, unit (42), integration (182), constraints (42), authorization (111), full suite (377), build, Drizzle journal check, and schema drift check passed locally.
+- `npm ci`, lint (0 errors; one pre-existing unused-variable warning), typecheck, unit (42), integration (182), constraints (42), authorization (119), full suite (385 across 60 files), build, Drizzle journal check, and schema drift check passed in exact-SHA CI.
 - Migration journal remains 14 entries ending at `0013_phase_12_household_management`; no `0014` was created. Neon development checks were read-only with zero writes.
 - Full `npm audit` reports five High package-path entries representing one unique development-only advisory, `GHSA-vfj7-8cjw-p6xm` for `braces@3.0.3`, covered only by accepted residual `RA-2026-F12-001`. The full audit is not clean. `npm audit --omit=dev` reports zero vulnerabilities.
 - Production database and deployment were not accessed.
 
 ## Finding counts and verdict
 
-- Gate blockers: 2 evidence gaps (independent PostgreSQL concurrency proof; incomplete authenticated route/session matrix).
+- Original blocker-specific proof gaps: 0 open of 2 (independent PostgreSQL concurrency; authenticated principal/session matrix plus System Admin Origin guard).
+- Remaining blocker: wider S1–S16 security coverage is incomplete; independent audit is still required before Fase 3.
 - Confirmed Critical security failures: 0.
 - High: 1 accepted development-only dependency advisory (`RA-2026-F12-001`); 0 confirmed unaccepted High security failures in executed tests.
 - Warnings: 1 performance scaling observation. A pre-existing lint warning is recorded separately in quality-gates.json.
 - Nice-to-have: 0.
 
-**Exact Launch Safety CI result for this implementation commit:** Test Gate A run `37213548073`, PASS at SHA `7bce770cfa6086a1def7690fb582bf94dc5d412d` (7m8s). A report-only follow-up commit receives a separate exact-SHA CI run; the final branch head and its CI run are included in the delivery response.
+**Exact Launch Safety CI for validated remediation code:** Test Gate A run `37219269983`, PASS at SHA `edcd071b713fe1a6db55513726810c7428521d96`; Gate A passed and the PostgreSQL concurrency job `111487109094` passed. This report/evidence follow-up is separately gated on its own exact SHA.
 
 ## Final verdict
 
-LAUNCH SAFETY FAIL — FASE 3 NO-GO — BLOCKER: independent PostgreSQL connection concurrency proof unavailable and the full required authenticated route/session security matrix remains unexecuted.
+LAUNCH SAFETY FAIL — FASE 3 NO-GO — BLOCKER: wider S1–S16 security coverage remains incomplete and requires independent audit.

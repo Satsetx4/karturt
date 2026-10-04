@@ -1,9 +1,17 @@
 {
   "schemaVersion": 1,
   "event": "launch_safety.independent_postgres_concurrency_environment_check",
-  "assessedAt": "2026-10-04",
-  "repositoryHead": "64e24f06c32083975e04b1a1693139416974b9d6",
-  "result": "CI_HARNESS_ADDED_LOCAL_RUNTIME_UNAVAILABLE_CI_EXECUTION_PENDING",
+  "assessedAt": "2026-10-05",
+  "repositoryHead": "edcd071b713fe1a6db55513726810c7428521d96",
+  "result": "PASS",
+  "ci": {
+    "workflow": "Test Gate A",
+    "runId": 37219269983,
+    "runUrl": "https://github.com/Satsetx4/karturt/actions/runs/37219269983",
+    "headSha": "edcd071b713fe1a6db55513726810c7428521d96",
+    "gateA": "PASS",
+    "postgresConcurrencyJob": "PASS"
+  },
   "inventory": {
     "psql": "not found on PATH",
     "postgres": "not found on PATH",
@@ -20,7 +28,21 @@
     "integrationTests": "PGlite in-process embedded database via one PGlite client and drizzle-orm/pglite",
     "application": "@neondatabase/serverless Pool and drizzle-orm/neon-serverless",
     "nodePostgresDriver": "pg@8.23.1 and @types/pg@8.23.1 added as development-only dependencies; Drizzle node-postgres adapter wired in the concurrency harness",
-    "independentPostgresBackendPidsObserved": []
+    "independentPostgresBackendPidsObserved": [100, 101]
+  },
+  "proof": {
+    "postgresVersion": "17.11",
+    "migrationsApplied": 14,
+    "backendPidsDistinct": true,
+    "lockContentionObservedForEveryRace": true,
+    "scenariosPassed": [
+      "duplicate_payment_request_verification",
+      "same_key_cash_retry",
+      "same_payment_concurrent_reversal",
+      "same_due_concurrent_waiver",
+      "same_house_concurrent_resident_replacement"
+    ],
+    "persistedLedgerAndAuditAssertions": "PASS"
   },
   "safety": {
     "neonAccessForConcurrency": "none",
@@ -29,16 +51,13 @@
     "machineWideSettingsChanged": false,
     "migrationCreatedOrRun": false
   },
-  "missingToCloseBlocker": [
-    "The GitHub Actions disposable PostgreSQL service and concurrency proof step must execute successfully on the final branch SHA.",
-    "The run must record distinct pg_backend_pid() values and a PostgreSQL Lock wait for each race, then verify persisted payment, allocation, reversal, waiver, lifecycle, and audit outcomes."
-  ],
+  "missingToCloseBlocker": [],
   "smallestLocalOnlySetup": {
     "runtime": "Configured in a Launch Safety branch-only Gate A job as an ephemeral PostgreSQL 17 service with a fresh test database, health check, and loopback-only host port.",
     "testAdapter": "Added as development-only pg and Drizzle node-postgres dependencies with two dedicated one-connection pools; do not reuse PGlite or the application's Neon connection for this proof.",
     "proof": "The harness accepts only host 127.0.0.1, queries pg_backend_pid() on both pools and asserts the PIDs differ. For each actual domain/service race, a test-only trigger holds the first transaction after lock acquisition; pg_stat_activity must show the second backend waiting on a PostgreSQL Lock before final ledger/audit assertions run.",
     "cleanup": "Stop and remove only the disposable local database/container and its ephemeral data after the run.",
-    "currentReadiness": "CI workflow and harness are implemented but not yet executed against PostgreSQL. The branch-only job uploads the sanitized JSON evidence as a 14-day artifact named launch-safety-postgres-concurrency-<github.sha>; the JSON is also emitted in the test step logs. This workstation still has no local PostgreSQL runtime. No service was installed or started here."
+    "currentReadiness": "PASS on exact code SHA edcd071b713fe1a6db55513726810c7428521d96. GitHub Actions used only an ephemeral PostgreSQL 17 service, uploaded sanitized JSON evidence, and stopped the service after the job. This workstation still has no local PostgreSQL runtime; none was installed or started."
   },
   "dependencyAuditAfterTestDriver": {
     "fullAudit": "5 High affected-package entries, unchanged; one unique advisory GHSA-vfj7-8cjw-p6xm for development-only braces@3.0.3, within RA-2026-F12-001.",

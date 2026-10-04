@@ -1,5 +1,5 @@
 {
-  "status": "BLOCKER_SPECIFIC_ROUTE_MATRIX_PASS_WITH_BROADER_SECURITY_AND_CONCURRENCY_GAPS",
+  "status": "ORIGINAL_BLOCKER_SPECIFIC_PROOFS_PASS_WITH_BROADER_SECURITY_COVERAGE_RESIDUALS",
   "plan": "docs/launch-safety-security-plan.md",
   "planned_threat_rows": 23,
   "executed_security_focused_tests": {
@@ -26,7 +26,16 @@
     "cash": "new same-key concurrent domain test and existing different-key race tests passed",
     "reversal": "existing concurrent reversal tests passed",
     "waiver": "existing concurrent waiver tests passed",
-    "independent_database_connections": "PENDING exact-SHA GitHub Actions run of the disposable PostgreSQL 17 two-pool harness; PGlite evidence alone does not prove independent backend lock contention"
+    "independent_database_connections": {
+      "result": "PASS",
+      "workflow": "Test Gate A",
+      "run_id": 37219269983,
+      "head_sha": "edcd071b713fe1a6db55513726810c7428521d96",
+      "backend_pids": [100, 101],
+      "distinct": true,
+      "lock_contention_observed_for_all_five_scenarios": true,
+      "evidence": "docs/launch-safety-evidence/postgres-independent-concurrency.json"
+    }
   },
   "blocker_specific_route_session_matrix": "CLOSED; actual signed-cookie direct-handler cross-product is recorded in authorization-summary.json and system-admin-recovery-route-security.json.",
   "open_security_coverage": "Broader S1-S16 threat-plan work remains incomplete for full individual-endpoint cross-products, browser-origin delivery, session fixation/cookie attributes, brute-force boundaries, resident PIN lockout, and some malformed-input/SQL-injection cases.",

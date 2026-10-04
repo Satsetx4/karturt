@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "event": "launch_safety.independent_postgres_concurrency_proof",
+  "generatedAt": "2026-10-04T17:13:03.123Z",
+  "result": "PASS",
+  "databaseTarget": "disposable loopback PostgreSQL test database; URL redacted",
+  "postgresVersion": {
+    "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+    "versionNumber": "170011"
+  },
+  "migrationsApplied": 14,
+  "independentBackends": {
+    "connectionAPid": 100,
+    "connectionBPid": 101,
+    "distinct": true,
+    "poolMaximumConnections": 1
+  },
+  "lockContentionObservedForEveryRace": true,
+  "scenarios": [
+    {
+      "name": "duplicate_payment_request_verification",
+      "result": "PASS",
+      "outcomes": [
+        "fulfilled",
+        "Error"
+      ],
+      "persisted": {
+        "requestsVerified": 1,
+        "payments": 1,
+        "allocations": 2,
+        "allocationAmount": 80000,
+        "verificationAudits": 1,
+        "openClaims": 0
+      },
+      "lockWait": {
+        "observed": true,
+        "firstBackendPid": 100,
+        "firstWaitEvent": "PgSleep",
+        "secondBackendPid": 101,
+        "secondWaitEventType": "Lock",
+        "secondWaitEvent": "transactionid"
+      }
+    },
+    {
+      "name": "same_key_cash_retry",
+      "result": "PASS",
+      "outcomes": [
+        "fulfilled",
+        "fulfilled"
+      ],
+      "replayFlags": [
+        false,
+        true
+      ],
+      "persisted": {
+        "payments": 1,
+        "allocations": 2,
+        "allocationAmount": 80000,
+        "paidDues": 2,
+        "activeSettlements": 2,
+        "cashAudits": 1
+      },
+      "lockWait": {
+        "observed": true,
+        "firstBackendPid": 100,
+        "firstWaitEvent": "PgSleep",
+        "secondBackendPid": 101,
+        "secondWaitEventType": "Lock",
+        "secondWaitEvent": "advisory"
+      }
+    },
+    {
+      "name": "same_payment_concurrent_reversal",
+      "result": "PASS",
+      "outcomes": [
+        "fulfilled",
+        "Error"
+      ],
+      "persisted": {
+        "originalPayments": 1,
+        "reversals": 1,
+        "activeSettlements": 0,
+        "unpaidDues": 1,
+        "reversalAudits": 1
+      },
+      "lockWait": {
+        "observed": true,
+        "firstBackendPid": 100,
+        "firstWaitEvent": "PgSleep",
+        "secondBackendPid": 101,
+        "secondWaitEventType": "Lock",
+        "secondWaitEvent": "transactionid"
+      }
+    },
+    {
+      "name": "same_due_concurrent_waiver",
+      "result": "PASS",
+      "outcomes": [
+        "fulfilled",
+        "Error"
+      ],
+      "persisted": {
+        "waiverActions": 1,
+        "waiverItems": 1,
+        "waivedDues": 1,
+        "activeSettlements": 0,
+        "waiverAudits": 1
+      },
+      "lockWait": {
+        "observed": true,
+        "firstBackendPid": 100,
+        "firstWaitEvent": "PgSleep",
+        "secondBackendPid": 101,
+        "secondWaitEventType": "Lock",
+        "secondWaitEvent": "transactionid"
+      }
+    },
+    {
+      "name": "same_house_concurrent_resident_replacement",
+      "result": "PASS",
+      "outcomes": [
+        "fulfilled",
+        "Error"
+      ],
+      "persisted": {
+        "householdRowsForHouse": 2,
+        "inactiveHouseholds": 1,
+        "activeHouseholds": 1,
+        "replacementAudits": 1
+      },
+      "lockWait": {
+        "observed": true,
+        "firstBackendPid": 100,
+        "firstWaitEvent": "PgSleep",
+        "secondBackendPid": 101,
+        "secondWaitEventType": "Lock",
+        "secondWaitEvent": "transactionid"
+      }
+    }
+  ],
+  "sharedNeonWrites": 0,
+  "productionAccess": "none",
+  "migrationFilesChanged": 0
+}
