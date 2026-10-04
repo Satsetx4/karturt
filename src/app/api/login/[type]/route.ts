@@ -1,15 +1,95 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, lte, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuth } from "@/lib/auth/server";
 import { clearResidentLoginFailures, isResidentLoginLocked, recordFailedResidentLogin } from "@/lib/auth/login-lockout";
 import { toPublicLoginResponse } from "@/lib/auth/login-response";
 import { getDb } from "@/db/client";
-import { houses, households, officialAssignments, people } from "@/db/schema";
+import { appAccounts, authAccount, authSession, houses, households, officialAssignments, people } from "@/db/schema";
 import { findUniqueLoginAccount } from "@/lib/auth/login-account";
 import { officialAssignmentActiveOn, jakartaBusinessDate } from "@/lib/officials/lifecycle";
 
 export const runtime = "nodejs";
+
+type ResidentCredentialSnapshot = { id: string; password: string };
+
+async function readResidentCredentialSnapshot(database: ReturnType<typeof getDb>, authUserId: string) {
+  const credentials = await database
+    .select({ id: authAccount.id, password: authAccount.password })
+    .from(authAccount)
+    .where(and(eq(authAccount.userId, authUserId), eq(authAccount.providerId, "credential")))
+    .limit(2);
+  if (credentials.length !== 1 || !credentials[0]?.password) return null;
+  return credentials[0] as ResidentCredentialSnapshot;
+}
+
+async function residentLoginStateMatches(
+  database: ReturnType<typeof getDb>,
+  account: NonNullable<Awaited<ReturnType<typeof findUniqueLoginAccount>>>,
+  identifier: string,
+  credential: ResidentCredentialSnapshot,
+) {
+  if (!account.rtUnitId || !account.householdId || !account.personId) return false;
+
+  const currentIdentifierAccount = await findUniqueLoginAccount(database, "resident", identifier);
+  if (!currentIdentifierAccount || currentIdentifierAccount.id !== account.id) return false;
+
+  const current = await database
+    .select({
+      appAccountId: appAccounts.id,
+      authUserId: appAccounts.authUserId,
+      rtUnitId: appAccounts.rtUnitId,
+      householdId: appAccounts.householdId,
+      personId: appAccounts.personId,
+      credentialId: authAccount.id,
+      credentialPassword: authAccount.password,
+    })
+    .from(appAccounts)
+    .innerJoin(households, and(
+      eq(households.id, appAccounts.householdId),
+      eq(households.rtUnitId, appAccounts.rtUnitId),
+    ))
+    .innerJoin(houses, and(
+      eq(houses.id, households.houseId),
+      eq(houses.rtUnitId, households.rtUnitId),
+    ))
+    .innerJoin(people, and(
+      eq(people.id, appAccounts.personId),
+      eq(people.rtUnitId, appAccounts.rtUnitId),
+      eq(people.householdId, appAccounts.householdId),
+    ))
+    .innerJoin(authAccount, and(
+      eq(authAccount.userId, appAccounts.authUserId),
+      eq(authAccount.providerId, "credential"),
+    ))
+    .where(and(
+      eq(appAccounts.id, account.id),
+      eq(appAccounts.authUserId, account.authUserId),
+      eq(appAccounts.accountType, "resident"),
+      eq(appAccounts.status, "active"),
+      eq(appAccounts.rtUnitId, account.rtUnitId),
+      eq(appAccounts.householdId, account.householdId),
+      eq(appAccounts.personId, account.personId),
+      eq(households.status, "active"),
+      isNull(households.endsOn),
+      lte(households.startsOn, jakartaBusinessDate()),
+      eq(people.isActive, true),
+      sql`upper(${houses.number}) = ${identifier}`,
+    ))
+    .limit(2);
+
+  return current.length === 1
+    && current[0]?.appAccountId === account.id
+    && current[0]?.authUserId === account.authUserId
+    && current[0]?.credentialId === credential.id
+    && current[0]?.credentialPassword === credential.password;
+}
+
+async function rejectChangedResidentLogin(database: ReturnType<typeof getDb>, authUserId: string) {
+  await database.delete(authSession).where(eq(authSession.userId, authUserId));
+  console.info(JSON.stringify({ event: "auth.login.completed", accountType: "resident", outcome: "rejected" }));
+  return toPublicLoginResponse(new Response(null, { status: 401 }));
+}
 
 const payloadSchema = z.object({
   identifier: z.string().trim().min(1).max(100),
@@ -76,6 +156,7 @@ export async function POST(request: Request, context: { params: Promise<{ type: 
   }
 
   if (type === "resident") {
+    const businessDate = jakartaBusinessDate();
     const [activeHousehold] = await db
       .select({ id: households.id })
       .from(households)
@@ -88,11 +169,20 @@ export async function POST(request: Request, context: { params: Promise<{ type: 
       .where(and(
         eq(households.id, account.householdId!),
         eq(households.status, "active"),
+        isNull(households.endsOn),
+        lte(households.startsOn, businessDate),
         eq(people.isActive, true),
         sql`upper(${houses.number}) = ${identifier}`,
       ))
       .limit(1);
     if (!activeHousehold) return rejectLoginAttempt(request, type, parsed.data.password);
+  }
+
+  const residentCredential = type === "resident"
+    ? await readResidentCredentialSnapshot(db, account.authUserId)
+    : null;
+  if (type === "resident" && !residentCredential) {
+    return rejectLoginAttempt(request, type, parsed.data.password);
   }
 
   if (type === "official") {
@@ -106,6 +196,10 @@ export async function POST(request: Request, context: { params: Promise<{ type: 
 
   const authRequest = createCredentialAuthRequest(request, account.email, parsed.data.password);
   const response = await getAuth().handler(authRequest);
+  if (type === "resident" && response.ok && residentCredential) {
+    const stillCurrent = await residentLoginStateMatches(db, account, identifier, residentCredential);
+    if (!stillCurrent) return rejectChangedResidentLogin(db, account.authUserId);
+  }
   if (type === "resident" && response.status === 401) await recordFailedResidentLogin(db, account.id);
   if (type === "resident" && response.ok) await clearResidentLoginFailures(db, account.id);
   console.info(JSON.stringify({ event: "auth.login.completed", accountType: type, outcome: response.ok ? "accepted" : "rejected" }));

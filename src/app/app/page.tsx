@@ -9,7 +9,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SignOutButton } from "@/components/sign-out-button";
 import { TreasurerDashboard } from "@/components/treasurer-dashboard";
 import Link from "next/link";
-import { ArrowRight, Banknote, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Banknote, House, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { getDb } from "@/db/client";
 import { authUser } from "@/db/schema";
 import {
@@ -80,6 +80,16 @@ export default async function AccountHomePage() {
           </p>
           {principal.role === "rt_chairman" && (
             <div className="chairman-tools-grid" aria-label="Pengelolaan iuran">
+              <section className="chairman-tool-card" aria-labelledby="chairman-household-entry-title">
+                <div className="chairman-tool-icon"><House size={22} aria-hidden="true" /></div>
+                <div className="chairman-tool-copy">
+                  <h2 id="chairman-household-entry-title">Rumah dan warga</h2>
+                  <p>Kelola masa tinggal, data warga, dan akses PIN dengan menjaga riwayat tetap utuh.</p>
+                </div>
+                <Link className="chairman-tool-link" href="/app/rumah">
+                  Buka data rumah dan warga <ArrowRight size={18} aria-hidden="true" />
+                </Link>
+              </section>
               <section className="chairman-tool-card" aria-labelledby="chairman-rate-entry-title">
                 <div className="chairman-tool-icon"><Banknote size={22} aria-hidden="true" /></div>
                 <div className="chairman-tool-copy">

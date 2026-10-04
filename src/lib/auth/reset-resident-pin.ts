@@ -1,8 +1,8 @@
 import { hashPassword } from "better-auth/crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
 import { appendAuditEvent } from "@/lib/audit/writer";
-import { authAccount, authSession, appAccounts } from "@/db/schema";
+import { authAccount, authSession, appAccounts, households, people } from "@/db/schema";
 import { assertCanPerform, type Principal } from "@/lib/auth/permissions";
 import { isValidAccountPassword } from "@/lib/auth/account-password";
 
@@ -28,6 +28,9 @@ export async function resetResidentPin(
     rtUnitId = principal.rtUnitId;
     if (!rtUnitId) throw new Error("Forbidden: Chairman reset requires an RT principal.");
     assertCanPerform(principal, "resident:reset_credential", { rtUnitId });
+    if (input.recoveryReference?.trim()) {
+      throw new Error("Forbidden: recovery reference is reserved for System Admin structured recovery.");
+    }
     action = "resident.pin.reset";
   } else if (principal.role === "system_admin") {
     assertCanPerform(principal, "system:recover");
@@ -50,9 +53,23 @@ export async function resetResidentPin(
     const [target] = await transaction
       .select({ id: appAccounts.id, authUserId: appAccounts.authUserId })
       .from(appAccounts)
-      .where(and(...targetConditions))
+      .innerJoin(households, and(
+        eq(households.id, appAccounts.householdId),
+        eq(households.rtUnitId, appAccounts.rtUnitId),
+      ))
+      .innerJoin(people, and(
+        eq(people.id, appAccounts.personId),
+        eq(people.rtUnitId, appAccounts.rtUnitId),
+        eq(people.householdId, appAccounts.householdId),
+      ))
+      .where(and(
+        ...targetConditions,
+        eq(households.status, "active"),
+        isNull(households.endsOn),
+        eq(people.isActive, true),
+      ))
       .limit(1)
-      .for("update");
+      .for("update", { of: appAccounts });
     if (!target) throw new Error("Resident account was not found in the authorized scope.");
 
     const [credential] = await transaction

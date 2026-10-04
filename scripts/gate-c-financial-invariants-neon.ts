@@ -8,8 +8,8 @@ const expectedTarget = {
   branchName: "karturt-development",
   endpointId: "ep-quiet-cake-azrhjiyh",
   database: "neondb",
-  migrationCount: 13,
-  migrationHeadHash: "cd5459a3497fd70444e1d51cafa2f8408e9db3fe2e70de53ecbeb702cf8ebe54",
+  migrationCount: 14,
+  migrationHeadHash: "994bcc9376b207fdc0668312cc68cab3c2cec46bc6101edc4c2b5ef7f51c4a85",
 } as const;
 
 const sampleLimit = 10;
@@ -746,14 +746,17 @@ async function inspectTarget(client: PoolClient) {
     FROM drizzle.__drizzle_migrations
   `);
   const current = migration.rows[0];
-  if (current?.entry_count !== String(expectedTarget.migrationCount) || current.head_hash !== expectedTarget.migrationHeadHash) {
-    throw new Error("Neon development migration journal is not the frozen F11 head (13 entries / expected 0012 hash).");
+  if (
+    current?.entry_count !== String(expectedTarget.migrationCount) ||
+    current.head_hash?.toLowerCase() !== expectedTarget.migrationHeadHash
+  ) {
+    throw new Error("Neon development migration journal is not the frozen F12 head (14 entries / expected 0013 hash).");
   }
   return {
     database: identity.rows[0].database_name,
     databaseRole: identity.rows[0].role_name,
     migrationEntries: Number(current.entry_count),
-    migrationHead: "0012_phase_11_tariff_adjustment",
+    migrationHead: "0013_phase_12_household_management",
     migrationHeadHash: current.head_hash,
   };
 }

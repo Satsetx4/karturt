@@ -28,13 +28,101 @@ describe("PostgreSQL constraints", () => {
     await expect(db.insert(houses).values({ rtUnitId: rtTwo, number: "C-01" })).resolves.toBeDefined();
   });
 
-  it("allows only one active household for a house but preserves ended household history", async () => {
+  it("rejects overlapping household periods and preserves adjacent ended household history", async () => {
     const { db } = testDatabase;
     const rtUnitId = await createRt(db);
     const [house] = await db.insert(houses).values({ rtUnitId, number: `H-${randomUUID().slice(0, 6)}` }).returning({ id: houses.id });
-    await db.insert(households).values({ rtUnitId, houseId: house.id, startsOn: "2020-01-01", status: "active" });
-    await expect(db.insert(households).values({ rtUnitId, houseId: house.id, startsOn: "2021-01-01", status: "active" })).rejects.toThrow();
-    await db.insert(households).values({ rtUnitId, houseId: house.id, startsOn: "2020-01-01", endsOn: "2024-12-31", status: "inactive" });
+    await db.insert(households).values({
+      rtUnitId,
+      houseId: house.id,
+      startsOn: "2020-01-01",
+      endsOn: "2020-12-31",
+      status: "inactive",
+    });
+    const [current] = await db.insert(households).values({
+      rtUnitId,
+      houseId: house.id,
+      startsOn: "2021-01-01",
+      status: "active",
+    }).returning({ id: households.id });
+    await expect(db.insert(households).values({
+      rtUnitId,
+      houseId: house.id,
+      startsOn: "2021-01-01",
+      status: "active",
+    })).rejects.toThrow();
+    await expect(db.insert(households).values({
+      rtUnitId,
+      houseId: house.id,
+      startsOn: "2020-12-31",
+      endsOn: "2021-01-01",
+      status: "inactive",
+    })).rejects.toThrow();
+    await expect(testDatabase.client.query(
+      "UPDATE public.households SET starts_on = '2020-12-31' WHERE id = $1",
+      [current!.id],
+    )).rejects.toThrow(/Household identity and start fields are immutable/);
+    await expect(testDatabase.client.query(
+      "UPDATE public.households SET ends_on = '2021-01-01', status = 'inactive' WHERE rt_unit_id = $1 AND house_id = $2 AND starts_on = '2020-01-01'",
+      [rtUnitId, house.id],
+    )).rejects.toThrow(/Household period overlaps another household/);
+  });
+
+  it("allows disabled resident login history to be reused while retaining current and official uniqueness", async () => {
+    const { db } = testDatabase;
+    const rtUnitId = await createRt(db);
+    const formerHousehold = await createHousehold(db, rtUnitId);
+    const currentHousehold = await createHousehold(db, rtUnitId);
+    const identifier = `A-${randomUUID().slice(0, 6)}`;
+    const formerUser = await createAuthUser(db);
+    await db.insert(appAccounts).values({
+      rtUnitId,
+      authUserId: formerUser.id,
+      accountType: "resident",
+      status: "disabled",
+      loginIdentifier: identifier,
+      personId: formerHousehold.personId,
+      householdId: formerHousehold.householdId,
+    });
+    const currentUser = await createAuthUser(db);
+    await expect(db.insert(appAccounts).values({
+      rtUnitId,
+      authUserId: currentUser.id,
+      accountType: "resident",
+      loginIdentifier: identifier.toLowerCase(),
+      personId: currentHousehold.personId,
+      householdId: currentHousehold.householdId,
+    })).resolves.toBeDefined();
+
+    const lockedUser = await createAuthUser(db);
+    await expect(db.insert(appAccounts).values({
+      rtUnitId,
+      authUserId: lockedUser.id,
+      accountType: "resident",
+      status: "locked",
+      loginIdentifier: identifier,
+      personId: currentHousehold.personId,
+      householdId: currentHousehold.householdId,
+    })).rejects.toThrow();
+
+    const officialLogin = `official-${randomUUID().slice(0, 6)}`;
+    const formerOfficial = await createAuthUser(db);
+    const newOfficial = await createAuthUser(db);
+    await db.insert(appAccounts).values({
+      rtUnitId,
+      authUserId: formerOfficial.id,
+      accountType: "official",
+      status: "disabled",
+      loginIdentifier: officialLogin,
+      personId: formerHousehold.personId,
+    });
+    await expect(db.insert(appAccounts).values({
+      rtUnitId,
+      authUserId: newOfficial.id,
+      accountType: "official",
+      loginIdentifier: officialLogin.toUpperCase(),
+      personId: currentHousehold.personId,
+    })).rejects.toThrow();
   });
 
   it("rejects a household reference from another RT unit", async () => {

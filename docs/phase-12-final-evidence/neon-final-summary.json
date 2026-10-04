@@ -1,0 +1,38 @@
+{
+  "result": "PASS",
+  "lifecycle": {
+    "result": "PASS",
+    "migrationEntries": 14,
+    "migrationHead": "0013_phase_12_household_management",
+    "globalCategories": 11,
+    "globalZero": 11,
+    "fixtureChecks": 15,
+    "fixtureZero": 15,
+    "replacementSnapshotCounts": {
+      "oldHouseholdDueRowsBefore": 12,
+      "oldHouseholdDueRowsAfter": 12,
+      "preservedDueRowsExpected": 11,
+      "futureUntouchedDueRowsExpected": 1,
+      "newHouseholdPreStartDueRows": 11,
+      "newHouseholdPreStartDueRowsInvalid": 0
+    },
+    "conflictSnapshotCounts": {
+      "activeResidentSessionsBefore": 0,
+      "activeResidentSessionsAfter": 0,
+      "lifecycleAuditEventsBefore": 0,
+      "lifecycleAuditEventsAfter": 0,
+      "financialRowsBefore": 1,
+      "financialRowsAfter": 1,
+      "financialContentMatches": true
+    }
+  },
+  "gateC": {
+    "migrationEntries": 14,
+    "migrationHead": "0013_phase_12_household_management",
+    "migrationHeadHash": "994BCC9376B207FDC0668312CC68CAB3C2CEC46BC6101EDC4C2B5EF7F51C4A85",
+    "hashMatched": true,
+    "anomalyCategories": 32,
+    "zeroCategories": 32,
+    "nonzeroCategories": 0
+  }
+}

@@ -79,6 +79,13 @@ describe("Audit Core and resident PIN recovery", () => {
     const chairman = await createOfficialPrincipal(rtUnitId, "rt_chairman");
     const resident = await createResident(rtUnitId);
     const secondResident = await createResident(rtUnitId);
+    await expect(resetResidentPin(db as unknown as AppDatabase, chairman, {
+      residentAccountId: resident.accountId,
+      pin: "804216",
+      reason: "Chairman cannot use structured recovery references.",
+      recoveryReference: "REC-2026-999",
+    })).rejects.toThrow("recovery reference is reserved for System Admin structured recovery");
+
     const expiredAt = new Date(Date.now() + 60 * 60 * 1000);
     await db.insert(authSession).values([
       { id: randomUUID(), token: randomUUID(), userId: resident.userId, expiresAt: expiredAt },
@@ -166,6 +173,29 @@ describe("Audit Core and resident PIN recovery", () => {
       actorAppAccountId: systemAdmin.appAccountId,
       context: { recoveryReference: "REC-2026-001", revokedSessionCount: 0 },
     }]);
+  });
+
+  it("does not let a Chairman reset a disabled resident account", async () => {
+    const { db } = testDatabase;
+    const rtUnitId = await createRt(db);
+    const chairman = await createOfficialPrincipal(rtUnitId, "rt_chairman");
+    const resident = await createResident(rtUnitId);
+    await db.update(appAccounts).set({ status: "disabled" }).where(eq(appAccounts.id, resident.accountId));
+
+    await expect(resetResidentPin(db as unknown as AppDatabase, chairman, {
+      residentAccountId: resident.accountId,
+      pin: "804216",
+      reason: "Disabled historical resident account.",
+    })).rejects.toThrow("not found in the authorized scope");
+
+    const [credential] = await db.select({ password: authAccount.password })
+      .from(authAccount).where(eq(authAccount.userId, resident.userId));
+    await expect(verifyPassword({ hash: credential!.password!, password: "123456" })).resolves.toBe(true);
+    await expect(verifyPassword({ hash: credential!.password!, password: "804216" })).resolves.toBe(false);
+    await expect(db.select().from(auditEvents).where(and(
+      eq(auditEvents.entityId, resident.accountId),
+      eq(auditEvents.action, "resident.pin.reset"),
+    ))).resolves.toHaveLength(0);
   });
 
   it("accepts only the action-specific audit context and rejects secrets and personal values", async () => {

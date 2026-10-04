@@ -30,6 +30,34 @@ const recoveryActions = new Set([
   "system_admin.two_factor.emergency_recovery",
 ]);
 
+function assertContextKeys(keys: string[], expected: string) {
+  if (keys.join(",") !== expected) {
+    throw new Error("Audit context fields do not match the action contract.");
+  }
+}
+
+function assertAuditDate(value: AuditContextValue | undefined) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error("Audit lifecycle date must use YYYY-MM-DD.");
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    throw new Error("Audit lifecycle date is invalid.");
+  }
+}
+
+function assertAuditUuid(value: AuditContextValue | undefined) {
+  if (typeof value !== "string" || !uuidPattern.test(value)) {
+    throw new Error("Audit lifecycle identifiers must be UUIDs.");
+  }
+}
+
+function assertAuditCount(value: AuditContextValue | undefined) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error("Audit lifecycle counts must be non-negative integers.");
+  }
+}
+
 function normalizeContext(action: string, context: AuditContext | undefined): AuditContext {
   const value = context ?? {};
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -165,6 +193,67 @@ function normalizeContext(action: string, context: AuditContext | undefined): Au
     return { amountDelta, effectiveTargetAfter, originalAmount };
   }
 
+  if (action === "household.created") {
+    assertContextKeys(keys, "createdResidentAccountId,generatedDueCount,startsOn");
+    assertAuditUuid(value.createdResidentAccountId);
+    assertAuditCount(value.generatedDueCount);
+    assertAuditDate(value.startsOn);
+    return {
+      createdResidentAccountId: value.createdResidentAccountId as string,
+      generatedDueCount: value.generatedDueCount as number,
+      startsOn: value.startsOn as string,
+    };
+  }
+
+  if (action === "household.updated") {
+    assertContextKeys(keys, "changedFields");
+    const fields = value.changedFields;
+    const allowed = new Set(["fullName", "houseLabel", "phone"]);
+    const parsed = typeof fields === "string" ? fields.split(",") : [];
+    if (
+      parsed.length === 0 ||
+      parsed.some((field) => !allowed.has(field)) ||
+      parsed.some((field, index) => index > 0 && parsed[index - 1] >= field)
+    ) {
+      throw new Error("Household update audit fields are not canonical.");
+    }
+    return { changedFields: fields as string };
+  }
+
+  if (action === "household.deactivated") {
+    assertContextKeys(keys, "disabledAccountCount,effectiveEndDate,revokedSessionCount,transitionedDueCount");
+    assertAuditCount(value.disabledAccountCount);
+    assertAuditDate(value.effectiveEndDate);
+    assertAuditCount(value.revokedSessionCount);
+    assertAuditCount(value.transitionedDueCount);
+    return {
+      disabledAccountCount: value.disabledAccountCount as number,
+      effectiveEndDate: value.effectiveEndDate as string,
+      revokedSessionCount: value.revokedSessionCount as number,
+      transitionedDueCount: value.transitionedDueCount as number,
+    };
+  }
+
+  if (action === "household.resident_replaced") {
+    assertContextKeys(keys, "effectiveDate,newAccountId,newHouseholdId,oldAccountId,oldHouseholdId,revokedSessionCount,transitionedDueCount");
+    assertAuditDate(value.effectiveDate);
+    assertAuditUuid(value.newAccountId);
+    assertAuditUuid(value.newHouseholdId);
+    assertAuditUuid(value.oldAccountId);
+    assertAuditUuid(value.oldHouseholdId);
+    assertAuditCount(value.revokedSessionCount);
+    assertAuditCount(value.transitionedDueCount);
+    return {
+      effectiveDate: value.effectiveDate as string,
+      newAccountId: value.newAccountId as string,
+      newHouseholdId: value.newHouseholdId as string,
+      oldAccountId: value.oldAccountId as string,
+      oldHouseholdId: value.oldHouseholdId as string,
+      revokedSessionCount: value.revokedSessionCount as number,
+      transitionedDueCount: value.transitionedDueCount as number,
+    };
+  }
+
   if (action === "waiver.created") {
     if (keys.join(",") !== "itemCount,periods,totalAmount") {
       throw new Error("Audit context fields do not match the action contract.");
@@ -261,6 +350,18 @@ export async function appendAuditEvent<TTransaction extends TransactionExecutor>
   }
   if (action === "billing.adjustment_created" && (entityType !== "due_adjustment" || reason === null)) {
     throw new Error("Adjustment audit requires a due adjustment entity and a mandatory reason.");
+  }
+  if (
+    (action === "household.created" || action === "household.updated") &&
+    (entityType !== "household" || reason !== null)
+  ) {
+    throw new Error("Household create and update audits require a household entity and no reason.");
+  }
+  if (
+    (action === "household.deactivated" || action === "household.resident_replaced") &&
+    (entityType !== "household" || reason === null)
+  ) {
+    throw new Error("Household lifecycle audits require a household entity and a mandatory reason.");
   }
   const safeContext = normalizeContext(action, input.context);
   if (Buffer.byteLength(JSON.stringify(safeContext), "utf8") > 2048) {

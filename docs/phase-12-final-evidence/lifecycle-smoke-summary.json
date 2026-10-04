@@ -1,0 +1,13 @@
+{
+  "sourceCommit": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+  "outcome": "PASS",
+  "scenarios": {
+    "crossRtChairman": "PASS",
+    "treasurerManagementAndReset": "PASS",
+    "interactedDueConflict": "PASS",
+    "sameHouseReplacementAtBoundary": "PASS",
+    "deactivation": "PASS"
+  },
+  "screenshotCount": 21,
+  "viewportStateCount": 60
+}

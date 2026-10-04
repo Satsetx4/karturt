@@ -92,6 +92,13 @@
       "when": 1790954578486,
       "tag": "0012_phase_11_tariff_adjustment",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791010052523,
+      "tag": "0013_phase_12_household_management",
+      "breakpoints": true
     }
   ]
 }

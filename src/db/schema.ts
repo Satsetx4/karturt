@@ -85,6 +85,7 @@ export const households = pgTable("households", {
   uniqueIndex("households_one_active_per_house_uq")
     .on(table.rtUnitId, table.houseId)
     .where(sql`${table.status} = 'active'`),
+  index("households_rt_house_period_idx").on(table.rtUnitId, table.houseId, table.startsOn, table.endsOn),
   check(
     "households_dates_match_status",
     sql`(${table.status} = 'active' and ${table.endsOn} is null) or (${table.status} = 'inactive' and ${table.endsOn} is not null and ${table.endsOn} >= ${table.startsOn})`,
@@ -215,9 +216,12 @@ export const appAccounts = pgTable("app_accounts", {
   }).onDelete("restrict"),
   unique("app_accounts_rt_id_type_uq").on(table.rtUnitId, table.id, table.accountType),
   unique("app_accounts_rt_household_id_type_uq").on(table.rtUnitId, table.householdId, table.id, table.accountType),
-  uniqueIndex("app_accounts_login_identifier_uq")
+  uniqueIndex("app_accounts_resident_login_uq")
     .on(table.rtUnitId, table.accountType, sql`lower(${table.loginIdentifier})`)
-    .where(sql`${table.accountType} <> 'system_admin'`),
+    .where(sql`${table.accountType} = 'resident' and ${table.status} <> 'disabled'`),
+  uniqueIndex("app_accounts_official_login_uq")
+    .on(table.rtUnitId, table.accountType, sql`lower(${table.loginIdentifier})`)
+    .where(sql`${table.accountType} = 'official'`),
   uniqueIndex("app_accounts_system_admin_login_uq")
     .on(sql`lower(${table.loginIdentifier})`)
     .where(sql`${table.accountType} = 'system_admin'`),

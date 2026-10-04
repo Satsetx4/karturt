@@ -1,0 +1,140 @@
+{
+  "targetGuardPassed": true,
+  "exitCode": 0,
+  "audit": {
+    "event": "phase_12_1.post_smoke_lifecycle_neon_read_only_audit",
+    "environment": "development",
+    "database": "neondb",
+    "migrationEntries": 14,
+    "migrationHead": "0013_phase_12_household_management",
+    "operationMode": "BEGIN READ ONLY; SELECT-only; no fixtures, writes, or schema changes",
+    "householdAuthAndLedgerAnomalies": [
+      {
+        "name": "overlapping_household_periods",
+        "count": 0
+      },
+      {
+        "name": "multiple_active_households_same_house",
+        "count": 0
+      },
+      {
+        "name": "multiple_current_residents_same_household",
+        "count": 0
+      },
+      {
+        "name": "duplicate_current_resident_login_same_rt",
+        "count": 0
+      },
+      {
+        "name": "ambiguous_current_resident_login_across_rt",
+        "count": 0
+      },
+      {
+        "name": "active_resident_linked_to_inactive_household",
+        "count": 0
+      },
+      {
+        "name": "active_resident_linked_to_inactive_person",
+        "count": 0
+      },
+      {
+        "name": "disabled_resident_with_unexpired_session",
+        "count": 0
+      },
+      {
+        "name": "financial_rows_with_household_scope_mismatch",
+        "count": 0
+      },
+      {
+        "name": "not_due_financial_activity",
+        "count": 0
+      },
+      {
+        "name": "post_end_interacted_due_rewritten_to_not_due",
+        "count": 0
+      }
+    ],
+    "replacementSnapshotCounts": {
+      "oldHouseholdDueRowsBefore": 12,
+      "oldHouseholdDueRowsAfter": 12,
+      "preservedDueRowsExpected": 11,
+      "futureUntouchedDueRowsExpected": 1,
+      "newHouseholdPreStartDueRows": 11,
+      "newHouseholdPreStartDueRowsInvalid": 0
+    },
+    "conflictSnapshotCounts": {
+      "activeResidentSessionsBefore": 0,
+      "activeResidentSessionsAfter": 0,
+      "lifecycleAuditEventsBefore": 0,
+      "lifecycleAuditEventsAfter": 0,
+      "financialRowsBefore": 1,
+      "financialRowsAfter": 1,
+      "financialContentMatches": true
+    },
+    "fixtureIntegrityChecks": [
+      {
+        "name": "replacement_pair_same_house_and_rt_mismatch",
+        "count": 0
+      },
+      {
+        "name": "replacement_old_new_period_overlap",
+        "count": 0
+      },
+      {
+        "name": "replacement_account_and_household_lifecycle_state_mismatch",
+        "count": 0
+      },
+      {
+        "name": "replacement_complete_due_partition_snapshot_mismatch",
+        "count": 0
+      },
+      {
+        "name": "replacement_preserved_due_snapshot_mismatch",
+        "count": 0
+      },
+      {
+        "name": "replacement_future_untouched_due_not_not_due",
+        "count": 0
+      },
+      {
+        "name": "replacement_old_financial_owner_rows_mismatch",
+        "count": 0
+      },
+      {
+        "name": "replacement_new_household_inherited_financial_rows",
+        "count": 0
+      },
+      {
+        "name": "replacement_new_household_pre_start_due_invalid",
+        "count": 0
+      },
+      {
+        "name": "conflict_lifecycle_or_due_snapshot_partial_mutation",
+        "count": 0
+      },
+      {
+        "name": "conflict_financial_owner_rows_changed",
+        "count": 0
+      },
+      {
+        "name": "conflict_financial_interaction_counts_changed",
+        "count": 0
+      },
+      {
+        "name": "conflict_resident_session_count_changed",
+        "count": 0
+      },
+      {
+        "name": "conflict_lifecycle_audit_count_changed",
+        "count": 0
+      },
+      {
+        "name": "conflict_financial_content_changed",
+        "count": 0
+      }
+    ],
+    "nonzeroGlobalAnomalyKeys": [],
+    "nonzeroFixtureCheckKeys": [],
+    "result": "PASS"
+  }
+}

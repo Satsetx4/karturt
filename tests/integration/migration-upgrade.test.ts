@@ -24,7 +24,35 @@ import {
 import type { AppDatabase } from "../../src/db/client";
 import type { Principal } from "../../src/lib/auth/permissions";
 import { recordTreasurerCashPayment } from "../../src/lib/billing/treasurer-cash-payments";
+import { createChairmanAdjustment } from "../../src/lib/billing/chairman-adjustment";
 import { createAuthUser, createHousehold, createRt } from "../helpers/database";
+
+const gateCHistoryTables = [
+  ["monthly_dues", "id"],
+  ["payment_requests", "id"],
+  ["payment_request_items", "request_id, monthly_due_id"],
+  ["payment_request_claims", "monthly_due_id"],
+  ["payments", "id"],
+  ["payment_allocations", "id"],
+  ["payment_reversals", "id"],
+  ["active_due_settlements", "allocation_id"],
+  ["waiver_actions", "id"],
+  ["waiver_items", "waiver_action_id, monthly_due_id"],
+  ["due_adjustments", "id"],
+  ["audit_events", "id"],
+] as const;
+
+async function snapshotGateCHistory(client: PGlite) {
+  const snapshot: Record<string, string> = {};
+  for (const [table, orderBy] of gateCHistoryTables) {
+    const [row] = (await client.query<{ rows: string }>(`
+      SELECT coalesce(json_agg(row_to_json(snapshot_row) ORDER BY ${orderBy}), '[]'::json)::text AS rows
+      FROM public.${table} AS snapshot_row
+    `)).rows;
+    snapshot[table] = row!.rows;
+  }
+  return snapshot;
+}
 
 describe("legacy billing migration upgrade", () => {
   let client: PGlite;
@@ -80,7 +108,7 @@ describe("legacy billing migration upgrade", () => {
     expect(migrated).toEqual({ status: "not_due", waived_reason: null });
   });
 
-  it("applies the clean migration chain through 0012", async () => {
+  it("applies the clean migration chain through 0013", async () => {
     const cleanClient = new PGlite();
     try {
       const migrationFolder = resolve(process.cwd(), "drizzle");
@@ -106,12 +134,34 @@ describe("legacy billing migration upgrade", () => {
           AND tc.constraint_type = 'PRIMARY KEY'
       `);
       expect(ownershipKey.rows.map((row) => row.column_name)).toEqual(["allocation_id"]);
+      const phase12Indexes = await cleanClient.query<{ indexname: string }>(`
+        SELECT indexname FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexname IN (
+            'app_accounts_resident_login_uq',
+            'app_accounts_official_login_uq',
+            'households_rt_house_period_idx'
+          )
+        ORDER BY indexname
+      `);
+      expect(phase12Indexes.rows.map((row) => row.indexname)).toEqual([
+        "app_accounts_official_login_uq",
+        "app_accounts_resident_login_uq",
+        "households_rt_house_period_idx",
+      ]);
+      const phase12Trigger = await cleanClient.query<{ tgname: string }>(`
+        SELECT tgname FROM pg_trigger
+        WHERE tgrelid = 'public.households'::regclass
+          AND tgname = 'households_guard_phase12_period_v1'
+          AND NOT tgisinternal
+      `);
+      expect(phase12Trigger.rows).toHaveLength(1);
     } finally {
       await cleanClient.close();
     }
   }, 60000);
 
-  it("upgrades intact transfer and cash history through 0012, preserving owners and then recording cash", async () => {
+  it("upgrades intact transfer and cash history through 0013 without changing Gate C ledger history", async () => {
     const upgradeClient = new PGlite();
     try {
       const migrationFolder = resolve(process.cwd(), "drizzle");
@@ -285,6 +335,38 @@ describe("legacy billing migration upgrade", () => {
       await upgradeClient.exec(readFileSync(resolve(migrationFolder, waiverMigration), "utf8"));
       const tariffAdjustmentMigration = "0012_phase_11_tariff_adjustment.sql";
       await upgradeClient.exec(readFileSync(resolve(migrationFolder, tariffAdjustmentMigration), "utf8"));
+      const chairmanUser = await createAuthUser(db);
+      const [chairmanAccount] = await db.insert(appAccounts).values({
+        rtUnitId,
+        authUserId: chairmanUser.id,
+        accountType: "official",
+        loginIdentifier: `chairman-${chairmanUser.id}`,
+        personId: household.personId,
+      }).returning({ id: appAccounts.id });
+      await db.insert(officialAssignments).values({
+        rtUnitId,
+        appAccountId: chairmanAccount!.id,
+        role: "rt_chairman",
+        startsOn: "2020-01-01",
+      });
+      const chairmanPrincipal: Principal = {
+        authUserId: chairmanUser.id,
+        appAccountId: chairmanAccount!.id,
+        role: "rt_chairman",
+        rtUnitId,
+        householdId: null,
+        personId: household.personId,
+      };
+      await createChairmanAdjustment(db as unknown as AppDatabase, chairmanPrincipal, {
+        monthlyDueId: duesBeforeUpgrade.find((due) => due.month === 3)!.id,
+        amountDelta: 10000,
+        reason: "Development migration preservation fixture",
+        idempotencyKey: randomUUID(),
+      }, "2026-10-02");
+      const gateCHistoryBefore = await snapshotGateCHistory(upgradeClient);
+      const householdManagementMigration = "0013_phase_12_household_management.sql";
+      await upgradeClient.exec(readFileSync(resolve(migrationFolder, householdManagementMigration), "utf8"));
+      expect(await snapshotGateCHistory(upgradeClient)).toEqual(gateCHistoryBefore);
 
       const [transferAfter] = await db.select().from(payments).where(eq(payments.id, transferPaymentId));
       const [transferAllocationAfter] = await db.select().from(paymentAllocations)
@@ -309,7 +391,13 @@ describe("legacy billing migration upgrade", () => {
       });
       expect(cashAfter).toEqual(cashBefore);
       expect(cashAllocationAfter).toEqual(cashAllocationBefore);
-      expect(await db.select().from(dueAdjustments)).toHaveLength(0);
+      const preservedAdjustments = await db.select().from(dueAdjustments);
+      expect(preservedAdjustments).toHaveLength(1);
+      expect(preservedAdjustments[0]).toMatchObject({
+        monthlyDueId: duesBeforeUpgrade.find((due) => due.month === 3)!.id,
+        amountDelta: 10000,
+        effectiveTargetAfter: 50000,
+      });
       expect(await db.select().from(activeDueSettlements)).toHaveLength(2);
       expect(await db.select().from(waiverActions)).toHaveLength(0);
       expect(await db.select().from(waiverItems)).toHaveLength(0);
@@ -332,6 +420,49 @@ describe("legacy billing migration upgrade", () => {
       await upgradeClient.close();
     }
   });
+
+  it("refuses 0012 to 0013 when existing household periods overlap", async () => {
+    const overlapClient = new PGlite();
+    try {
+      const migrationFolder = resolve(process.cwd(), "drizzle");
+      const migrations = readdirSync(migrationFolder)
+        .filter((name) => name.endsWith(".sql"))
+        .sort();
+      const householdManagementMigration = "0013_phase_12_household_management.sql";
+      for (const name of migrations.filter((migration) => migration < householdManagementMigration)) {
+        await overlapClient.exec(readFileSync(resolve(migrationFolder, name), "utf8"));
+      }
+
+      const [rt] = (await overlapClient.query<{ id: string }>(`
+        INSERT INTO public.rt_units (code, name, rw_code, village)
+        VALUES ('RT-F12-OVERLAP', 'F12 overlap', 'RW-F12-OVERLAP', 'Village F12')
+        RETURNING id
+      `)).rows;
+      const [house] = (await overlapClient.query<{ id: string }>(`
+        INSERT INTO public.houses (rt_unit_id, number) VALUES ($1, 'F12-OVERLAP') RETURNING id
+      `, [rt!.id])).rows;
+      await overlapClient.query(`
+        INSERT INTO public.households (rt_unit_id, house_id, starts_on, ends_on, status)
+        VALUES ($1, $2, '2020-01-01', '2025-01-01', 'inactive')
+      `, [rt!.id, house!.id]);
+      await overlapClient.query(`
+        INSERT INTO public.households (rt_unit_id, house_id, starts_on, status)
+        VALUES ($1, $2, '2024-12-01', 'active')
+      `, [rt!.id, house!.id]);
+
+      await expect(overlapClient.exec(readFileSync(
+        resolve(migrationFolder, householdManagementMigration),
+        "utf8",
+      ))).rejects.toThrow(/Phase 12 migration refused: household periods already overlap/);
+      const priorLoginIndex = await overlapClient.query<{ indexname: string }>(`
+        SELECT indexname FROM pg_indexes
+        WHERE schemaname = 'public' AND indexname = 'app_accounts_login_identifier_uq'
+      `);
+      expect(priorLoginIndex.rows).toHaveLength(1);
+    } finally {
+      await overlapClient.close();
+    }
+  }, 60000);
 
   it("refuses 0010 to 0011 when a legacy WAIVED due has no structured history", async () => {
     const upgradeClient = new PGlite();

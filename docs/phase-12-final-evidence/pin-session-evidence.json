@@ -1,0 +1,21 @@
+{
+  "sourceCommit": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+  "evidenceType": "resident PIN reset and session revocation",
+  "residentLoginBeforeReset": "PASS",
+  "resetUiConfirmation": "PASS",
+  "doubleSubmitGuard": true,
+  "checks": {
+    "sessionCountBeforeReset": 1,
+    "sessionCountAfterReset": 0,
+    "oldSessionApiStatusBeforeReset": 200,
+    "oldSessionApiStatusAfterReset": 401,
+    "oldPinRejected": "PASS",
+    "newPinLogin": "PASS",
+    "newPinSessionCount": 1,
+    "resetAuditEventCount": 1,
+    "resetAuditContextHasCredentialLikeKey": false,
+    "resetAuditContextContainsSensitiveValue": false,
+    "resetAuditContextHasHashLikeValue": false,
+    "resetAuditContextHasTokenLikeValue": false
+  }
+}

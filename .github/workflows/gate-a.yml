@@ -16,6 +16,9 @@ on:
       - "feat/phase-9-payment-reversal"
       - "feat/phase-10-waiver"
       - "feat/phase-11-tariff-adjustment"
+      - "feat/phase-12-household-management"
+      - "integrate/f12-clean-checkpoint"
+      - "main"
     paths-ignore:
       - "docs/test-gate-a-report.md"
   pull_request:

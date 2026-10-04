@@ -1,0 +1,104 @@
+{
+  "runId": 37177247556,
+  "name": "Test Gate A",
+  "event": "push",
+  "headSha": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+  "status": "completed",
+  "conclusion": "success",
+  "createdAt": "2026-10-04T04:31:24Z",
+  "jobUrl": "https://github.com/Satsetx4/karturt/actions/runs/37177247556",
+  "jobs": [
+    {
+      "name": "Gate A local verification",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check out repository",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Set up Node.js",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install dependencies",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Lint",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Typecheck",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Unit tests",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Integration and migration tests",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Database constraint tests",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Authorization tests",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Full test suite",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Drizzle migration journal consistency",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Drizzle schema drift check",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Production build",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Set up Node.js",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Check out repository",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ]
+}
