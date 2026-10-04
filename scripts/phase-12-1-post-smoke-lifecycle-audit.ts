@@ -335,6 +335,17 @@ async function count(client: PoolClient, sql: string, values: unknown[] = []): P
   return Number(raw);
 }
 
+async function runAuditStage<T>(label: string, operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    const rawCode = (error as { code?: unknown } | null)?.code;
+    const sqlState = typeof rawCode === "string" && /^[0-9A-Z]{5}$/.test(rawCode) ? rawCode : "UNKNOWN";
+    console.error(JSON.stringify({ stage: label, sqlState }));
+    throw error;
+  }
+}
+
 const globalChecks: Array<{ name: string; sql: string }> = [
   {
     name: "overlapping_household_periods",
@@ -347,7 +358,7 @@ const globalChecks: Array<{ name: string; sql: string }> = [
        AND second_period.id > first_period.id
        AND first_period.starts_on <= coalesce(second_period.ends_on, 'infinity'::date)
        AND (first_period.ends_on IS NULL OR first_period.ends_on >= second_period.starts_on)
-    ) overlaps`,
+    ) AS overlapping_pairs`,
   },
   {
     name: "multiple_active_households_same_house",
@@ -830,7 +841,10 @@ async function main() {
     const target = await inspectTarget(client);
 
     const global = [];
-    for (const check of globalChecks) global.push({ name: check.name, count: await count(client, check.sql) });
+    for (const check of globalChecks) {
+      const value = await runAuditStage(`global:${check.name}`, () => count(client, check.sql));
+      global.push({ name: check.name, count: value });
+    }
 
     const qaSeedAttemptInventory = [];
     for (const [index, rawAttempt] of manifest.postSmokeAudit.qaSeedAttempts.entries()) {
