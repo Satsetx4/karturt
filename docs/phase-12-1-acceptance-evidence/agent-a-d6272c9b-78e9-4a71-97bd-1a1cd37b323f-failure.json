@@ -1,0 +1,21 @@
+{
+  "runId": "d6272c9b-78e9-4a71-97bd-1a1cd37b323f",
+  "outcome": "FAIL",
+  "stage": "old PIN is rejected after reset",
+  "diagnostics": {
+    "loginPath": "/login/warga",
+    "browserPath": "/login/warga",
+    "friendlyAlertVisible": true,
+    "loginApiStatuses": {
+      "/api/login/official": [
+        200,
+        200
+      ],
+      "/api/login/resident": [
+        200,
+        401
+      ]
+    }
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

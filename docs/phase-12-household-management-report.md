@@ -96,3 +96,15 @@ Server lokal dijalankan dengan konfigurasi development yang endpoint-nya terveri
 **F12 FAIL** sampai semua gerbang yang tertunda lulus, termasuk smoke browser autentikasi, CI pada HEAD akhir, dan resolusi temuan High sesuai kebijakan acceptance.
 
 **F13 NO-GO.** Jangan mulai F13 sampai gerbang F12 dinyatakan PASS dan residual yang memblokir ditutup.
+
+## F12.1 Acceptance Closure Update — 2026-10-04
+
+Bagian ini melengkapi riwayat laporan F12 di atas; status akhir closure mengacu pada laporan [phase-12-1-acceptance-closure-report.md](phase-12-1-acceptance-closure-report.md). Baseline tetap `b933cc9a279d91191d6d7fa8c76f6202fbb68da5`; branch kerja `fix/phase-12-1-acceptance-closure`; exact source SHA yang diuji `414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7`.
+
+Smoke browser terautentikasi kini lulus untuk Chairman list/search/add/edit/deactivate, reset PIN dan pencabutan sesi, replacement penghuni satu rumah dengan preservasi tunggakan, conflict protection tanpa mutasi parsial, penolakan akses Treasurer/lintas-RT, serta lima ukuran viewport. Audit read-only pasca-smoke menemukan 11/11 kategori global dan 15/15 pemeriksaan fixture nol; Gate C tetap 32/32 nol. Migration head tidak berubah: 14 entri hingga `0013_phase_12_household_management`.
+
+CI final pada exact source SHA dan satu-satunya blocker dependency dicatat dalam laporan closure. Audit penuh masih menemukan satu akar High (`braces@3.0.3`) pada rantai development lint tooling; audit production-only 0, dan upstream belum menyediakan versi patch. Karena acceptance mensyaratkan audit penuh tanpa High, hasil akhirnya tetap:
+
+**F12 FAIL — F13 NO-GO — remaining blocker: full dependency audit masih melaporkan High yang belum dipatch pada dependency development `braces@3.0.3`.**
+
+Tidak ada perubahan production, migration `0014`, merge ke `main`, atau pekerjaan F13.

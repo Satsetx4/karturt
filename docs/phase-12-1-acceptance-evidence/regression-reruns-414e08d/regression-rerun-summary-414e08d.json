@@ -1,0 +1,142 @@
+{
+  "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+  "execution": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 for each listed group; local tests only; Neon/database connection variables removed from child environments; no live smoke scripts run",
+  "totalSuites": 7,
+  "passedSuites": 7,
+  "failedSuites": [],
+  "results": [
+    {
+      "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+      "suite": "f5-f7-requests-verification-resolution",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 tests/integration/resident-payment-request.test.ts tests/integration/resident-payment-request-route.test.ts tests/integration/resident-payment-request-history-route.test.ts tests/integration/payment-request-resolution.test.ts tests/integration/payment-request-resolution-route.test.ts tests/integration/treasurer-payment-verification.test.ts tests/constraints/payment-request-items-immutable.test.ts",
+      "files": [
+        "tests/integration/resident-payment-request.test.ts",
+        "tests/integration/resident-payment-request-route.test.ts",
+        "tests/integration/resident-payment-request-history-route.test.ts",
+        "tests/integration/payment-request-resolution.test.ts",
+        "tests/integration/payment-request-resolution-route.test.ts",
+        "tests/integration/treasurer-payment-verification.test.ts",
+        "tests/constraints/payment-request-items-immutable.test.ts"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "summary": {
+        "testFiles": "7 passed (7)",
+        "tests": "45 passed (45)",
+        "duration": "22.42s (tests 64%, import 33%, transform 2%)"
+      }
+    },
+    {
+      "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+      "suite": "f8-cash",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 tests/integration/treasurer-cash-payment.test.ts tests/integration/treasurer-cash-payment-route.test.ts tests/constraints/cash-payment-ledger.test.ts",
+      "files": [
+        "tests/integration/treasurer-cash-payment.test.ts",
+        "tests/integration/treasurer-cash-payment-route.test.ts",
+        "tests/constraints/cash-payment-ledger.test.ts"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "summary": {
+        "testFiles": "3 passed (3)",
+        "tests": "15 passed (15)",
+        "duration": "8.83s (tests 72%, import 24%, transform 4%)"
+      }
+    },
+    {
+      "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+      "suite": "f9-reversal",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 tests/integration/payment-reversal.test.ts",
+      "files": [
+        "tests/integration/payment-reversal.test.ts"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "summary": {
+        "testFiles": "1 passed (1)",
+        "tests": "8 passed (8)",
+        "duration": "4.52s (tests 79%, import 15%, transform 6%)"
+      }
+    },
+    {
+      "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+      "suite": "f10-waiver",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 tests/integration/chairman-waiver.test.ts tests/constraints/waiver-ledger.test.ts tests/authorization/chairman-waiver-route.test.ts tests/authorization/chairman-waiver-adversarial.test.ts",
+      "files": [
+        "tests/integration/chairman-waiver.test.ts",
+        "tests/constraints/waiver-ledger.test.ts",
+        "tests/authorization/chairman-waiver-route.test.ts",
+        "tests/authorization/chairman-waiver-adversarial.test.ts"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "summary": {
+        "testFiles": "4 passed (4)",
+        "tests": "38 passed (38)",
+        "duration": "14.07s (tests 70%, import 27%, transform 3%)"
+      }
+    },
+    {
+      "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+      "suite": "f11-tariff-adjustment-concurrency",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 tests/integration/phase-11-adjustment-races.test.ts tests/constraints/phase-11-tariff-adjustment.test.ts tests/authorization/chairman-adjustment.test.ts",
+      "files": [
+        "tests/integration/phase-11-adjustment-races.test.ts",
+        "tests/constraints/phase-11-tariff-adjustment.test.ts",
+        "tests/authorization/chairman-adjustment.test.ts"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "summary": {
+        "testFiles": "3 passed (3)",
+        "tests": "19 passed (19)",
+        "duration": "11.67s (tests 81%, import 16%, transform 3%)"
+      }
+    },
+    {
+      "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+      "suite": "f12-household-resident-auth-concurrency",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 tests/integration/phase12-household-history.test.ts tests/integration/household-lifecycle-domain.test.ts tests/integration/resident-login-route.test.ts tests/integration/resident-lockout.test.ts tests/constraints/phase-12-household-database.test.ts tests/authorization/phase-12-household-security.test.ts tests/authorization/phase-12-household-route-security.test.ts tests/authorization/phase-12-household-auth-race.test.ts",
+      "files": [
+        "tests/integration/phase12-household-history.test.ts",
+        "tests/integration/household-lifecycle-domain.test.ts",
+        "tests/integration/resident-login-route.test.ts",
+        "tests/integration/resident-lockout.test.ts",
+        "tests/constraints/phase-12-household-database.test.ts",
+        "tests/authorization/phase-12-household-security.test.ts",
+        "tests/authorization/phase-12-household-route-security.test.ts",
+        "tests/authorization/phase-12-household-auth-race.test.ts"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "summary": {
+        "testFiles": "8 passed (8)",
+        "tests": "50 passed (50)",
+        "duration": "31.75s (tests 73%, import 25%, transform 2%)"
+      }
+    },
+    {
+      "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+      "suite": "gate-c-regression",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 tests/constraints/gate-c-payment-ledger.test.ts tests/authorization/gate-c-financial-actors.test.ts",
+      "files": [
+        "tests/constraints/gate-c-payment-ledger.test.ts",
+        "tests/authorization/gate-c-financial-actors.test.ts"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "summary": {
+        "testFiles": "2 passed (2)",
+        "tests": "6 passed (6)",
+        "duration": "7.76s (tests 80%, import 16%, transform 4%)"
+      }
+    }
+  ]
+}

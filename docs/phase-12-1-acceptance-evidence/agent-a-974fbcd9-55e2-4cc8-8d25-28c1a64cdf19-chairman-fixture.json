@@ -1,0 +1,21 @@
+{
+  "runId": "974fbcd9-55e2-4cc8-8d25-28c1a64cdf19",
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchId": "br-crimson-band-az6i637k",
+    "database": "neondb"
+  },
+  "migrationHead": "0013_phase_12_household_management",
+  "fixture": {
+    "rtUnitId": "cf9c532b-237a-4feb-80de-4d00050b028f",
+    "chairmanHouseholdId": "a9395f82-b277-4b5a-a29d-b48a1075187c",
+    "chairmanHouseId": "a5a749b7-fcee-4461-84bb-4e7f5754f920",
+    "chairmanPersonId": "62017aee-29d2-442e-b279-0d514e2b8488",
+    "chairmanAccountId": "5d3411bc-f2bf-415d-b3e1-eb1f9e5bb1f2",
+    "billingYearId": "5c9352e6-f99b-4cd3-85ef-249c2fb813d0",
+    "rtCode": "QA12-F6C95D7B3F",
+    "syntheticHouseNumber": "QA12-C-F6C95D7B3F",
+    "reusedExistingFixture": true
+  },
+  "note": "Synthetic QA-only IDs; no names, PINs, passwords, tokens, hashes, or connection values."
+}

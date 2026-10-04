@@ -1,0 +1,8 @@
+COMMAND: npm.cmd run lint
+npm notice run karturt@0.1.0 lint
+npm notice run eslint .
+
+D:\!AGY\karturt-phase-12-1-acceptance-closure\scripts\phase-12-household-browser-smoke.ts
+  1005:11  warning  'pinResetAuditEvidence' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+✖ 1 problem (0 errors, 1 warning)

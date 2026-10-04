@@ -1,0 +1,6 @@
+{
+  "runId": "a2a1857c-96f8-482e-9ff7-2a7656714bee",
+  "outcome": "FAIL",
+  "stage": "read-only exact development target and migration verification",
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

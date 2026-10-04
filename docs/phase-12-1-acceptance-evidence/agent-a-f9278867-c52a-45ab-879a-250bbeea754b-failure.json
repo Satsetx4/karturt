@@ -1,0 +1,13 @@
+{
+  "runId": "f9278867-c52a-45ab-879a-250bbeea754b",
+  "outcome": "FAIL",
+  "stage": "verify Chairman browser session across local server restart",
+  "diagnostics": {
+    "path": "/login/pengurus",
+    "titleVisible": false,
+    "loginFormVisible": true,
+    "loginAlert": false,
+    "bodyHasHouseholdText": false
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

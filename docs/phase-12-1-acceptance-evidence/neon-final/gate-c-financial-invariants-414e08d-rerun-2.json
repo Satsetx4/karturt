@@ -1,0 +1,5 @@
+{
+  "result": "AUDIT_CONTRACT_MISMATCH",
+  "targetGuardPassed": true,
+  "exitCode": 0
+}

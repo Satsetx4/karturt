@@ -1,0 +1,8 @@
+COMMAND: npx.cmd drizzle-kit check
+STARTED: 2026-10-04T03:37:39.3722374Z
+npm notice run karturt@0.1.0 npx
+npm notice run drizzle-kit check
+No config path provided, using default 'drizzle.config.ts'
+Reading config file 'D:\!AGY\karturt-phase-12-1-acceptance-closure\drizzle.config.ts'
+Everything's fine 🐶🔥
+EXIT_CODE: 0

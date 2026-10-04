@@ -1,0 +1,167 @@
+{
+  "runId": "7a19303f-f00b-444b-922e-2167408e57d1",
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchId": "br-crimson-band-az6i637k",
+    "database": "neondb"
+  },
+  "migrationHead": "0013_phase_12_household_management",
+  "preflight": {
+    "database": "neondb",
+    "migrationEntries": 14,
+    "migrationHead": "0013_phase_12_household_management",
+    "migrationHashMatches": true
+  },
+  "syntheticChairman": {
+    "rtUnitId": "cf9c532b-237a-4feb-80de-4d00050b028f",
+    "householdId": "a9395f82-b277-4b5a-a29d-b48a1075187c",
+    "personId": "62017aee-29d2-442e-b279-0d514e2b8488",
+    "accountId": "5d3411bc-f2bf-415d-b3e1-eb1f9e5bb1f2"
+  },
+  "supportingFutureTariffId": "792f1d00-17b5-413f-9a4b-9fd63a568127",
+  "createdResident": {
+    "houseNumber": "QA12-7595855382",
+    "householdId": "4fbc23a4-930a-4e48-85a1-108c0024bfbd",
+    "houseId": "1ef70424-8f10-4f7b-92fb-9f4ea50061c0",
+    "personId": "d4d8eff8-957f-4605-a607-fdd51e4cb737",
+    "accountId": "90bfda62-5ea7-456f-81fb-1c60d4cf6d69",
+    "startsOn": "2026-11-01",
+    "status": "active",
+    "dues": [
+      {
+        "id": "219d6505-de43-45c7-a0a8-8c68f3f652ef",
+        "period": "2026-01",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "26234f13-748a-42c9-99c2-629283c78c8b",
+        "period": "2026-02",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "8dbbf125-3d02-48cb-9a72-3d5fcb513997",
+        "period": "2026-03",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "a24ad61c-2fe2-4bb5-ae85-9fcc299b9f2e",
+        "period": "2026-04",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "47950d30-f869-49c5-8ab2-d039a919fd15",
+        "period": "2026-05",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "c2a7f7f7-07d6-480d-89fc-1a6bddf244d0",
+        "period": "2026-06",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "75d051c8-c0a4-4dca-b799-8232374e0f22",
+        "period": "2026-07",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "a421bbe8-f2ab-45b2-83d5-8959eeab190a",
+        "period": "2026-08",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "ee94cdb2-058d-480d-a14b-2d5be796eff9",
+        "period": "2026-09",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "4d749fcc-962d-4b90-b87f-f0cdb2bd8f8f",
+        "period": "2026-10",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "07a115af-e568-4383-b057-4c903a5e32a6",
+        "period": "2026-11",
+        "amount": 50000,
+        "status": "unpaid"
+      },
+      {
+        "id": "20ec352d-90bf-41dd-98cd-0e82c5e3edb0",
+        "period": "2026-12",
+        "amount": 50000,
+        "status": "unpaid"
+      }
+    ],
+    "postEditNameIsSynthetic": true,
+    "accountStatus": "active"
+  },
+  "results": {
+    "chairmanLogin": "PASS",
+    "householdList": "PASS",
+    "search": "PASS",
+    "add": "PASS",
+    "edit": "PASS",
+    "mutationPosts": 2
+  },
+  "postSmokeAudit": {
+    "qaSeedAttempts": [
+      {
+        "rtUnitId": "33a50e94-9cf6-4ac8-8883-c50835284aad",
+        "state": "leftover_partial"
+      },
+      {
+        "rtUnitId": "cf9c532b-237a-4feb-80de-4d00050b028f",
+        "state": "reused"
+      }
+    ]
+  },
+  "viewportResults": [
+    {
+      "width": 360,
+      "height": 800,
+      "overflow": false,
+      "undersizedTargets": []
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "overflow": false,
+      "undersizedTargets": []
+    },
+    {
+      "width": 430,
+      "height": 900,
+      "overflow": false,
+      "undersizedTargets": []
+    },
+    {
+      "width": 768,
+      "height": 1024,
+      "overflow": false,
+      "undersizedTargets": []
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "overflow": false,
+      "undersizedTargets": []
+    }
+  ],
+  "screenshotsSaved": [
+    "390x844-chairman-list",
+    "1440x900-chairman-list",
+    "390x844-household-created",
+    "1440x900-household-edited"
+  ],
+  "credentialSafety": "No PIN, password, session cookie/token, credential hash, database URL, or user-supplied identity is included.",
+  "evidenceType": "fixture-manifest"
+}

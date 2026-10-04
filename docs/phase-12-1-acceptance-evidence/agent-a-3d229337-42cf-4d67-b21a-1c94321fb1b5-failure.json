@@ -1,0 +1,17 @@
+{
+  "runId": "3d229337-42cf-4d67-b21a-1c94321fb1b5",
+  "outcome": "FAIL",
+  "stage": "Chairman login and household list for lifecycle continuation",
+  "diagnostics": {
+    "loginPath": "/login/pengurus",
+    "browserPath": "/login/pengurus",
+    "loginFormVisible": true,
+    "friendlyAlertVisible": true,
+    "loginApiStatuses": {
+      "/api/login/official": [
+        429
+      ]
+    }
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

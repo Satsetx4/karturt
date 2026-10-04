@@ -1,0 +1,20 @@
+{
+  "sourceHead": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+  "checkedDate": "2026-10-04 (Asia/Bangkok)",
+  "npmRegistry": {
+    "command": "npm view braces versions --json",
+    "exitCode": 0,
+    "latestPublishedVersion": "3.0.3",
+    "versionListEvidence": "upstream-braces-versions.json"
+  },
+  "githubAdvisoryDatabase": {
+    "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+    "id": "GHSA-vfj7-8cjw-p6xm",
+    "cve": "CVE-2026-93687",
+    "severity": "High",
+    "affectedVersions": "<=3.0.3",
+    "patchedVersions": "None",
+    "lastUpdated": "2026-10-02"
+  },
+  "patchStatusChangedSincePriorCheck": false
+}

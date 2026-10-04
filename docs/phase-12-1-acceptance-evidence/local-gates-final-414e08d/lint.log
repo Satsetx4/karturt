@@ -1,0 +1,14 @@
+COMMAND: npm.cmd run lint
+STARTED: 2026-10-04T04:07:23.1492734Z
+npm notice run karturt@0.1.0 lint
+npm notice run eslint .
+
+D:\!AGY\karturt-phase-12-1-acceptance-closure\scripts\agent-a-final-diagnostic-d18fe72e08944ac6bfe1c8ab02ab3d82.tmp.ts
+  1056:11  warning  'pinResetAuditEvidence' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\!AGY\karturt-phase-12-1-acceptance-closure\scripts\phase-12-household-browser-smoke.ts
+  1005:11  warning  'pinResetAuditEvidence' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+✖ 2 problems (0 errors, 2 warnings)
+
+EXIT_CODE: 0

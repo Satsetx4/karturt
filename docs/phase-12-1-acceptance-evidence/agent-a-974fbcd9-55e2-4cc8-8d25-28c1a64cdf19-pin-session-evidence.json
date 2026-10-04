@@ -1,0 +1,27 @@
+{
+  "runId": "974fbcd9-55e2-4cc8-8d25-28c1a64cdf19",
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchId": "br-crimson-band-az6i637k",
+    "database": "neondb"
+  },
+  "clock": "Local dev server business date is simulated as 2026-11-01 through its Asia/Jakarta business-date helper; real Date and session expiry remain unchanged.",
+  "householdId": "69082347-26eb-4c9a-83c1-75e628b8ca30",
+  "residentAccountId": "89fb3ab7-c8ac-4b0f-833d-aca8e6647ca7",
+  "residentLoginBeforeReset": "PASS",
+  "sessionCountBeforeReset": 1,
+  "residentApiStatusBeforeReset": 200,
+  "resetUiConfirmation": "PASS",
+  "doubleSubmitGuard": true,
+  "sessionCountAfterReset": 0,
+  "capturedOldSessionApiStatusAfterReset": 401,
+  "resetAuditEventCount": 1,
+  "resetAuditContextHasCredentialLikeKey": false,
+  "resetAuditContextContainsSensitiveValue": false,
+  "resetAuditContextHasHashLikeValue": false,
+  "resetAuditContextHasTokenLikeValue": false,
+  "screenshotsSaved": [
+    "390x844-pin-reset-success"
+  ],
+  "credentialSafety": "PINs and session cookie were kept only in process memory; evidence contains no credential values or hashes."
+}

@@ -1,0 +1,6 @@
+{
+  "runId": "ad5de8aa-4102-47a7-9d1c-2b5cc7498cdb",
+  "outcome": "FAIL",
+  "stage": "verify synthetic Treasurer household and PIN reset authorization denials",
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

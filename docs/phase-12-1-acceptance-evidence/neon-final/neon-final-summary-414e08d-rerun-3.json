@@ -1,0 +1,57 @@
+{
+  "result": "PASS",
+  "target": {
+    "environment": "development",
+    "projectId": "billowing-base-57949906",
+    "branchId": "br-crimson-band-az6i637k",
+    "branchName": "karturt-development",
+    "endpointId": "ep-quiet-cake-azrhjiyh",
+    "directHostCheck": "endpoint ID first label; .neon.tech suffix; no pooler",
+    "database": "neondb",
+    "branchMetadataVerified": true,
+    "branchIsPrimaryOrDefault": false
+  },
+  "lifecycle": {
+    "exitCode": 0,
+    "result": "PASS",
+    "migrationEntries": 14,
+    "migrationHead": "0013_phase_12_household_management",
+    "globalCategories": 11,
+    "globalZero": 11,
+    "fixtureChecks": 15,
+    "fixtureZero": 15,
+    "replacementSnapshotCounts": {
+      "oldHouseholdDueRowsBefore": 12,
+      "oldHouseholdDueRowsAfter": 12,
+      "preservedDueRowsExpected": 11,
+      "futureUntouchedDueRowsExpected": 1,
+      "newHouseholdPreStartDueRows": 11,
+      "newHouseholdPreStartDueRowsInvalid": 0
+    },
+    "conflictSnapshotCounts": {
+      "activeResidentSessionsBefore": 0,
+      "activeResidentSessionsAfter": 0,
+      "lifecycleAuditEventsBefore": 0,
+      "lifecycleAuditEventsAfter": 0,
+      "financialRowsBefore": 1,
+      "financialRowsAfter": 1,
+      "financialContentMatches": true
+    }
+  },
+  "gateC": {
+    "exitCode": 0,
+    "migrationEntries": 14,
+    "migrationHead": "0013_phase_12_household_management",
+    "migrationHeadHash": "994BCC9376B207FDC0668312CC68CAB3C2CEC46BC6101EDC4C2B5EF7F51C4A85",
+    "hashMatched": true,
+    "anomalyCategories": 32,
+    "zeroCategories": 32,
+    "nonzeroCategories": 0
+  },
+  "evidence": {
+    "lifecycle": "neon-final/post-smoke-lifecycle-audit-414e08d-rerun-2.json",
+    "gateC": "neon-final/gate-c-financial-invariants-414e08d-rerun-3.json",
+    "summary": "neon-final/neon-final-summary-414e08d-rerun-3.json"
+  },
+  "boundary": "process-local development env load; strict target guard; lifecycle BEGIN READ ONLY; Gate C SELECT-only; no fixture mutation or migration"
+}

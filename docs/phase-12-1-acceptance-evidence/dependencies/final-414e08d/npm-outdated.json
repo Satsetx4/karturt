@@ -1,0 +1,99 @@
+{
+  "sourceHead": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+  "command": "npm outdated --json",
+  "exitCode": 1,
+  "toolchain": {
+    "node": "v24.19.0",
+    "npm": "12.0.2"
+  },
+  "packages": {
+    "@neondatabase/serverless": {
+      "current": "1.1.0",
+      "wanted": "1.2.0",
+      "latest": "1.2.0",
+      "dependent": "<repo>",
+      "location": "node_modules/@neondatabase/serverless",
+      "type": null
+    },
+    "@types/node": {
+      "current": "24.13.6",
+      "wanted": "24.19.1",
+      "latest": "26.6.4",
+      "dependent": "<repo>",
+      "location": "node_modules/@types/node",
+      "type": null
+    },
+    "better-auth": {
+      "current": "1.7.6",
+      "wanted": "1.7.7",
+      "latest": "1.7.7",
+      "dependent": "<repo>",
+      "location": "node_modules/better-auth",
+      "type": null
+    },
+    "eslint": {
+      "current": "9.39.5",
+      "wanted": "9.39.5",
+      "latest": "10.12.0",
+      "dependent": "<repo>",
+      "location": "node_modules/eslint",
+      "type": null
+    },
+    "eslint-config-next": {
+      "current": "16.3.6",
+      "wanted": "16.3.6",
+      "latest": "16.3.8",
+      "dependent": "<repo>",
+      "location": "node_modules/eslint-config-next",
+      "type": null
+    },
+    "lucide-react": {
+      "current": "1.48.0",
+      "wanted": "1.51.0",
+      "latest": "1.51.0",
+      "dependent": "<repo>",
+      "location": "node_modules/lucide-react",
+      "type": null
+    },
+    "next": {
+      "current": "16.3.6",
+      "wanted": "16.3.6",
+      "latest": "16.3.8",
+      "dependent": "<repo>",
+      "location": "node_modules/next",
+      "type": null
+    },
+    "react": {
+      "current": "19.2.8",
+      "wanted": "19.2.8",
+      "latest": "19.3.0",
+      "dependent": "<repo>",
+      "location": "node_modules/react",
+      "type": null
+    },
+    "react-dom": {
+      "current": "19.2.8",
+      "wanted": "19.2.8",
+      "latest": "19.3.0",
+      "dependent": "<repo>",
+      "location": "node_modules/react-dom",
+      "type": null
+    },
+    "typescript": {
+      "current": "5.9.3",
+      "wanted": "5.9.3",
+      "latest": "7.0.2",
+      "dependent": "<repo>",
+      "location": "node_modules/typescript",
+      "type": null
+    },
+    "vitest": {
+      "current": "5.0.1",
+      "wanted": "5.0.3",
+      "latest": "5.0.3",
+      "dependent": "<repo>",
+      "location": "node_modules/vitest",
+      "type": null
+    }
+  }
+}

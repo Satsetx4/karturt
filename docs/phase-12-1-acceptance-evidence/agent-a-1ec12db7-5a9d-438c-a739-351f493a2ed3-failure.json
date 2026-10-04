@@ -1,0 +1,11 @@
+{
+  "runId": "1ec12db7-5a9d-438c-a739-351f493a2ed3",
+  "outcome": "FAIL",
+  "stage": "verify Chairman household list HTTP API session",
+  "diagnostics": {
+    "listApiStatus": 500,
+    "browserPath": "/app",
+    "chairmanListTitleVisible": false
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

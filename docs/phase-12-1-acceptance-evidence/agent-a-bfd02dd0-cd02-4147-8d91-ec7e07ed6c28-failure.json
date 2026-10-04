@@ -1,0 +1,45 @@
+{
+  "runId": "bfd02dd0-cd02-4147-8d91-ec7e07ed6c28",
+  "outcome": "FAIL",
+  "stage": "wait for household create API and UI success",
+  "diagnostics": {
+    "path": "/app/rumah",
+    "formValid": true,
+    "invalidFields": [],
+    "createFormVisible": true,
+    "maskedPinFieldHasValue": true,
+    "feedbackStatus": false,
+    "friendlyAlertVisible": true,
+    "rawInternalErrorVisible": false,
+    "createPosts": 1,
+    "householdApiStatuses": {
+      "/api/login/official": [
+        200
+      ],
+      "/api/chairman/households": [
+        200,
+        200,
+        200,
+        409
+      ]
+    },
+    "responseCategory": "generic-conflict",
+    "requestFieldPresence": {
+      "hasNewHouse": false,
+      "hasHouseId": true,
+      "hasHouseNumber": false,
+      "hasStartsOn": true,
+      "hasFullName": true,
+      "hasInitialPin": true
+    },
+    "preCreateReadOnlyChecks": {
+      "outcome": "PASS",
+      "globallyUnusedHouseNumber": true,
+      "globallyUnusedResidentLoginIdentifier": true,
+      "targetHouseAndPeriodClear": true,
+      "checkedPeriodStart": "2026-11-01",
+      "attempts": 1
+    }
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

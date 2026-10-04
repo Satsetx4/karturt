@@ -1,0 +1,6 @@
+{
+  "runId": "90b1c720-0be9-4b67-aada-2336514171a3",
+  "outcome": "FAIL",
+  "stage": "verify exactly 14 migrations ending at 0013",
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

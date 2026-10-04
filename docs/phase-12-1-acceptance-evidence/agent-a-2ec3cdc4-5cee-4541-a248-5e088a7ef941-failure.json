@@ -1,0 +1,6 @@
+{
+  "runId": "2ec3cdc4-5cee-4541-a248-5e088a7ef941",
+  "outcome": "FAIL",
+  "stage": "read existing synthetic tariff in reused RT",
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

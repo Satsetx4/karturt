@@ -1,0 +1,201 @@
+{
+  "runId": "f3089aa7-713f-47c9-83a3-f6b3e80215f4",
+  "outcome": "PASS",
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchId": "br-crimson-band-az6i637k",
+    "database": "neondb"
+  },
+  "migrationHead": "0013_phase_12_household_management",
+  "source": {
+    "branch": "fix/phase-12-1-acceptance-closure",
+    "baseline": "b933cc9a279d91191d6d7fa8c76f6202fbb68da5",
+    "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+    "provenanceSha256": {
+      "scripts/phase-12-household-browser-smoke.ts": "172c5d9466233fa662bb7467d03a49c9c0318584a437f23f87a6e1d2d99ab5e5",
+      "src/components/chairman-household-management.tsx": "f702ca445e22c95dc340e9cae4881c51bca03878d7d2010a43f31b16d61ac512",
+      "src/app/api/chairman/households/[householdId]/replace/route.ts": "d9d598a6807b37ce06aeb34d785ec537bf86c5d354c81cd959edf85fc4c8729c",
+      "src/app/api/chairman/households/[householdId]/deactivate/route.ts": "996c97c5f9c4cee023a67556563f4ef21ca5fd09d28044f60c6b25477a22127a",
+      "src/app/api/chairman/adjustments/route.ts": "90ade30b93c0e3a2b3bf1e5176347561e4fd838452fc697ba4a16a129086b51b"
+    }
+  },
+  "preflight": {
+    "database": "neondb",
+    "migrationEntries": 14,
+    "migrationHead": "0013_phase_12_household_management",
+    "migrationHashMatches": true
+  },
+  "loadingStateObserved": true,
+  "syntheticChairman": {
+    "rtUnitId": "cf9c532b-237a-4feb-80de-4d00050b028f",
+    "householdId": "a9395f82-b277-4b5a-a29d-b48a1075187c",
+    "personId": "62017aee-29d2-442e-b279-0d514e2b8488",
+    "accountId": "5d3411bc-f2bf-415d-b3e1-eb1f9e5bb1f2"
+  },
+  "supportingFutureTariffId": "792f1d00-17b5-413f-9a4b-9fd63a568127",
+  "createdResident": {
+    "houseNumber": "QA12-F82688E66B",
+    "householdId": "36675b25-f65f-44ac-af52-1045bb4f4c5d",
+    "houseId": "e4cc5b7d-6759-4196-973a-3f8316e3b6dc",
+    "personId": "dc56ad27-23c2-4c49-9f5d-9ac702adc8aa",
+    "accountId": "e87b4c65-e5db-46ac-9683-ed6cb04368d6",
+    "startsOn": "2026-11-01",
+    "status": "active",
+    "dues": [
+      {
+        "id": "8b706412-3199-44ed-8928-3585bf2e328c",
+        "period": "2026-01",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "069acd59-008f-4f78-a7c0-2fbdb75f24e3",
+        "period": "2026-02",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "c305fe37-16be-4466-a338-73be4a9363b5",
+        "period": "2026-03",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "32ff4c25-3fa6-42b0-a2b2-92ee79ed5dbb",
+        "period": "2026-04",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "056328dc-c6cf-4ca9-b4a4-f90ad331a9fd",
+        "period": "2026-05",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "4e586c7a-2b72-4c32-ae8e-300b48d733d2",
+        "period": "2026-06",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "c274e66d-8b2b-41ff-b82c-3c3972e934b7",
+        "period": "2026-07",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "1492f403-65d5-42e4-b031-60bc5a933d3c",
+        "period": "2026-08",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "5a908570-40aa-44fe-9e6b-eba94cbadc4a",
+        "period": "2026-09",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "6a4a414c-41d4-4e36-a046-9c7b45b3db18",
+        "period": "2026-10",
+        "amount": 0,
+        "status": "not_due"
+      },
+      {
+        "id": "f4b5e76a-ff99-4141-85e6-9f5fe4c10048",
+        "period": "2026-11",
+        "amount": 50000,
+        "status": "unpaid"
+      },
+      {
+        "id": "658af7f9-0397-4a42-ac09-1f718ce44cbc",
+        "period": "2026-12",
+        "amount": 50000,
+        "status": "unpaid"
+      }
+    ],
+    "postEditNameIsSynthetic": true,
+    "accountStatus": "active"
+  },
+  "results": {
+    "chairmanLogin": "PASS",
+    "householdList": "PASS",
+    "search": "PASS",
+    "add": "PASS",
+    "edit": "PASS",
+    "residentLoginBeforeReset": "PASS",
+    "pinReset": "PASS",
+    "oldSessionRevoked": "PASS",
+    "oldPinRejected": "PASS",
+    "newPinLogin": "PASS",
+    "mutationPosts": 3
+  },
+  "pinSession": {
+    "sessionCountBeforeReset": 1,
+    "sessionCountAfterReset": 0,
+    "oldSessionApiStatusBeforeReset": 200,
+    "oldSessionApiStatusAfterReset": 401,
+    "resetAuditActionCount": 1,
+    "resetAuditContextHasCredentialLikeKey": false,
+    "resetAuditContextContainsSensitiveValue": false,
+    "resetAuditContextHasHashLikeValue": false,
+    "resetAuditContextHasTokenLikeValue": false,
+    "newPinSessionCount": 1
+  },
+  "postSmokeAudit": {
+    "qaSeedAttempts": [
+      {
+        "rtUnitId": "33a50e94-9cf6-4ac8-8883-c50835284aad",
+        "state": "leftover_partial"
+      },
+      {
+        "rtUnitId": "cf9c532b-237a-4feb-80de-4d00050b028f",
+        "state": "reused"
+      }
+    ]
+  },
+  "viewportResults": [
+    {
+      "width": 360,
+      "height": 800,
+      "overflow": false,
+      "undersizedTargets": []
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "overflow": false,
+      "undersizedTargets": []
+    },
+    {
+      "width": 430,
+      "height": 900,
+      "overflow": false,
+      "undersizedTargets": []
+    },
+    {
+      "width": 768,
+      "height": 1024,
+      "overflow": false,
+      "undersizedTargets": []
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "overflow": false,
+      "undersizedTargets": []
+    }
+  ],
+  "screenshotsSaved": [
+    "390x844-chairman-list",
+    "1440x900-chairman-list",
+    "390x844-household-loading",
+    "390x844-household-created",
+    "1440x900-household-edited",
+    "390x844-pin-reset-success",
+    "390x844-resident-new-pin-login"
+  ],
+  "credentialSafety": "No PIN, password, session cookie/token, credential hash, database URL, or user-supplied identity is included.",
+  "evidenceType": "fixture-manifest"
+}

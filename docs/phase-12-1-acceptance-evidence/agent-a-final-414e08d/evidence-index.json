@@ -1,0 +1,652 @@
+{
+  "evidenceSet": "agent-a-final-414e08d",
+  "source": {
+    "branch": "fix/phase-12-1-acceptance-closure",
+    "baseline": "b933cc9a279d91191d6d7fa8c76f6202fbb68da5",
+    "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7"
+  },
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchId": "br-crimson-band-az6i637k",
+    "database": "neondb"
+  },
+  "migrationHead": "0013_phase_12_household_management",
+  "coreRun": {
+    "runId": "f3089aa7-713f-47c9-83a3-f6b3e80215f4",
+    "outcome": "PASS",
+    "scenarios": {
+      "chairmanLogin": "PASS",
+      "householdList": "PASS",
+      "search": "PASS",
+      "add": "PASS",
+      "edit": "PASS",
+      "residentLoginBeforeReset": "PASS",
+      "pinReset": "PASS",
+      "oldSessionRevoked": "PASS",
+      "oldPinRejected": "PASS",
+      "newPinLogin": "PASS",
+      "mutationPosts": 3
+    },
+    "pinSession": {
+      "oldSessionApiBeforeReset": 200,
+      "sessionCountBeforeReset": 1,
+      "sessionCountAfterReset": 0,
+      "oldSessionApiAfterReset": 401,
+      "resetAuditEvents": 1,
+      "resetAuditCredentialKey": false,
+      "resetAuditSubmittedSecret": false,
+      "resetAuditHashLikeValue": false,
+      "resetAuditTokenLikeValue": false,
+      "oldPinLoginStatus": 401,
+      "newPinLoginStatus": 200,
+      "newResidentSessionCount": 1
+    },
+    "viewports": [
+      {
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      }
+    ],
+    "screenshots": [
+      "agent-a-final-414e08d/core-1440x900-chairman-list.png",
+      "agent-a-final-414e08d/core-1440x900-household-edited.png",
+      "agent-a-final-414e08d/core-390x844-chairman-list.png",
+      "agent-a-final-414e08d/core-390x844-household-created.png",
+      "agent-a-final-414e08d/core-390x844-household-loading.png",
+      "agent-a-final-414e08d/core-390x844-pin-reset-success.png",
+      "agent-a-final-414e08d/core-390x844-resident-new-pin-login.png"
+    ],
+    "files": [
+      "core-fixture-manifest.json",
+      "core-browser-smoke-results.json",
+      "core-pin-session-evidence.json",
+      "core-resident-login-evidence.json",
+      "core-chairman-fixture.json"
+    ]
+  },
+  "lifecycleRun": {
+    "runId": "751bc046-b7d0-49f7-b1d2-80a73600ae9f",
+    "outcome": "PASS",
+    "scenarios": {
+      "chairmanLoginListSearch": "PASS",
+      "addResident": "PASS; bound to prior proof f3089aa7-713f-47c9-83a3-f6b3e80215f4",
+      "editResidentAndDatabasePersistence": "PASS; bound to prior proof f3089aa7-713f-47c9-83a3-f6b3e80215f4",
+      "pinResetAndOldSessionRevocation": "PASS; bound to prior proof f3089aa7-713f-47c9-83a3-f6b3e80215f4",
+      "oldPinRejectedAndNewPinResidentLogin": "PASS; bound to prior proof f3089aa7-713f-47c9-83a3-f6b3e80215f4",
+      "sameHouseReplacementAndDebtPreservation": "PASS",
+      "interactedDueConflictNoPartialMutation": "PASS",
+      "deactivationAndSessionRevocation": "PASS",
+      "crossRtChairman": "PASS",
+      "treasurerManagementAndPinReset": "PASS"
+    },
+    "replacement": {
+      "sameHouse": true,
+      "oldHouseholdStatus": "inactive",
+      "newHouseholdStatus": "active",
+      "oldResidentDisabled": true,
+      "oldSessionCountAfterReplacement": 0,
+      "capturedOldSessionApiStatusAfterReplacement": 401,
+      "oldPinRejectedStatus": 401,
+      "oldArrearUnchanged": true,
+      "futureUntouchedDueBecameNotDue": true,
+      "newHouseholdHistoryRowCount": 0,
+      "newLoginStatus": 200,
+      "newResidentSessionCount": 1,
+      "uniqueCurrentSameHouseResidentLoginCount": 1,
+      "effectiveMonthSent": "2026-12"
+    },
+    "conflict": {
+      "status": 409,
+      "errorVisible": true,
+      "internalErrorVisible": false,
+      "credentialVisible": false,
+      "activeSessionCountBefore": 0,
+      "activeSessionCountAfter": 0,
+      "activeSessionCountUnchanged": true,
+      "lifecycleAuditCountBefore": 0,
+      "lifecycleAuditCountAfter": 0,
+      "lifecycleAuditCountUnchanged": true,
+      "financialContentRowCountBefore": 1,
+      "financialContentUnchanged": true,
+      "unchanged": true
+    },
+    "deactivation": {
+      "status": 200,
+      "householdStatus": "inactive",
+      "endsOn": "2026-12-31",
+      "personActive": false,
+      "residentAccountStatus": "disabled",
+      "residentSessionCountBefore": 1,
+      "residentSessionCountAfter": 0,
+      "oldSessionApiStatusAfter": 401,
+      "resetAuditDelta": 1,
+      "resetAuditHasCredentialLikeData": false
+    },
+    "authorization": {
+      "crossRt": {
+        "status": 404,
+        "genericError": true,
+        "noMutation": true,
+        "internalLeak": false
+      },
+      "treasurer": {
+        "householdListStatus": 403,
+        "householdGeneric": true,
+        "resetStatus": 403,
+        "resetGeneric": true,
+        "noAuditMutation": true,
+        "noSessionMutation": true,
+        "internalLeak": false
+      }
+    },
+    "viewportChecks": {
+      "list": [
+        {
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        }
+      ],
+      "activeFormsAndConfirmations": [
+        {
+          "state": "add household form",
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "add household form",
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "add household form",
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "add household form",
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "add household form",
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "resident edit form",
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "resident edit form",
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "resident edit form",
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "resident edit form",
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "resident edit form",
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "PIN reset form",
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "PIN reset form",
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "PIN reset form",
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "PIN reset form",
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "PIN reset form",
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "PIN reset confirmation",
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "PIN reset confirmation",
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "PIN reset confirmation",
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "PIN reset confirmation",
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "PIN reset confirmation",
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "conflict replacement form",
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "conflict replacement form",
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "conflict replacement form",
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "conflict replacement form",
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "conflict replacement form",
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "conflict replacement confirmation",
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "conflict replacement confirmation",
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "conflict replacement confirmation",
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "conflict replacement confirmation",
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "conflict replacement confirmation",
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "same-house replacement form",
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "same-house replacement form",
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "same-house replacement form",
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "same-house replacement form",
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "same-house replacement form",
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "same-house replacement confirmation",
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "same-house replacement confirmation",
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "same-house replacement confirmation",
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "same-house replacement confirmation",
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "same-house replacement confirmation",
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "deactivation resident PIN reset form",
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "deactivation resident PIN reset form",
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "deactivation resident PIN reset form",
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "deactivation resident PIN reset form",
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "deactivation resident PIN reset form",
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "deactivation resident PIN confirmation",
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "deactivation resident PIN confirmation",
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "deactivation resident PIN confirmation",
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "deactivation resident PIN confirmation",
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "deactivation resident PIN confirmation",
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "household deactivation form",
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "household deactivation form",
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "household deactivation form",
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "household deactivation form",
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "household deactivation form",
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "household deactivation confirmation",
+          "width": 360,
+          "height": 800,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "household deactivation confirmation",
+          "width": 390,
+          "height": 844,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "household deactivation confirmation",
+          "width": 430,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "household deactivation confirmation",
+          "width": 768,
+          "height": 1024,
+          "overflow": false,
+          "undersizedTargets": []
+        },
+        {
+          "state": "household deactivation confirmation",
+          "width": 1440,
+          "height": 900,
+          "overflow": false,
+          "undersizedTargets": []
+        }
+      ]
+    },
+    "screenshots": [
+      "agent-a-final-414e08d/lifecycle-1440x900-household-deactivation-success.png",
+      "agent-a-final-414e08d/lifecycle-1440x900-interacted-due-conflict-error.png",
+      "agent-a-final-414e08d/lifecycle-1440x900-lifecycle-household-list.png",
+      "agent-a-final-414e08d/lifecycle-1440x900-same-house-replacement-success.png",
+      "agent-a-final-414e08d/lifecycle-390x844-deactivation-resident-before.png",
+      "agent-a-final-414e08d/lifecycle-390x844-household-deactivation-review.png",
+      "agent-a-final-414e08d/lifecycle-390x844-household-deactivation-success.png",
+      "agent-a-final-414e08d/lifecycle-390x844-interacted-due-conflict-error.png",
+      "agent-a-final-414e08d/lifecycle-390x844-interacted-due-replacement-review.png",
+      "agent-a-final-414e08d/lifecycle-390x844-lifecycle-household-list.png",
+      "agent-a-final-414e08d/lifecycle-390x844-lifecycle-pin-reset-success.png",
+      "agent-a-final-414e08d/lifecycle-390x844-lifecycle-resident-before-replacement.png",
+      "agent-a-final-414e08d/lifecycle-390x844-same-house-new-resident-login.png",
+      "agent-a-final-414e08d/lifecycle-390x844-same-house-replacement-review.png",
+      "agent-a-final-414e08d/lifecycle-390x844-same-house-replacement-success.png"
+    ],
+    "files": [
+      "lifecycle-fixture-manifest-original.json",
+      "lifecycle-fixture-manifest-normalized.json",
+      "lifecycle-browser-smoke-results.json"
+    ]
+  },
+  "credentialAndErrorScan": {
+    "status": "PASS",
+    "basis": "Harness evidence contains only sanitized statuses, counts, booleans, synthetic identifiers, and screenshots; PIN reset audit fields report no credential-like key, submitted secret, hash-like value, or token-like value; conflict and authorization checks report no internal error or credential display."
+  },
+  "screenshotPathNote": "All screenshot files physically exist under this evidence set. The original lifecycle manifest contains duplicated docs/ prefixes in its screenshot path list; use lifecycle-fixture-manifest-normalized.json for correct copied paths."
+}

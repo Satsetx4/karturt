@@ -1,0 +1,17 @@
+{
+  "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+  "suite": "f9-reversal",
+  "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 tests/integration/payment-reversal.test.ts",
+  "files": [
+    "tests/integration/payment-reversal.test.ts"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "summary": {
+    "testFiles": "1 passed (1)",
+    "tests": "8 passed (8)",
+    "duration": "4.52s (tests 79%, import 15%, transform 6%)"
+  },
+  "invocationEquivalentTo": "npm test -- --maxWorkers=1 <listed test files>"
+}

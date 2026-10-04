@@ -1,0 +1,38 @@
+{
+  "targetGuardPassed": true,
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchId": "br-crimson-band-az6i637k",
+    "branchName": "karturt-development",
+    "endpointId": "ep-quiet-cake-azrhjiyh",
+    "database": "neondb",
+    "hostSuffix": ".neon.tech",
+    "directHost": true,
+    "environment": "development"
+  },
+  "migration": {
+    "entries": 14,
+    "head": "0013_phase_12_household_management",
+    "headHash": "994bcc9376b207fdc0668312cc68cab3c2cec46bc6101edc4c2b5ef7f51c4a85",
+    "verifiedByBothAudits": false
+  },
+  "lifecycleAudit": {
+    "exitCode": 1,
+    "passed": false,
+    "globalAnomalyCategories": 0,
+    "allGlobalZero": false,
+    "fixtureChecks": 0,
+    "allFixtureChecksZero": false
+  },
+  "gateC": {
+    "exitCode": 0,
+    "passed": true,
+    "anomalyCategories": 32,
+    "all32Zero": true
+  },
+  "evidenceFiles": [
+    "post-smoke-lifecycle-audit.json",
+    "gate-c-financial-invariants.json"
+  ],
+  "databaseAccess": "read-only audits only; lifecycle audit BEGIN READ ONLY; Gate C SELECT-only; no live regression smokes"
+}

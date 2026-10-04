@@ -1,0 +1,20 @@
+{
+  "runId": "f3089aa7-713f-47c9-83a3-f6b3e80215f4",
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchId": "br-crimson-band-az6i637k",
+    "database": "neondb"
+  },
+  "newPinLoginStatus": 200,
+  "oldPinRejectedStatus": 401,
+  "residentApiStatus": 200,
+  "activeResidentSessionCount": 1,
+  "profile": {
+    "residentAreaVisible": true,
+    "houseNumberVisible": true,
+    "editedNameVisible": true,
+    "originalNameVisible": false
+  },
+  "editedNamePersistedInDatabase": true,
+  "credentialSafety": "No PIN, password, session cookie/token, credential hash, or database connection value is included."
+}

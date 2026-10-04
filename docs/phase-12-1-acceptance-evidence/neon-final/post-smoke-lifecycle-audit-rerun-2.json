@@ -1,0 +1,11 @@
+{
+  "result": "AUDIT_FAILED",
+  "exitCode": 1,
+  "targetGuardPassed": true,
+  "diagnostic": {
+    "category": "other",
+    "name": "OtherError",
+    "code": "42601",
+    "failedQuery": null
+  }
+}

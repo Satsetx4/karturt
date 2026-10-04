@@ -1,0 +1,9 @@
+karturt@0.1.0 <repo>
+├─┬ better-auth@1.7.6
+│ └── next@16.3.6 deduped
+├─┬ eslint-config-next@16.3.6
+│ └─┬ @next/eslint-plugin-next@16.3.6
+│   └─┬ fast-glob@3.3.1
+│     └─┬ micromatch@4.0.8
+│       └── braces@3.0.3
+└── next@16.3.6

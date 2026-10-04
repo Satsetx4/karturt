@@ -1,0 +1,15 @@
+{
+  "runId": "751bc046-b7d0-49f7-b1d2-80a73600ae9f",
+  "outcome": "PASS",
+  "manifest": "docs/phase-12-1-acceptance-evidence/agent-a-751bc046-b7d0-49f7-b1d2-80a73600ae9f-fixture-manifest.json",
+  "scenarios": {
+    "crossRtChairman": "PASS",
+    "treasurerManagementAndReset": "PASS",
+    "interactedDueConflict": "PASS",
+    "sameHouseReplacementAtBoundary": "PASS",
+    "deactivation": "PASS"
+  },
+  "screenshotCount": 21,
+  "viewportStateCount": 60,
+  "target": "billowing-base-57949906/br-crimson-band-az6i637k/neondb"
+}

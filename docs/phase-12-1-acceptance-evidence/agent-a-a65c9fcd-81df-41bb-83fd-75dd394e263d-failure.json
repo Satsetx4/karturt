@@ -1,0 +1,19 @@
+{
+  "runId": "a65c9fcd-81df-41bb-83fd-75dd394e263d",
+  "outcome": "FAIL",
+  "stage": "review and confirm same-house replacement at the December 1 boundary",
+  "diagnostics": {
+    "treasurerAuthorization": {
+      "householdStatus": 403,
+      "householdGeneric": true,
+      "resetStatus": 403,
+      "resetGeneric": true,
+      "responseLeak": false
+    },
+    "resetAuditCountBefore": 2,
+    "resetAuditCountAfter": 2,
+    "residentSessionCountBefore": 1,
+    "residentSessionCountAfter": 1
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

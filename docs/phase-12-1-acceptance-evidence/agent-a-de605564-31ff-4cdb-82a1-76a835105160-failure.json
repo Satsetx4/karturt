@@ -1,0 +1,25 @@
+{
+  "runId": "de605564-31ff-4cdb-82a1-76a835105160",
+  "outcome": "FAIL",
+  "stage": "new PIN authenticates resident through browser",
+  "diagnostics": {
+    "path": "/app",
+    "loginFormVisible": false,
+    "genericLoginAlert": false,
+    "appHeading": "Kartu Iuran",
+    "syntheticResidentNameVisible": false,
+    "residentCardVisible": false,
+    "authStatuses": {
+      "/api/login/official": [
+        200,
+        200
+      ],
+      "/api/login/resident": [
+        200,
+        401,
+        200
+      ]
+    }
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

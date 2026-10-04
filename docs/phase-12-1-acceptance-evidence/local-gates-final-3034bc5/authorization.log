@@ -1,0 +1,15 @@
+COMMAND: npm.cmd run test:authorization -- --maxWorkers=1
+npm notice run karturt@0.1.0 test:authorization
+npm notice run vitest run tests/authorization --maxWorkers=1
+
+ RUN  v5.0.1 D:/!AGY/karturt-phase-12-1-acceptance-closure
+
+
+ Test Files  10 passed (10)
+      Tests  89 passed (89)
+   Start at  10:25:13
+   Duration  26.60s (tests 69%, import 28%, transform 3%)
+
+     Import  61 modules were evaluated 82 times · 6.98s total, 28% of tracked time
+             ~1.79s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation

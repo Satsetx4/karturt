@@ -1,0 +1,12 @@
+{
+  "result": "AUDIT_FAILED",
+  "targetGuardPassed": true,
+  "diagnostic": {
+    "name": "OtherError",
+    "code": "42601",
+    "stage": {
+      "stage": "global:overlapping_household_periods",
+      "sqlState": "42601"
+    }
+  }
+}

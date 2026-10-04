@@ -1,0 +1,6 @@
+{
+  "runId": "3c9e1774-8cec-47c2-8494-7bf651186f7b",
+  "outcome": "FAIL",
+  "stage": "create synthetic future tariff through authenticated Chairman API",
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

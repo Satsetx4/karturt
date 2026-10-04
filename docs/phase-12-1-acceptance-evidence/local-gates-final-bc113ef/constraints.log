@@ -1,0 +1,14 @@
+COMMAND: npm.cmd run test:constraints -- --maxWorkers=1
+STARTED: 2026-10-04T03:33:25.9655491Z
+npm notice run karturt@0.1.0 test:constraints
+npm notice run vitest run tests/constraints --maxWorkers=1
+
+ RUN  v5.0.1 D:/!AGY/karturt-phase-12-1-acceptance-closure
+
+
+ Test Files  8 passed (8)
+      Tests  42 passed (42)
+   Start at  10:33:26
+   Duration  30.56s (tests 78%, import 20%, transform 2%)
+
+EXIT_CODE: 0

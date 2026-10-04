@@ -1,0 +1,2 @@
+?? docs/phase-12-1-acceptance-evidence/
+?? scripts/agent-a-final-diagnostic-d18fe72e08944ac6bfe1c8ab02ab3d82.tmp.ts

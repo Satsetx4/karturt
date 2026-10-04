@@ -1,0 +1,6 @@
+{
+  "runId": "4da8e859-3a63-461c-8cf9-8f407743b598",
+  "outcome": "FAIL",
+  "stage": "verify Chairman household list HTTP API session",
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

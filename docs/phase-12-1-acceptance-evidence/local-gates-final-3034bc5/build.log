@@ -1,0 +1,12 @@
+COMMAND: npm.cmd run build
+npm notice run karturt@0.1.0 build
+npm notice run next build
+▲ Next.js 16.3.6 (Turbopack)
+✓ Running next.config.ts took 172ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 3.0s
+  Running TypeScript ...
+scripts/phase-12-1-post-smoke-lifecycle-audit.ts(845,77): error TS2345: Argument of type 'PoolClient | undefined' is not assignable to parameter of type 'PoolClient'.
+  Type 'undefined' is not assignable to type 'PoolClient'.
+Failed to type check.

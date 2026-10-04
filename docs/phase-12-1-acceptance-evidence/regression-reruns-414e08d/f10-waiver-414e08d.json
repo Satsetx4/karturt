@@ -1,0 +1,20 @@
+{
+  "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+  "suite": "f10-waiver",
+  "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 tests/integration/chairman-waiver.test.ts tests/constraints/waiver-ledger.test.ts tests/authorization/chairman-waiver-route.test.ts tests/authorization/chairman-waiver-adversarial.test.ts",
+  "files": [
+    "tests/integration/chairman-waiver.test.ts",
+    "tests/constraints/waiver-ledger.test.ts",
+    "tests/authorization/chairman-waiver-route.test.ts",
+    "tests/authorization/chairman-waiver-adversarial.test.ts"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "summary": {
+    "testFiles": "4 passed (4)",
+    "tests": "38 passed (38)",
+    "duration": "14.07s (tests 70%, import 27%, transform 3%)"
+  },
+  "invocationEquivalentTo": "npm test -- --maxWorkers=1 <listed test files>"
+}

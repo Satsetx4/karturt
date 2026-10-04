@@ -1,0 +1,5 @@
+COMMAND: npm.cmd run typecheck
+STARTED: 2026-10-04T03:31:14.8182802Z
+npm notice run karturt@0.1.0 typecheck
+npm notice run tsc --noEmit
+EXIT_CODE: 0

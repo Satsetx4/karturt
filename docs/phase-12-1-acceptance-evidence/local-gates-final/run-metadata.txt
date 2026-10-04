@@ -1,0 +1,5 @@
+HEAD=50daa9a8ba41c6e7ed1c8dbb62d4f14936620c18
+BRANCH=fix/phase-12-1-acceptance-closure
+DATABASE_ENV=test
+DATABASE_URL=[REDACTED test placeholder]
+Note: Vitest uses in-memory PGlite; localhost URL is CI placeholder only.

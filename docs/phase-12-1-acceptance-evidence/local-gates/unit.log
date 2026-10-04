@@ -1,0 +1,13 @@
+npm notice run karturt@0.1.0 test:unit
+npm notice run vitest run tests/unit --maxWorkers=1
+
+ RUN  v5.0.1 D:/!AGY/karturt-phase-12-1-acceptance-closure
+
+
+ Test Files  6 passed (6)
+      Tests  37 passed (37)
+   Start at  02:09:09
+   Duration  7.69s (import 89%, transform 5%, tests 4%, worker 1%)
+
+    Isolate  6 workers spawned · ~432ms startup each (spawn + environment, per file)
+             at least ~2.16s faster with isolate: false — reuses workers across files instead of one per file

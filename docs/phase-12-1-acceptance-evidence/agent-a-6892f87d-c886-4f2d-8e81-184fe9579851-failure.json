@@ -1,0 +1,16 @@
+{
+  "runId": "6892f87d-c886-4f2d-8e81-184fe9579851",
+  "outcome": "FAIL",
+  "stage": "wait for household page and list data",
+  "diagnostics": {
+    "path": "/app/rumah",
+    "titleVisible": true,
+    "listVisible": true,
+    "emptyVisible": false,
+    "loadingVisible": false,
+    "friendlyErrorVisible": false,
+    "loginFormVisible": false,
+    "internalErrorPattern": false
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

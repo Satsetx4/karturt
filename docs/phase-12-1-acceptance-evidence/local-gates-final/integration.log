@@ -1,0 +1,11 @@
+COMMAND: npm.cmd run test:integration -- --maxWorkers=1
+npm notice run karturt@0.1.0 test:integration
+npm notice run vitest run tests/integration --maxWorkers=1
+
+ RUN  v5.0.1 D:/!AGY/karturt-phase-12-1-acceptance-closure
+
+
+ Test Files  30 passed (30)
+      Tests  153 passed (153)
+   Start at  05:14:46
+   Duration  121.49s (tests 75%, import 24%, transform 1%)

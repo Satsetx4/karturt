@@ -1,0 +1,14 @@
+COMMAND: npm.cmd run test:unit -- --maxWorkers=1
+npm notice run karturt@0.1.0 test:unit
+npm notice run vitest run tests/unit --maxWorkers=1
+
+ RUN  v5.0.1 D:/!AGY/karturt-phase-12-1-acceptance-closure
+
+
+ Test Files  6 passed (6)
+      Tests  37 passed (37)
+   Start at  10:22:37
+   Duration  2.96s (import 74%, transform 14%, tests 10%, worker 2%)
+
+    Isolate  6 workers spawned · ~152ms startup each (spawn + environment, per file)
+             at least ~761ms faster with isolate: false — reuses workers across files instead of one per file

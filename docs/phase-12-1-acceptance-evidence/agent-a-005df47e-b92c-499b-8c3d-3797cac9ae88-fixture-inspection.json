@@ -1,0 +1,31 @@
+{
+  "runId": "005df47e-b92c-499b-8c3d-3797cac9ae88",
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchId": "br-crimson-band-az6i637k",
+    "database": "neondb"
+  },
+  "readOnly": true,
+  "fixtures": [
+    {
+      "rt_unit_id": "33a50e94-9cf6-4ac8-8883-c50835284aad",
+      "code": "QA12-D413C1F1CA",
+      "houses": 1,
+      "households": 1,
+      "people": 1,
+      "app_accounts": 1,
+      "billing_years": 1,
+      "fee_rates": 0
+    },
+    {
+      "rt_unit_id": "cf9c532b-237a-4feb-80de-4d00050b028f",
+      "code": "QA12-F6C95D7B3F",
+      "houses": 15,
+      "households": 16,
+      "people": 16,
+      "app_accounts": 17,
+      "billing_years": 1,
+      "fee_rates": 1
+    }
+  ]
+}

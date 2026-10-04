@@ -1,0 +1,19 @@
+{
+  "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+  "suite": "f8-cash",
+  "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 tests/integration/treasurer-cash-payment.test.ts tests/integration/treasurer-cash-payment-route.test.ts tests/constraints/cash-payment-ledger.test.ts",
+  "files": [
+    "tests/integration/treasurer-cash-payment.test.ts",
+    "tests/integration/treasurer-cash-payment-route.test.ts",
+    "tests/constraints/cash-payment-ledger.test.ts"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "summary": {
+    "testFiles": "3 passed (3)",
+    "tests": "15 passed (15)",
+    "duration": "8.83s (tests 72%, import 24%, transform 4%)"
+  },
+  "invocationEquivalentTo": "npm test -- --maxWorkers=1 <listed test files>"
+}

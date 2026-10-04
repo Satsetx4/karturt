@@ -1,0 +1,6 @@
+Gate: npm.cmd test -- --maxWorkers=1
+Observed: full-test.log remained at the Vitest startup banner with no test file/result output for over two minutes.
+Process check: Vitest parent PID 8648 remained alive, but CPU time stayed unchanged (2.46875s) across a 5-second sample; the worker process had exited.
+Action: stopped only the exact local Vitest process PID 8648 so the runner could continue to build and schema checks.
+Recorded exit: -1. Treat full-suite result as stalled/interrupted, not as a completed test result.
+No source files were changed. Final HEAD remained 3034bc5d463d724217d07c892464963f62c44587.

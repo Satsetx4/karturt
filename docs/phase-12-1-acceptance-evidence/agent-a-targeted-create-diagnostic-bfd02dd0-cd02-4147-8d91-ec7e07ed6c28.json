@@ -1,0 +1,69 @@
+{
+  "runId": "bfd02dd0-cd02-4147-8d91-ec7e07ed6c28",
+  "outcome": "DIAGNOSTIC_409",
+  "source": {
+    "branch": "fix/phase-12-1-acceptance-closure",
+    "head": "bc113efcd811f6b3872206e734d1c2e1e57b1346"
+  },
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchId": "br-crimson-band-az6i637k",
+    "database": "neondb",
+    "migrationHead": "0013_phase_12_household_management"
+  },
+  "http": {
+    "createStatus": 409,
+    "safeCategory": "generic-conflict",
+    "friendlyAlertVisible": true,
+    "rawInternalErrorVisible": false,
+    "responseTextPersisted": false
+  },
+  "requestFieldPresence": {
+    "hasNewHouse": false,
+    "hasHouseId": true,
+    "hasHouseNumber": false,
+    "hasStartsOn": true,
+    "hasFullName": true,
+    "hasInitialPin": true
+  },
+  "preCreateChecks": {
+    "globallyUnusedHouseNumber": true,
+    "globallyUnusedResidentLoginIdentifier": true,
+    "targetHouseAndPeriodClear": true,
+    "checkedPeriodStart": "2026-11-01",
+    "attempts": 1
+  },
+  "readOnlyRtConfiguration": {
+    "openYear": 2026,
+    "openYearStatus": "open",
+    "dueDay": 10,
+    "feeRateCount": 1,
+    "feeRates": [
+      {
+        "effectiveMonth": 11,
+        "monthlyAmount": 50000
+      }
+    ],
+    "tariffCoversNovember": true,
+    "tariffCoversDecember": true
+  },
+  "readOnlyAvailableHouseCheck": {
+    "availableHouseCount": 1,
+    "firstAvailableHouseHasPeriodConflict": true,
+    "availableHousesWithPeriodConflict": 1,
+    "checkedPeriodStart": "2026-11-01"
+  },
+  "postFailureIntegrity": {
+    "recentQaHouses": 0,
+    "recentQaHouseholds": 0,
+    "recentQaPeople": 0,
+    "recentResidentAccounts": 0,
+    "recentOrphanHouses": 0,
+    "recentHouseholdsWithoutPerson": 0,
+    "recentPeopleWithoutResidentAccount": 0,
+    "window": "last 15 minutes"
+  },
+  "diagnosis": "The browser request used houseId instead of newHouse. The selected first available synthetic house has a prior period overlapping 2026-11-01; the generic conflict is consistent with expected period protection. The instrumented harness copy should select the new-house option before submitting.",
+  "credentialSafety": "No response text, PIN, password, token, hash, cookie, or connection value is included.",
+  "precheckedUniqueInputWasSubmitted": false
+}

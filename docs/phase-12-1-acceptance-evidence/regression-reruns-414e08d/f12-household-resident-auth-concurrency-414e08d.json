@@ -1,0 +1,24 @@
+{
+  "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+  "suite": "f12-household-resident-auth-concurrency",
+  "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 tests/integration/phase12-household-history.test.ts tests/integration/household-lifecycle-domain.test.ts tests/integration/resident-login-route.test.ts tests/integration/resident-lockout.test.ts tests/constraints/phase-12-household-database.test.ts tests/authorization/phase-12-household-security.test.ts tests/authorization/phase-12-household-route-security.test.ts tests/authorization/phase-12-household-auth-race.test.ts",
+  "files": [
+    "tests/integration/phase12-household-history.test.ts",
+    "tests/integration/household-lifecycle-domain.test.ts",
+    "tests/integration/resident-login-route.test.ts",
+    "tests/integration/resident-lockout.test.ts",
+    "tests/constraints/phase-12-household-database.test.ts",
+    "tests/authorization/phase-12-household-security.test.ts",
+    "tests/authorization/phase-12-household-route-security.test.ts",
+    "tests/authorization/phase-12-household-auth-race.test.ts"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "summary": {
+    "testFiles": "8 passed (8)",
+    "tests": "50 passed (50)",
+    "duration": "31.75s (tests 73%, import 25%, transform 2%)"
+  },
+  "invocationEquivalentTo": "npm test -- --maxWorkers=1 <listed test files>"
+}

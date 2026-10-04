@@ -1,0 +1,51 @@
+[
+  {
+    "gate": "lint",
+    "exitCode": 0
+  },
+  {
+    "gate": "typecheck",
+    "exitCode": 2
+  },
+  {
+    "gate": "unit",
+    "exitCode": 0
+  },
+  {
+    "gate": "integration",
+    "exitCode": 0
+  },
+  {
+    "gate": "constraints",
+    "exitCode": 0
+  },
+  {
+    "gate": "authorization",
+    "exitCode": 0
+  },
+  {
+    "gate": "full-test",
+    "exitCode": -1
+  },
+  {
+    "gate": "build",
+    "exitCode": 1
+  },
+  {
+    "gate": "drizzle-check",
+    "exitCode": 0
+  },
+  {
+    "gate": "schema-generate",
+    "exitCode": 0
+  },
+  {
+    "gate": "schema-drift-diff",
+    "exitCode": 0
+  },
+  {
+    "gate": "schema-drift-untracked-check",
+    "exitCode": 0,
+    "status": ""
+  }
+]

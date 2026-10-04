@@ -1,0 +1,5 @@
+HEAD=414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7
+BRANCH=fix/phase-12-1-acceptance-closure
+DATABASE_ENV=test
+DATABASE_URL=local-only placeholder (127.0.0.1; not a Neon URL)
+Note: test suites use in-memory PGlite; build-only BETTER_AUTH_SECRET is a process-local dummy.

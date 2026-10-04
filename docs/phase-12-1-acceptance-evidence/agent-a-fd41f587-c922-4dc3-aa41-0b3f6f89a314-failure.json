@@ -1,0 +1,11 @@
+{
+  "runId": "fd41f587-c922-4dc3-aa41-0b3f6f89a314",
+  "outcome": "FAIL",
+  "stage": "check household list viewport 360x800",
+  "diagnostics": {
+    "listApiStatus": 200,
+    "browserPath": "/app",
+    "chairmanListTitleVisible": false
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

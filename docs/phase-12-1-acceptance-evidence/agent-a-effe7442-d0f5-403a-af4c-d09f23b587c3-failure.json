@@ -1,0 +1,32 @@
+{
+  "runId": "effe7442-d0f5-403a-af4c-d09f23b587c3",
+  "outcome": "FAIL",
+  "stage": "check household list viewport 360x800",
+  "diagnostics": {
+    "viewport": {
+      "width": 360,
+      "height": 800
+    },
+    "path": "/app/rumah",
+    "titleVisible": true,
+    "listVisible": true,
+    "emptyVisible": false,
+    "loadingVisible": false,
+    "friendlyErrorVisible": false,
+    "latestHouseholdListApiStatus": 200,
+    "overflow": false,
+    "undersizedTargets": [
+      {
+        "selector": "a",
+        "width": 113,
+        "height": 35
+      },
+      {
+        "selector": "a",
+        "width": 64,
+        "height": 20
+      }
+    ]
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

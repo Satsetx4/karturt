@@ -1,0 +1,70 @@
+COMMAND: npm.cmd run build
+npm notice run karturt@0.1.0 build
+npm notice run next build
+▲ Next.js 16.3.6 (Turbopack)
+✓ Running next.config.ts took 41ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 2.5s
+  Running TypeScript ...
+  Finished TypeScript in 14.0s ...
+  Collecting page data using 3 workers ...
+  Generating static pages using 3 workers (0/14) ...
+  Generating static pages using 3 workers (3/14)
+  Generating static pages using 3 workers (6/14)
+  Generating static pages using 3 workers (10/14)
+✓ Generating static pages using 3 workers (14/14) in 361ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/auth/[...all]
+├ ƒ /api/chairman/adjustments
+├ ƒ /api/chairman/adjustments/households
+├ ƒ /api/chairman/adjustments/households/[householdId]
+├ ƒ /api/chairman/fee-rates
+├ ƒ /api/chairman/households
+├ ƒ /api/chairman/households/[householdId]
+├ ƒ /api/chairman/households/[householdId]/deactivate
+├ ƒ /api/chairman/households/[householdId]/replace
+├ ƒ /api/chairman/waivers
+├ ƒ /api/chairman/waivers/history
+├ ƒ /api/chairman/waivers/households
+├ ƒ /api/chairman/waivers/households/[householdId]
+├ ƒ /api/health
+├ ƒ /api/login/[type]
+├ ƒ /api/resident/monthly-dues
+├ ƒ /api/resident/payment-history
+├ ƒ /api/resident/payment-requests
+├ ƒ /api/resident/payment-requests/[requestCode]/cancel
+├ ƒ /api/residents/[accountId]/reset-pin
+├ ƒ /api/system-admin/accounts/[accountId]/recover-two-factor
+├ ƒ /api/treasurer/cash-payments
+├ ƒ /api/treasurer/cash-payments/households
+├ ƒ /api/treasurer/cash-payments/households/[householdId]
+├ ƒ /api/treasurer/payment-requests
+├ ƒ /api/treasurer/payment-requests/[requestCode]
+├ ƒ /api/treasurer/payment-requests/[requestCode]/reject
+├ ƒ /api/treasurer/payment-requests/[requestCode]/verify
+├ ƒ /api/treasurer/payments
+├ ƒ /api/treasurer/payments/[paymentId]/reverse
+├ ƒ /app
+├ ƒ /app/bendahara/[requestCode]
+├ ƒ /app/bendahara/riwayat
+├ ƒ /app/bendahara/tunai
+├ ƒ /app/pemutihan
+├ ƒ /app/penyesuaian
+├ ƒ /app/rumah
+├ ƒ /app/tarif
+├ ○ /login/pengurus
+├ ○ /login/warga
+├ ○ /robots.txt
+├ ○ /sitemap.xml
+├ ○ /system/2fa
+├ ƒ /system/2fa/setup
+└ ○ /system/login
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

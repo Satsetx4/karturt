@@ -1,0 +1,34 @@
+npm notice run karturt@0.1.0 db:generate
+npm notice run drizzle-kit generate --name gate_a_ci_drift
+No config path provided, using default 'drizzle.config.ts'
+Reading config file 'D:\!AGY\karturt-phase-12-1-acceptance-closure\drizzle.config.ts'
+27 tables
+active_due_settlements 7 columns 3 indexes 3 fks
+app_accounts 11 columns 4 indexes 5 fks
+audit_events 8 columns 2 indexes 1 fks
+account 13 columns 0 indexes 1 fks
+rateLimit 4 columns 0 indexes 0 fks
+session 8 columns 0 indexes 1 fks
+twoFactor 7 columns 1 indexes 1 fks
+user 8 columns 0 indexes 0 fks
+verification 6 columns 0 indexes 0 fks
+billing_years 5 columns 2 indexes 1 fks
+due_adjustments 12 columns 2 indexes 2 fks
+fee_rates 10 columns 2 indexes 2 fks
+households 7 columns 2 indexes 2 fks
+houses 5 columns 1 indexes 1 fks
+monthly_dues 11 columns 1 indexes 3 fks
+official_assignments 8 columns 0 indexes 2 fks
+payment_allocations 8 columns 3 indexes 4 fks
+payment_request_claims 3 columns 1 indexes 1 fks
+payment_request_items 7 columns 1 indexes 2 fks
+payment_requests 19 columns 4 indexes 4 fks
+payment_reversals 8 columns 2 indexes 2 fks
+payments 12 columns 4 indexes 2 fks
+people 7 columns 0 indexes 2 fks
+rt_settings 6 columns 1 indexes 1 fks
+rt_units 10 columns 1 indexes 0 fks
+waiver_actions 11 columns 2 indexes 2 fks
+waiver_items 7 columns 3 indexes 2 fks
+
+No schema changes, nothing to migrate 😴

@@ -1,0 +1,151 @@
+{
+  "event": "gate_c.financial_invariants_neon_read_only_audit",
+  "environment": "development",
+  "projectId": "billowing-base-57949906",
+  "branchName": "karturt-development",
+  "branchId": "br-crimson-band-az6i637k",
+  "endpointId": "ep-quiet-cake-azrhjiyh",
+  "database": "neondb",
+  "migrationEntries": 14,
+  "migrationHead": "0013_phase_12_household_management",
+  "migrationHeadHash": "994BCC9376B207FDC0668312CC68CAB3C2CEC46BC6101EDC4C2B5EF7F51C4A85",
+  "migrationHeadHashMatched": true,
+  "sampleLimit": 10,
+  "operationMode": "SELECT-only; no fixtures, writes, schema changes, or migrations",
+  "anomalyCount": 32,
+  "zeroTargetAnomalies": [
+    {
+      "name": "paid_balance_mismatch",
+      "count": 0
+    },
+    {
+      "name": "unpaid_fully_settled",
+      "count": 0
+    },
+    {
+      "name": "payable_target_nonpositive",
+      "count": 0
+    },
+    {
+      "name": "active_received_over_target",
+      "count": 0
+    },
+    {
+      "name": "verified_request_payment_allocation_mismatch",
+      "count": 0
+    },
+    {
+      "name": "payment_without_allocation",
+      "count": 0
+    },
+    {
+      "name": "payment_amount_allocation_sum_mismatch",
+      "count": 0
+    },
+    {
+      "name": "duplicate_allocation_for_payment_due",
+      "count": 0
+    },
+    {
+      "name": "active_allocation_missing_exact_owner",
+      "count": 0
+    },
+    {
+      "name": "active_owner_allocation_payment_mismatch",
+      "count": 0
+    },
+    {
+      "name": "reversed_payment_retains_active_owner",
+      "count": 0
+    },
+    {
+      "name": "active_ownership_sum_vs_direct_receipts",
+      "count": 0
+    },
+    {
+      "name": "pending_request_missing_valid_claim_or_item",
+      "count": 0
+    },
+    {
+      "name": "active_claim_without_pending_request_or_item",
+      "count": 0
+    },
+    {
+      "name": "terminal_request_with_active_claim",
+      "count": 0
+    },
+    {
+      "name": "pending_item_snapshot_outstanding_mismatch",
+      "count": 0
+    },
+    {
+      "name": "waived_ledger_anomaly",
+      "count": 0
+    },
+    {
+      "name": "waived_active_received",
+      "count": 0
+    },
+    {
+      "name": "waived_active_claim",
+      "count": 0
+    },
+    {
+      "name": "waived_adjustment_after_action",
+      "count": 0
+    },
+    {
+      "name": "not_due_financial_activity",
+      "count": 0
+    },
+    {
+      "name": "adjustment_audit_mismatch",
+      "count": 0
+    },
+    {
+      "name": "waiver_audit_mismatch",
+      "count": 0
+    },
+    {
+      "name": "fee_rate_audit_mismatch",
+      "count": 0
+    },
+    {
+      "name": "payment_request_creation_audit_mismatch",
+      "count": 0
+    },
+    {
+      "name": "verified_request_audit_mismatch",
+      "count": 0
+    },
+    {
+      "name": "request_resolution_audit_mismatch",
+      "count": 0
+    },
+    {
+      "name": "cash_payment_audit_mismatch",
+      "count": 0
+    },
+    {
+      "name": "payment_reversal_audit_mismatch",
+      "count": 0
+    },
+    {
+      "name": "system_admin_financial_actor",
+      "count": 0
+    },
+    {
+      "name": "duplicate_active_treasurer_or_chairman",
+      "count": 0
+    },
+    {
+      "name": "same_account_active_treasurer_and_chairman",
+      "count": 0
+    }
+  ],
+  "nonzeroAnomalyKeys": [],
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "all32AnomaliesZero": true
+}

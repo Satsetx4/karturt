@@ -1,0 +1,59 @@
+{
+  "capturedDate": "2026-10-04 (Asia/Bangkok)",
+  "method": "Sequential, isolated npm CLI calls; one package and one field per query where applicable.",
+  "queries": [
+    {
+      "command": "npm view braces versions --json",
+      "exitCode": 0,
+      "result": [
+        "0.1.0", "0.1.1", "0.1.2", "0.1.4", "0.1.5",
+        "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.5.1",
+        "1.6.0", "1.7.0", "1.8.0", "1.8.1", "1.8.2", "1.8.3", "1.8.4", "1.8.5",
+        "2.0.0", "2.0.1", "2.0.2", "2.0.3", "2.0.4",
+        "2.1.0", "2.1.1", "2.2.0", "2.2.1", "2.2.2", "2.3.0", "2.3.1", "2.3.2",
+        "3.0.0", "3.0.1", "3.0.2", "3.0.3"
+      ]
+    },
+    {
+      "command": "npm view braces@3.0.3 version --json",
+      "exitCode": 0,
+      "result": ["3.0.3"]
+    },
+    {
+      "command": "npm view braces@3.0.3 dist --json",
+      "exitCode": 0,
+      "result": [{
+        "shasum": "490332f40919452272d55a8480adc0c441358789",
+        "tarball": "https://registry.npmjs.org/braces/-/braces-3.0.3.tgz",
+        "fileCount": 10,
+        "integrity": "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==",
+        "unpackedSize": 44635
+      }]
+    },
+    {
+      "command": "npm view braces@3.0.3 time --json",
+      "exitCode": 0,
+      "result": {
+        "version": "3.0.3",
+        "published": "2024-05-21T08:59:11.390Z",
+        "packageModified": "2024-09-18T05:27:12.449Z"
+      }
+    },
+    {
+      "command": "npm view braces@3.0.4 version --json",
+      "exitCode": 1,
+      "result": {"errorCode": "E404", "summary": "No match found for version 3.0.4"}
+    },
+    {
+      "command": "npm view braces@3.0.5 version --json",
+      "exitCode": 1,
+      "result": {"errorCode": "E404", "summary": "No match found for version 3.0.5"}
+    },
+    {
+      "command": "npm view braces@3.1.9 version --json",
+      "exitCode": 1,
+      "result": {"errorCode": "E404", "summary": "No match found for version 3.1.9"}
+    }
+  ],
+  "correction": "A prior combined-field registry snapshot incorrectly associated micromatch version values with the braces versions field. It is retained as upstream-registry-checks.superseded.json. The isolated braces versions query above returns the correct published list, ending at 3.0.3; all three exact follow-on version probes returned E404."
+}

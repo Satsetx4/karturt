@@ -1,0 +1,101 @@
+{
+  "baselineSha": "b933cc9a279d91191d6d7fa8c76f6202fbb68da5",
+  "environment": {
+    "tests": "APP_ENV=test; DATABASE_ENV=test; DATABASE_URL host ends in .invalid; tests instantiate PGlite",
+    "build": "APP_ENV=production; DATABASE_ENV=production; DATABASE_URL host ends in .invalid",
+    "productionOrNeonReachable": false
+  },
+  "gates": [
+    {
+      "name": "lint",
+      "command": "npm run lint",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationSeconds": 51,
+      "log": "lint.log",
+      "detail": "0 errors; 2 unused-variable warnings in Agent A smoke script"
+    },
+    {
+      "name": "typecheck",
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationSeconds": 13.9,
+      "log": "typecheck.log",
+      "detail": "Completed before current build failure was observed"
+    },
+    {
+      "name": "unit",
+      "command": "npm run test:unit -- --maxWorkers=1",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationSeconds": 10.1,
+      "log": "unit.log",
+      "detail": "6 files, 37 tests passed"
+    },
+    {
+      "name": "integration",
+      "command": "npm run test:integration -- --maxWorkers=1",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationSeconds": 127.6,
+      "log": "integration.log",
+      "detail": "30 files, 153 tests passed"
+    },
+    {
+      "name": "constraints",
+      "command": "npm run test:constraints -- --maxWorkers=1",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationSeconds": 32.3,
+      "log": "constraints.log",
+      "detail": "8 files, 42 tests passed"
+    },
+    {
+      "name": "authorization",
+      "command": "npm run test:authorization -- --maxWorkers=1",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationSeconds": 27.7,
+      "log": "authorization.log",
+      "detail": "10 files, 89 tests passed"
+    },
+    {
+      "name": "full-test",
+      "command": "npm test -- --maxWorkers=1",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationSeconds": 180.6,
+      "log": "full-test.log",
+      "detail": "54 files, 321 tests passed"
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "exitCode": 1,
+      "status": "FAIL",
+      "durationSeconds": 42.7,
+      "log": "build.log",
+      "detail": "Next.js TypeScript check failed: scripts/phase-12-household-browser-smoke.ts(334,25): TS2304 Cannot find name createChairmanFixture"
+    },
+    {
+      "name": "drizzle-check",
+      "command": "npx drizzle-kit check (invoked via npm exec -- drizzle-kit check)",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationSeconds": 2.7,
+      "log": "drizzle-check.log",
+      "detail": "Everything is fine"
+    },
+    {
+      "name": "schema-drift",
+      "command": "npm run db:generate -- --name gate_a_ci_drift; git diff --exit-code -- drizzle; git status --porcelain --untracked-files=all -- drizzle",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationSeconds": 2.36,
+      "log": "schema-drift.log",
+      "detail": "No schema changes; no tracked or untracked Drizzle changes"
+    }
+  ],
+  "scopeNote": "No app code, dependency, test, or report files were edited by Agent D. Agent A added untracked smoke/audit scripts during this run; rerun relevant local gates after Agent A finishes."
+}

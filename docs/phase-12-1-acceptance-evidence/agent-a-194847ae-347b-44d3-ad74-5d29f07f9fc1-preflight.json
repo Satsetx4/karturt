@@ -1,0 +1,22 @@
+{
+  "runId": "194847ae-347b-44d3-ad74-5d29f07f9fc1",
+  "outcome": "PASS",
+  "source": {
+    "branch": "fix/phase-12-1-acceptance-closure",
+    "baseline": "b933cc9a279d91191d6d7fa8c76f6202fbb68da5",
+    "head": "b933cc9a279d91191d6d7fa8c76f6202fbb68da5"
+  },
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchId": "br-crimson-band-az6i637k",
+    "database": "neondb",
+    "directEndpointVerified": true
+  },
+  "database": {
+    "database": "neondb",
+    "migrationEntries": 14,
+    "migrationHead": "0013_phase_12_household_management",
+    "migrationHashMatches": true
+  },
+  "action": "Read-only preflight; no synthetic fixtures created."
+}

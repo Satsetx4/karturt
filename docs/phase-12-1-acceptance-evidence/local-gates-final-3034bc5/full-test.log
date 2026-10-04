@@ -1,0 +1,5 @@
+COMMAND: npm.cmd test -- --maxWorkers=1
+npm notice run karturt@0.1.0 test
+npm notice run vitest run --maxWorkers=1
+
+ RUN  v5.0.1 D:/!AGY/karturt-phase-12-1-acceptance-closure

@@ -1,0 +1,11 @@
+{
+  "runId": "dadabaf9-36ac-4f5a-b52a-f3cc642e7560",
+  "outcome": "FAIL",
+  "stage": "new PIN authenticates resident through browser",
+  "diagnostics": {
+    "listApiStatus": 200,
+    "browserPath": "/app",
+    "chairmanListTitleVisible": false
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

@@ -1,0 +1,1174 @@
+{
+  "runId": "751bc046-b7d0-49f7-b1d2-80a73600ae9f",
+  "outcome": "PASS",
+  "source": {
+    "branch": "fix/phase-12-1-acceptance-closure",
+    "baseline": "b933cc9a279d91191d6d7fa8c76f6202fbb68da5",
+    "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+    "provenanceSha256": {
+      "scripts/phase-12-household-browser-smoke.ts": "172c5d9466233fa662bb7467d03a49c9c0318584a437f23f87a6e1d2d99ab5e5",
+      "src/components/chairman-household-management.tsx": "f702ca445e22c95dc340e9cae4881c51bca03878d7d2010a43f31b16d61ac512",
+      "src/app/api/chairman/households/[householdId]/replace/route.ts": "d9d598a6807b37ce06aeb34d785ec537bf86c5d354c81cd959edf85fc4c8729c",
+      "src/app/api/chairman/households/[householdId]/deactivate/route.ts": "996c97c5f9c4cee023a67556563f4ef21ca5fd09d28044f60c6b25477a22127a",
+      "src/app/api/chairman/adjustments/route.ts": "90ade30b93c0e3a2b3bf1e5176347561e4fd838452fc697ba4a16a129086b51b"
+    }
+  },
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchId": "br-crimson-band-az6i637k",
+    "endpointId": "ep-quiet-cake-azrhjiyh",
+    "database": "neondb"
+  },
+  "simulatedBusinessDates": [
+    "2026-11-01",
+    "2026-11-11",
+    "2026-12-01"
+  ],
+  "migrationHead": "0013_phase_12_household_management",
+  "priorBrowserProof": {
+    "runId": "f3089aa7-713f-47c9-83a3-f6b3e80215f4",
+    "coreSmokeEvidence": "agent-a-final-414e08d/core-browser-smoke-results.json",
+    "loginEvidence": "agent-a-final-414e08d/core-resident-login-evidence.json",
+    "pinSessionEvidence": "agent-a-final-414e08d/core-pin-session-evidence.json",
+    "screenshots": [
+      "agent-a-final-414e08d/core-1440x900-chairman-list.png",
+      "agent-a-final-414e08d/core-1440x900-household-edited.png",
+      "agent-a-final-414e08d/core-390x844-chairman-list.png",
+      "agent-a-final-414e08d/core-390x844-household-created.png",
+      "agent-a-final-414e08d/core-390x844-household-loading.png",
+      "agent-a-final-414e08d/core-390x844-pin-reset-success.png",
+      "agent-a-final-414e08d/core-390x844-resident-new-pin-login.png"
+    ],
+    "outcome": "PASS: create, edit persistence, PIN reset/session revocation, old PIN rejection, and new PIN resident login"
+  },
+  "scenarios": {
+    "chairmanLoginListSearch": "PASS",
+    "addResident": "PASS; bound to prior proof f3089aa7-713f-47c9-83a3-f6b3e80215f4",
+    "editResidentAndDatabasePersistence": "PASS; bound to prior proof f3089aa7-713f-47c9-83a3-f6b3e80215f4",
+    "pinResetAndOldSessionRevocation": "PASS; bound to prior proof f3089aa7-713f-47c9-83a3-f6b3e80215f4",
+    "oldPinRejectedAndNewPinResidentLogin": "PASS; bound to prior proof f3089aa7-713f-47c9-83a3-f6b3e80215f4",
+    "sameHouseReplacementAndDebtPreservation": "PASS",
+    "interactedDueConflictNoPartialMutation": "PASS",
+    "deactivationAndSessionRevocation": "PASS",
+    "crossRtChairman": "PASS",
+    "treasurerManagementAndPinReset": "PASS"
+  },
+  "viewportChecks": {
+    "list": [
+      {
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      }
+    ],
+    "activeFormsAndConfirmations": [
+      {
+        "state": "add household form",
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "add household form",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "add household form",
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "add household form",
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "add household form",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "resident edit form",
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "resident edit form",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "resident edit form",
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "resident edit form",
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "resident edit form",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "PIN reset form",
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "PIN reset form",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "PIN reset form",
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "PIN reset form",
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "PIN reset form",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "PIN reset confirmation",
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "PIN reset confirmation",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "PIN reset confirmation",
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "PIN reset confirmation",
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "PIN reset confirmation",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "conflict replacement form",
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "conflict replacement form",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "conflict replacement form",
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "conflict replacement form",
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "conflict replacement form",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "conflict replacement confirmation",
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "conflict replacement confirmation",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "conflict replacement confirmation",
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "conflict replacement confirmation",
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "conflict replacement confirmation",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "same-house replacement form",
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "same-house replacement form",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "same-house replacement form",
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "same-house replacement form",
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "same-house replacement form",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "same-house replacement confirmation",
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "same-house replacement confirmation",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "same-house replacement confirmation",
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "same-house replacement confirmation",
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "same-house replacement confirmation",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "deactivation resident PIN reset form",
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "deactivation resident PIN reset form",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "deactivation resident PIN reset form",
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "deactivation resident PIN reset form",
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "deactivation resident PIN reset form",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "deactivation resident PIN confirmation",
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "deactivation resident PIN confirmation",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "deactivation resident PIN confirmation",
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "deactivation resident PIN confirmation",
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "deactivation resident PIN confirmation",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "household deactivation form",
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "household deactivation form",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "household deactivation form",
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "household deactivation form",
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "household deactivation form",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "household deactivation confirmation",
+        "width": 360,
+        "height": 800,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "household deactivation confirmation",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "household deactivation confirmation",
+        "width": 430,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "household deactivation confirmation",
+        "width": 768,
+        "height": 1024,
+        "overflow": false,
+        "undersizedTargets": []
+      },
+      {
+        "state": "household deactivation confirmation",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "undersizedTargets": []
+      }
+    ]
+  },
+  "replacementEvidence": {
+    "sameHouse": true,
+    "oldHouseholdStatus": "inactive",
+    "newHouseholdStatus": "active",
+    "oldResidentDisabled": true,
+    "oldSessionCountAfterReplacement": 0,
+    "capturedOldSessionApiStatusAfterReplacement": 401,
+    "oldPinRejectedStatus": 401,
+    "oldArrearUnchanged": true,
+    "futureUntouchedDueBecameNotDue": true,
+    "newHouseholdHistoryRowCount": 0,
+    "newLoginStatus": 200,
+    "newResidentSessionCount": 1,
+    "uniqueCurrentSameHouseResidentLoginCount": 1,
+    "effectiveMonthSent": "2026-12"
+  },
+  "deactivationEvidence": {
+    "status": 200,
+    "householdStatus": "inactive",
+    "endsOn": "2026-12-31",
+    "personActive": false,
+    "residentAccountStatus": "disabled",
+    "residentSessionCountBefore": 1,
+    "residentSessionCountAfter": 0,
+    "oldSessionApiStatusAfter": 401,
+    "resetAuditDelta": 1,
+    "resetAuditHasCredentialLikeData": false
+  },
+  "conflictEvidence": {
+    "status": 409,
+    "errorVisible": true,
+    "internalErrorVisible": false,
+    "credentialVisible": false,
+    "activeSessionCountBefore": 0,
+    "activeSessionCountAfter": 0,
+    "activeSessionCountUnchanged": true,
+    "lifecycleAuditCountBefore": 0,
+    "lifecycleAuditCountAfter": 0,
+    "lifecycleAuditCountUnchanged": true,
+    "financialContentRowCountBefore": 1,
+    "financialContentUnchanged": true,
+    "unchanged": true
+  },
+  "authorizationEvidence": {
+    "crossRt": {
+      "status": 404,
+      "genericError": true,
+      "noMutation": true,
+      "internalLeak": false
+    },
+    "treasurer": {
+      "householdListStatus": 403,
+      "householdGeneric": true,
+      "resetStatus": 403,
+      "resetGeneric": true,
+      "noAuditMutation": true,
+      "noSessionMutation": true,
+      "internalLeak": false
+    }
+  },
+  "viewportScreenshotFiles": [
+    "agent-a-final-414e08d/lifecycle-1440x900-household-deactivation-success.png",
+    "agent-a-final-414e08d/lifecycle-1440x900-interacted-due-conflict-error.png",
+    "agent-a-final-414e08d/lifecycle-1440x900-lifecycle-household-list.png",
+    "agent-a-final-414e08d/lifecycle-1440x900-same-house-replacement-success.png",
+    "agent-a-final-414e08d/lifecycle-390x844-deactivation-resident-before.png",
+    "agent-a-final-414e08d/lifecycle-390x844-household-deactivation-review.png",
+    "agent-a-final-414e08d/lifecycle-390x844-household-deactivation-success.png",
+    "agent-a-final-414e08d/lifecycle-390x844-interacted-due-conflict-error.png",
+    "agent-a-final-414e08d/lifecycle-390x844-interacted-due-replacement-review.png",
+    "agent-a-final-414e08d/lifecycle-390x844-lifecycle-household-list.png",
+    "agent-a-final-414e08d/lifecycle-390x844-lifecycle-pin-reset-success.png",
+    "agent-a-final-414e08d/lifecycle-390x844-lifecycle-resident-before-replacement.png",
+    "agent-a-final-414e08d/lifecycle-390x844-same-house-new-resident-login.png",
+    "agent-a-final-414e08d/lifecycle-390x844-same-house-replacement-review.png",
+    "agent-a-final-414e08d/lifecycle-390x844-same-house-replacement-success.png"
+  ],
+  "postSmokeAudit": {
+    "qaSeedAttempts": [
+      {
+        "rtUnitId": "33a50e94-9cf6-4ac8-8883-c50835284aad",
+        "state": "leftover_partial"
+      },
+      {
+        "rtUnitId": "cf9c532b-237a-4feb-80de-4d00050b028f",
+        "state": "reused"
+      }
+    ],
+    "replacement": {
+      "oldHouseholdId": "36675b25-f65f-44ac-af52-1045bb4f4c5d",
+      "newHouseholdId": "f7ec840e-6e99-4a54-9477-789c4f188ace",
+      "oldPersonId": "dc56ad27-23c2-4c49-9f5d-9ac702adc8aa",
+      "oldResidentAccountId": "e87b4c65-e5db-46ac-9683-ed6cb04368d6",
+      "newResidentAccountId": "4b545dfc-f994-4a9f-b43b-636ec3e78c26",
+      "oldEndsOn": "2026-11-30",
+      "newStartsOn": "2026-12-01",
+      "oldHouseholdDueRowsBefore": [
+        {
+          "id": "8b706412-3199-44ed-8928-3585bf2e328c",
+          "billingYear": 2026,
+          "month": 1,
+          "amount": 0,
+          "dueDate": "2026-01-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "069acd59-008f-4f78-a7c0-2fbdb75f24e3",
+          "billingYear": 2026,
+          "month": 2,
+          "amount": 0,
+          "dueDate": "2026-02-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "c305fe37-16be-4466-a338-73be4a9363b5",
+          "billingYear": 2026,
+          "month": 3,
+          "amount": 0,
+          "dueDate": "2026-03-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "32ff4c25-3fa6-42b0-a2b2-92ee79ed5dbb",
+          "billingYear": 2026,
+          "month": 4,
+          "amount": 0,
+          "dueDate": "2026-04-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "056328dc-c6cf-4ca9-b4a4-f90ad331a9fd",
+          "billingYear": 2026,
+          "month": 5,
+          "amount": 0,
+          "dueDate": "2026-05-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "4e586c7a-2b72-4c32-ae8e-300b48d733d2",
+          "billingYear": 2026,
+          "month": 6,
+          "amount": 0,
+          "dueDate": "2026-06-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "c274e66d-8b2b-41ff-b82c-3c3972e934b7",
+          "billingYear": 2026,
+          "month": 7,
+          "amount": 0,
+          "dueDate": "2026-07-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "1492f403-65d5-42e4-b031-60bc5a933d3c",
+          "billingYear": 2026,
+          "month": 8,
+          "amount": 0,
+          "dueDate": "2026-08-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "5a908570-40aa-44fe-9e6b-eba94cbadc4a",
+          "billingYear": 2026,
+          "month": 9,
+          "amount": 0,
+          "dueDate": "2026-09-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "6a4a414c-41d4-4e36-a046-9c7b45b3db18",
+          "billingYear": 2026,
+          "month": 10,
+          "amount": 0,
+          "dueDate": "2026-10-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "f4b5e76a-ff99-4141-85e6-9f5fe4c10048",
+          "billingYear": 2026,
+          "month": 11,
+          "amount": 50000,
+          "dueDate": "2026-11-10",
+          "status": "unpaid",
+          "feeRateId": "792f1d00-17b5-413f-9a4b-9fd63a568127",
+          "waivedReason": null
+        },
+        {
+          "id": "658af7f9-0397-4a42-ac09-1f718ce44cbc",
+          "billingYear": 2026,
+          "month": 12,
+          "amount": 50000,
+          "dueDate": "2026-12-10",
+          "status": "unpaid",
+          "feeRateId": "792f1d00-17b5-413f-9a4b-9fd63a568127",
+          "waivedReason": null
+        }
+      ],
+      "oldHouseholdDueRowsAfter": [
+        {
+          "id": "8b706412-3199-44ed-8928-3585bf2e328c",
+          "billingYear": 2026,
+          "month": 1,
+          "amount": 0,
+          "dueDate": "2026-01-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "069acd59-008f-4f78-a7c0-2fbdb75f24e3",
+          "billingYear": 2026,
+          "month": 2,
+          "amount": 0,
+          "dueDate": "2026-02-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "c305fe37-16be-4466-a338-73be4a9363b5",
+          "billingYear": 2026,
+          "month": 3,
+          "amount": 0,
+          "dueDate": "2026-03-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "32ff4c25-3fa6-42b0-a2b2-92ee79ed5dbb",
+          "billingYear": 2026,
+          "month": 4,
+          "amount": 0,
+          "dueDate": "2026-04-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "056328dc-c6cf-4ca9-b4a4-f90ad331a9fd",
+          "billingYear": 2026,
+          "month": 5,
+          "amount": 0,
+          "dueDate": "2026-05-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "4e586c7a-2b72-4c32-ae8e-300b48d733d2",
+          "billingYear": 2026,
+          "month": 6,
+          "amount": 0,
+          "dueDate": "2026-06-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "c274e66d-8b2b-41ff-b82c-3c3972e934b7",
+          "billingYear": 2026,
+          "month": 7,
+          "amount": 0,
+          "dueDate": "2026-07-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "1492f403-65d5-42e4-b031-60bc5a933d3c",
+          "billingYear": 2026,
+          "month": 8,
+          "amount": 0,
+          "dueDate": "2026-08-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "5a908570-40aa-44fe-9e6b-eba94cbadc4a",
+          "billingYear": 2026,
+          "month": 9,
+          "amount": 0,
+          "dueDate": "2026-09-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "6a4a414c-41d4-4e36-a046-9c7b45b3db18",
+          "billingYear": 2026,
+          "month": 10,
+          "amount": 0,
+          "dueDate": "2026-10-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "f4b5e76a-ff99-4141-85e6-9f5fe4c10048",
+          "billingYear": 2026,
+          "month": 11,
+          "amount": 50000,
+          "dueDate": "2026-11-10",
+          "status": "unpaid",
+          "feeRateId": "792f1d00-17b5-413f-9a4b-9fd63a568127",
+          "waivedReason": null
+        },
+        {
+          "id": "658af7f9-0397-4a42-ac09-1f718ce44cbc",
+          "billingYear": 2026,
+          "month": 12,
+          "amount": 0,
+          "dueDate": "2026-12-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        }
+      ],
+      "newHouseholdDueRowsAfter": [
+        {
+          "id": "b9a095ee-b805-4a68-85ef-c872a08fcf65",
+          "billingYear": 2026,
+          "month": 1,
+          "amount": 0,
+          "dueDate": "2026-01-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "261f0bfc-fd4a-49e9-b312-eeb561a9bd26",
+          "billingYear": 2026,
+          "month": 2,
+          "amount": 0,
+          "dueDate": "2026-02-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "040fd635-f246-4819-a510-3a64ec8aeff3",
+          "billingYear": 2026,
+          "month": 3,
+          "amount": 0,
+          "dueDate": "2026-03-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "9c858a29-6bbd-4a93-b93b-d5e1ee9e0b7d",
+          "billingYear": 2026,
+          "month": 4,
+          "amount": 0,
+          "dueDate": "2026-04-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "ecd202c5-9fde-439f-bcc3-8f688d086f72",
+          "billingYear": 2026,
+          "month": 5,
+          "amount": 0,
+          "dueDate": "2026-05-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "f4306dc2-23b6-4003-a050-a16327f22c98",
+          "billingYear": 2026,
+          "month": 6,
+          "amount": 0,
+          "dueDate": "2026-06-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "1a6f75d4-fb5d-4036-b82e-f45cc3637312",
+          "billingYear": 2026,
+          "month": 7,
+          "amount": 0,
+          "dueDate": "2026-07-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "3529f443-cce2-40ff-b6d5-6bf9cecc0611",
+          "billingYear": 2026,
+          "month": 8,
+          "amount": 0,
+          "dueDate": "2026-08-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "357779b8-a7ae-4d7d-ae81-0502dd965994",
+          "billingYear": 2026,
+          "month": 9,
+          "amount": 0,
+          "dueDate": "2026-09-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "519d9cdd-9645-4e6d-8062-7e753cbe283c",
+          "billingYear": 2026,
+          "month": 10,
+          "amount": 0,
+          "dueDate": "2026-10-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "ada69cde-5b27-465a-acb1-932011b12cc5",
+          "billingYear": 2026,
+          "month": 11,
+          "amount": 0,
+          "dueDate": "2026-11-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "6563fca4-0f7b-4e7b-9134-556c1b41056b",
+          "billingYear": 2026,
+          "month": 12,
+          "amount": 50000,
+          "dueDate": "2026-12-10",
+          "status": "unpaid",
+          "feeRateId": "792f1d00-17b5-413f-9a4b-9fd63a568127",
+          "waivedReason": null
+        }
+      ],
+      "preservedDueRows": [
+        {
+          "id": "8b706412-3199-44ed-8928-3585bf2e328c",
+          "billingYear": 2026,
+          "month": 1,
+          "amount": 0,
+          "dueDate": "2026-01-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "069acd59-008f-4f78-a7c0-2fbdb75f24e3",
+          "billingYear": 2026,
+          "month": 2,
+          "amount": 0,
+          "dueDate": "2026-02-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "c305fe37-16be-4466-a338-73be4a9363b5",
+          "billingYear": 2026,
+          "month": 3,
+          "amount": 0,
+          "dueDate": "2026-03-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "32ff4c25-3fa6-42b0-a2b2-92ee79ed5dbb",
+          "billingYear": 2026,
+          "month": 4,
+          "amount": 0,
+          "dueDate": "2026-04-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "056328dc-c6cf-4ca9-b4a4-f90ad331a9fd",
+          "billingYear": 2026,
+          "month": 5,
+          "amount": 0,
+          "dueDate": "2026-05-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "4e586c7a-2b72-4c32-ae8e-300b48d733d2",
+          "billingYear": 2026,
+          "month": 6,
+          "amount": 0,
+          "dueDate": "2026-06-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "c274e66d-8b2b-41ff-b82c-3c3972e934b7",
+          "billingYear": 2026,
+          "month": 7,
+          "amount": 0,
+          "dueDate": "2026-07-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "1492f403-65d5-42e4-b031-60bc5a933d3c",
+          "billingYear": 2026,
+          "month": 8,
+          "amount": 0,
+          "dueDate": "2026-08-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "5a908570-40aa-44fe-9e6b-eba94cbadc4a",
+          "billingYear": 2026,
+          "month": 9,
+          "amount": 0,
+          "dueDate": "2026-09-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "6a4a414c-41d4-4e36-a046-9c7b45b3db18",
+          "billingYear": 2026,
+          "month": 10,
+          "amount": 0,
+          "dueDate": "2026-10-10",
+          "status": "not_due",
+          "feeRateId": null,
+          "waivedReason": null
+        },
+        {
+          "id": "f4b5e76a-ff99-4141-85e6-9f5fe4c10048",
+          "billingYear": 2026,
+          "month": 11,
+          "amount": 50000,
+          "dueDate": "2026-11-10",
+          "status": "unpaid",
+          "feeRateId": "792f1d00-17b5-413f-9a4b-9fd63a568127",
+          "waivedReason": null
+        }
+      ],
+      "futureUntouchedDueIds": [
+        "658af7f9-0397-4a42-ac09-1f718ce44cbc"
+      ],
+      "oldHistoryCounts": {
+        "paymentRequests": 0,
+        "paymentRequestItems": 0,
+        "paymentRequestClaims": 0,
+        "payments": 0,
+        "paymentAllocations": 0,
+        "activeDueSettlements": 0,
+        "paymentReversals": 0,
+        "dueAdjustments": 0,
+        "waiverActions": 0,
+        "waiverItems": 0
+      },
+      "oldHistoryOwnerRows": {
+        "paymentRequests": [],
+        "paymentRequestItems": [],
+        "paymentRequestClaims": [],
+        "payments": [],
+        "paymentAllocations": [],
+        "activeDueSettlements": [],
+        "paymentReversals": [],
+        "dueAdjustments": [],
+        "waiverActions": [],
+        "waiverItems": []
+      }
+    },
+    "conflict": {
+      "householdId": "a2691c47-224c-477e-ab1c-20360c2dce63",
+      "personId": "c3b4560d-d22a-4504-9ee5-0ac857c5a367",
+      "residentAccountId": "c8476adc-c456-4f3f-9379-1685cfe075f0",
+      "dueId": "74d5314c-dfaa-4c27-bee2-12a3c0b2f056",
+      "before": {
+        "householdStatus": "active",
+        "householdEndsOn": null,
+        "personIsActive": true,
+        "residentAccountStatus": "active",
+        "due": {
+          "billingYear": 2026,
+          "month": 12,
+          "amount": 50000,
+          "dueDate": "2026-12-10",
+          "status": "unpaid",
+          "feeRateId": "792f1d00-17b5-413f-9a4b-9fd63a568127",
+          "waivedReason": null
+        },
+        "interactionCounts": {
+          "paymentRequests": 0,
+          "paymentRequestItems": 0,
+          "paymentRequestClaims": 0,
+          "payments": 0,
+          "paymentAllocations": 0,
+          "activeDueSettlements": 0,
+          "paymentReversals": 0,
+          "dueAdjustments": 1,
+          "waiverActions": 0,
+          "waiverItems": 0
+        },
+        "ownershipRows": {
+          "paymentRequests": [],
+          "paymentRequestItems": [],
+          "paymentRequestClaims": [],
+          "payments": [],
+          "paymentAllocations": [],
+          "activeDueSettlements": [],
+          "paymentReversals": [],
+          "dueAdjustments": [
+            {
+              "key": "d251fc19-f373-4cb1-aa2c-6078cb260f01",
+              "rtUnitId": "cf9c532b-237a-4feb-80de-4d00050b028f",
+              "householdId": "a2691c47-224c-477e-ab1c-20360c2dce63"
+            }
+          ],
+          "waiverActions": [],
+          "waiverItems": []
+        },
+        "activeSessionCount": 0,
+        "lifecycleAuditCount": 0,
+        "financialContent": {
+          "fingerprint": "55749315aac29433be31617109403f0ecbe23906a21675e6a5057c62c5310f74",
+          "rowCount": 1
+        }
+      }
+    }
+  },
+  "credentialSafety": "PINs, passwords, cookies, tokens, credential hashes, and connection values stayed in process memory only; evidence stores sanitized statuses, booleans, synthetic IDs, due snapshots, ownership keys, and aggregate counts.",
+  "evidencePathNormalization": "This copy corrects duplicated docs/ prefixes in viewportScreenshotFiles. The original manifest is preserved unchanged, and screenshot files are copied under this folder."
+}

@@ -1,0 +1,5 @@
+COMMAND: npm.cmd run typecheck
+npm notice run karturt@0.1.0 typecheck
+npm notice run tsc --noEmit
+scripts/phase-12-1-post-smoke-lifecycle-audit.ts(845,77): error TS2345: Argument of type 'PoolClient | undefined' is not assignable to parameter of type 'PoolClient'.
+  Type 'undefined' is not assignable to type 'PoolClient'.

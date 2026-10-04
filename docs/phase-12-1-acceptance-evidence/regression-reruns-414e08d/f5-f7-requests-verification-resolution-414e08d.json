@@ -1,0 +1,23 @@
+{
+  "head": "414e08d1689e2a5775f3c34f4ca6fe7010fcf2c7",
+  "suite": "f5-f7-requests-verification-resolution",
+  "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 tests/integration/resident-payment-request.test.ts tests/integration/resident-payment-request-route.test.ts tests/integration/resident-payment-request-history-route.test.ts tests/integration/payment-request-resolution.test.ts tests/integration/payment-request-resolution-route.test.ts tests/integration/treasurer-payment-verification.test.ts tests/constraints/payment-request-items-immutable.test.ts",
+  "files": [
+    "tests/integration/resident-payment-request.test.ts",
+    "tests/integration/resident-payment-request-route.test.ts",
+    "tests/integration/resident-payment-request-history-route.test.ts",
+    "tests/integration/payment-request-resolution.test.ts",
+    "tests/integration/payment-request-resolution-route.test.ts",
+    "tests/integration/treasurer-payment-verification.test.ts",
+    "tests/constraints/payment-request-items-immutable.test.ts"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "summary": {
+    "testFiles": "7 passed (7)",
+    "tests": "45 passed (45)",
+    "duration": "22.42s (tests 64%, import 33%, transform 2%)"
+  },
+  "invocationEquivalentTo": "npm test -- --maxWorkers=1 <listed test files>"
+}

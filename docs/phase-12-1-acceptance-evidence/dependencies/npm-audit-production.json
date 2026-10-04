@@ -1,0 +1,17 @@
+{
+  "command": "npm audit --omit=dev --json",
+  "exitCode": 0,
+  "toolchain": {
+    "node": "v24.19.0",
+    "npm": "12.0.2"
+  },
+  "vulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "findings": []
+}

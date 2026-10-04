@@ -1,0 +1,20 @@
+{
+  "runId": "0730fffb-63be-44c4-b3bb-1d7408e4e070",
+  "outcome": "FAIL",
+  "stage": "resident authenticates with original PIN in browser",
+  "diagnostics": {
+    "loginPath": "/login/warga",
+    "browserPath": "/app",
+    "loginFormVisible": false,
+    "friendlyAlertVisible": false,
+    "loginApiStatuses": {
+      "/api/login/official": [
+        200
+      ],
+      "/api/login/resident": [
+        200
+      ]
+    }
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

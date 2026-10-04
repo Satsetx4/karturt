@@ -1,0 +1,6 @@
+{
+  "runId": "3b9a6472-d997-44d3-82f9-c8cc63a34c00",
+  "outcome": "FAIL",
+  "stage": "create synthetic Chairman fixture in verified development database",
+  "note": "Sanitized failure record; underlying error details suppressed."
+}

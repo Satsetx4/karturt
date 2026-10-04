@@ -1,0 +1,11 @@
+{
+  "runId": "4247bb57-6642-48aa-a931-60ddd0da6bca",
+  "outcome": "FAIL",
+  "stage": "submit resident edit through browser UI",
+  "diagnostics": {
+    "listApiStatus": 200,
+    "browserPath": "/app",
+    "chairmanListTitleVisible": false
+  },
+  "note": "Sanitized failure record; underlying error details suppressed."
+}
