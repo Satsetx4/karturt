@@ -842,7 +842,7 @@ async function main() {
 
     const global = [];
     for (const check of globalChecks) {
-      const value = await runAuditStage(`global:${check.name}`, () => count(client, check.sql));
+      const value = await runAuditStage(`global:${check.name}`, () => count(client!, check.sql));
       global.push({ name: check.name, count: value });
     }
 
