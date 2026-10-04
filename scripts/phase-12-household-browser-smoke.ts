@@ -1621,6 +1621,8 @@ async function main() {
     stage = "open Chairman add-household form";
     await click("button.chairman-household-primary", "Tambah warga");
     await waitFor("Boolean(document.querySelector('#household-new-number'))", "Create household form did not open.");
+    await setInput("#household-existing-house", "new");
+    await waitFor("document.querySelector('#household-existing-house')?.value === 'new'", "Create household form did not select the new-house option.");
     const newHouseNumber = "QA12-" + randomBytes(5).toString("hex").toUpperCase();
     const syntheticResidentName = "F12 QA synthetic Resident " + runId.slice(0, 8).toUpperCase();
     const newPin = String(randomInt(100000, 1000000));
