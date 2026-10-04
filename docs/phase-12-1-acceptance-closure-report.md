@@ -124,3 +124,7 @@ The clean-source quality gates and exact-checkpoint CI must pass before promotio
 **After the clean-source/local quality gates pass, the F12 verdict is: F12 PASS — with explicitly accepted dev-tooling residual risk RA-2026-F12-001. GO integration to main. GO F13 planning only after clean main checkpoint is verified.**
 
 Production remains untouched by this checkpoint, and F13 implementation has not started.
+
+## F12.2 Final Integration Verification — 2026-10-04
+
+The clean integration checkpoint a3b898707686cbf71b6b02dd195782c37ecf317b was promoted to main by fast-forward from ff9628b7fa178fb3c56ff3530adeb4719b9fe295. Test Gate A passed on the exact clean branch SHA (run 37181362310) and the exact promoted main SHA (run 37181930669). The promotion and final disposition are recorded in docs/f12-clean-integration-report.md. Historical FAIL conclusions above remain preserved as prior decisions; current F12 status is PASS with the narrowly scoped RA-2026-F12-001 accepted residual risk. F13 implementation has not started.

@@ -1,0 +1,24 @@
+{
+  "workflowName": "Test Gate A",
+  "checkpointSha": "a3b898707686cbf71b6b02dd195782c37ecf317b",
+  "runs": [
+    {
+      "purpose": "clean integration branch CI",
+      "branch": "integrate/f12-clean-checkpoint",
+      "runId": 37181362310,
+      "headSha": "a3b898707686cbf71b6b02dd195782c37ecf317b",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Satsetx4/karturt/actions/runs/37181362310"
+    },
+    {
+      "purpose": "main CI after checkpoint promotion",
+      "branch": "main",
+      "runId": 37181930669,
+      "headSha": "a3b898707686cbf71b6b02dd195782c37ecf317b",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Satsetx4/karturt/actions/runs/37181930669"
+    }
+  ]
+}

@@ -20,6 +20,7 @@ Browser and PIN JSON summaries have been reduced to outcome, status, and count f
 | neon-final-summary.json | Aggregate F12.1 Neon result, lifecycle counts, replacement/conflict snapshot counts, and Gate C counts. |
 | ci-source-414e08d.json | GitHub CI result for exact tested source SHA 414e08d. |
 | ci-f12-1-final-head.json | GitHub CI result for exact F12.1 final documentation HEAD 2b6a5bb. |
+| ci-clean-checkpoint.json | Exact clean branch and promoted main CI runs on checkpoint SHA a3b8987; both passed. |
 | dependency-assessment.md | Narrow dev-tooling advisory assessment and production-only audit interpretation. |
 | npm-audit-full.json | Fresh full dependency audit from the clean integration source (2026-10-04): five High entries, zero Critical; all five are the accepted dev-tooling chain. |
 | npm-audit-production.json | Fresh production-only dependency audit from the clean integration source (2026-10-04): zero vulnerabilities. |
@@ -31,4 +32,4 @@ Browser and PIN JSON summaries have been reduced to outcome, status, and count f
 
 ## Pruning record
 
-The F12.1 source bundle contained 433 files totaling 12,947,409 bytes in the expanded worktree. The clean checkpoint retains 17 curated files (16 evidence artifacts plus this index); the 16 artifacts total 383814 bytes and the curated folder totals 387642 bytes. The superseded bundle is excluded from the integration commit and retained on the F12.1 source branch; it may remain as untracked files in this temporary worktree until worktree cleanup. Compared with the expanded source bundle, the checkpoint omits 416 files totaling 12,559,767 bytes.
+The F12.1 source bundle contained 433 files totaling 12,947,409 bytes in the expanded worktree. The clean checkpoint retains 18 curated files (17 evidence artifacts plus this index); the curated folder totals 388530 bytes. The superseded bundle is excluded from the integration commit and retained on the F12.1 source branch; it may remain as untracked files in this temporary worktree until worktree cleanup. Compared with the expanded source bundle, the checkpoint omits 415 files totaling 12558879 bytes.

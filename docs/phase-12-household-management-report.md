@@ -127,3 +127,7 @@ Checkpoint bersih harus lulus quality gates pada clean source dan CI untuk exact
 **After the clean-source/local quality gates pass, the F12 verdict is: F12 PASS — with explicitly accepted dev-tooling residual risk RA-2026-F12-001. GO integration to main. GO F13 planning only after clean main checkpoint is verified.**
 
 Production tetap di luar cakupan mutasi checkpoint ini. Implementasi F13 belum dimulai.
+
+## F12.2 Final Integration Verification — 2026-10-04
+
+The exact clean checkpoint a3b898707686cbf71b6b02dd195782c37ecf317b is now the main integration commit. It was fast-forwarded from the recorded baseline ff9628b7fa178fb3c56ff3530adeb4719b9fe295; exact-SHA Test Gate A passed on the clean integration branch (run 37181362310) and on main (run 37181930669). See docs/f12-clean-integration-report.md for the complete audit, evidence curation, Neon read-only follow-up, semantic-equivalence result, risk boundary, and final verdict. F12 PASS with RA-2026-F12-001 as KNOWN / ACCEPTED RESIDUAL RISK — NOT RESOLVED. F13 planning may proceed after this verified checkpoint; F13 implementation has not started.
