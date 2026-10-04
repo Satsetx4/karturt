@@ -357,6 +357,37 @@ function outcomeNames(outcomes: [Settled<unknown>, Settled<unknown>]) {
     : outcome.reason instanceof Error ? outcome.reason.name : "rejected");
 }
 
+function safeOutcomeSummary(outcomes: [Settled<unknown>, Settled<unknown>]) {
+  return outcomes.map((outcome) => {
+    if (outcome.status === "fulfilled") return { status: "fulfilled" };
+    let current: unknown = outcome.reason;
+    let postgresCode: string | null = null;
+    for (let depth = 0; depth < 4 && current; depth += 1) {
+      if (typeof current !== "object" || current === null) break;
+      const candidate = current as { code?: unknown; cause?: unknown };
+      if (typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code)) {
+        postgresCode = candidate.code;
+        break;
+      }
+      current = candidate.cause;
+    }
+    return {
+      status: "rejected",
+      errorName: outcome.reason instanceof Error ? outcome.reason.name : "UnknownError",
+      postgresCode,
+    };
+  });
+}
+
+function assertFulfilledCount(
+  outcomes: [Settled<unknown>, Settled<unknown>],
+  expected: number,
+  scenario: string,
+) {
+  const actual = outcomes.filter((outcome) => outcome.status === "fulfilled").length;
+  assert.equal(actual, expected, `${scenario}: expected ${expected} fulfilled outcome(s); observed ${JSON.stringify(safeOutcomeSummary(outcomes))}`);
+}
+
 async function testConcurrentVerification() {
   const scenario = await createFinancialScenario();
   const request = await createResidentPaymentRequest(databaseA, scenario.residentPrincipal, {
@@ -369,7 +400,7 @@ async function testConcurrentVerification() {
     first: () => verifyTreasurerPaymentRequest(databaseA, scenario.treasurerPrincipal, request.requestCode, businessDate),
     second: () => verifyTreasurerPaymentRequest(databaseB, scenario.treasurerPrincipal, request.requestCode, businessDate),
   });
-  assert.equal(race.outcomes.filter((outcome) => outcome.status === "fulfilled").length, 1);
+  assertFulfilledCount(race.outcomes, 1, "duplicate_payment_request_verification");
   const rejected = race.outcomes.find((outcome) => outcome.status === "rejected");
   assert.ok(rejected && rejected.status === "rejected");
   assert.ok(rejected.reason instanceof TreasurerPaymentRequestAlreadyProcessedError);
@@ -414,7 +445,7 @@ async function testSameKeyCashRetry() {
     first: () => recordTreasurerCashPayment(databaseA, scenario.treasurerPrincipal, input, businessDate),
     second: () => recordTreasurerCashPayment(databaseB, scenario.treasurerPrincipal, input, businessDate),
   });
-  assert.ok(race.outcomes.every((outcome) => outcome.status === "fulfilled"));
+  assertFulfilledCount(race.outcomes, 2, "same_key_cash_retry");
   const results = race.outcomes.map((outcome) => outcome.status === "fulfilled" ? outcome.value : null);
   assert.deepEqual(results.map((result) => result?.replayed).sort(), [false, true]);
 
@@ -471,7 +502,7 @@ async function testConcurrentReversal() {
       reason: "Concurrency reversal B",
     }, businessDate),
   });
-  assert.equal(race.outcomes.filter((outcome) => outcome.status === "fulfilled").length, 1);
+  assertFulfilledCount(race.outcomes, 1, "same_payment_concurrent_reversal");
   const rejected = race.outcomes.find((outcome) => outcome.status === "rejected");
   assert.ok(rejected && rejected.status === "rejected");
   assert.ok(rejected.reason instanceof TreasurerPaymentAlreadyReversedError);
@@ -510,7 +541,7 @@ async function testConcurrentWaiver() {
     first: () => create(databaseA, "A"),
     second: () => create(databaseB, "B"),
   });
-  assert.equal(race.outcomes.filter((outcome) => outcome.status === "fulfilled").length, 1);
+  assertFulfilledCount(race.outcomes, 1, "same_due_concurrent_waiver");
   const rejected = race.outcomes.find((outcome) => outcome.status === "rejected");
   assert.ok(rejected && rejected.status === "rejected");
   assert.ok(rejected.reason instanceof ChairmanWaiverConflictError);
@@ -574,7 +605,7 @@ async function testConcurrentHouseholdReplacement() {
     first: () => replace(databaseA, "Replacement A"),
     second: () => replace(databaseB, "Replacement B"),
   });
-  assert.equal(race.outcomes.filter((outcome) => outcome.status === "fulfilled").length, 1);
+  assertFulfilledCount(race.outcomes, 1, "same_house_concurrent_resident_replacement");
   const rejected = race.outcomes.find((outcome) => outcome.status === "rejected");
   assert.ok(rejected && rejected.status === "rejected");
   assert.ok(rejected.reason instanceof HouseholdConflictError);
@@ -621,13 +652,17 @@ async function main() {
   pidB = await backendPid(poolB);
   assert.notEqual(pidA, pidB, "two racing pools must use independent PostgreSQL backends");
 
-  const checks = [
-    await testConcurrentVerification(),
-    await testSameKeyCashRetry(),
-    await testConcurrentReversal(),
-    await testConcurrentWaiver(),
-    await testConcurrentHouseholdReplacement(),
-  ];
+  const checks = [];
+  for (const [name, run] of [
+    ["duplicate_payment_request_verification", testConcurrentVerification],
+    ["same_key_cash_retry", testSameKeyCashRetry],
+    ["same_payment_concurrent_reversal", testConcurrentReversal],
+    ["same_due_concurrent_waiver", testConcurrentWaiver],
+    ["same_house_concurrent_resident_replacement", testConcurrentHouseholdReplacement],
+  ] as const) {
+    process.stdout.write(`Running PostgreSQL race scenario: ${name}\n`);
+    checks.push(await run());
+  }
   for (const check of checks) assert.equal(check.result, "PASS");
 
   const evidence = {
