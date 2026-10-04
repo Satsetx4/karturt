@@ -1,5 +1,5 @@
 {
-  "status": "PARTIAL_PASS_WITH_BLOCKING_EVIDENCE_GAPS",
+  "status": "BLOCKER_SPECIFIC_ROUTE_MATRIX_PASS_WITH_BROADER_SECURITY_AND_CONCURRENCY_GAPS",
   "plan": "docs/launch-safety-security-plan.md",
   "planned_threat_rows": 23,
   "executed_security_focused_tests": {
@@ -14,15 +14,22 @@
     "tests": 9,
     "new_case": "same idempotency key submitted concurrently; asserts one payment, two allocations totaling the expected amount, one audit, and paid due rows"
   },
-  "authorization_regression": "111/111 authorization tests passed; see authorization-summary.json for matrix coverage limit.",
+  "authorization_regression": "119/119 authorization tests passed across 13 files. The blocker-specific actual-cookie matrix passes for nine principal categories across representative handlers in all four available route families; see authorization-summary.json for broader S1-S16 limits.",
+  "system_admin_recovery_origin": {
+    "status": "FIXED_AND_TESTED",
+    "guard": "Shared isSameOriginRequest check runs before body parsing and authentication.",
+    "foreign_missing_null_malformed_origin": "403; factor, session, account, and audit state unchanged",
+    "browser_delivery_test": "NOT_RUN; route-level authenticated Origin rejection is proven, but cross-site cookie delivery was not tested in a browser"
+  },
   "concurrency_evidence": {
     "same_payment_verification": "existing concurrent domain test passed in the PGlite suite",
     "cash": "new same-key concurrent domain test and existing different-key race tests passed",
     "reversal": "existing concurrent reversal tests passed",
     "waiver": "existing concurrent waiver tests passed",
-    "independent_database_connections": "NOT PROVEN; PGlite uses one in-memory database client per suite, so Promise.all overlap does not establish PostgreSQL row-lock contention across backend connections"
+    "independent_database_connections": "PENDING exact-SHA GitHub Actions run of the disposable PostgreSQL 17 two-pool harness; PGlite evidence alone does not prove independent backend lock contention"
   },
-  "open_security_coverage": "Full authenticated route/session matrix was not completed. System Admin two-factor recovery route lacks an explicit Origin guard in source; exploitability was not established.",
+  "blocker_specific_route_session_matrix": "CLOSED; actual signed-cookie direct-handler cross-product is recorded in authorization-summary.json and system-admin-recovery-route-security.json.",
+  "open_security_coverage": "Broader S1-S16 threat-plan work remains incomplete for full individual-endpoint cross-products, browser-origin delivery, session fixation/cookie attributes, brute-force boundaries, resident PIN lockout, and some malformed-input/SQL-injection cases.",
   "confirmed_critical_security_failures": 0,
   "confirmed_unaccepted_high_security_failures": 0,
   "production_access": "none",

@@ -1,0 +1,89 @@
+{
+  "result": "PASS_BLOCKER_SPECIFIC_PRINCIPAL_SESSION_MATRIX",
+  "scope": "Focused actual-cookie route/session blocker slice across Resident, Treasurer, Chairman, and System Admin routes",
+  "environment": "Disposable local PGlite database migrated from repository SQL; no Neon or production access",
+  "execution": {
+    "targetedCommand": "npm.cmd test -- tests/authorization/system-admin-recovery-route-session.test.ts --maxWorkers=1",
+    "targetedFilesPassed": 1,
+    "targetedTestsPassed": 8,
+    "authorizationCommand": "npm.cmd run test:authorization -- --maxWorkers=1",
+    "authorizationFilesPassed": 13,
+    "authorizationTestsPassed": 119,
+    "typecheck": "npm.cmd run typecheck — PASS",
+    "lint": "npm.cmd run lint — 0 errors; one pre-existing warning at scripts/phase-12-household-browser-smoke.ts:1005",
+    "diffCheck": "git diff --check — PASS"
+  },
+  "blockerSpecificMatrix": {
+    "status": "CLOSED",
+    "principalCategories": [
+      "Resident",
+      "Treasurer",
+      "Chairman",
+      "verified System Admin",
+      "unverified System Admin",
+      "anonymous",
+      "disabled account session",
+      "ended assignment session",
+      "other-RT Resident/Treasurer/Chairman sessions"
+    ],
+    "handlerFamilies": [
+      "Resident monthly dues GET",
+      "Treasurer payment queue GET",
+      "Chairman household management GET",
+      "System Admin 2FA recovery POST"
+    ],
+    "evidence": "Nine principal categories crossed against all four representative handler families using actual Better Auth cookies or anonymous requests; correct-role and other-RT scoped reads succeed, wrong-role/stale/anonymous requests are denied, and recovery/database snapshots remain unchanged on denial. Adjacent route tests preserve positive Resident, Treasurer verification, Chairman waiver, and System Admin recovery paths.",
+    "systemAdminAudit": "NOT_APPLICABLE; no audit API route exists under src/app/api and admin tooling is deferred F17"
+  },
+  "sessionAuthenticity": "Better Auth sessions and signed cookies were created through local email login and System Admin TOTP flows. Route handlers and principal resolution are real; tests inject Next request-header context to invoke handlers directly, so this is not browser coverage.",
+  "tdd": {
+    "red": "Before the route guard, a foreign-Origin POST with a verified System Admin cookie returned HTTP 200 and completed the recovery route instead of the expected 403.",
+    "green": "After adding the shared isSameOriginRequest guard before body parsing/authentication, foreign, missing, null, and malformed Origin cases returned 403 without state changes. Expanded route tests pass."
+  },
+  "cases": {
+    "systemAdminRecovery": {
+      "foreignMissingNullMalformedOrigin": "403; factor/session/account/audit unchanged",
+      "verifiedAdminOtherTarget": "200; target factor reset, both target sessions revoked, actor sessions retained, one audit event",
+      "targetCookieReplayAfterRevocation": "401",
+      "selfRecovery": "403; factor/session/account/audit unchanged",
+      "residentTreasurerChairmanAnonymous": "403/401; target unchanged",
+      "disabledEndedAssignmentUnverifiedAdmin": "401; target unchanged"
+    },
+    "residentRoutes": {
+      "twoSameRtCookiesRequestGet": "Each only sees its own request",
+      "crossOwnerCancel": "404; request/item/claim/due/audit unchanged",
+      "anonymousGetCreateCancel": "401; state unchanged",
+      "duesGet": "Resident 200; anonymous and previously issued disabled-account cookie 401",
+      "pinResetPost": "Anonymous 401; Resident and other-RT Resident 403; account/session/audit state unchanged"
+    },
+    "treasurerRoutes": {
+      "queueHistoryGet": "Treasurer 200; anonymous 401",
+      "paymentRequestVerify": "Treasurer 200; one payment and one allocation created; due paid",
+      "verifyWrongPrincipals": "Resident same/other RT, Chairman, disabled, ended assignment, unverified System Admin, anonymous denied; financial rows unchanged",
+      "verifiedSystemAdminVerify": "403; financial rows unchanged",
+      "cashPost": "Treasurer reached service; 409 because fixture has no unpaid due; state unchanged",
+      "reversalPost": "Treasurer with unknown payment 404; anonymous 401; state unchanged"
+    },
+    "chairmanRoutes": {
+      "waiverReport": "Same-RT Chairman succeeds; Resident/Treasurer/anonymous denied",
+      "crossRtWaiverReport": "Cross-RT waiver 404 with unchanged state; other-RT report has zero target values; spoofed rtUnitId report 400",
+      "householdFeeGet": "Chairman 200; anonymous 401",
+      "lifecycleFeeAdjustmentPost": "Anonymous 401; Treasurer 403; state unchanged",
+      "staleSessionHouseholdGet": "Disabled Resident 401; ended-assignment Chairman 401"
+    },
+    "adminAudit": "No System Admin audit HTTP handler exists under src/app/api on this branch; admin tooling is deferred F17 and no endpoint was created"
+  },
+  "remainingGaps": [
+    "No two-origin browser harness was run to observe cross-site cookie delivery.",
+    "Successful cash payment, reversal, household lifecycle, fee-rate, and adjustment mutations were not exercised in this focused matrix; their denial and safe no-op/error paths were exercised.",
+    "Payment-history actual-cookie coverage, authenticated Resident payment-request create success, and successful lifecycle/fee/adjustment/cash/reversal mutations remain uncovered.",
+    "The broader S1-S16 threat plan remains incomplete for fixation, brute-force boundaries, PIN lockout, full browser CSRF proof, and the separately assigned concurrency suite.",
+    "System Admin recovery target inactive/foreign, malformed reference, and audit-failure rollback do not have a complete HTTP-level cookie matrix."
+  ],
+  "safety": {
+    "neonWrites": 0,
+    "productionAccess": false,
+    "migrations": 0,
+    "branchMergeToMain": false
+  }
+}

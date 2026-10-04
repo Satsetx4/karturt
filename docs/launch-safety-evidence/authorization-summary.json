@@ -1,22 +1,31 @@
 {
-  "status": "PARTIAL_PASS_WITH_COVERAGE_GAP",
+  "status": "PASS_BLOCKER_SPECIFIC_MATRIX_WITH_BROADER_S1_S16_RESIDUALS",
   "source_baseline": "4890678b91c4c4e2c535f1149da60dbfcde32370",
+  "launch_safety_branch_before_remediation": "64e24f06c32083975e04b1a1693139416974b9d6",
   "broad_authorization_suite": {
     "result": "PASS",
-    "test_files": 12,
-    "tests": 111
+    "command": "npm.cmd run test:authorization -- --maxWorkers=1",
+    "test_files": 13,
+    "tests": 119
   },
-  "full_regression_suite": {
+  "blocker_specific_route_session_matrix": {
     "result": "PASS",
-    "test_files": 59,
-    "tests": 377
+    "command": "npm.cmd test -- tests/authorization/system-admin-recovery-route-session.test.ts --maxWorkers=1",
+    "test_files": 1,
+    "tests": 8,
+    "principal_categories": 9,
+    "representative_handler_families": 4,
+    "sessions": "Actual Better Auth signed cookies and System Admin TOTP; anonymous cases use no cookie",
+    "denial_state_assertions": "Protected financial, identity, session, factor, and audit snapshots remain unchanged where applicable"
   },
-  "focused_server_side_coverage": [
-    "Chairman report access and tenant/role spoofing tests",
-    "financial actor substitution tests",
-    "cash, payment verification, reversal, and waiver domain/integration tests"
-  ],
-  "coverage_limit": "The 23-row frozen threat plan's full authenticated route/session matrix across Resident, Treasurer, Chairman, System Admin, anonymous, inactive account, ended assignment, other user, other RT, spoofed tenant/role, and direct API was not executed as one complete matrix. Existing passing suites cover subsets but do not establish every planned route/principal pairing.",
-  "open_source_review_item": "System Admin two-factor recovery route has no explicit Origin guard in the inspected source. Browser exploitability and SameSite/session behavior were not proven; retain as an unresolved security coverage item.",
+  "previous_full_regression_suite": {
+    "result": "PASS_BEFORE_REMEDIATION_CHANGES",
+    "test_files": 59,
+    "tests": 377,
+    "head_sha": "7bce770cfa6086a1def7690fb582bf94dc5d412d"
+  },
+  "current_full_regression_ci": "PENDING exact final remediation SHA",
+  "coverage_limit": "The blocker-specific representative principal/session matrix is closed. The broader S1-S16 threat plan remains partial: not every individual endpoint has a full principal cross-product; browser-origin delivery, session fixation, brute-force boundary, PIN lockout, and broader malformed-input/SQL-injection coverage remain separately documented.",
+  "system_admin_audit_route": "NOT_APPLICABLE; no HTTP audit route exists under src/app/api and F17 admin tooling is deferred",
   "production_access": "none"
 }

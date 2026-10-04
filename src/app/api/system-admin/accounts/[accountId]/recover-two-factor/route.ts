@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { getCurrentPrincipal, MfaEnrollmentRequiredError, UnauthenticatedError } from "@/lib/auth/principal";
 import { recoverSystemAdminTwoFactor } from "@/lib/auth/recover-system-admin-two-factor";
+import { isSameOriginRequest } from "@/lib/http/request-security";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,12 @@ const payloadSchema = z.object({
 });
 
 export async function POST(request: Request, context: { params: Promise<{ accountId: string }> }) {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ message: "Permintaan tidak dapat diproses dari alamat ini." }, {
+      status: 403,
+      headers: { "cache-control": "no-store" },
+    });
+  }
   let payload: unknown;
   try {
     payload = await request.json();
