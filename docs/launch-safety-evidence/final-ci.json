@@ -1,0 +1,9 @@
+{
+  "workflow": "Test Gate A",
+  "run_id": 37213548073,
+  "head_sha": "7bce770cfa6086a1def7690fb582bf94dc5d412d",
+  "status": "completed",
+  "conclusion": "success",
+  "duration": "7m8s",
+  "note": "Exact implementation SHA passed install, lint, typecheck, unit, integration/migration, constraints, authorization, full suite, journal, schema drift, and build gates. Existing Node 20 deprecation and phase-12 unused-variable warnings remain."
+}
