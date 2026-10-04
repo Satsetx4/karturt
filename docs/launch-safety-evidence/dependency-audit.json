@@ -1,0 +1,44 @@
+{
+  "audit_date": "2026-10-04",
+  "commands": {
+    "full": {
+      "command": "npm audit --json",
+      "exit_code": 1,
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 5,
+        "critical": 0,
+        "total": 5
+      }
+    },
+    "production_only": {
+      "command": "npm audit --omit=dev --json",
+      "exit_code": 0,
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      }
+    }
+  },
+  "unique_advisory_count": 1,
+  "affected_package_paths": 5,
+  "findings": [
+    {
+      "package": "braces",
+      "advisory": "GHSA-vfj7-8cjw-p6xm",
+      "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+      "affected_range": "<=3.0.3",
+      "installed_scope": "development-only transitive dependency",
+      "severity": "high",
+      "status": "KNOWN / ACCEPTED RESIDUAL RISK — RA-2026-F12-001",
+      "disposition": "Sole unique advisory. Its five affected package-path entries are braces, micromatch, fast-glob, @next/eslint-plugin-next, and eslint-config-next; all are the same transitive advisory path."
+    }
+  ],
+  "overall": "Full audit reports 5 High affected package paths representing 1 unique advisory, exactly the accepted development-only RA-2026-F12-001 braces@3.0.3 residual. Do not describe the full audit as clean. Production-only audit reports 0 vulnerabilities."
+}

@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "event": "karturt.f12_lifecycle_global_audit",
+  "generatedAt": "2026-10-04T15:22:47.641Z",
+  "environment": "development",
+  "operationMode": "REPEATABLE READ READ ONLY",
+  "database": "neondb",
+  "branch": "karturt-development",
+  "migrationEntries": 14,
+  "migrationHead": "0013_phase_12_household_management",
+  "totalChecks": 11,
+  "zeroAnomalyChecks": 11,
+  "result": "PASS",
+  "checks": [
+    {
+      "name": "overlapping_household_periods",
+      "count": 0
+    },
+    {
+      "name": "multiple_active_households_same_house",
+      "count": 0
+    },
+    {
+      "name": "multiple_current_residents_same_household",
+      "count": 0
+    },
+    {
+      "name": "duplicate_current_resident_login_same_rt",
+      "count": 0
+    },
+    {
+      "name": "ambiguous_current_resident_login_across_rt",
+      "count": 0
+    },
+    {
+      "name": "active_resident_linked_to_inactive_household",
+      "count": 0
+    },
+    {
+      "name": "active_resident_linked_to_inactive_person",
+      "count": 0
+    },
+    {
+      "name": "disabled_resident_with_unexpired_session",
+      "count": 0
+    },
+    {
+      "name": "financial_rows_with_household_scope_mismatch",
+      "count": 0
+    },
+    {
+      "name": "not_due_financial_activity",
+      "count": 0
+    },
+    {
+      "name": "post_end_interacted_due_rewritten_to_not_due",
+      "count": 0
+    }
+  ]
+}

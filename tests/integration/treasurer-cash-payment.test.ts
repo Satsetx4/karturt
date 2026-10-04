@@ -202,6 +202,38 @@ describe("Treasurer direct cash payment", () => {
       .where(eq(payments.cashIdempotencyKey, key))).toHaveLength(1);
   });
 
+  it("serializes simultaneous retries of the same cash operation to one financial effect", async () => {
+    const scenario = await createScenario(["2026-11", "2026-12"]);
+    const idempotencyKey = randomUUID();
+    const input = { householdId: scenario.householdId, period: "2026-12", idempotencyKey };
+
+    const attempts = await Promise.all([
+      recordTreasurerCashPayment(database, scenario.treasurerPrincipal, input),
+      recordTreasurerCashPayment(database, scenario.treasurerPrincipal, input),
+    ]);
+
+    expect(attempts.map((result) => result.replayed).sort()).toEqual([false, true]);
+    for (const attempt of attempts) {
+      expect(attempt).toMatchObject({ status: "recorded", periods: ["2026-11", "2026-12"], itemCount: 2, totalAmount: 80000 });
+    }
+
+    const paymentRows = await testDatabase.db.select().from(payments)
+      .where(eq(payments.cashIdempotencyKey, idempotencyKey));
+    expect(paymentRows).toHaveLength(1);
+    const allocations = await testDatabase.db.select().from(paymentAllocations)
+      .where(eq(paymentAllocations.paymentId, paymentRows[0]!.id));
+    expect(allocations).toHaveLength(2);
+    expect(allocations.reduce((total, allocation) => total + allocation.amount, 0)).toBe(80000);
+    expect(await testDatabase.db.select().from(auditEvents).where(and(
+      eq(auditEvents.action, "payment.cash_recorded"),
+      eq(auditEvents.entityId, paymentRows[0]!.id),
+    ))).toHaveLength(1);
+    const persistedDues = await testDatabase.db.select().from(monthlyDues)
+      .where(inArray(monthlyDues.id, scenario.dueIds));
+    expect(persistedDues).toHaveLength(2);
+    expect(persistedDues.every((due) => due.status === "paid")).toBe(true);
+  });
+
   it("treats injection-like household search text as data and keeps search within the Treasurer RT", async () => {
     const scenario = await createScenario(["2026-12"]);
     const otherRt = await createRt(testDatabase.db);

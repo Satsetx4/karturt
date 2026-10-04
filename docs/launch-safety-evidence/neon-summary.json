@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "event": "launch_safety.neon_development_read_only_summary",
+  "generatedAt": "2026-10-04T15:22:47.641Z",
+  "projectId": "billowing-base-57949906",
+  "branchId": "br-crimson-band-az6i637k",
+  "branch": "karturt-development",
+  "endpointId": "ep-quiet-cake-azrhjiyh",
+  "database": "neondb",
+  "migrationEntries": 14,
+  "migrationHead": "0013_phase_12_household_management",
+  "migrationHeadHash": "994BCC9376B207FDC0668312CC68CAB3C2CEC46BC6101EDC4C2B5EF7F51C4A85",
+  "readOnly": true,
+  "repeatableRead": true,
+  "productionAccess": "none",
+  "writesPerformed": 0,
+  "integrity": {
+    "result": "PASS",
+    "checks": 16,
+    "zeroAnomalies": 16
+  },
+  "gateC": {
+    "result": "PASS",
+    "checks": 32,
+    "zeroAnomalies": 32
+  },
+  "lifecycleGlobal": {
+    "result": "PASS",
+    "checks": 11,
+    "zeroAnomalies": 11
+  }
+}

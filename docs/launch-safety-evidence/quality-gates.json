@@ -1,0 +1,96 @@
+{
+  "run_date": "2026-10-04",
+  "environment": "local worktree; synthetic PGlite fixtures; build used inert CI-only placeholder values; no Neon or production access",
+  "results": {
+    "npm_ci": {
+      "status": "PASS",
+      "exit_code": 0,
+      "detail": "427 packages added; lockfile unchanged."
+    },
+    "lint": {
+      "status": "PASS",
+      "exit_code": 0,
+      "errors": 0,
+      "warning_count": 1,
+      "detail": "Final rerun passed with 0 errors. Existing unused-variable warning remains in scripts/phase-12-household-browser-smoke.ts line 1005."
+    },
+    "typecheck": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "unit": {
+      "status": "PASS",
+      "exit_code": 0,
+      "test_files": 7,
+      "tests": 42
+    },
+    "integration": {
+      "status": "PASS",
+      "exit_code": 0,
+      "test_files": 32,
+      "tests": 182
+    },
+    "constraints": {
+      "status": "PASS",
+      "exit_code": 0,
+      "test_files": 8,
+      "tests": 42
+    },
+    "authorization": {
+      "status": "PASS",
+      "exit_code": 0,
+      "test_files": 12,
+      "tests": 111
+    },
+    "full_suite": {
+      "status": "PASS",
+      "exit_code": 0,
+      "test_files": 59,
+      "tests": 377
+    },
+    "production_build": {
+      "status": "PASS",
+      "exit_code": 0,
+      "detail": "Build passed with inert CI-only environment placeholders; initial no-env attempt failed closed and was not treated as build result."
+    },
+    "drizzle_journal": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "schema_drift": {
+      "status": "PASS",
+      "exit_code": 0,
+      "detail": "Workflow procedure generated no migration; git diff and untracked status under drizzle/ remained clean."
+    },
+    "f13_manual_oracle": {
+      "status": "PASS",
+      "exit_code": 0,
+      "test_file": "tests/integration/phase13-reports-manual-oracle.test.ts"
+    },
+    "launch_safety_integrity_local": {
+      "status": "PASS",
+      "exit_code": 0,
+      "test_file": "tests/integration/launch-safety-integrity.test.ts"
+    },
+    "security_concurrency_focus": {
+      "status": "PASS",
+      "exit_code": 0,
+      "tests": 77,
+      "detail": "Combined eight-file run covering F13 manual oracle, integrity fixtures, cash payment, verification, reversal, waiver, and authorization suites."
+    },
+    "dependency_audit": {
+      "status": "PASS_WITH_ACCEPTED_RESIDUAL",
+      "full_audit_exit_code": 1,
+      "full_audit_high_paths": 5,
+      "unique_advisories": 1,
+      "accepted_advisory": "GHSA-vfj7-8cjw-p6xm / RA-2026-F12-001 / development-only braces@3.0.3",
+      "production_only_exit_code": 0,
+      "production_only_vulnerabilities": 0
+    }
+  },
+  "caveats": [
+    "The initial lint run found four explicit-any errors in the new performance script; the coordinator replaced them with concrete types and reran lint successfully.",
+    "Neon script attempt failed closed before database access because APP_ENV and DATABASE_ENV were unset; this is not a Neon audit result. Coordinator is collecting Gate C and lifecycle evidence separately."
+  ],
+  "production_access": "none"
+}

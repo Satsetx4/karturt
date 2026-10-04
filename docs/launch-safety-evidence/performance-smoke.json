@@ -1,0 +1,102 @@
+{
+  "result": "COMPLETED_WITH_OBSERVATION",
+  "environment": "local disposable PGlite; no Neon connection or mutation",
+  "scalingComparison": {
+    "method": "Same in-memory database, schema and service functions; independent RT fixtures at 50 and 500 households. One unrecorded warmup then three timed runs per service path and fixture; ratios use the median of three.",
+    "scales": {
+      "small_50": {
+        "dataset": {
+          "households": 50,
+          "annualDues": 600
+        },
+        "reads": {
+          "chairman_f13_report_year_and_arrears": {
+            "medianMs": 166.37,
+            "repeatMs": [
+              166.37,
+              166.22,
+              168.29
+            ],
+            "arrearsHouseholds": 50
+          },
+          "household_management_list_first_page": {
+            "medianMs": 39.24,
+            "repeatMs": [
+              40.07,
+              39.24,
+              38.87
+            ],
+            "returnedRows": 50
+          }
+        }
+      },
+      "large_500": {
+        "dataset": {
+          "households": 500,
+          "annualDues": 6000
+        },
+        "reads": {
+          "chairman_f13_report_year_and_arrears": {
+            "medianMs": 11524.89,
+            "repeatMs": [
+              11481.77,
+              11524.89,
+              11607.76
+            ],
+            "arrearsHouseholds": 500
+          },
+          "household_management_list_first_page": {
+            "medianMs": 205.09,
+            "repeatMs": [
+              201.81,
+              205.09,
+              233.1
+            ],
+            "returnedRows": 250
+          }
+        }
+      }
+    },
+    "ratios_500_to_50": {
+      "chairman_f13_report_year_and_arrears": 69.27,
+      "household_management_list_first_page": 5.23
+    },
+    "expectedDatasetMultiplier": 10,
+    "queryCount": "not instrumented; Drizzle/PGlite wrapper does not expose a reliable count without changing query execution",
+    "perHouseholdQueryPattern": "No obvious service-level per-household read loop in inspected report/list implementations; each fetch uses batched queries. Source inspection only.",
+    "interpretation": "Compare warmed median ratios to the 10x dataset multiplier. Shared-process cache effects remain possible; this is PGlite, not Neon, and establishes no production SLA."
+  },
+  "otherReadSmoke": {
+    "resident_billing_12_dues": {
+      "ms": 5.04,
+      "resultRows": 12
+    },
+    "resident_card_domain_summary": {
+      "ms": 0.15,
+      "resultRows": 12,
+      "totals": {
+        "paid": 0,
+        "pending": 0,
+        "unpaid": 360000
+      }
+    },
+    "treasurer_payment_request_queue_empty": {
+      "ms": 5.1,
+      "resultRows": 0
+    },
+    "treasurer_payment_history_empty": {
+      "ms": 3.68,
+      "resultRows": 0
+    },
+    "resident_payment_history_empty": {
+      "ms": 1.44,
+      "resultRows": 0
+    }
+  },
+  "paymentFixtureAssessment": "Nonempty payment queue/history not seeded: a valid payment requires the immutable request snapshot, verification path, allocation ledger, status transitions, and audit/constraint invariants. This is not a cheap synthetic row fixture; empty-path timings are retained as a limitation.",
+  "memory": {
+    "heapUsedMiB": 58.1,
+    "note": "single end-of-run sample; no profiler/peak sampling"
+  },
+  "timestamp": "2026-10-04T15:29:59.526Z"
+}

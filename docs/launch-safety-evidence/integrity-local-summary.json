@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "event": "launch_safety.integrity_local_fixture_tests",
+  "environment": "local-fixture",
+  "result": "PASS",
+  "testFile": "tests/integration/launch-safety-integrity.test.ts",
+  "testsPassed": 27,
+  "testsFailed": 0,
+  "coverage": {
+    "cleanSyntheticFixture": "PASS",
+    "actualMigratedLocalSchema": "PASS",
+    "frozenCategoryScenarios": 16,
+    "combinedIndependentCounts": "PASS"
+  },
+  "expectedPredicateOverlap": [
+    {
+      "trigger": "paid_due_without_exact_active_settlement",
+      "alsoDetected": "active_received_over_effective_target",
+      "reason": "Missing exact active ownership also creates a direct-receipt versus owner-total mismatch."
+    },
+    {
+      "trigger": "reversed_payment_still_active",
+      "alsoDetected": "active_received_over_effective_target",
+      "reason": "A reversed payment retained in active ownership creates an owner-total versus active-receipt mismatch."
+    }
+  ],
+  "neonAccess": "NOT RUN",
+  "productionAccess": "NOT RUN"
+}

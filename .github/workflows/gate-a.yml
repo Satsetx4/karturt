@@ -19,6 +19,7 @@ on:
       - "feat/phase-12-household-management"
       - "feat/phase-13-reports"
       - "fix/phase-13-1-acceptance-closure"
+      - "feat/launch-safety-single-rt"
       - "integrate/f12-clean-checkpoint"
       - "main"
     paths-ignore:

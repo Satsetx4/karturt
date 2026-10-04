@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "event": "launch_safety.integrity_read_only_audit",
+  "generatedAt": "2026-10-04T15:18:46.581Z",
+  "environment": "development",
+  "executionMethod": "Neon SQL transaction using the Launch Safety checker query definitions",
+  "branch": "karturt-development",
+  "database": "neondb",
+  "operationMode": "REPEATABLE READ READ ONLY",
+  "migrationEntries": 14,
+  "migrationHead": "0013_phase_12_household_management",
+  "migrationHeadHash": "994BCC9376B207FDC0668312CC68CAB3C2CEC46BC6101EDC4C2B5EF7F51C4A85",
+  "auditDate": "2026-10-04",
+  "result": "PASS",
+  "totalChecks": 16,
+  "zeroAnomalyChecks": 16,
+  "nonzeroCategoryCount": 0,
+  "anomalyCategories": [
+    {
+      "name": "pending_request_invalid_due_state",
+      "severity": "HIGH",
+      "count": 0
+    },
+    {
+      "name": "paid_due_without_exact_active_settlement",
+      "severity": "CRITICAL",
+      "count": 0
+    },
+    {
+      "name": "paid_due_unexplained_balance",
+      "severity": "CRITICAL",
+      "count": 0
+    },
+    {
+      "name": "verified_request_payment_allocation_mismatch",
+      "severity": "CRITICAL",
+      "count": 0
+    },
+    {
+      "name": "payment_allocation_mismatch",
+      "severity": "CRITICAL",
+      "count": 0
+    },
+    {
+      "name": "active_received_over_effective_target",
+      "severity": "CRITICAL",
+      "count": 0
+    },
+    {
+      "name": "reversed_payment_still_active",
+      "severity": "CRITICAL",
+      "count": 0
+    },
+    {
+      "name": "waived_ledger_or_activity_mismatch",
+      "severity": "CRITICAL",
+      "count": 0
+    },
+    {
+      "name": "not_due_invalid_snapshot_or_activity",
+      "severity": "CRITICAL",
+      "count": 0
+    },
+    {
+      "name": "household_period_overlap",
+      "severity": "HIGH",
+      "count": 0
+    },
+    {
+      "name": "multiple_active_households_same_house",
+      "severity": "HIGH",
+      "count": 0
+    },
+    {
+      "name": "active_resident_linked_to_inactive_household",
+      "severity": "HIGH",
+      "count": 0
+    },
+    {
+      "name": "active_resident_linked_to_inactive_person",
+      "severity": "HIGH",
+      "count": 0
+    },
+    {
+      "name": "duplicate_current_treasurer_or_chairman",
+      "severity": "HIGH",
+      "count": 0
+    },
+    {
+      "name": "same_account_current_treasurer_and_chairman",
+      "severity": "HIGH",
+      "count": 0
+    },
+    {
+      "name": "cross_rt_financial_scope_mismatch",
+      "severity": "CRITICAL",
+      "count": 0
+    }
+  ]
+}

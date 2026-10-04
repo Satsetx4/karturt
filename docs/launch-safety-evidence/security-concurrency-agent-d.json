@@ -1,0 +1,29 @@
+{
+  "status": "PARTIAL_PASS_WITH_EVIDENCE_GAP",
+  "environment": "local PGlite synthetic fixtures; no Neon or production access",
+  "focused_test_runs": [
+    {
+      "command": "npx vitest run tests/integration/treasurer-cash-payment.test.ts --maxWorkers=1",
+      "result": "PASS",
+      "test_files": 1,
+      "tests": 9
+    },
+    {
+      "command": "npx vitest run tests/integration/treasurer-payment-verification.test.ts tests/integration/payment-reversal.test.ts tests/integration/chairman-waiver.test.ts tests/authorization/chairman-reports.test.ts tests/authorization/gate-c-financial-actors.test.ts --maxWorkers=1",
+      "result": "PASS",
+      "test_files": 5,
+      "tests": 40
+    }
+  ],
+  "new_coverage": "Same idempotency key cash payment submitted concurrently; asserts one payment, two allocations totaling the expected amount, one audit, and paid due rows.",
+  "existing_financial_race_coverage": [
+    "Duplicate payment request verification produces one payment, allocation set, and verified audit.",
+    "Distinct-key cash submissions for the same due produce at most one payment and allocation owner.",
+    "Concurrent reversal attempts produce one reversal and one audit; repeated reversal is rejected.",
+    "Concurrent waiver attempts produce one waiver action and one item set."
+  ],
+  "evidence_limit": "PGlite test helpers expose one in-memory database client per suite. Promise.all races exercise actual domain transaction paths, but independent database connections have not been established or proven; these results do not satisfy the frozen plan's independent-connection concurrency requirement.",
+  "security_scope_limit": "Focused authorization tests passed, including Chairman report tenant/role spoofing and financial actor substitution. This run does not establish the full frozen plan's authenticated route/session matrix for every principal and route family.",
+  "database_migration": "unchanged",
+  "production_access": "none"
+}

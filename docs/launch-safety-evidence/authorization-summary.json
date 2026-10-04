@@ -1,0 +1,22 @@
+{
+  "status": "PARTIAL_PASS_WITH_COVERAGE_GAP",
+  "source_baseline": "4890678b91c4c4e2c535f1149da60dbfcde32370",
+  "broad_authorization_suite": {
+    "result": "PASS",
+    "test_files": 12,
+    "tests": 111
+  },
+  "full_regression_suite": {
+    "result": "PASS",
+    "test_files": 59,
+    "tests": 377
+  },
+  "focused_server_side_coverage": [
+    "Chairman report access and tenant/role spoofing tests",
+    "financial actor substitution tests",
+    "cash, payment verification, reversal, and waiver domain/integration tests"
+  ],
+  "coverage_limit": "The 23-row frozen threat plan's full authenticated route/session matrix across Resident, Treasurer, Chairman, System Admin, anonymous, inactive account, ended assignment, other user, other RT, spoofed tenant/role, and direct API was not executed as one complete matrix. Existing passing suites cover subsets but do not establish every planned route/principal pairing.",
+  "open_source_review_item": "System Admin two-factor recovery route has no explicit Origin guard in the inspected source. Browser exploitability and SameSite/session behavior were not proven; retain as an unresolved security coverage item.",
+  "production_access": "none"
+}
