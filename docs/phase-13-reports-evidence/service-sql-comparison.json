@@ -1,0 +1,578 @@
+{
+  "verification": {
+    "status": "completed",
+    "target": "Neon development; project billowing-base-57949906; branch karturt-development; database neondb",
+    "migrationEntries": 14,
+    "migrationHead": "0013_phase_12_household_management",
+    "migrationHash": "994BCC9376B207FDC0668312CC68CAB3C2CEC46BC6101EDC4C2B5EF7F51C4A85",
+    "operationMode": "SELECT-only; direct getRtFinancialReport service invocation using principal fields derived from selected active Chairman account and assignment rows; no session or HTTP/API call; not authenticated API/browser E2E",
+    "businessDate": "2026-10-04",
+    "selectedYear": 2026,
+    "availableYearCount": 1,
+    "selectedPrincipal": {
+      "accountActive": true,
+      "assignmentActive": true,
+      "assignmentCount": 1,
+      "role": "rt_chairman"
+    },
+    "selectedRtYearDueCount": 13
+  },
+  "service": {
+    "yearly": {
+      "target": 240000,
+      "effectiveTarget": 240000,
+      "received": 40000,
+      "transferReceived": 20000,
+      "cashReceived": 20000,
+      "waived": 140000,
+      "outstanding": 60000,
+      "obligationCount": 12,
+      "waivedCount": 7,
+      "notDueCount": 1,
+      "overdueCount": 2
+    },
+    "monthly": [
+      {
+        "month": 1,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 2,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 3,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 4,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 0,
+        "outstanding": 20000,
+        "obligationCount": 1,
+        "waivedCount": 0,
+        "notDueCount": 0,
+        "overdueCount": 1
+      },
+      {
+        "month": 5,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 0,
+        "outstanding": 20000,
+        "obligationCount": 1,
+        "waivedCount": 0,
+        "notDueCount": 0,
+        "overdueCount": 1
+      },
+      {
+        "month": 6,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 20000,
+        "transferReceived": 0,
+        "cashReceived": 20000,
+        "waived": 0,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 0,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 7,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 8,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 9,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 20000,
+        "transferReceived": 20000,
+        "cashReceived": 0,
+        "waived": 0,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 0,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 10,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 11,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 12,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 0,
+        "outstanding": 20000,
+        "obligationCount": 1,
+        "waivedCount": 0,
+        "notDueCount": 1,
+        "overdueCount": 0
+      }
+    ],
+    "arrears": {
+      "totalOutstanding": 40000,
+      "overduePeriodCount": 2,
+      "householdCount": 2,
+      "pendingPeriodCount": 2,
+      "pendingHouseholdCount": 2,
+      "activeHouseholdCount": 2,
+      "historicalHouseholdCount": 0,
+      "activeOutstanding": 40000,
+      "historicalOutstanding": 0
+    },
+    "arrearsByMonth": [
+      {
+        "month": 1,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 2,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 3,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 4,
+        "overdueCount": 1,
+        "outstanding": 20000,
+        "pendingCount": 1
+      },
+      {
+        "month": 5,
+        "overdueCount": 1,
+        "outstanding": 20000,
+        "pendingCount": 1
+      },
+      {
+        "month": 6,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 7,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 8,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 9,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 10,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 11,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 12,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      }
+    ]
+  },
+  "independentSql": {
+    "yearly": {
+      "target": 240000,
+      "effectiveTarget": 240000,
+      "received": 40000,
+      "transferReceived": 20000,
+      "cashReceived": 20000,
+      "waived": 140000,
+      "outstanding": 60000,
+      "obligationCount": 12,
+      "waivedCount": 7,
+      "notDueCount": 1,
+      "overdueCount": 2
+    },
+    "monthly": [
+      {
+        "month": 1,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 2,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 3,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 4,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 0,
+        "outstanding": 20000,
+        "obligationCount": 1,
+        "waivedCount": 0,
+        "notDueCount": 0,
+        "overdueCount": 1
+      },
+      {
+        "month": 5,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 0,
+        "outstanding": 20000,
+        "obligationCount": 1,
+        "waivedCount": 0,
+        "notDueCount": 0,
+        "overdueCount": 1
+      },
+      {
+        "month": 6,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 20000,
+        "transferReceived": 0,
+        "cashReceived": 20000,
+        "waived": 0,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 0,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 7,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 8,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 9,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 20000,
+        "transferReceived": 20000,
+        "cashReceived": 0,
+        "waived": 0,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 0,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 10,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 11,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 20000,
+        "outstanding": 0,
+        "obligationCount": 1,
+        "waivedCount": 1,
+        "notDueCount": 0,
+        "overdueCount": 0
+      },
+      {
+        "month": 12,
+        "target": 20000,
+        "effectiveTarget": 20000,
+        "received": 0,
+        "transferReceived": 0,
+        "cashReceived": 0,
+        "waived": 0,
+        "outstanding": 20000,
+        "obligationCount": 1,
+        "waivedCount": 0,
+        "notDueCount": 1,
+        "overdueCount": 0
+      }
+    ],
+    "arrears": {
+      "totalOutstanding": 40000,
+      "overduePeriodCount": 2,
+      "householdCount": 2,
+      "pendingPeriodCount": 2,
+      "pendingHouseholdCount": 2,
+      "activeHouseholdCount": 2,
+      "historicalHouseholdCount": 0,
+      "activeOutstanding": 40000,
+      "historicalOutstanding": 0
+    },
+    "arrearsByMonth": [
+      {
+        "month": 1,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 2,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 3,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 4,
+        "overdueCount": 1,
+        "outstanding": 20000,
+        "pendingCount": 1
+      },
+      {
+        "month": 5,
+        "overdueCount": 1,
+        "outstanding": 20000,
+        "pendingCount": 1
+      },
+      {
+        "month": 6,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 7,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 8,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 9,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 10,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 11,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      },
+      {
+        "month": 12,
+        "overdueCount": 0,
+        "outstanding": 0,
+        "pendingCount": 0
+      }
+    ],
+    "reversedPaymentAllocations": {
+      "count": 2,
+      "amount": 40000,
+      "transfer": 20000,
+      "cash": 20000
+    },
+    "integrityCounts": {
+      "notDueFinancialActivity": 0,
+      "waivedRowsMismatch": 0
+    }
+  },
+  "reconciliation": {
+    "monthlyServiceEqualsSql": true,
+    "yearlyServiceEqualsSql": true,
+    "sqlYearlyEqualsMonthlySum": true,
+    "arrearsServiceEqualsSql": true,
+    "arrearsByMonthServiceEqualsSql": true,
+    "allChecksPass": true
+  }
+}

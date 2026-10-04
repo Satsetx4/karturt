@@ -1,0 +1,117 @@
+{
+  "case": "F13 deterministic manual reporting oracle",
+  "currency": "IDR",
+  "amountUnit": "rupiah",
+  "businessDates": {
+    "arrearsAsOf": "2026-05-20",
+    "beforeMayDueDate": "2026-05-05",
+    "dueDayOfMonth": 10
+  },
+  "fixtureAssumptions": {
+    "baseMonthlyTariff": 40000,
+    "positiveAdjustment": { "household": "H1", "month": 2, "amount": 10000 },
+    "negativeAdjustment": { "household": "H1", "month": 3, "amount": -5000 },
+    "cashAllocationRule": "F8 oldest-unpaid-first sweep through the requested billing period",
+    "cashSweepExamples": [
+      { "household": "H2", "requestedThrough": "2026-05", "allocatedTo": ["2026-04", "2026-05"], "amountPerPeriod": 40000, "total": 80000 },
+      { "household": "H3-new", "requestedThrough": "2026-05", "allocatedTo": ["2026-04", "2026-05"], "amountPerPeriod": 40000, "total": 80000, "reversed": true }
+    ],
+    "pendingRequest": {
+      "household": "H1",
+      "requestedThrough": "2026-05",
+      "claims": ["2026-03", "2026-05"],
+      "claimedAmount": 75000,
+      "countAsReceived": false
+    },
+    "waiver": { "household": "H1", "period": "2026-04", "amount": 40000 },
+    "lifecycle": {
+      "oldHousehold": { "key": "H3-old", "houseNumber": "A-03", "startsOn": "2024-01-01", "endsOn": "2026-02-28" },
+      "newHousehold": { "key": "H3-new", "houseNumber": "A-03", "startsOn": "2026-03-01", "endsOn": null },
+      "identitiesRemainSeparate": true
+    },
+    "juneToDecemberExtension": {
+      "assumption": "For each month Jun-Dec, H1, H2, and H3-new each have one unpaid 40000 obligation; H3-old is NOT_DUE; no adjustments, payments, or waivers occur.",
+      "perMonth": { "target": 120000, "effectiveTarget": 120000, "received": 0, "transferReceived": 0, "cashReceived": 0, "waived": 0, "outstanding": 120000, "notDueCount": 1 }
+    }
+  },
+  "monthly": [
+    { "month": "2026-01", "target": 80000, "effectiveTarget": 80000, "received": 80000, "transferReceived": 80000, "cashReceived": 0, "waived": 0, "outstanding": 0, "notDueCount": 2, "overdueCountAsOfMay20": 0 },
+    { "month": "2026-02", "target": 80000, "effectiveTarget": 90000, "received": 50000, "transferReceived": 0, "cashReceived": 50000, "waived": 0, "outstanding": 40000, "notDueCount": 2, "overdueCountAsOfMay20": 1 },
+    { "month": "2026-03", "target": 120000, "effectiveTarget": 115000, "received": 80000, "transferReceived": 40000, "cashReceived": 40000, "waived": 0, "outstanding": 35000, "notDueCount": 1, "overdueCountAsOfMay20": 1 },
+    { "month": "2026-04", "target": 120000, "effectiveTarget": 120000, "received": 40000, "transferReceived": 0, "cashReceived": 40000, "waived": 40000, "outstanding": 40000, "notDueCount": 1, "overdueCountAsOfMay20": 1 },
+    { "month": "2026-05", "target": 120000, "effectiveTarget": 120000, "received": 40000, "transferReceived": 0, "cashReceived": 40000, "waived": 0, "outstanding": 80000, "notDueCount": 1, "overdueCountAsOfMay20": 2 },
+    { "month": "2026-06", "target": 120000, "effectiveTarget": 120000, "received": 0, "transferReceived": 0, "cashReceived": 0, "waived": 0, "outstanding": 120000, "notDueCount": 1, "overdueCountAsOfMay20": 0 },
+    { "month": "2026-07", "target": 120000, "effectiveTarget": 120000, "received": 0, "transferReceived": 0, "cashReceived": 0, "waived": 0, "outstanding": 120000, "notDueCount": 1, "overdueCountAsOfMay20": 0 },
+    { "month": "2026-08", "target": 120000, "effectiveTarget": 120000, "received": 0, "transferReceived": 0, "cashReceived": 0, "waived": 0, "outstanding": 120000, "notDueCount": 1, "overdueCountAsOfMay20": 0 },
+    { "month": "2026-09", "target": 120000, "effectiveTarget": 120000, "received": 0, "transferReceived": 0, "cashReceived": 0, "waived": 0, "outstanding": 120000, "notDueCount": 1, "overdueCountAsOfMay20": 0 },
+    { "month": "2026-10", "target": 120000, "effectiveTarget": 120000, "received": 0, "transferReceived": 0, "cashReceived": 0, "waived": 0, "outstanding": 120000, "notDueCount": 1, "overdueCountAsOfMay20": 0 },
+    { "month": "2026-11", "target": 120000, "effectiveTarget": 120000, "received": 0, "transferReceived": 0, "cashReceived": 0, "waived": 0, "outstanding": 120000, "notDueCount": 1, "overdueCountAsOfMay20": 0 },
+    { "month": "2026-12", "target": 120000, "effectiveTarget": 120000, "received": 0, "transferReceived": 0, "cashReceived": 0, "waived": 0, "outstanding": 120000, "notDueCount": 1, "overdueCountAsOfMay20": 0 }
+  ],
+  "janToMaySubtotal": {
+    "target": 520000,
+    "effectiveTarget": 525000,
+    "received": 290000,
+    "transferReceived": 120000,
+    "cashReceived": 170000,
+    "waived": 40000,
+    "outstanding": 195000,
+    "notDueCount": 7,
+    "identity": "525000 = 290000 + 40000 + 195000"
+  },
+  "yearly": {
+    "target": 1360000,
+    "effectiveTarget": 1365000,
+    "received": 290000,
+    "transferReceived": 120000,
+    "cashReceived": 170000,
+    "waived": 40000,
+    "outstanding": 1035000,
+    "notDueCount": 14,
+    "identity": "1365000 = 290000 + 40000 + 1035000"
+  },
+  "arrears": {
+    "2026-05-20": {
+      "totalOutstanding": 195000,
+      "dueCount": 5,
+      "householdCount": 3,
+      "items": [
+        { "household": "H3-old", "houseNumber": "A-03", "period": "2026-02", "outstanding": 40000, "pending": false },
+        { "household": "H1", "houseNumber": "A-01", "period": "2026-03", "outstanding": 35000, "pending": true },
+        { "household": "H3-new", "houseNumber": "A-03", "period": "2026-04", "outstanding": 40000, "pending": false, "paymentReversed": true },
+        { "household": "H1", "houseNumber": "A-01", "period": "2026-05", "outstanding": 40000, "pending": true },
+        { "household": "H3-new", "houseNumber": "A-03", "period": "2026-05", "outstanding": 40000, "pending": false, "paymentReversed": true }
+      ]
+    },
+    "2026-05-05": {
+      "totalOutstanding": 115000,
+      "dueCount": 3,
+      "householdCount": 3,
+      "items": [
+        { "household": "H3-old", "houseNumber": "A-03", "period": "2026-02", "outstanding": 40000, "pending": false },
+        { "household": "H1", "houseNumber": "A-01", "period": "2026-03", "outstanding": 35000, "pending": true },
+        { "household": "H3-new", "houseNumber": "A-03", "period": "2026-04", "outstanding": 40000, "pending": false, "paymentReversed": true }
+      ]
+    }
+  },
+  "reconciliations": {
+    "transferPlusCashEqualsReceived": true,
+    "effectiveTargetEqualsReceivedPlusWaivedPlusOutstanding": true,
+    "waivedIsSeparateFromNotDue": true,
+    "notDueHasZeroFinancialAmounts": true,
+    "pendingRequestIsNotReceived": true,
+    "reversedPaymentAllocationsAreExcluded": true,
+    "oldAndNewHouseholdHistoriesRemainSeparate": true
+  },
+  "verification": {
+    "fixtureDatabase": "local PGlite integration test",
+    "directSqlComparedWithReportService": true,
+    "assertedMonths": "2026-01 through 2026-12",
+    "assertedArrearsDates": ["2026-05-20", "2026-05-05"],
+    "financialAndAuditTablesUnchangedByReportRead": true,
+    "historicalHouseholdSnapshotSeededDirectly": true,
+    "snapshotReason": "F12 lifecycle trigger rejects retroactive replacement against wall-clock now(); trigger behavior was not disabled or changed",
+    "integrationTest": "tests/integration/phase13-reports-manual-oracle.test.ts",
+    "result": "PASS"
+  }
+}

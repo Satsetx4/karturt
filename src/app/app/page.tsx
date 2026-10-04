@@ -9,7 +9,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SignOutButton } from "@/components/sign-out-button";
 import { TreasurerDashboard } from "@/components/treasurer-dashboard";
 import Link from "next/link";
-import { ArrowRight, Banknote, House, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Banknote, ChartPie, House, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { getDb } from "@/db/client";
 import { authUser } from "@/db/schema";
 import {
@@ -118,6 +118,16 @@ export default async function AccountHomePage() {
                 </div>
                 <Link className="chairman-tool-link" href="/app/pemutihan">
                   Buka pemutihan iuran <ArrowRight size={18} aria-hidden="true" />
+                </Link>
+              </section>
+              <section className="chairman-tool-card" aria-labelledby="chairman-report-entry-title">
+                <div className="chairman-tool-icon"><ChartPie size={22} aria-hidden="true" /></div>
+                <div className="chairman-tool-copy">
+                  <h2 id="chairman-report-entry-title">Laporan iuran</h2>
+                  <p>Tinjau target, penerimaan, pembebasan, dan tunggakan per periode.</p>
+                </div>
+                <Link className="chairman-tool-link" href="/app/laporan">
+                  Buka laporan iuran <ArrowRight size={18} aria-hidden="true" />
                 </Link>
               </section>
             </div>

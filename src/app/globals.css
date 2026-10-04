@@ -895,3 +895,110 @@ button { color: inherit; }
   .chairman-household-primary, .chairman-household-secondary, .chairman-household-danger { transition-duration: .01ms; }
 }
 
+.chairman-reports-page .breadcrumb a { min-height: 44px; display: inline-flex; align-items: center; gap: 7px; }
+.chairman-reports-area { width: min(100%, 980px); min-width: 0; margin: 25px auto 54px; }
+.chairman-reports-heading { min-width: 0; margin-bottom: 21px; }
+.chairman-reports-heading .eyebrow { margin: 0 0 9px; }
+.chairman-reports-heading h1 { margin: 0; font-size: clamp(30px, 7vw, 43px); line-height: 1.08; letter-spacing: -.04em; overflow-wrap: anywhere; }
+.chairman-reports-heading > p:last-child { max-width: 720px; margin: 11px 0 0; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+.chairman-report-year-panel { min-width: 0; margin: 19px 0; padding: 14px; display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: center; gap: 11px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: 0 5px 18px rgb(25 55 65 / 5%); }
+.chairman-report-year-icon { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 12px; color: var(--teal); background: var(--teal-wash); }
+.chairman-report-year-copy { min-width: 0; display: grid; gap: 4px; }
+.chairman-report-year-copy label { font-size: 13px; font-weight: 750; }
+.chairman-report-year-copy select { width: 100%; min-width: 0; min-height: 44px; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--ink); background: var(--surface-raised); font: inherit; font-size: 15px; font-weight: 700; }
+.chairman-report-year-copy select:focus-visible { outline: 3px solid color-mix(in srgb, var(--teal) 25%, transparent); outline-offset: 2px; border-color: var(--teal); }
+.chairman-report-loading { min-height: 150px; margin: 14px 0; display: flex; align-items: center; justify-content: center; gap: 11px; color: var(--muted); font-weight: 700; }
+.chairman-report-spinner { width: 19px; height: 19px; border: 2px solid var(--line-strong); border-top-color: var(--teal); border-radius: 50%; animation: chairman-report-spin .8s linear infinite; }
+@keyframes chairman-report-spin { to { transform: rotate(360deg); } }
+.chairman-report-alert { min-width: 0; margin: 15px 0; padding: 13px; display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: start; gap: 8px 10px; border: 1px solid #dfaaa3; border-left: 4px solid #b95448; border-radius: 11px; color: #883c35; background: #fff0ed; }
+.chairman-report-alert > svg { margin-top: 2px; }
+.chairman-report-alert p { min-width: 0; margin: 0; line-height: 1.45; overflow-wrap: anywhere; }
+.dark .chairman-report-alert { border-color: #804941; color: #f4b5ad; background: #3a2928; }
+.chairman-report-button { grid-column: 2; width: fit-content; min-width: 125px; min-height: 44px; padding: 8px 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--ink); background: var(--surface); font: inherit; font-size: 14px; font-weight: 750; cursor: pointer; transition: transform 170ms ease, border-color 170ms ease, background-color 170ms ease; }
+.chairman-report-button:hover { border-color: var(--teal); background: var(--teal-wash); }
+.chairman-report-button:active { transform: scale(.97); }
+.chairman-report-empty { min-width: 0; margin: 16px 0; padding: 15px; display: flex; align-items: flex-start; gap: 11px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: var(--teal-wash); }
+.chairman-report-empty > svg { flex: 0 0 auto; color: var(--teal); }
+.chairman-report-empty strong { display: block; line-height: 1.4; overflow-wrap: anywhere; }
+.chairman-report-empty p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.chairman-report-empty--compact { padding: 14px; }
+.chairman-report-panel, .chairman-report-month-card, .chairman-report-household-card { min-width: 0; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); box-shadow: 0 6px 20px rgb(25 55 65 / 5%); }
+.chairman-report-panel { margin-top: 17px; padding: clamp(15px, 4vw, 23px); }
+.chairman-report-panel-heading, .chairman-report-section-heading { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.chairman-report-panel-heading .eyebrow, .chairman-report-section-heading .eyebrow { margin: 0 0 5px; }
+.chairman-report-panel-heading h2, .chairman-report-section-heading h2 { margin: 0; font-size: clamp(20px, 4.8vw, 25px); line-height: 1.25; overflow-wrap: anywhere; }
+.chairman-report-metrics { min-width: 0; margin: 15px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.chairman-report-metric { min-width: 0; padding: 10px; display: grid; align-content: start; gap: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); }
+.chairman-report-metric dt { color: var(--muted); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.chairman-report-metric dd { min-width: 0; margin: 0; font-size: clamp(14px, 3.8vw, 16px); font-weight: 800; line-height: 1.35; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.chairman-report-identity { min-width: 0; margin: 12px 0 0; padding-top: 10px; display: grid; gap: 3px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.chairman-report-identity span { color: var(--ink); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.chairman-report-section { min-width: 0; margin-top: 28px; }
+.chairman-report-section-heading { align-items: flex-end; margin-bottom: 12px; }
+.chairman-report-section-note { max-width: 45%; color: var(--muted); font-size: 12px; line-height: 1.35; text-align: right; }
+.chairman-report-month-list, .chairman-report-arrears-list { min-width: 0; display: grid; gap: 11px; }
+.chairman-report-month-card { padding: 13px; background: var(--surface-raised); }
+.chairman-report-month-heading { min-width: 0; display: grid; gap: 8px; }
+.chairman-report-month-heading h3 { margin: 0; font-size: 19px; line-height: 1.3; overflow-wrap: anywhere; }
+.chairman-report-badges { min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chairman-report-badge, .chairman-report-lifecycle, .chairman-report-pending-badge { min-height: 27px; padding: 4px 8px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); font-size: 11px; font-weight: 750; line-height: 1.25; overflow-wrap: anywhere; }
+.chairman-report-badge.is-not-due { border-color: #aab7c0; color: #475762; background: #eef2f4; }
+.dark .chairman-report-badge.is-not-due { border-color: #50616c; color: #d4e0e4; background: #27353b; }
+.chairman-report-badge.is-waived { border-color: #c8b0dd; color: #61447d; background: #f4edf9; }
+.dark .chairman-report-badge.is-waived { border-color: #6f5682; color: #e0c7f2; background: #33283c; }
+.chairman-report-badge.is-overdue { border-color: #dfaaa3; color: #883c35; background: #fff0ed; }
+.dark .chairman-report-badge.is-overdue { border-color: #804941; color: #f4b5ad; background: #3a2928; }
+.chairman-report-metrics--month { margin-top: 12px; }
+.chairman-report-arrears-total { max-width: 52%; color: var(--navy); font-size: clamp(16px, 4.3vw, 21px); font-weight: 800; line-height: 1.3; text-align: right; overflow-wrap: anywhere; }
+.chairman-report-arrears-note { margin: -6px 0 12px; color: var(--muted); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.chairman-report-household-card { padding: 13px; display: grid; gap: 11px; background: var(--surface); }
+.chairman-report-household-heading { min-width: 0; display: flex; align-items: flex-start; gap: 8px; }
+.chairman-report-household-title { min-width: 0; flex: 1 1 auto; }
+.chairman-report-household-title h3 { margin: 0; font-size: 17px; line-height: 1.3; overflow-wrap: anywhere; }
+.chairman-report-household-title p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.chairman-report-lifecycle { flex: 0 0 auto; }
+.chairman-report-lifecycle.is-active { border-color: #a8d2bd; color: #175e45; background: #eaf6ef; }
+.dark .chairman-report-lifecycle.is-active { border-color: #39735e; color: #aee0c7; background: #1f382f; }
+.chairman-report-lifecycle.is-historical { border-color: var(--line-strong); color: var(--muted); background: var(--surface-raised); }
+.chairman-report-household-facts { min-width: 0; padding: 9px 10px; display: grid; gap: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-raised); }
+.chairman-report-household-facts span { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.chairman-report-household-facts strong { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.chairman-report-household-pending { margin: 0; padding: 8px 10px; border: 1px solid #ead79b; border-radius: 9px; color: #735700; background: #fff9e3; font-size: 12px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
+.dark .chairman-report-household-pending { border-color: #78652e; color: #f2d778; background: #302b1b; }
+.chairman-report-period-list { min-width: 0; margin: 0; padding: 0; display: grid; gap: 7px; list-style: none; }
+.chairman-report-period-list li { min-width: 0; padding: 9px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-raised); }
+.chairman-report-period-list li > div { min-width: 0; display: grid; gap: 3px; }
+.chairman-report-period-list li > div > strong { font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+.chairman-report-period-list li > div > span:not(.chairman-report-pending-badge) { color: var(--muted); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.chairman-report-pending-badge { width: fit-content; border-color: #ead79b; color: #735700; background: #fff9e3; }
+.dark .chairman-report-pending-badge { border-color: #78652e; color: #f2d778; background: #302b1b; }
+.chairman-report-period-amount { flex: 0 0 auto; color: #883c35; font-size: 14px; line-height: 1.35; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+.dark .chairman-report-period-amount { color: #f4b5ad; }
+.chairman-report-household-total { min-width: 0; padding-top: 10px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); }
+.chairman-report-household-total span { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.chairman-report-household-total strong { min-width: 0; font-size: 15px; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+@media (min-width: 600px) {
+  .chairman-report-year-panel { max-width: 380px; padding: 16px; }
+  .chairman-report-month-card, .chairman-report-household-card { padding: 16px; }
+  .chairman-report-metric { padding: 11px; }
+}
+@media (min-width: 760px) {
+  .chairman-report-panel .chairman-report-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .chairman-report-metrics--month { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .chairman-report-month-list, .chairman-report-arrears-list { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+}
+@media (max-width: 380px) {
+  .chairman-report-year-panel, .chairman-report-month-card, .chairman-report-household-card { padding: 11px; }
+  .chairman-report-metric { padding: 8px; }
+  .chairman-report-metric dt { font-size: 11px; }
+  .chairman-report-metric dd { font-size: 13px; }
+  .chairman-report-household-heading { flex-wrap: wrap; }
+  .chairman-report-household-title { flex-basis: 100%; }
+  .chairman-report-period-list li { flex-wrap: wrap; }
+  .chairman-report-period-amount { margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chairman-report-spinner { animation: none; }
+  .chairman-report-button { transition-duration: .01ms; }
+}
+

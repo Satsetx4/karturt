@@ -78,6 +78,21 @@ describe("role authorization", () => {
     expect(canPerform(principal("treasurer"), "resident:reset_credential", { rtUnitId: "rt-one" })).toBe(false);
   });
 
+  it("grants RT reports only to a same-RT Chairman and keeps payment verification Treasurer-only", () => {
+    const chairman = principal("rt_chairman");
+    expect(canPerform(chairman, "report:read:rt", { rtUnitId: "rt-one" })).toBe(true);
+    expect(canPerform(chairman, "report:read:rt", { rtUnitId: "rt-two" })).toBe(false);
+    expect(canPerform(chairman, "report:read:rt")).toBe(false);
+    expect(canPerform(principal("treasurer"), "report:read:rt", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("resident"), "report:read:rt", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(
+      principal("system_admin", { rtUnitId: null, householdId: null, personId: null }),
+      "report:read:rt",
+      { rtUnitId: "rt-one" },
+    )).toBe(false);
+    expect(canPerform(chairman, "payment:verify", { rtUnitId: "rt-one" })).toBe(false);
+  });
+
   it("limits waiver management to a Chairman scoped to the same RT", () => {
     expect(canPerform(principal("rt_chairman"), "waiver:manage", { rtUnitId: "rt-one" })).toBe(true);
     expect(canPerform(principal("rt_chairman"), "waiver:manage", { rtUnitId: "rt-two" })).toBe(false);

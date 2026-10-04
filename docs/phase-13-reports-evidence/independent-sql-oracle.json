@@ -1,0 +1,109 @@
+{
+  "event": "f13.independent_neon_sql_oracle",
+  "verifiedAt": "2026-10-04T08:40:22Z",
+  "environment": "development",
+  "target": {
+    "projectId": "billowing-base-57949906",
+    "branchName": "karturt-development",
+    "branchId": "br-crimson-band-az6i637k",
+    "database": "neondb"
+  },
+  "operationMode": "SELECT-only; no writes, schema changes, fixtures, migrations, or production access",
+  "migrationJournal": {
+    "entries": 14,
+    "head": "0013_phase_12_household_management",
+    "headHash": "994BCC9376B207FDC0668312CC68CAB3C2CEC46BC6101EDC4C2B5EF7F51C4A85",
+    "unexpected0014": false
+  },
+  "gateC": {
+    "source": "scripts/gate-c-financial-invariants-neon.ts anomalyQueries",
+    "queryCount": 32,
+    "zeroCount": 32,
+    "nonzeroCount": 0
+  },
+  "householdLifecycleGlobal": {
+    "source": "scripts/phase-12-1-post-smoke-lifecycle-audit.ts globalChecks",
+    "queryCount": 11,
+    "zeroCount": 11,
+    "nonzeroCount": 0
+  },
+  "billingPeriodOracle": {
+    "year": 2026,
+    "scope": "aggregate over 64 RT billing-year scopes; not a tenant-specific API comparison",
+    "businessDate": "2026-10-04",
+    "periodBasis": "monthly_dues billing year and month; active payment_allocations joined to payments.method; reversed payments excluded",
+    "waiverBasis": "waiver_items summed per due only when due status is waived",
+    "notDueBasis": "not_due target, effective target, received, waived, and outstanding are all zero",
+    "currencyUnit": "integer Rupiah",
+    "yearly": {
+      "target": 17312000,
+      "effectiveTarget": 17312003,
+      "received": 3584000,
+      "transferReceived": 1974000,
+      "cashReceived": 1610000,
+      "waived": 720000,
+      "outstanding": 13008003,
+      "obligationCount": 659,
+      "waivedCount": 36,
+      "notDueCount": 231,
+      "overduePeriodCount": 294,
+      "overdueOutstanding": 8504000,
+      "overduePendingPeriodCount": 87
+    },
+    "monthly": [
+      {"month": 1, "target": 670000, "effectiveTarget": 670000, "received": 0, "transferReceived": 0, "cashReceived": 0, "waived": 120000, "outstanding": 550000, "obligationCount": 20, "waivedCount": 6, "notDueCount": 24, "overduePeriodCount": 14, "overdueOutstanding": 550000},
+      {"month": 2, "target": 670000, "effectiveTarget": 670000, "received": 0, "transferReceived": 0, "cashReceived": 0, "waived": 120000, "outstanding": 550000, "obligationCount": 20, "waivedCount": 6, "notDueCount": 24, "overduePeriodCount": 14, "overdueOutstanding": 550000},
+      {"month": 3, "target": 790000, "effectiveTarget": 790000, "received": 0, "transferReceived": 0, "cashReceived": 0, "waived": 120000, "outstanding": 670000, "obligationCount": 23, "waivedCount": 6, "notDueCount": 21, "overduePeriodCount": 17, "overdueOutstanding": 670000},
+      {"month": 4, "target": 1942000, "effectiveTarget": 1942000, "received": 738000, "transferReceived": 396000, "cashReceived": 342000, "waived": 0, "outstanding": 1204000, "obligationCount": 87, "waivedCount": 0, "notDueCount": 21, "overduePeriodCount": 46, "overdueOutstanding": 1204000},
+      {"month": 5, "target": 1982000, "effectiveTarget": 1982000, "received": 738000, "transferReceived": 396000, "cashReceived": 342000, "waived": 0, "outstanding": 1244000, "obligationCount": 88, "waivedCount": 0, "notDueCount": 20, "overduePeriodCount": 47, "overdueOutstanding": 1244000},
+      {"month": 6, "target": 1388000, "effectiveTarget": 1388000, "received": 350000, "transferReceived": 270000, "cashReceived": 80000, "waived": 40000, "outstanding": 998000, "obligationCount": 55, "waivedCount": 2, "notDueCount": 20, "overduePeriodCount": 34, "overdueOutstanding": 998000},
+      {"month": 7, "target": 1520000, "effectiveTarget": 1520000, "received": 468000, "transferReceived": 198000, "cashReceived": 270000, "waived": 120000, "outstanding": 932000, "obligationCount": 66, "waivedCount": 6, "notDueCount": 23, "overduePeriodCount": 34, "overdueOutstanding": 932000},
+      {"month": 8, "target": 1820000, "effectiveTarget": 1820000, "received": 414000, "transferReceived": 144000, "cashReceived": 270000, "waived": 120000, "outstanding": 1286000, "obligationCount": 79, "waivedCount": 6, "notDueCount": 20, "overduePeriodCount": 50, "overdueOutstanding": 1286000},
+      {"month": 9, "target": 1424000, "effectiveTarget": 1424000, "received": 354000, "transferReceived": 300000, "cashReceived": 54000, "waived": 0, "outstanding": 1070000, "obligationCount": 57, "waivedCount": 0, "notDueCount": 20, "overduePeriodCount": 38, "overdueOutstanding": 1070000},
+      {"month": 10, "target": 1424000, "effectiveTarget": 1424000, "received": 252000, "transferReceived": 0, "cashReceived": 252000, "waived": 40000, "outstanding": 1132000, "obligationCount": 57, "waivedCount": 2, "notDueCount": 20, "overduePeriodCount": 0, "overdueOutstanding": 0},
+      {"month": 11, "target": 1850000, "effectiveTarget": 1850000, "received": 270000, "transferReceived": 270000, "cashReceived": 0, "waived": 40000, "outstanding": 1540000, "obligationCount": 54, "waivedCount": 2, "notDueCount": 5, "overduePeriodCount": 0, "overdueOutstanding": 0},
+      {"month": 12, "target": 1832000, "effectiveTarget": 1832003, "received": 0, "transferReceived": 0, "cashReceived": 0, "waived": 0, "outstanding": 1832003, "obligationCount": 53, "waivedCount": 0, "notDueCount": 13, "overduePeriodCount": 0, "overdueOutstanding": 0}
+    ],
+    "reconciliation": {
+      "transferPlusCashEqualsReceived": true,
+      "effectiveTargetEqualsReceivedPlusWaivedPlusOutstanding": true,
+      "methodMismatchCount": 0,
+      "perDueInvariantMismatchCount": 0,
+      "waivedDueWithWaiverRowMismatchCount": 0,
+      "notDueFinancialActivityCount": 0
+    },
+    "crossPeriodAllocations": {
+      "allRows": 251,
+      "allAmount": 4562000,
+      "activeRows": 184,
+      "activeAmount": 3332000,
+      "reversedRows": 67,
+      "reversedAmount": 1230000
+    },
+    "reversedPayments": {
+      "paymentCount": 44,
+      "allocationRows": 67,
+      "allocationAmount": 1230000,
+      "transferAmount": 444000,
+      "cashAmount": 786000,
+      "excludedFromReceived": true
+    },
+    "samePhysicalHouseLifecycleSeparation": {
+      "groupsWithHistoricalAndActiveHouseholds": 2,
+      "distinctHouseholdRows": 4,
+      "historicalHouseholds": 2,
+      "activeHouseholds": 2,
+      "historicalHouseholdsWithOutstanding": 2,
+      "activeHouseholdsWithOutstanding": 2,
+      "historicalOutstanding": 100000,
+      "activeOutstanding": 100000,
+      "dueRows": 48,
+      "aggregatedBy": "household_id before physical house grouping"
+    }
+  },
+  "apiComparison": {
+    "completed": false,
+    "reason": "No authenticated development Chairman browser session or credential source was available; the SQL totals cover 64 RT scopes and are not suitable to compare directly to one tenant-scoped API response."
+  },
+  "privacy": "No household IDs, RT IDs, resident names, account identifiers, credentials, or secrets included."
+}

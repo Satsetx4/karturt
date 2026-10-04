@@ -1,0 +1,16 @@
+{
+  "branch": "feat/phase-13-reports",
+  "baselineHead": "322e439267cd4e5d5552f7816ed1d3a3eebf533c",
+  "npmCi": "PASS; package lock unchanged",
+  "lint": { "result": "PASS", "errors": 0, "preexistingWarnings": 1, "warningSource": "scripts/phase-12-household-browser-smoke.ts:1005" },
+  "typecheck": "PASS",
+  "unit": { "files": 7, "tests": 42, "result": "PASS" },
+  "integration": { "files": 31, "tests": 154, "result": "PASS" },
+  "constraints": { "files": 8, "tests": 42, "result": "PASS" },
+  "authorization": { "files": 12, "tests": 111, "result": "PASS" },
+  "fullTest": { "files": 58, "tests": 349, "result": "PASS" },
+  "productionBuild": "PASS",
+  "drizzleKitCheck": "PASS",
+  "schemaDrift": "PASS; no schema changes",
+  "migrationHead": "0013_phase_12_household_management"
+}

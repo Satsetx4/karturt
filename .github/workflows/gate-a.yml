@@ -17,6 +17,7 @@ on:
       - "feat/phase-10-waiver"
       - "feat/phase-11-tariff-adjustment"
       - "feat/phase-12-household-management"
+      - "feat/phase-13-reports"
       - "integrate/f12-clean-checkpoint"
       - "main"
     paths-ignore:

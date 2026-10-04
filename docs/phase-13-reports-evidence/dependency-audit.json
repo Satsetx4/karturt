@@ -1,0 +1,14 @@
+{
+  "fullAudit": {
+    "highFindingEntries": 5,
+    "criticalFindingEntries": 0,
+    "rootFindingCount": 1,
+    "rootPackage": "braces@3.0.3",
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "acceptedRisk": "RA-2026-F12-001",
+    "findingIsDevelopmentOnly": true
+  },
+  "productionOnlyAudit": { "vulnerabilities": 0, "result": "PASS" },
+  "newHighOrCriticalFindings": 0,
+  "waiverExpanded": false
+}

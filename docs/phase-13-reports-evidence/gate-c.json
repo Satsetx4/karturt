@@ -1,0 +1,12 @@
+{
+  "environment": "Neon development",
+  "projectId": "billowing-base-57949906",
+  "branchName": "karturt-development",
+  "branchId": "br-crimson-band-az6i637k",
+  "database": "neondb",
+  "checks": 32,
+  "zeroAnomalyChecks": 32,
+  "nonzeroChecks": 0,
+  "productionAccessed": false,
+  "databaseWrites": false
+}

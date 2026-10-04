@@ -1,0 +1,16 @@
+{
+  "environment": "development",
+  "projectId": "billowing-base-57949906",
+  "branchName": "karturt-development",
+  "branchId": "br-crimson-band-az6i637k",
+  "database": "neondb",
+  "migrationJournalEntries": 14,
+  "migrationHead": "0013_phase_12_household_management",
+  "migrationHeadHash": "994BCC9376B207FDC0668312CC68CAB3C2CEC46BC6101EDC4C2B5EF7F51C4A85",
+  "unexpected0014": false,
+  "gateC": { "checks": 32, "zeroAnomalies": 32 },
+  "f12LifecycleGlobal": { "checks": 11, "zeroAnomalies": 11 },
+  "independentSqlOracle": "independent-sql-oracle.json",
+  "accessMode": "read-only",
+  "productionAccessed": false
+}

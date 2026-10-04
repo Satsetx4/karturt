@@ -7,6 +7,7 @@ export type Permission =
   | "payment:history:self"
   | "payment:cancel:self"
   | "billing:read:rt"
+  | "report:read:rt"
   | "billing:generate"
   | "fee_rate:manage"
   | "due_adjustment:manage"
@@ -37,6 +38,7 @@ const permissions: Record<AppRole, ReadonlySet<Permission>> = {
   treasurer: new Set(["billing:read:rt", "resident:read:rt", "payment:verify", "payment:reject", "payment:record_cash", "payment:reverse"]),
   rt_chairman: new Set([
     "billing:read:rt",
+    "report:read:rt",
     "billing:generate",
     "fee_rate:manage",
     "due_adjustment:manage",
@@ -52,6 +54,7 @@ const permissions: Record<AppRole, ReadonlySet<Permission>> = {
 
 const rtScopedPermissions = new Set<Permission>([
   "billing:read:rt",
+  "report:read:rt",
   "billing:generate",
   "fee_rate:manage",
   "due_adjustment:manage",

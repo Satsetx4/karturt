@@ -1,0 +1,22 @@
+{
+  "localDevelopmentApp": "http://127.0.0.1:3000",
+  "anonymousPageGuard": {
+    "route": "/app/laporan",
+    "redirect": "307 to /login/pengurus",
+    "status": "PASS"
+  },
+  "anonymousApiGuard": {
+    "route": "GET /api/chairman/reports?year=2026",
+    "status": 401,
+    "cacheControl": "no-store",
+    "result": "PASS",
+    "verifiedBy": "direct localhost HTTP request without a session"
+  },
+  "authenticatedChairmanSmoke": {
+    "status": "NOT RUN",
+    "reason": "No authenticated development Chairman session was available; no credentials were requested, entered, provisioned, or reset."
+  },
+  "yearSelectorAnnualMonthlyArrearsAndViewportChecks": "NOT RUN",
+  "liveTreasurerResidentSystemAdminAndCrossRtChecks": "NOT RUN; covered by automated authorization suites, not live browser sessions",
+  "screenshots": []
+}
