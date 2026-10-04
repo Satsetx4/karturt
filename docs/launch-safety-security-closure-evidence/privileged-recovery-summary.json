@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "result": "PASS",
+  "residentPinReset": {
+    "residentDenied": true,
+    "treasurerDenied": true,
+    "foreignChairmanDenied": true,
+    "ownRtChairmanAllowed": true,
+    "inactiveTargetDenied": true,
+    "spoofedActorDenied": true
+  },
+  "systemAdminRecovery": {
+    "anonymousDenied": true,
+    "nonAdminDenied": true,
+    "unverifiedAdminDenied": true,
+    "selfRecoveryDenied": true,
+    "differentVerifiedActiveAdminAllowed": true,
+    "disabledTargetDenied": true,
+    "missingReferenceDenied": true,
+    "spoofedActorDenied": true
+  },
+  "authorizedRecovery": {
+    "targetOnlyMutation": true,
+    "targetSessionsRevoked": true,
+    "factorStateUpdated": true,
+    "exactlyOneSafeAuditEvent": true,
+    "auditFailureRollsBackAllChanges": true
+  },
+  "testFile": "tests/authorization/system-admin-recovery-route-session.test.ts"
+}

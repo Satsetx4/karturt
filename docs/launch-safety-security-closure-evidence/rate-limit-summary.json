@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "result": "PASS",
+  "configurationSource": "src/lib/auth/server.ts",
+  "S14": {
+    "knownAndUnknownIdentityBoundary": "configured N and N+1 enforced",
+    "systemAdminTotpBoundary": "configured N and N+1 enforced",
+    "knownUnknownEnumerationParity": true,
+    "databaseBackedRateLimitRowsObserved": true
+  },
+  "testFile": "tests/integration/security-closure-rate-limit.test.ts",
+  "syntheticLocalIdentitiesOnly": true
+}

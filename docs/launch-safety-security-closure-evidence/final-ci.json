@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "workflow": "Test Gate A",
+  "sourceCodeSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "runId": "37227655766",
+  "runUrl": "https://github.com/Satsetx4/karturt/actions/runs/37227655766",
+  "conclusion": "PASS",
+  "jobs": {
+    "Gate A local verification": "PASS",
+    "Launch Safety independent PostgreSQL concurrency": "PASS"
+  },
+  "productionAccess": "none",
+  "mergeToMain": false
+}

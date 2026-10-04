@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "result": "PASS",
+  "routeOriginMatrix": "foreign, missing, null, and malformed Origin returned 403 with zero protected state change",
+  "browser": "headless Chrome; two ephemeral loopback origins; real authenticated local session cookies",
+  "attempts": [
+    { "family": "financial cash mutation", "cookieDelivered": true, "sessionValidated": true, "responseStatus": 403, "stateChanged": false },
+    { "family": "System Admin 2FA recovery", "cookieDelivered": true, "sessionValidated": true, "responseStatus": 403, "stateChanged": false }
+  ],
+  "secretsPersisted": false,
+  "limitations": ["Synthetic local accounts", "No production browser/session was used"]
+}

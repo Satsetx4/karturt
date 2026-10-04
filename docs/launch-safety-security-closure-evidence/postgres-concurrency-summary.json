@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "ciRunId": "37227655766",
+  "ciConclusion": "PASS",
+  "database": "disposable PostgreSQL 17.11; no Neon or production access",
+  "migrationsApplied": 14,
+  "independentBackends": true,
+  "lockContentionObservedForEveryRace": true,
+  "S17_paymentIdempotency": "PASS — existing payment request and cash idempotency suites",
+  "S18_doubleSubmit": "PASS — request duplicate-submit coverage and same-key cash retry race",
+  "S19_paymentVerificationConcurrency": "PASS — one verification persisted; duplicate denied",
+  "S20_cashConcurrency": "PASS — same-key retry persisted one payment and one audit",
+  "S21_reversalConcurrency": "PASS — one reversal persisted; active settlement removed",
+  "S22_waiverConcurrency": "PASS — one waiver persisted; duplicate denied",
+  "S23_householdLifecycleConcurrency": "PASS — one replacement persisted; one active household remains",
+  "sharedNeonWrites": 0,
+  "migrationFilesChanged": 0
+}

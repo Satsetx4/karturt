@@ -61,6 +61,55 @@ Synthetic disposable PGlite comparison used 50 households/600 annual dues and 50
 
 **Exact Launch Safety CI for validated remediation code:** Test Gate A run `37219269983`, PASS at SHA `edcd071b713fe1a6db55513726810c7428521d96`; Gate A passed and the PostgreSQL concurrency job `111487109094` passed. This report/evidence follow-up is separately gated on its own exact SHA.
 
+## F2.1 Security Closure Addendum — 2026-10-05
+
+**Previous:** LAUNCH SAFETY FAIL — S1–S16 security coverage incomplete. The earlier FAIL history above is retained as the original Launch Safety finding.
+
+**F2.1 source branch:** `fix/launch-safety-security-closure`<br>
+**Source commit:** `091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2`<br>
+**Exact source-commit CI:** Test Gate A run `37227655766` — PASS. Gate A and independent PostgreSQL concurrency jobs passed.
+
+| Security row | F2.1 result |
+|---|---|
+| S1 — IDOR / cross-user | PASS |
+| S2 — Cross-RT security fixture | PASS |
+| S3 — Role escalation | PASS |
+| S4 — Tenant spoofing | PASS |
+| S5 — Role / actor spoofing | PASS |
+| S6 — Direct API authorization | PASS |
+| S7 — Mass assignment | PASS |
+| S8 — Malformed payload | PASS |
+| S9 — SQL injection | PASS |
+| S10 — CSRF, including two-origin browser proof | PASS |
+| S11 — Session fixation / cookie attributes | PASS |
+| S12 — Session revocation | PASS |
+| S13 — Inactive / ended assignment session | PASS |
+| S14 — Brute-force / rate limit | PASS |
+| S15 — Resident PIN lockout | PASS |
+| S16 — Privileged recovery | PASS |
+| S17–S23 — Revalidated without rewriting the concurrency harness | PASS |
+
+- Integrity: 16/16 zero; Gate C: 32/32 zero; F12 lifecycle global: 11/11 zero.
+- Migration journal remains 14 entries ending at `0013_phase_12_household_management`; no `0014` was created.
+- Production dependency audit: 0 vulnerabilities. The only accepted residual remains `RA-2026-F12-001` for the development-only `braces@3.0.3` advisory; it is not resolved or generalized.
+- Full suite: 399/399 across 64 files; exact-source Gate A, security closure suite, Drizzle checks, production build, and independent PostgreSQL concurrency all PASS.
+- Browser CSRF used two loopback origins and real synthetic signed sessions; both the financial mutation and System Admin recovery returned 403 with state unchanged. Session fixation and cookie attributes also passed.
+- Resident login rate limits and five-failure/15-minute PIN lockout passed configured-boundary, expiry, authorized reset, and concurrent-race checks.
+- Performance: **WARNING — remeasure in staging**; the existing local PGlite 500-household F13 report measured approximately 11.5 seconds. No F2.1 optimization was made.
+- Production was not accessed. The branch was not merged to `main`.
+
+**F2.1 PASS**<br>
+**LAUNCH SAFETY PASS**<br>
+**BLOCKERS: 0**<br>
+**CRITICAL: 0**<br>
+**UNACCEPTED HIGH: 0**<br>
+**Single-RT MVP: APPROVED**<br>
+**Multi-RT user features: OUT OF MVP**<br>
+**Multi-RT security architecture: PRESERVED**<br>
+**READY FOR FASE 3**
+
+The completion report and sanitized evidence pack are in `docs/launch-safety-security-closure-report.md` and `docs/launch-safety-security-closure-evidence/`. The documentation-only final branch commit is still subject to its exact-SHA CI pass before delivery.
+
 ## Final verdict
 
 LAUNCH SAFETY FAIL — FASE 3 NO-GO — BLOCKER: wider S1–S16 security coverage remains incomplete and requires independent audit.

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "result": "PASS",
+  "S8": {
+    "families": ["Resident request", "Treasurer cash", "Treasurer verification", "Chairman waiver", "Chairman PIN reset", "System Admin recovery"],
+    "cases": ["invalid JSON", "wrong types", "invalid IDs", "empty required fields", "oversized reason", "unexpected arrays/objects", "invalid idempotency key"],
+    "response": "bounded 4xx; no stack, SQL, or secret leakage; protected state unchanged"
+  },
+  "S9": {
+    "inputs": ["login identifier", "search text", "reason text", "route identifier/query"],
+    "payloadClasses": ["quotes", "backslashes", "wildcards", "comment syntax", "tautology syntax"],
+    "result": "No authentication bypass, scope widening, extra rows, or database error disclosure.",
+    "rawSqlIntroducedByF2_1": false
+  },
+  "testFile": "tests/authorization/security-closure-input.test.ts"
+}

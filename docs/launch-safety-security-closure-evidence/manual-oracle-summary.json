@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "result": "PASS",
+  "command": "npm test -- tests/integration/gate-c-balance-oracle.test.ts --maxWorkers=1",
+  "filesPassed": 1,
+  "testsPassed": 1,
+  "scope": "F13 manual balance oracle regression"
+}

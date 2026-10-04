@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "fullAudit": {
+    "result": "KNOWN ACCEPTED RESIDUAL ONLY",
+    "reportedHighPathEntries": 5,
+    "uniqueAdvisories": 1,
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "package": "braces@3.0.3",
+    "scope": "development dependency chain",
+    "acceptance": "RA-2026-F12-001 — KNOWN / ACCEPTED RESIDUAL RISK — NOT RESOLVED"
+  },
+  "productionAudit": { "command": "npm audit --omit=dev", "critical": 0, "high": 0, "result": "PASS" },
+  "newCritical": 0,
+  "newUnacceptedHigh": 0,
+  "auditFixApplied": false
+}

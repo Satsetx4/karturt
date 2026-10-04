@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "result": "PASS",
+  "configurationSource": "src/lib/auth/login-lockout.ts",
+  "configuredFailureLimit": 5,
+  "configuredLockoutMinutes": 15,
+  "proof": {
+    "thresholdReached": true,
+    "deniedDuringLockout": true,
+    "validPinAllowedAfterExpiry": true,
+    "authorizedResetClearsLockout": true,
+    "unknownAndDisabledIdentitySafe": true,
+    "concurrentWrongPinRaceCannotBypassLimit": true
+  },
+  "testFile": "tests/integration/security-closure-rate-limit.test.ts",
+  "credentialsPersistedInEvidence": false
+}

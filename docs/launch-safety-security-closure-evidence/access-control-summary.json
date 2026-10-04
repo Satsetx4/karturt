@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "result": "PASS",
+  "sessions": "real Better Auth signed sessions for disposable local identities",
+  "S1": "Resident A cannot read or cancel Resident B payment request; known foreign request code does not disclose data; request, dues, claims, and audit remain unchanged.",
+  "S2": "RT-A Chairman report remains scoped to RT-A; RT-A Treasurer verification and Chairman PIN reset targeting RT-B are denied without disclosure or mutation.",
+  "S3": "Resident-to-Treasurer, Treasurer-to-Chairman, Chairman-to-Treasurer, non-admin-to-System-Admin, and ended-assignment old-cookie actions are denied.",
+  "S4": "Caller-supplied tenant scope cannot alter principal-derived authorization.",
+  "S5": "Caller-supplied role, account type, actor, verifier, or creator values cannot set persisted authority.",
+  "S6": "Anonymous, wrong-role, inactive, ended-assignment, and unverified direct API cases are denied; authorized role cases succeed.",
+  "S7": "Protected fields are rejected or ignored on Resident request, Treasurer cash/verification, Chairman waiver/PIN reset, and System Admin recovery.",
+  "limitations": ["Representative route families only", "Cross-RT identities are disposable security fixtures only"]
+}

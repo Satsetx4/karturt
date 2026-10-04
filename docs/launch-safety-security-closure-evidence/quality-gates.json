@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "local": {
+    "npmCi": "PASS",
+    "lint": { "result": "PASS", "errors": 0, "preexistingWarnings": 1 },
+    "typecheck": "PASS",
+    "unit": { "files": 7, "tests": 42, "result": "PASS" },
+    "integration": { "files": 35, "tests": 190, "result": "PASS" },
+    "constraints": { "files": 8, "tests": 42, "result": "PASS" },
+    "authorization": { "files": 14, "tests": 125, "result": "PASS" },
+    "securityClosure": { "files": 5, "tests": 22, "result": "PASS" },
+    "fullSuite": { "files": 64, "tests": 399, "result": "PASS" },
+    "productionBuild": "PASS",
+    "drizzleJournalCheck": "PASS",
+    "schemaDrift": "PASS — no schema changes or migration file generated"
+  },
+  "exactSourceCommitCi": { "runId": "37227655766", "result": "PASS" },
+  "finalDocumentationCommitCi": "Exact final documentation-commit run ID is reported in task completion.",
+  "migrationHead": "0013_phase_12_household_management",
+  "migration0014Created": false,
+  "productionAccess": "none"
+}

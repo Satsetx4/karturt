@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "result": "PASS",
+  "checks": 32,
+  "nonzeroFindings": 0,
+  "migrationEntries": 14,
+  "migrationHead": "0013_phase_12_household_management",
+  "target": "karturt-development; read-only verification",
+  "productionAccess": "none"
+}

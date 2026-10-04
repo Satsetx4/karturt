@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "classification": "WARNING — remeasure in staging",
+  "measurement": "Chairman F13 report plus arrears at 500 households took approximately 11.5 seconds on local PGlite.",
+  "scope": "Existing local synthetic performance observation; no F2.1 optimization or performance migration.",
+  "launchBlocker": false,
+  "stagingOrProductionMeasurementPerformed": false
+}

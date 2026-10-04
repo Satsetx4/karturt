@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "testedSha": "091ef09057bbb2bb3df6e7b53eb5bbb0a3ff8dd2",
+  "result": "PASS",
+  "S11": {
+    "fakePreAuthCookieProtectedApi": 401,
+    "attackerSelectedTokenReused": false,
+    "freshServerIssuedSessionAuthenticated": true,
+    "httpsCookieAttributes": { "HttpOnly": true, "Secure": true, "SameSiteObservedAndValidated": true }
+  },
+  "S12": "Old sessions denied after Resident PIN reset, household resident replacement, and System Admin 2FA recovery.",
+  "S13": "Old sessions denied on protected reads and writes after account disablement or official assignment end.",
+  "rawCookiesOrSessionTokensPersisted": false,
+  "testFiles": ["tests/integration/security-closure-session-fixation.test.ts", "tests/authorization/system-admin-recovery-route-session.test.ts"]
+}
