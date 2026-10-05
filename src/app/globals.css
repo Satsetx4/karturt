@@ -144,7 +144,7 @@ button { color: inherit; }
 .help-line { margin-top: 18px; padding-top: 17px; border-top: 1px solid var(--line); }
 .alternate-login { margin: -28px 0 50px; text-align: center; color: var(--muted); font-size: 14px; }
 .alternate-login p { margin: 0; }
-.alternate-login a { color: var(--teal); font-weight: 750; }
+.alternate-login a { min-height: 44px; display: inline-flex; align-items: center; color: var(--teal); font-weight: 750; }
 .alternate-login a:hover { text-decoration: underline; text-underline-offset: 4px; }
 .honeypot { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .spinner { animation: spin 900ms linear infinite; }
