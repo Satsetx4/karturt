@@ -4,7 +4,7 @@
   "repository": "Satsetx4/karturt",
   "branch": "feat/delivery-readiness-single-rt",
   "baselineSha": "ef9b6efacea01e996aec43f6eeb1429b4e86044e",
-  "sourceCommit": "7c56f273111ab0f94f54a493f500aed4e2e54dcd",
+  "sourceCommit": "1e976f667d5fcbbacc80fed2a0bf6935c8946359",
   "status": "READY_PREVIEW_WITH_RECORDED_CANCELED_MISTARGET",
   "stagingProject": {
     "name": "karturt-f3-staging",
@@ -13,13 +13,13 @@
     "productionScopedVariableCount": 0
   },
   "deployment": {
-    "id": "dpl_7a1nbVvs9QKKf9YuHCsiWWttC9vg",
+    "id": "dpl_NaACmdTai4S2MCH4foEpUG4fXyWX",
     "state": "READY",
     "environment": "Preview",
     "source": "git",
     "sourceBranch": "feat/delivery-readiness-single-rt",
-    "sourceCommit": "7c56f273111ab0f94f54a493f500aed4e2e54dcd",
-    "deploymentUrl": "https://karturt-f3-staging-2o95fooay-sekawan.vercel.app",
+    "sourceCommit": "1e976f667d5fcbbacc80fed2a0bf6935c8946359",
+    "deploymentUrl": "https://karturt-f3-staging-4opkpv5p4-sekawan.vercel.app",
     "branchAlias": "https://karturt-f3-staging-git-feat-delivery-readiness-s-861162-sekawan.vercel.app",
     "https": true,
     "hstsObserved": true

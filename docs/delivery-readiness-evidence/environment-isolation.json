@@ -30,5 +30,6 @@
     "productionDomainUsed": false
   },
   "secretMaterialRecorded": false,
-  "currentPreviewDeploymentId": "dpl_7a1nbVvs9QKKf9YuHCsiWWttC9vg"
+  "currentPreviewDeploymentId": "dpl_NaACmdTai4S2MCH4foEpUG4fXyWX",
+  "currentPreviewSourceCommit": "1e976f667d5fcbbacc80fed2a0bf6935c8946359"
 }

@@ -2,15 +2,15 @@
   "schemaVersion": 1,
   "asOfDate": "2026-10-05",
   "branch": "feat/delivery-readiness-single-rt",
-  "codeCommit": "7c56f273111ab0f94f54a493f500aed4e2e54dcd",
+  "codeCommit": "1e976f667d5fcbbacc80fed2a0bf6935c8946359",
   "codeCommitCi": {
-    "runId": 37295820362,
+    "runId": 37325026328,
     "status": "PASS",
     "conclusion": "success",
     "gateA": "PASS",
     "launchSecurityClosure": "PASS",
     "independentPostgresConcurrency": "PASS",
-    "url": "https://github.com/Satsetx4/karturt/actions/runs/37295820362"
+    "url": "https://github.com/Satsetx4/karturt/actions/runs/37325026328"
   },
   "gateA": {
     "install": "PASS",
@@ -39,7 +39,16 @@
       "classification": "KNOWN / ACCEPTED RESIDUAL RISK — NOT RESOLVED"
     }
   },
-  "finalEvidenceCommitCi": "Exact-SHA CI is run after the final evidence/report commit; its run and conclusion are reported in the task completion record to avoid a recursive evidence-only commit.",
+  "deliveryReadiness": {
+    "systemAdminUat": "PASS",
+    "postUatLaunchIntegrity": "16/16 zero",
+    "postUatGateC": "32/32 zero",
+    "postUatLifecycle": "11/11 zero",
+    "migrationHead": "0013_phase_12_household_management",
+    "responsiveAcceptance": "PASS",
+    "finalEvidenceCommitCi": "REPORTED_IN_TASK_COMPLETION",
+    "credentialCleanup": "PASS; 4 official/admin passwords rotated, 6 resident PINs reset, 0 sessions remain"
+  },
   "productionTouched": false,
   "branchMergedToMain": false
 }

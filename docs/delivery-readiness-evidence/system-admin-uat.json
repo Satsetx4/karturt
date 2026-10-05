@@ -2,60 +2,57 @@
   "schemaVersion": 1,
   "observedDate": "2026-10-05",
   "environment": "staging",
-  "scope": "SINGLE-RT synthetic system admins only",
-  "sourceCodeFixCommit": "0469a487bb00a00bd71d75c0b006dde6ec301d69",
-  "currentPreviewCommit": "7c56f273111ab0f94f54a493f500aed4e2e54dcd",
-  "currentPreviewDeploymentId": "dpl_7a1nbVvs9QKKf9YuHCsiWWttC9vg",
-  "status": "FAIL_INCOMPLETE_POST_FIX_AUTHENTICATED_UAT",
-  "priorDeploymentEvidence": {
-    "commit": "a81ea65897efd178c7ecf49eab1bc550b2905b0a",
-    "admin1PasswordLogin": "PASS",
-    "admin1TotpAndVerifiedSession": "PASS",
-    "protectedNonfinancialAction": "PASS_AFTER_VALID_INPUT",
-    "admin2PasswordLogin": "PASS",
-    "admin2TotpAndVerifiedSession": "PASS",
-    "secondAdminRecovery": "PASS",
-    "targetSessionsRevoked": 3,
-    "targetReEnrollment": "PASS",
-    "selfRecoveryDenied403": true,
-    "unverifiedRecoveryDenied401": true,
-    "systemAdminFinancialMutationDenied403": true,
-    "finding": "Malformed recovery reference returned 500 without mutation; narrow route validation was added and CI tests pass, but live post-fix UAT is still required."
+  "scope": "SINGLE-RT synthetic System Admin accounts only",
+  "status": "PASS",
+  "deployment": {
+    "commit": "1e976f667d5fcbbacc80fed2a0bf6935c8946359",
+    "deploymentId": "dpl_NaACmdTai4S2MCH4foEpUG4fXyWX",
+    "https": true,
+    "ready": true
+  },
+  "initialPreFixFinding": {
+    "malformedRecoveryReferenceStatus": 500,
+    "stateChanged": false,
+    "resolution": "Route now validates the audit reference format before recovery is attempted.",
+    "fixCommit": "1e976f667d5fcbbacc80fed2a0bf6935c8946359",
+    "regressionTest": "rejects malformed System Admin recovery references before changing target state"
   },
   "postFixUat": {
-    "passwordLoginToMfa": "PASS",
-    "currentMfaChallengeDisplayed": true,
-    "verifiedSystemAdminSession": "NOT_VERIFIED",
-    "validRecoveryAction": "NOT_RUN",
-    "malformedAndOmittedReferenceHttp400": "NOT_VERIFIED",
-    "directHttpProbes": "BLOCKED_AT_VERCEL_PREVIEW_AUTH_401",
-    "existingFactorDecryption": "NOT_AVAILABLE_FROM_AUTHORIZED_LOCAL_VALUES",
-    "stagingVercelSecretRead": "REDACTED_BY_CONNECTOR",
-    "existingTotpSeedOrAuthenticatorAvailable": false,
-    "factorResetOrMfaBypassPerformed": false,
-    "financialStateMutationFromProbe": false
+    "admin01PasswordLoginAndMfa": "PASS",
+    "admin02PasswordLoginAndMfa": "PASS",
+    "twoVerifiedFactorsAfterReEnrollment": 2,
+    "liveSessionsPerAdminAfterReEnrollment": 1,
+    "admin02ToAdmin01Recovery": {
+      "status": 200,
+      "sessionsRevoked": 1,
+      "result": "PASS"
+    },
+    "targetTotpReEnrollment": "PASS",
+    "targetRegainedAccess": "PASS",
+    "selfRecoveryDenied": {
+      "expectedStatus": 403,
+      "observedStatus": 403,
+      "result": "PASS"
+    },
+    "unverifiedAdminDenied": {
+      "expectedStatus": 401,
+      "observedStatus": 401,
+      "result": "PASS"
+    },
+    "systemAdminFinancialMutationDenied": {
+      "expectedStatus": 403,
+      "observedStatus": 403,
+      "result": "PASS"
+    },
+    "malformedRecoveryReferenceDenied": {
+      "expectedStatus": 400,
+      "observedStatus": 400,
+      "passed": true
+    },
+    "noFinancialMutationFromNegativeProbes": true,
+    "recoveryAuditEvents": 2
   },
-  "phase8ReadOnly": {
-    "launchIntegrity": {
-      "checks": 16,
-      "zero": 16,
-      "result": "PASS"
-    },
-    "gateC": {
-      "checks": 32,
-      "zero": 32,
-      "result": "PASS"
-    },
-    "lifecycle": {
-      "checks": 11,
-      "zero": 11,
-      "result": "PASS"
-    },
-    "migrationEntries": 14,
-    "migrationHead": "0013_phase_12_household_management",
-    "postProbeStateChanged": false
-  },
-  "blocker": "The staging System Admin session reaches MFA, but there is no authorized current TOTP source. The existing factor cannot be decrypted with local staging-auth candidates and Vercel stores this variable as a redacted sensitive value. No MFA bypass, factor reset, or destructive account change was attempted; therefore post-fix protected recovery behavior remains unverified.",
+  "temporaryStagingPreviewAccess": "User-approved for staging UAT; credential or share material not recorded in this evidence.",
   "credentialOrSessionMaterialRecorded": false,
   "productionTouched": false
 }

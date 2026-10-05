@@ -1,55 +1,29 @@
 {
   "status": "PASS",
-  "generatedAt": "2026-10-05T09:17:51.3695139Z",
-  "scope": "Post-UAT read-only reconciliation on the single-RT source staging database after Resident, Treasurer, Chairman, and System Admin UAT.",
+  "generatedAt": "2026-10-05T16:40:07.050Z",
+  "scope": "Post-UAT staging read-only reconciliation; single-RT synthetic data.",
   "source": {
     "branch": "feat/delivery-readiness-single-rt",
-    "sha": "a81ea65897efd178c7ecf49eab1bc550b2905b0a"
+    "sha": "1e976f667d5fcbbacc80fed2a0bf6935c8946359"
   },
   "target": {
     "environment": "staging",
+    "projectId": "wispy-sky-99637283",
+    "branchId": "br-morning-wind-b3tektlf",
+    "endpointId": "ep-orange-king-b38p96on",
     "database": "karturt_f3_uat"
   },
   "migration": {
     "entries": 14,
     "head": "0013_phase_12_household_management",
     "headHash": "a707f54fb504999323fd65860cfeea247288e20940d1319094195d067f30ab2c",
-    "matchesCheckedIn0013": true,
     "migration0014Present": false
   },
   "execution": {
     "mode": "REPEATABLE READ READ ONLY",
-    "scripts": "Checked-in launch-safety, Gate C, and lifecycle query definitions executed via staging-only wrappers. The official command entrypoints retain their development-only target guards and were not modified.",
-    "sourceEnvironmentLabelsVerified": true,
-    "sourceDatabasePathVerified": true,
-    "postExpirySessionRerun": {
-      "startedAt": "2026-10-05T09:17:45.9671159Z",
-      "completedAt": "2026-10-05T09:17:51.3695139Z",
-      "operationMode": "REPEATABLE READ READ ONLY",
-      "launchIntegrity": {
-        "result": "PASS",
-        "total": 16,
-        "zeroAnomalies": 16,
-        "generatedAt": "2026-10-05T09:17:46.726Z"
-      },
-      "gateC": {
-        "result": "PASS",
-        "total": 32,
-        "zeroAnomalies": 32
-      },
-      "lifecycle": {
-        "result": "PASS",
-        "total": 11,
-        "zeroAnomalies": 11
-      },
-      "migrationEntries": 14,
-      "migrationHead": "0013_phase_12_household_management",
-      "migrationHeadHash": "a707f54fb504999323fd65860cfeea247288e20940d1319094195d067f30ab2c",
-      "allFinancialInvariantsZero": true
-    }
+    "auditDateAsiaJakarta": "2026-10-05"
   },
   "launchIntegrity": {
-    "result": "PASS",
     "total": 16,
     "zero": 16,
     "nonzero": 0,
@@ -121,7 +95,6 @@
     ]
   },
   "gateC": {
-    "result": "PASS",
     "total": 32,
     "zero": 32,
     "nonzero": 0,
@@ -257,7 +230,6 @@
     ]
   },
   "lifecycle": {
-    "result": "PASS",
     "total": 11,
     "zero": 11,
     "nonzero": 0,
@@ -310,74 +282,13 @@
   },
   "financialReconciliation": {
     "result": "PASS",
-    "invariants": [
-      {
-        "name": "active_received_not_over_effective_target",
-        "anomalies": 0,
-        "checkedBy": [
-          "launch I06",
-          "Gate C active_received_over_target"
-        ]
-      },
-      {
-        "name": "paid_due_has_exact_active_allocation",
-        "anomalies": 0,
-        "checkedBy": [
-          "launch I02-I05",
-          "Gate C paid/ownership/allocation checks"
-        ]
-      },
-      {
-        "name": "reversed_payment_not_active_received",
-        "anomalies": 0,
-        "checkedBy": [
-          "launch I07",
-          "Gate C reversed_payment_retains_active_owner"
-        ]
-      },
-      {
-        "name": "waived_state_and_ledger_valid",
-        "anomalies": 0,
-        "checkedBy": [
-          "launch I08",
-          "Gate C waiver checks"
-        ]
-      },
-      {
-        "name": "not_due_has_no_financial_activity",
-        "anomalies": 0,
-        "checkedBy": [
-          "launch I09",
-          "Gate C not_due_financial_activity",
-          "Lifecycle check"
-        ]
-      }
-    ]
+    "invariants": {
+      "activeReceivedAtOrBelowTarget": true,
+      "paidDuesHaveValidActiveAllocation": true,
+      "reversedPaymentsNotActive": true,
+      "waivedStateAndLedgerValid": true,
+      "notDueHasNoFinancialActivity": true
+    }
   },
-  "adminFinancialDenial": {
-    "verifiedSystemAdminSession": true,
-    "endpointStatus": 403,
-    "requestStateBeforeAndAfter": "pending",
-    "itemCountBeforeAndAfter": 1,
-    "paymentCountBeforeAndAfter": 0,
-    "allocationCountBeforeAndAfter": 0,
-    "dueStateBeforeAndAfter": "unpaid",
-    "stateUnchanged": true
-  },
-  "secretScan": "No connection strings, credentials, account IDs, request codes, cookies, PINs, TOTP values, or real resident data recorded.",
-  "sessionExpirySanity": {
-    "result": "PASS",
-    "targetOnly": true,
-    "preexistingTargetSessionsRevoked": 2,
-    "freshLoginStatus": 200,
-    "freshTargetSessionsBeforeExpiry": 1,
-    "expirationRowsUpdated": 1,
-    "expiryFieldOnly": "expiresAt",
-    "protectedEndpointStatus": 401,
-    "getSessionPresentAfter": false,
-    "expiredTargetSessionRowsAfterAuthCheck": 0,
-    "nonTargetAccountAndSessionFingerprintsUnchanged": true,
-    "financialFingerprintsUnchanged": true,
-    "targetAccountActiveUnlocked": true
-  }
+  "productionTouched": false
 }
