@@ -39,7 +39,7 @@
       "classification": "KNOWN / ACCEPTED RESIDUAL RISK — NOT RESOLVED"
     }
   },
-  "finalEvidenceCommitCi": "A new exact-SHA workflow is required after the final evidence/report commit; report its run in the completion response, without a recursive evidence commit.",
+  "finalEvidenceCommitCi": "Exact-SHA CI is run after the final evidence/report commit; its run and conclusion are reported in the task completion record to avoid a recursive evidence-only commit.",
   "productionTouched": false,
   "branchMergedToMain": false
 }
