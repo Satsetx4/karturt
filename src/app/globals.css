@@ -57,7 +57,7 @@ button { color: inherit; }
 
 .page-shell { width: min(100%, 1200px); min-height: 100vh; margin-inline: auto; padding: 22px clamp(18px, 4vw, 52px) 0; display: flex; flex-direction: column; }
 .topbar { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.brand { display: inline-flex; align-items: center; gap: 11px; min-width: 0; }
+.brand { min-height: 44px; display: inline-flex; align-items: center; gap: 11px; min-width: 0; }
 .brand-mark { width: 39px; height: 39px; display: grid; place-items: center; border-radius: 12px 12px 12px 4px; background: #173745; color: #f4fbf8; font-size: 23px; font-weight: 800; line-height: 1; box-shadow: 0 5px 13px rgb(23 55 69 / 17%); }
 .dark .brand-mark { color: #152a34; background: #c1ded9; }
 .brand-copy { display: flex; flex-direction: column; line-height: 1.1; }
@@ -108,6 +108,7 @@ button { color: inherit; }
 .back-link { min-height: 44px; display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 14px; font-weight: 650; transition: color 160ms ease; }
 .back-link:hover { color: var(--teal); }
 .breadcrumb { margin-top: 28px; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.breadcrumb a { min-height: 44px; display: inline-flex; align-items: center; }
 .breadcrumb a:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
 .login-grid { flex: 1; padding: 49px 0 62px; display: grid; grid-template-columns: minmax(0, .9fr) minmax(380px, 1.1fr); align-items: center; gap: clamp(38px, 8vw, 95px); }
 .login-intro { max-width: 390px; animation: appear .55s ease both; }

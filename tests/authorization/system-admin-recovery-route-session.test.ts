@@ -945,6 +945,72 @@ describe("System Admin recovery route cookie-session boundary", () => {
     }
   });
 
+  it("validates structured System Admin resident PIN recovery before entering the transaction", async () => {
+    const resident = await regularSession("Structured Recovery Resident", "resident");
+    const admin = await verifiedAdminSession("Structured Recovery Admin");
+    const pinRequest = (body: unknown) => resetResidentPin(new Request(
+      `http://localhost:3000/api/residents/${resident.accountId}/reset-pin`,
+      {
+        method: "POST",
+        headers: {
+          cookie: admin.cookie,
+          origin: "http://localhost:3000",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+      },
+    ), { params: Promise.resolve({ accountId: resident.accountId }) });
+    const invokePinRequest = (body: unknown) => {
+      mocks.requestHeaders = new Headers({ cookie: admin.cookie });
+      return pinRequest(body);
+    };
+    const before = {
+      credential: await testDatabase.db.select({ password: authAccount.password })
+        .from(authAccount).where(eq(authAccount.userId, resident.userId)),
+      target: await testDatabase.db.select({ failedLoginAttempts: appAccounts.failedLoginAttempts, lockedUntil: appAccounts.lockedUntil })
+        .from(appAccounts).where(eq(appAccounts.id, resident.accountId)),
+      residentSessions: await testDatabase.db.select().from(authSession).where(eq(authSession.userId, resident.userId)),
+      adminSessions: await testDatabase.db.select().from(authSession).where(eq(authSession.userId, admin.userId)),
+      audits: await testDatabase.db.select().from(auditEvents).where(and(
+        eq(auditEvents.entityId, resident.accountId),
+        eq(auditEvents.action, "resident.pin.structured_recovery"),
+      )),
+    };
+    const basePayload = { pin: "839174", reason: "Synthetic structured recovery verification" };
+
+    const malformedReference = await invokePinRequest({ ...basePayload, recoveryReference: "F3-2026-004" });
+    expect(malformedReference.status).toBe(400);
+    const missingReference = await invokePinRequest(basePayload);
+    expect(missingReference.status).toBe(400);
+    expect(await testDatabase.db.select({ password: authAccount.password })
+      .from(authAccount).where(eq(authAccount.userId, resident.userId))).toEqual(before.credential);
+    expect(await testDatabase.db.select({ failedLoginAttempts: appAccounts.failedLoginAttempts, lockedUntil: appAccounts.lockedUntil })
+      .from(appAccounts).where(eq(appAccounts.id, resident.accountId))).toEqual(before.target);
+    expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, resident.userId)))
+      .toEqual(before.residentSessions);
+    expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, admin.userId)))
+      .toEqual(before.adminSessions);
+    expect(await testDatabase.db.select().from(auditEvents).where(and(
+      eq(auditEvents.entityId, resident.accountId),
+      eq(auditEvents.action, "resident.pin.structured_recovery"),
+    ))).toEqual(before.audits);
+
+    const authorizedReset = await invokePinRequest({ ...basePayload, recoveryReference: "QA-2026-405" });
+    expect(authorizedReset.status).toBe(200);
+    expect(await testDatabase.db.select({ password: authAccount.password })
+      .from(authAccount).where(eq(authAccount.userId, resident.userId))).not.toEqual(before.credential);
+    expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, resident.userId))).toHaveLength(0);
+    expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, admin.userId)))
+      .toEqual(before.adminSessions);
+    expect(await testDatabase.db.select().from(auditEvents).where(and(
+      eq(auditEvents.entityId, resident.accountId),
+      eq(auditEvents.action, "resident.pin.structured_recovery"),
+    ))).toMatchObject([{
+      actorAppAccountId: admin.accountId,
+      context: { recoveryReference: "QA-2026-405", revokedSessionCount: before.residentSessions.length },
+    }]);
+  });
+
   it("denies authenticated wrong-role, inactive, ended-assignment, unverified, and anonymous direct API calls without state changes", async () => {
     const target = await verifiedAdminSession("Recovery matrix target");
     const before = {

@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 const payloadSchema = z.object({
   pin: z.string().regex(/^\d{6}$/),
   reason: z.string().trim().min(1).max(500),
-  recoveryReference: z.string().trim().min(1).max(100).optional(),
+  recoveryReference: z.string().trim().min(1).max(100).regex(/^[A-Z]{2,10}-\d{4}-\d{3,8}$/).optional(),
 }).strict();
 
 export async function POST(
@@ -37,13 +37,19 @@ export async function POST(
     return NextResponse.json({ message: "Periksa kembali data yang dikirim." }, { status: 400, headers: { "cache-control": "no-store" } });
   }
   const parsed = payloadSchema.safeParse(payload);
-  if (!parsed.success) return NextResponse.json({ message: "PIN harus tepat enam digit dan alasan wajib diisi." }, { status: 400, headers: { "cache-control": "no-store" } });
+  if (!parsed.success) return NextResponse.json({ message: "Data pemulihan PIN tidak valid. Periksa PIN, alasan, dan format referensi." }, { status: 400, headers: { "cache-control": "no-store" } });
 
   const { accountId } = await context.params;
   if (!z.string().uuid().safeParse(accountId).success) return NextResponse.json({ message: "Akun warga tidak ditemukan." }, { status: 404, headers: { "cache-control": "no-store" } });
 
   try {
     const principal = await getCurrentPrincipal();
+    if (principal.role === "system_admin" && !parsed.data.recoveryReference) {
+      return NextResponse.json({ message: "Referensi pemulihan wajib diisi untuk System Admin." }, {
+        status: 400,
+        headers: { "cache-control": "no-store" },
+      });
+    }
     const result = await resetResidentPin(getDb(), principal, {
       residentAccountId: accountId,
       ...parsed.data,
