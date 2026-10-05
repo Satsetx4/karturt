@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "asOfDate": "2026-10-05",
+  "branch": "feat/delivery-readiness-single-rt",
+  "codeCommit": "7c56f273111ab0f94f54a493f500aed4e2e54dcd",
+  "codeCommitCi": {
+    "runId": 37295820362,
+    "status": "PASS",
+    "conclusion": "success",
+    "gateA": "PASS",
+    "launchSecurityClosure": "PASS",
+    "independentPostgresConcurrency": "PASS",
+    "url": "https://github.com/Satsetx4/karturt/actions/runs/37295820362"
+  },
+  "gateA": {
+    "install": "PASS",
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "unit": "PASS",
+    "integrationAndMigration": "PASS",
+    "constraints": "PASS",
+    "authorization": "PASS",
+    "securityClosure": "PASS",
+    "fullSuite": "PASS",
+    "drizzleJournalConsistency": "PASS",
+    "schemaDrift": "PASS",
+    "build": "PASS"
+  },
+  "dependencies": {
+    "productionOnlyAudit": {
+      "vulnerabilities": 0,
+      "result": "PASS"
+    },
+    "fullAudit": {
+      "critical": 0,
+      "uniqueAcceptedHighAdvisory": "RA-2026-F12-001",
+      "package": "braces@3.0.3",
+      "scope": "development-only",
+      "classification": "KNOWN / ACCEPTED RESIDUAL RISK — NOT RESOLVED"
+    }
+  },
+  "finalEvidenceCommitCi": "A new exact-SHA workflow is required after the final evidence/report commit; report its run in the completion response, without a recursive evidence commit.",
+  "productionTouched": false,
+  "branchMergedToMain": false
+}

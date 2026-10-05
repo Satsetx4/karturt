@@ -1,0 +1,148 @@
+{
+  "status": "PARTIAL_FAIL_REQUIRED_AUTHENTICATED_SCREENS_UNVERIFIED",
+  "credentialsPersisted": false,
+  "productionTouched": false,
+  "limitation": "The root IAB could read the public staging login pages; authenticated role screens were not available in the browser session. Do not treat prior deployment measurements as current evidence.",
+  "deploymentId": "dpl_7a1nbVvs9QKKf9YuHCsiWWttC9vg",
+  "missingRequiredScreens": [
+    "Resident card and dues",
+    "Treasurer queue",
+    "Chairman household management",
+    "Chairman report and arrears",
+    "authenticated MFA screen"
+  ],
+  "requiredViewports": [
+    {
+      "width": 360,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 430,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "generatedAt": "2026-10-05",
+  "measurements": [
+    {
+      "innerWidth": 360,
+      "alternateLoginLinkHeight": 44,
+      "bodyScrollWidth": 345,
+      "clientWidth": 345,
+      "route": "/login/warga",
+      "horizontalOverflow": false,
+      "viewport": "360x800",
+      "scrollWidth": 345
+    },
+    {
+      "innerWidth": 390,
+      "alternateLoginLinkHeight": 44,
+      "bodyScrollWidth": 375,
+      "clientWidth": 375,
+      "route": "/login/warga",
+      "horizontalOverflow": false,
+      "viewport": "390x844",
+      "scrollWidth": 375
+    },
+    {
+      "innerWidth": 430,
+      "alternateLoginLinkHeight": 44,
+      "bodyScrollWidth": 415,
+      "clientWidth": 415,
+      "route": "/login/warga",
+      "horizontalOverflow": false,
+      "viewport": "430x900",
+      "scrollWidth": 415
+    },
+    {
+      "innerWidth": 768,
+      "alternateLoginLinkHeight": 44,
+      "bodyScrollWidth": 768,
+      "clientWidth": 768,
+      "route": "/login/warga",
+      "horizontalOverflow": false,
+      "viewport": "768x1024",
+      "scrollWidth": 768
+    },
+    {
+      "innerWidth": 1440,
+      "alternateLoginLinkHeight": 44,
+      "bodyScrollWidth": 1425,
+      "clientWidth": 1425,
+      "route": "/login/warga",
+      "horizontalOverflow": false,
+      "viewport": "1440x900",
+      "scrollWidth": 1425
+    },
+    {
+      "innerWidth": 360,
+      "alternateLoginLinkHeight": 44,
+      "bodyScrollWidth": 345,
+      "clientWidth": 345,
+      "route": "/login/pengurus",
+      "horizontalOverflow": false,
+      "viewport": "360x800",
+      "scrollWidth": 345
+    },
+    {
+      "innerWidth": 390,
+      "alternateLoginLinkHeight": 44,
+      "bodyScrollWidth": 375,
+      "clientWidth": 375,
+      "route": "/login/pengurus",
+      "horizontalOverflow": false,
+      "viewport": "390x844",
+      "scrollWidth": 375
+    },
+    {
+      "innerWidth": 430,
+      "alternateLoginLinkHeight": 44,
+      "bodyScrollWidth": 415,
+      "clientWidth": 415,
+      "route": "/login/pengurus",
+      "horizontalOverflow": false,
+      "viewport": "430x900",
+      "scrollWidth": 415
+    },
+    {
+      "innerWidth": 768,
+      "alternateLoginLinkHeight": 44,
+      "bodyScrollWidth": 768,
+      "clientWidth": 768,
+      "route": "/login/pengurus",
+      "horizontalOverflow": false,
+      "viewport": "768x1024",
+      "scrollWidth": 768
+    },
+    {
+      "innerWidth": 1440,
+      "alternateLoginLinkHeight": 44,
+      "bodyScrollWidth": 1425,
+      "clientWidth": 1425,
+      "route": "/login/pengurus",
+      "horizontalOverflow": false,
+      "viewport": "1440x900",
+      "scrollWidth": 1425
+    }
+  ],
+  "deploymentSha": "7c56f273111ab0f94f54a493f500aed4e2e54dcd",
+  "schemaVersion": 1,
+  "source": "real HTTPS staging Preview in the root Codex in-app browser",
+  "environment": "staging",
+  "observedRoutes": [
+    "/login/warga",
+    "/login/pengurus"
+  ],
+  "screenshots": []
+}

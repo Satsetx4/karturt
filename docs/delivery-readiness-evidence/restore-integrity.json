@@ -1,0 +1,307 @@
+{
+  "status": "PASS",
+  "verified_at_utc": "2026-10-05T02:56:18.586Z",
+  "scope": "disposable restore target only for final checks; source-vs-restore comparison was previously completed read-only before auth",
+  "restore_identity": {
+    "project_id": "wispy-sky-99637283",
+    "branch_id": "br-small-frog-b35k2i5h",
+    "endpoint_id": "ep-cool-hat-b3ba4q5k",
+    "database": "karturt_f3_restore_verification",
+    "role": "karturt_f3_staging_app",
+    "server_version": "18.6 (4e955f5)"
+  },
+  "source_vs_restore_pre_auth": {
+    "status": "PASS",
+    "tables": 19,
+    "all_safe_counts_and_sha256_match": true,
+    "source_reconnected_for_final_capture": false,
+    "source_sha256_reused_from_prior_match": true
+  },
+  "safe_aggregate_comparison": {
+    "tables": 19,
+    "all_match": true,
+    "results": [
+      {
+        "table": "public.rt_units",
+        "source_count": 1,
+        "restore_count": 1,
+        "source_sha256": "8cc45f07b65a98ae5decf93c40886f12a80b9f072a3334a3019dc2d9db6e1664",
+        "restore_sha256": "8cc45f07b65a98ae5decf93c40886f12a80b9f072a3334a3019dc2d9db6e1664",
+        "match": true,
+        "safe_fields": 5,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.houses",
+        "source_count": 10,
+        "restore_count": 10,
+        "source_sha256": "7daa0c222970706b8c8df0acf7a47bab8fcd04f4a5412fc42a54d98602d16f69",
+        "restore_sha256": "7daa0c222970706b8c8df0acf7a47bab8fcd04f4a5412fc42a54d98602d16f69",
+        "match": true,
+        "safe_fields": 3,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.households",
+        "source_count": 10,
+        "restore_count": 10,
+        "source_sha256": "71ad904632d0487a79eaa572fcddb31e16eaaa8a04e7454bad26926dfa6afd70",
+        "restore_sha256": "71ad904632d0487a79eaa572fcddb31e16eaaa8a04e7454bad26926dfa6afd70",
+        "match": true,
+        "safe_fields": 7,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.people",
+        "source_count": 7,
+        "restore_count": 7,
+        "source_sha256": "ab544af16387329e75de0016be119217870596757b10a6e2ec8a2557f75a1f32",
+        "restore_sha256": "ab544af16387329e75de0016be119217870596757b10a6e2ec8a2557f75a1f32",
+        "match": true,
+        "safe_fields": 5,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.app_accounts",
+        "source_count": 9,
+        "restore_count": 9,
+        "source_sha256": "92e7fe238d0c82f310eafa14ed2ca7b5e2f8023a910b9f97ff36f06c5ee3e0f3",
+        "restore_sha256": "92e7fe238d0c82f310eafa14ed2ca7b5e2f8023a910b9f97ff36f06c5ee3e0f3",
+        "match": true,
+        "safe_fields": 7,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.official_assignments",
+        "source_count": 2,
+        "restore_count": 2,
+        "source_sha256": "3499590915c02aa00780aa0fe5d2394a1626e5fc91b46d80e4617fdeb3d77134",
+        "restore_sha256": "3499590915c02aa00780aa0fe5d2394a1626e5fc91b46d80e4617fdeb3d77134",
+        "match": true,
+        "safe_fields": 8,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.billing_years",
+        "source_count": 1,
+        "restore_count": 1,
+        "source_sha256": "c83a54c4c39206b46103cd5bd4843792fbbdd77633a82dad71e42ac273fc3b9c",
+        "restore_sha256": "c83a54c4c39206b46103cd5bd4843792fbbdd77633a82dad71e42ac273fc3b9c",
+        "match": true,
+        "safe_fields": 5,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.fee_rates",
+        "source_count": 1,
+        "restore_count": 1,
+        "source_sha256": "239acc05ceb5eb9edb956c30855c9211f2f9afed392dc942fae7cb27d00a10ed",
+        "restore_sha256": "239acc05ceb5eb9edb956c30855c9211f2f9afed392dc942fae7cb27d00a10ed",
+        "match": true,
+        "safe_fields": 6,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.monthly_dues",
+        "source_count": 60,
+        "restore_count": 60,
+        "source_sha256": "a3175f5e47d30d52cfdf89e1e7e9eab438fab632439380550c076797b6343fe9",
+        "restore_sha256": "a3175f5e47d30d52cfdf89e1e7e9eab438fab632439380550c076797b6343fe9",
+        "match": true,
+        "safe_fields": 10,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.payment_requests",
+        "source_count": 5,
+        "restore_count": 5,
+        "source_sha256": "7e00a0283604860982b3001979e05d4c98fe747979d6930967ae0348f9f061fa",
+        "restore_sha256": "7e00a0283604860982b3001979e05d4c98fe747979d6930967ae0348f9f061fa",
+        "match": true,
+        "safe_fields": 9,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.payment_request_items",
+        "source_count": 6,
+        "restore_count": 6,
+        "source_sha256": "5e9868e1f6dea05c6d39ceb19a23e17aec5e42db5d5f3ad247f1db2eb141a94e",
+        "restore_sha256": "5e9868e1f6dea05c6d39ceb19a23e17aec5e42db5d5f3ad247f1db2eb141a94e",
+        "match": true,
+        "safe_fields": 7,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.payment_request_claims",
+        "source_count": 1,
+        "restore_count": 1,
+        "source_sha256": "32ba13125dbca90f97d5115c95600480c5780e672fef62ee0785adb7bb044adc",
+        "restore_sha256": "32ba13125dbca90f97d5115c95600480c5780e672fef62ee0785adb7bb044adc",
+        "match": true,
+        "safe_fields": 3,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.payments",
+        "source_count": 3,
+        "restore_count": 3,
+        "source_sha256": "f97a2d554fc99c14d6dcbc12eca41730d65fef87ddd1f365ef6cb30484db89cf",
+        "restore_sha256": "f97a2d554fc99c14d6dcbc12eca41730d65fef87ddd1f365ef6cb30484db89cf",
+        "match": true,
+        "safe_fields": 8,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.payment_allocations",
+        "source_count": 7,
+        "restore_count": 7,
+        "source_sha256": "eea59a668f8d57502d2dbb04fb9c1c5c93f9de0967985665e2374126338557ff",
+        "restore_sha256": "eea59a668f8d57502d2dbb04fb9c1c5c93f9de0967985665e2374126338557ff",
+        "match": true,
+        "safe_fields": 8,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.payment_reversals",
+        "source_count": 1,
+        "restore_count": 1,
+        "source_sha256": "c6e3b47da6c6ea7f77988f2ccd290c822934a4311f4c72bef2e703fe13e4d25e",
+        "restore_sha256": "c6e3b47da6c6ea7f77988f2ccd290c822934a4311f4c72bef2e703fe13e4d25e",
+        "match": true,
+        "safe_fields": 5,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.waiver_actions",
+        "source_count": 1,
+        "restore_count": 1,
+        "source_sha256": "941d2a774f02588ab5f6809fb244a31d5347a2a55845d98da5d288a490f44ad9",
+        "restore_sha256": "941d2a774f02588ab5f6809fb244a31d5347a2a55845d98da5d288a490f44ad9",
+        "match": true,
+        "safe_fields": 6,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.waiver_items",
+        "source_count": 1,
+        "restore_count": 1,
+        "source_sha256": "45d360d94321834fa56afce057996328dc0b0d34c155e54fe97597f3d424647b",
+        "restore_sha256": "45d360d94321834fa56afce057996328dc0b0d34c155e54fe97597f3d424647b",
+        "match": true,
+        "safe_fields": 7,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "public.audit_events",
+        "source_count": 24,
+        "restore_count": 24,
+        "source_sha256": "9633245d48bbb99ff21092e447fc52bf7b07eb101db50f00c1d05715108cf295",
+        "restore_sha256": "9633245d48bbb99ff21092e447fc52bf7b07eb101db50f00c1d05715108cf295",
+        "match": true,
+        "safe_fields": 4,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      },
+      {
+        "table": "drizzle.__drizzle_migrations",
+        "source_count": 14,
+        "restore_count": 14,
+        "source_sha256": "f5f710489c43d29f6311a54289ab3a1479665d85fdd6f15b49f97cc7cb7b3499",
+        "restore_sha256": "f5f710489c43d29f6311a54289ab3a1479665d85fdd6f15b49f97cc7cb7b3499",
+        "match": true,
+        "safe_fields": 3,
+        "source_hash_basis": "reused from prior source-vs-restore PASS; allowlisted fields unchanged by auth"
+      }
+    ],
+    "excluded_fields": [
+      "people names and phone",
+      "house number and label",
+      "login identifiers",
+      "password hashes",
+      "session values",
+      "tokens and backup codes",
+      "audit actor, reason, and context"
+    ]
+  },
+  "migration_journal": {
+    "consistent_with_source_pre_auth": true,
+    "current_restore": {
+      "entries": 14,
+      "first_id": "1",
+      "last_id": "14",
+      "distinct_ids": 14,
+      "distinct_hashes": 14,
+      "invalid_hashes": 0,
+      "head_hash": "a707f54fb504999323fd65860cfeea247288e20940d1319094195d067f30ab2c",
+      "time_regressions": 0
+    }
+  },
+  "launch_integrity": {
+    "checks": 16,
+    "zero_anomalies": 16,
+    "pass": true
+  },
+  "gate_c": {
+    "checks": 32,
+    "zero_anomalies": 32,
+    "pass": true
+  },
+  "lifecycle": {
+    "checks": 11,
+    "zero_anomalies": 11,
+    "pass": true
+  },
+  "f13_financial_report_oracle": {
+    "pass": true,
+    "year": 2027,
+    "business_date": "2026-10-05",
+    "due_rows": 60,
+    "available_years": [
+      2027
+    ],
+    "monthly_match": true,
+    "yearly_match": true,
+    "arrears_match": true,
+    "yearly": {
+      "target": 480000,
+      "effectiveTarget": 481000,
+      "received": 51000,
+      "transferReceived": 10000,
+      "cashReceived": 41000,
+      "waived": 10000,
+      "outstanding": 420000,
+      "obligationCount": 48,
+      "waivedCount": 1,
+      "notDueCount": 12,
+      "overdueCount": 0
+    },
+    "arrears": {
+      "total_outstanding": 0,
+      "count": 0,
+      "household_count": 0,
+      "pending_period_count": 0,
+      "pending_household_count": 0
+    }
+  },
+  "synthetic_login": {
+    "pass": true,
+    "account_type": "official",
+    "http_status": 200,
+    "two_factor_redirect": false,
+    "session_verified": true,
+    "session_cookie_persisted": false
+  },
+  "prior_resident_login_counter": {
+    "failed_attempts": 0,
+    "locked_now": false
+  },
+  "notes": [
+    "Safe aggregate hashes cover allowlisted non-PII fields only.",
+    "Source comparison and migration-journal equality were verified in the earlier repeatable-read source/restore run; source was not reconnected for this final capture.",
+    "The synthetic login changed auth session/rate-limit state only; session values were verified in memory and not persisted to evidence."
+  ],
+  "restored_table_counts": {
+    "public_tables": 27,
+    "non_system_tables": 28,
+    "schemas_with_tables": 2
+  }
+}

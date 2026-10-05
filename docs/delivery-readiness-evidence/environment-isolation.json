@@ -1,70 +1,34 @@
 {
-  "schemaVersion": 1,
-  "asOfDate": "2026-10-05",
-  "repository": "Satsetx4/karturt",
-  "branch": "feat/delivery-readiness-single-rt",
-  "baselineSha": "ef9b6efacea01e996aec43f6eeb1429b4e86044e",
-  "existingNeonProject": {
-    "name": "KartuRT",
-    "projectId": "billowing-base-57949906",
-    "state": "untouched",
-    "productionBranch": {
-      "name": "production",
-      "branchId": "br-patient-band-azznfh28"
-    },
-    "developmentBranch": {
-      "name": "karturt-development",
-      "branchId": "br-crimson-band-az6i637k"
-    }
-  },
-  "stagingNeon": {
-    "projectName": "karturt-f3-staging-isolated",
-    "projectId": "wispy-sky-99637283",
-    "regionId": "aws-ap-southeast-1",
+  "evidenceState": "verified-at-checkpoint",
+  "verifiedDate": "2026-10-05",
+  "verifiedSourceCommit": "7c56f273111ab0f94f54a493f500aed4e2e54dcd",
+  "result": "PASS",
+  "appEnvironment": "staging",
+  "databaseEnvironment": "staging",
+  "databaseProvider": "Neon PostgreSQL",
+  "stagingProject": {
+    "name": "karturt-f3-staging-isolated",
+    "id": "wispy-sky-99637283",
+    "region": "aws-ap-southeast-1",
     "branchName": "staging",
     "branchId": "br-morning-wind-b3tektlf",
-    "databaseName": "karturt_f3_staging",
-    "roleName": "karturt_f3_staging_app",
-    "isolatedAsSeparateProject": true,
-    "migrationsRun": true,
-    "fixturesCreated": false
+    "databaseName": "karturt_f3_uat",
+    "applicationRole": "karturt_f3_staging_app"
   },
-  "localStagingEnvironment": {
-    "file": ".env.local",
-    "gitIgnored": true,
-    "fileValues": "kept local; not included in evidence",
-    "configuredKeys": [
-      "APP_ENV",
-      "DATABASE_ENV",
-      "DATABASE_URL",
-      "BETTER_AUTH_SECRET"
-    ],
-    "stagingLabelsVerified": true,
-    "databaseHostIsPooledNeonEndpoint": true,
-    "authSecretHexLength": 96,
-    "nextPublicAppUrl": "unset pending verified HTTPS deployment"
+  "appEnvironmentLabelsMatch": true,
+  "databaseEndpointVerifiedAsStaging": true,
+  "stagingAuthSecret": {
+    "uniqueToStaging": true,
+    "configuredForPreviewBranchOnly": true,
+    "valueRecorded": false
   },
-  "stagingVercel": {
-    "teamSlug": "sekawan",
-    "projectName": "karturt-f3-staging",
-    "projectId": "prj_OgnBy1d7z2beP8wQHRowF0yJc3PU",
-    "linkedRepository": "Satsetx4/karturt",
-    "productionBranchReportedByCreate": "main",
-    "initialDeployRequested": false,
-    "deploymentGate": {
-      "setting": "commandForIgnoringBuildStep",
-      "apiUpdateStatus": "accepted and re-applied with exact F3-only branch command on 2026-10-05",
-      "verificationStatus": "not independently verified; get_project omits the setting and no branch-triggered execution has occurred",
-      "intendedEligibleBranch": "feat/delivery-readiness-single-rt"
-    },
-    "projectDefaultDomain": {
-      "hostname": "karturt-f3-staging.vercel.app",
-      "deploymentAssignment": "none; no deployments exist",
-      "customProductionDomainConfigured": false
-    },
-    "branchPreviewEnvironmentVariables": "not created; Vercel rejected the branch scope because the branch is not yet present in the connected Git repository",
-    "previewEnvironmentVariableKeys": [],
-    "productionDeployment": "none"
+  "developmentProductionIsolation": {
+    "stagingNeonProjectIsSeparate": true,
+    "productionProjectAccessed": false,
+    "productionDatabaseAccessed": false,
+    "productionSecretsReadOrSet": false,
+    "productionDomainUsed": false
   },
-  "productionTouched": false
+  "secretMaterialRecorded": false,
+  "currentPreviewDeploymentId": "dpl_7a1nbVvs9QKKf9YuHCsiWWttC9vg"
 }

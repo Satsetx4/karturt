@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "observedDate": "2026-10-05",
+  "environment": "staging",
+  "scope": "SINGLE-RT synthetic system admins only",
+  "sourceCodeFixCommit": "0469a487bb00a00bd71d75c0b006dde6ec301d69",
+  "currentPreviewCommit": "7c56f273111ab0f94f54a493f500aed4e2e54dcd",
+  "currentPreviewDeploymentId": "dpl_7a1nbVvs9QKKf9YuHCsiWWttC9vg",
+  "status": "FAIL_INCOMPLETE_POST_FIX_AUTHENTICATED_UAT",
+  "priorDeploymentEvidence": {
+    "commit": "a81ea65897efd178c7ecf49eab1bc550b2905b0a",
+    "admin1PasswordLogin": "PASS",
+    "admin1TotpAndVerifiedSession": "PASS",
+    "protectedNonfinancialAction": "PASS_AFTER_VALID_INPUT",
+    "admin2PasswordLogin": "PASS",
+    "admin2TotpAndVerifiedSession": "PASS",
+    "secondAdminRecovery": "PASS",
+    "targetSessionsRevoked": 3,
+    "targetReEnrollment": "PASS",
+    "selfRecoveryDenied403": true,
+    "unverifiedRecoveryDenied401": true,
+    "systemAdminFinancialMutationDenied403": true,
+    "finding": "Malformed recovery reference returned 500 without mutation; narrow route validation was added and CI tests pass, but live post-fix UAT is still required."
+  },
+  "postFixUat": {
+    "passwordLoginToMfa": "PASS",
+    "currentMfaChallengeDisplayed": true,
+    "verifiedSystemAdminSession": "NOT_VERIFIED",
+    "validRecoveryAction": "NOT_RUN",
+    "malformedAndOmittedReferenceHttp400": "NOT_VERIFIED",
+    "directHttpProbes": "BLOCKED_AT_VERCEL_PREVIEW_AUTH_401",
+    "existingFactorDecryption": "NOT_AVAILABLE_FROM_AUTHORIZED_LOCAL_VALUES",
+    "stagingVercelSecretRead": "REDACTED_BY_CONNECTOR",
+    "existingTotpSeedOrAuthenticatorAvailable": false,
+    "factorResetOrMfaBypassPerformed": false,
+    "financialStateMutationFromProbe": false
+  },
+  "phase8ReadOnly": {
+    "launchIntegrity": {
+      "checks": 16,
+      "zero": 16,
+      "result": "PASS"
+    },
+    "gateC": {
+      "checks": 32,
+      "zero": 32,
+      "result": "PASS"
+    },
+    "lifecycle": {
+      "checks": 11,
+      "zero": 11,
+      "result": "PASS"
+    },
+    "migrationEntries": 14,
+    "migrationHead": "0013_phase_12_household_management",
+    "postProbeStateChanged": false
+  },
+  "blocker": "The staging System Admin session reaches MFA, but there is no authorized current TOTP source. The existing factor cannot be decrypted with local staging-auth candidates and Vercel stores this variable as a redacted sensitive value. No MFA bypass, factor reset, or destructive account change was attempted; therefore post-fix protected recovery behavior remains unverified.",
+  "credentialOrSessionMaterialRecorded": false,
+  "productionTouched": false
+}

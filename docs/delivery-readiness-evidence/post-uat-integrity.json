@@ -1,0 +1,383 @@
+{
+  "status": "PASS",
+  "generatedAt": "2026-10-05T09:17:51.3695139Z",
+  "scope": "Post-UAT read-only reconciliation on the single-RT source staging database after Resident, Treasurer, Chairman, and System Admin UAT.",
+  "source": {
+    "branch": "feat/delivery-readiness-single-rt",
+    "sha": "a81ea65897efd178c7ecf49eab1bc550b2905b0a"
+  },
+  "target": {
+    "environment": "staging",
+    "database": "karturt_f3_uat"
+  },
+  "migration": {
+    "entries": 14,
+    "head": "0013_phase_12_household_management",
+    "headHash": "a707f54fb504999323fd65860cfeea247288e20940d1319094195d067f30ab2c",
+    "matchesCheckedIn0013": true,
+    "migration0014Present": false
+  },
+  "execution": {
+    "mode": "REPEATABLE READ READ ONLY",
+    "scripts": "Checked-in launch-safety, Gate C, and lifecycle query definitions executed via staging-only wrappers. The official command entrypoints retain their development-only target guards and were not modified.",
+    "sourceEnvironmentLabelsVerified": true,
+    "sourceDatabasePathVerified": true,
+    "postExpirySessionRerun": {
+      "startedAt": "2026-10-05T09:17:45.9671159Z",
+      "completedAt": "2026-10-05T09:17:51.3695139Z",
+      "operationMode": "REPEATABLE READ READ ONLY",
+      "launchIntegrity": {
+        "result": "PASS",
+        "total": 16,
+        "zeroAnomalies": 16,
+        "generatedAt": "2026-10-05T09:17:46.726Z"
+      },
+      "gateC": {
+        "result": "PASS",
+        "total": 32,
+        "zeroAnomalies": 32
+      },
+      "lifecycle": {
+        "result": "PASS",
+        "total": 11,
+        "zeroAnomalies": 11
+      },
+      "migrationEntries": 14,
+      "migrationHead": "0013_phase_12_household_management",
+      "migrationHeadHash": "a707f54fb504999323fd65860cfeea247288e20940d1319094195d067f30ab2c",
+      "allFinancialInvariantsZero": true
+    }
+  },
+  "launchIntegrity": {
+    "result": "PASS",
+    "total": 16,
+    "zero": 16,
+    "nonzero": 0,
+    "checks": [
+      {
+        "name": "pending_request_invalid_due_state",
+        "anomalies": 0
+      },
+      {
+        "name": "paid_due_without_exact_active_settlement",
+        "anomalies": 0
+      },
+      {
+        "name": "paid_due_unexplained_balance",
+        "anomalies": 0
+      },
+      {
+        "name": "verified_request_payment_allocation_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "payment_allocation_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "active_received_over_effective_target",
+        "anomalies": 0
+      },
+      {
+        "name": "reversed_payment_still_active",
+        "anomalies": 0
+      },
+      {
+        "name": "waived_ledger_or_activity_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "not_due_invalid_snapshot_or_activity",
+        "anomalies": 0
+      },
+      {
+        "name": "household_period_overlap",
+        "anomalies": 0
+      },
+      {
+        "name": "multiple_active_households_same_house",
+        "anomalies": 0
+      },
+      {
+        "name": "active_resident_linked_to_inactive_household",
+        "anomalies": 0
+      },
+      {
+        "name": "active_resident_linked_to_inactive_person",
+        "anomalies": 0
+      },
+      {
+        "name": "duplicate_current_treasurer_or_chairman",
+        "anomalies": 0
+      },
+      {
+        "name": "same_account_current_treasurer_and_chairman",
+        "anomalies": 0
+      },
+      {
+        "name": "cross_rt_financial_scope_mismatch",
+        "anomalies": 0
+      }
+    ]
+  },
+  "gateC": {
+    "result": "PASS",
+    "total": 32,
+    "zero": 32,
+    "nonzero": 0,
+    "checks": [
+      {
+        "name": "paid_balance_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "unpaid_fully_settled",
+        "anomalies": 0
+      },
+      {
+        "name": "payable_target_nonpositive",
+        "anomalies": 0
+      },
+      {
+        "name": "active_received_over_target",
+        "anomalies": 0
+      },
+      {
+        "name": "verified_request_payment_allocation_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "payment_without_allocation",
+        "anomalies": 0
+      },
+      {
+        "name": "payment_amount_allocation_sum_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "duplicate_allocation_for_payment_due",
+        "anomalies": 0
+      },
+      {
+        "name": "active_allocation_missing_exact_owner",
+        "anomalies": 0
+      },
+      {
+        "name": "active_owner_allocation_payment_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "reversed_payment_retains_active_owner",
+        "anomalies": 0
+      },
+      {
+        "name": "active_ownership_sum_vs_direct_receipts",
+        "anomalies": 0
+      },
+      {
+        "name": "pending_request_missing_valid_claim_or_item",
+        "anomalies": 0
+      },
+      {
+        "name": "active_claim_without_pending_request_or_item",
+        "anomalies": 0
+      },
+      {
+        "name": "terminal_request_with_active_claim",
+        "anomalies": 0
+      },
+      {
+        "name": "pending_item_snapshot_outstanding_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "waived_ledger_anomaly",
+        "anomalies": 0
+      },
+      {
+        "name": "waived_active_received",
+        "anomalies": 0
+      },
+      {
+        "name": "waived_active_claim",
+        "anomalies": 0
+      },
+      {
+        "name": "waived_adjustment_after_action",
+        "anomalies": 0
+      },
+      {
+        "name": "not_due_financial_activity",
+        "anomalies": 0
+      },
+      {
+        "name": "adjustment_audit_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "waiver_audit_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "fee_rate_audit_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "payment_request_creation_audit_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "verified_request_audit_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "request_resolution_audit_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "cash_payment_audit_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "payment_reversal_audit_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "system_admin_financial_actor",
+        "anomalies": 0
+      },
+      {
+        "name": "duplicate_active_treasurer_or_chairman",
+        "anomalies": 0
+      },
+      {
+        "name": "same_account_active_treasurer_and_chairman",
+        "anomalies": 0
+      }
+    ]
+  },
+  "lifecycle": {
+    "result": "PASS",
+    "total": 11,
+    "zero": 11,
+    "nonzero": 0,
+    "checks": [
+      {
+        "name": "overlapping_household_periods",
+        "anomalies": 0
+      },
+      {
+        "name": "multiple_active_households_same_house",
+        "anomalies": 0
+      },
+      {
+        "name": "multiple_current_residents_same_household",
+        "anomalies": 0
+      },
+      {
+        "name": "duplicate_current_resident_login_same_rt",
+        "anomalies": 0
+      },
+      {
+        "name": "ambiguous_current_resident_login_across_rt",
+        "anomalies": 0
+      },
+      {
+        "name": "active_resident_linked_to_inactive_household",
+        "anomalies": 0
+      },
+      {
+        "name": "active_resident_linked_to_inactive_person",
+        "anomalies": 0
+      },
+      {
+        "name": "disabled_resident_with_unexpired_session",
+        "anomalies": 0
+      },
+      {
+        "name": "financial_rows_with_household_scope_mismatch",
+        "anomalies": 0
+      },
+      {
+        "name": "not_due_financial_activity",
+        "anomalies": 0
+      },
+      {
+        "name": "post_end_interacted_due_rewritten_to_not_due",
+        "anomalies": 0
+      }
+    ]
+  },
+  "financialReconciliation": {
+    "result": "PASS",
+    "invariants": [
+      {
+        "name": "active_received_not_over_effective_target",
+        "anomalies": 0,
+        "checkedBy": [
+          "launch I06",
+          "Gate C active_received_over_target"
+        ]
+      },
+      {
+        "name": "paid_due_has_exact_active_allocation",
+        "anomalies": 0,
+        "checkedBy": [
+          "launch I02-I05",
+          "Gate C paid/ownership/allocation checks"
+        ]
+      },
+      {
+        "name": "reversed_payment_not_active_received",
+        "anomalies": 0,
+        "checkedBy": [
+          "launch I07",
+          "Gate C reversed_payment_retains_active_owner"
+        ]
+      },
+      {
+        "name": "waived_state_and_ledger_valid",
+        "anomalies": 0,
+        "checkedBy": [
+          "launch I08",
+          "Gate C waiver checks"
+        ]
+      },
+      {
+        "name": "not_due_has_no_financial_activity",
+        "anomalies": 0,
+        "checkedBy": [
+          "launch I09",
+          "Gate C not_due_financial_activity",
+          "Lifecycle check"
+        ]
+      }
+    ]
+  },
+  "adminFinancialDenial": {
+    "verifiedSystemAdminSession": true,
+    "endpointStatus": 403,
+    "requestStateBeforeAndAfter": "pending",
+    "itemCountBeforeAndAfter": 1,
+    "paymentCountBeforeAndAfter": 0,
+    "allocationCountBeforeAndAfter": 0,
+    "dueStateBeforeAndAfter": "unpaid",
+    "stateUnchanged": true
+  },
+  "secretScan": "No connection strings, credentials, account IDs, request codes, cookies, PINs, TOTP values, or real resident data recorded.",
+  "sessionExpirySanity": {
+    "result": "PASS",
+    "targetOnly": true,
+    "preexistingTargetSessionsRevoked": 2,
+    "freshLoginStatus": 200,
+    "freshTargetSessionsBeforeExpiry": 1,
+    "expirationRowsUpdated": 1,
+    "expiryFieldOnly": "expiresAt",
+    "protectedEndpointStatus": 401,
+    "getSessionPresentAfter": false,
+    "expiredTargetSessionRowsAfterAuthCheck": 0,
+    "nonTargetAccountAndSessionFingerprintsUnchanged": true,
+    "financialFingerprintsUnchanged": true,
+    "targetAccountActiveUnlocked": true
+  }
+}

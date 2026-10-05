@@ -1,0 +1,47 @@
+{
+  "evidenceState": "verified",
+  "verifiedDate": "2026-10-05",
+  "deploymentCommit": "a81ea65897efd178c7ecf49eab1bc550b2905b0a",
+  "deploymentEnvironment": "Preview",
+  "result": "PASS",
+  "loginAndSession": "PASS",
+  "queueRead": "PASS",
+  "queueItemCountAtInitialCheck": 1,
+  "residentPaymentRequestFlow": {
+    "firstRequestCreated": "PASS",
+    "pendingObserved": "PASS",
+    "cancellation": "PASS",
+    "secondRequestCreated": "PASS",
+    "transferVerification": "PASS",
+    "residentObservedPaid": "PASS",
+    "activeTransferHistory": "PASS"
+  },
+  "separateRequestRejection": "PASS",
+  "cashPayment": "PASS",
+  "cashPaymentReversal": "PASS",
+  "reversalHistoryLabel": "Dibatalkan",
+  "sourceLedgerCheck": {
+    "januaryDueState": "paid",
+    "januaryActiveReceived": 10000,
+    "februaryDueState": "unpaid",
+    "februaryActiveReceived": 0,
+    "februaryRetainedPaymentAndReversal": true
+  },
+  "requestCountsAtCheckpoint": {
+    "verified": 3,
+    "rejected": 2,
+    "cancelled": 2,
+    "pending": 0
+  },
+  "chairmanOnlyEndpointDeniedToTreasurer": {
+    "status": 403,
+    "result": "PASS"
+  },
+  "secretOrSessionMaterialRecorded": false,
+  "requestCountsAtPostAdminDenial": {
+    "verified": 3,
+    "rejected": 2,
+    "cancelled": 2,
+    "pending": 1
+  }
+}

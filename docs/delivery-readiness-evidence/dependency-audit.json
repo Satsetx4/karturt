@@ -1,0 +1,23 @@
+{
+  "evidenceState": "verified-at-checkpoint",
+  "verifiedDate": "2026-10-05",
+  "verifiedSourceCommit": "a81ea65897efd178c7ecf49eab1bc550b2905b0a",
+  "fullAudit": {
+    "exitStatus": 1,
+    "highSeverityDependencyPaths": 5,
+    "uniqueAcceptedAdvisory": "GHSA-vfj7-8cjw-p6xm",
+    "cve": "CVE-2026-93687",
+    "package": "braces@3.0.3",
+    "scope": "development-only via eslint tooling",
+    "acceptanceRecord": "RA-2026-F12-001",
+    "classification": "KNOWN / ACCEPTED RESIDUAL RISK — NOT RESOLVED",
+    "otherAcceptedFindings": 0
+  },
+  "productionOnlyAudit": {
+    "commandScope": "omit development dependencies",
+    "exitStatus": 0,
+    "vulnerabilities": 0,
+    "result": "PASS"
+  },
+  "lockfileChanged": false
+}

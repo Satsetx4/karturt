@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS_SERVICE_LAYER_GOOD_WITH_SCOPE_LIMITATION",
+  "environment": {
+    "provider": "Neon",
+    "projectId": "wispy-sky-99637283",
+    "sourceBranchId": "br-morning-wind-b3tektlf",
+    "performanceBranchId": "br-wild-snow-b3byy0mp",
+    "database": "karturt_f3_staging",
+    "endpointId": "ep-empty-cell-b3s5ybna",
+    "measurementType": "PostgreSQL query execution only",
+    "queryMethod": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
+    "region": "aws-ap-southeast-1",
+    "computeCu": 0.25
+  },
+  "fixture": {
+    "synthetic": true,
+    "rtUnits": 1,
+    "houses": 500,
+    "households": 500,
+    "people": 497,
+    "annualDues": 5940,
+    "billingYears": 1,
+    "paymentRequests": 5,
+    "pendingPaymentRequests": 1,
+    "payments": 3,
+    "paymentAllocations": 7,
+    "notes": "The performance branch copied the existing 1-RT, 10-household synthetic fixture, then received 490 synthetic households and 5880 dues. Source and restore branches were not mutated."
+  },
+  "measurement": {
+    "warmupRunsPerWorkload": 1,
+    "timedRunsPerWorkload": 5,
+    "runOrder": "Sequential",
+    "errors": 0,
+    "timeouts": 0,
+    "workloads": {
+      "chairmanAnnualReportAndArrears": {
+        "classification": "database-query-only",
+        "runsMs": [
+          56.305,
+          61.377,
+          60.635,
+          58.383,
+          63.597
+        ],
+        "medianMs": 60.635,
+        "slowestMs": 63.597
+      },
+      "householdManagementFirstPage": {
+        "classification": "database-query-only",
+        "runsMs": [
+          22.4,
+          14.431,
+          13.419,
+          14.546,
+          14.162
+        ],
+        "medianMs": 14.431,
+        "slowestMs": 22.4
+      },
+      "treasurerRequestQueue": {
+        "classification": "database-query-only",
+        "runsMs": [
+          0.334,
+          0.348,
+          0.322,
+          0.333,
+          0.347
+        ],
+        "medianMs": 0.334,
+        "slowestMs": 0.348
+      },
+      "treasurerPaymentHistory": {
+        "classification": "database-query-only",
+        "runsMs": [
+          0.345,
+          0.302,
+          0.448,
+          0.346,
+          0.292
+        ],
+        "medianMs": 0.345,
+        "slowestMs": 0.448
+      },
+      "residentPaymentHistory": {
+        "classification": "database-query-only",
+        "runsMs": [
+          0.29,
+          0.218,
+          0.201,
+          0.206,
+          0.215
+        ],
+        "medianMs": 0.215,
+        "slowestMs": 0.29
+      },
+      "residentDuesAndCard": {
+        "classification": "database-query-only",
+        "runsMs": [
+          0.275,
+          0.27,
+          0.287,
+          0.281,
+          0.634
+        ],
+        "medianMs": 0.281,
+        "slowestMs": 0.634
+      }
+    }
+  },
+  "interpretation": {
+    "queryOnlyResult": "All measured PostgreSQL query execution times are below 2 seconds.",
+    "endToEndServiceTiming": "MEASURED for the checked-in read service functions via direct invocation on the isolated Neon branch.",
+    "httpApiTiming": "UNVERIFIED",
+    "acceptance": "Direct service timings include the checked-in database reads and service-layer processing, with synthetic principals resolved from staging rows. HTTP/API route middleware, authentication/session validation, response delivery, and browser rendering were not measured, so this is not full application or route acceptance.",
+    "serviceLayerResult": "All measured service-layer medians are below 2 seconds; classify these service paths as GOOD for this 0.25 CU isolated staging compute."
+  },
+  "serviceLayer": {
+    "runOrder": "Sequential",
+    "warmupRunsPerWorkload": 1,
+    "workloads": {
+      "chairmanAnnualReportAndArrears": {
+        "slowestMs": 945.45,
+        "outputSummary": {
+          "arrearsDueRows": 5922,
+          "months": 12,
+          "received": 51000,
+          "annualTarget": 59280000,
+          "arrearsHouseholds": 494
+        },
+        "medianMs": 651.34,
+        "runsMs": [
+          683.25,
+          651.34,
+          945.45,
+          647.28,
+          650.03
+        ]
+      },
+      "treasurerPaymentHistory": {
+        "slowestMs": 201.57,
+        "outputSummary": {
+          "transactions": 3
+        },
+        "medianMs": 179.11,
+        "runsMs": [
+          179.11,
+          167.29,
+          168.57,
+          195.36,
+          201.57
+        ]
+      },
+      "treasurerRequestQueue": {
+        "slowestMs": 189.05,
+        "outputSummary": {
+          "requests": 1
+        },
+        "medianMs": 182.31,
+        "runsMs": [
+          165.01,
+          182.31,
+          182.53,
+          189.05,
+          172.94
+        ]
+      },
+      "residentPaymentHistory": {
+        "slowestMs": 100.13,
+        "outputSummary": {
+          "payments": 1
+        },
+        "medianMs": 91.54,
+        "runsMs": [
+          90.42,
+          86.13,
+          95.66,
+          91.54,
+          100.13
+        ]
+      },
+      "residentDuesAndCard": {
+        "slowestMs": 135.0,
+        "outputSummary": {
+          "dues": 12,
+          "cardSummary": {
+            "pending": 0,
+            "paid": 10000,
+            "unpaid": 110000
+          }
+        },
+        "medianMs": 89.07,
+        "runsMs": [
+          89.07,
+          135.0,
+          84.2,
+          92.55,
+          88.79
+        ]
+      },
+      "householdManagementFirstPage": {
+        "slowestMs": 553.84,
+        "outputSummary": {
+          "returnedHouseholds": 250,
+          "availableHouses": 0
+        },
+        "medianMs": 392.11,
+        "runsMs": [
+          553.84,
+          336.65,
+          392.11,
+          340.64,
+          469.15
+        ]
+      }
+    },
+    "timeouts": 0,
+    "errors": 0,
+    "timedRunsPerWorkload": 5,
+    "method": "Checked-in TypeScript read service functions through the existing Neon serverless database wrapper; no Next build/dev command, HTTP route, browser, or auth/session middleware. Synthetic account principals were resolved from the isolated database."
+  },
+  "sourceCommit": "a81ea65897efd178c7ecf49eab1bc550b2905b0a",
+  "analysisNote": "The read service median for Chairman annual report plus arrears is below 2 seconds on the synthetic 500-household Neon branch. HTTP middleware, browser rendering, and authenticated route end-to-end latency were not measured."
+}

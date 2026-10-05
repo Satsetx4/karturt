@@ -1,0 +1,79 @@
+{
+  "evidenceState": "verified",
+  "verifiedDate": "2026-10-05",
+  "deploymentCommit": "a81ea65897efd178c7ecf49eab1bc550b2905b0a",
+  "deploymentEnvironment": "Preview",
+  "result": "PASS",
+  "fixtureLabel": "QA-F3-11",
+  "initialFutureStartAccountPreflight": {
+    "existingAccountsChecked": 5,
+    "eligibleForLogin": 0,
+    "reason": "household start date is after Jakarta business date",
+    "failedAttemptsAfterSinglePreflightLogin": 0,
+    "locked": false
+  },
+  "supportedChairmanCreateFlow": {
+    "result": "PASS",
+    "createdHouseholdsAfter": 11,
+    "createdHousesAfter": 11,
+    "activeResidentAccountsAfter": 6,
+    "startsOn": "2026-10-05"
+  },
+  "loginAndSession": "PASS",
+  "cardAndDues": "PASS",
+  "paymentRequest": {
+    "createPending": "PASS",
+    "firstRequestCancel": "PASS",
+    "secondRequestVerifyByTreasurer": "PASS",
+    "residentObservedPaid": "PASS",
+    "paymentHistory": "PASS"
+  },
+  "wrongPinAndLockout": {
+    "failedAttemptsToThreshold": 5,
+    "lockoutDurationMinutes": 15,
+    "result": "PASS"
+  },
+  "chairmanPinResetAndSessionRevocation": {
+    "resetViaUi": "PASS",
+    "failedAttemptsCleared": true,
+    "oldSessionProtectedRequestStatus": 401,
+    "newPinLoginStatus": 200,
+    "result": "PASS"
+  },
+  "expiredSessionTest": {
+    "result": "PASS",
+    "fixture": "one synthetic Resident account",
+    "credentialReset": {
+      "actorRole": "verified System Admin",
+      "httpStatus": 200,
+      "preexistingTargetSessionsRevoked": 2,
+      "otherAccountAndSessionFingerprintsUnchanged": true
+    },
+    "freshLogin": {
+      "attempts": 1,
+      "httpStatus": 200,
+      "sessionPresent": true,
+      "targetSessionRows": 1,
+      "cookieMappedToExactlyOneSession": true
+    },
+    "expiry": {
+      "updatedRows": 1,
+      "field": "expiresAt only",
+      "protectedPreviewEndpoint": "GET /api/resident/monthly-dues",
+      "protectedEndpointStatus": 401,
+      "getSessionPresentAfter": false,
+      "targetSessionRowAfterRequest": 0,
+      "expiredTargetRowNoLongerPersistedAfterAuthCheck": true
+    },
+    "postChecks": {
+      "residentAccountActive": true,
+      "failedAttempts": 0,
+      "locked": false,
+      "nonTargetAccountAndSessionFingerprintsUnchanged": true,
+      "financialFingerprintsUnchanged": true
+    },
+    "verifiedAt": "2026-10-05T09:16:56.740Z",
+    "secretOrSessionMaterialRecorded": false
+  },
+  "secretOrSessionMaterialRecorded": false
+}

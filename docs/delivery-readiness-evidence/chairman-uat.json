@@ -1,0 +1,44 @@
+{
+  "evidenceState": "verified",
+  "verifiedDate": "2026-10-05",
+  "deploymentCommit": "a81ea65897efd178c7ecf49eab1bc550b2905b0a",
+  "deploymentEnvironment": "Preview",
+  "role": "Chairman",
+  "result": "PASS",
+  "loginAndSession": "PASS",
+  "householdList": "PASS",
+  "supportedHouseholdCreate": {
+    "result": "PASS",
+    "httpStatus": 201,
+    "syntheticLabel": "QA-F3-11"
+  },
+  "residentPinResetAfterLockout": {
+    "result": "PASS",
+    "httpStatus": 200,
+    "failedAttemptsCleared": true,
+    "priorResidentSessionRevoked": true
+  },
+  "tariffSchedule": {
+    "result": "PASS",
+    "period": "2027-12",
+    "syntheticOnly": true
+  },
+  "dueAdjustment": {
+    "result": "PASS",
+    "period": "2027-03",
+    "syntheticAdjustmentAmount": 1000
+  },
+  "waiver": {
+    "result": "PASS",
+    "period": "2027-04",
+    "syntheticOnly": true
+  },
+  "reportAndArrears": "PASS",
+  "financialRecordsVerifiedReadOnly": true,
+  "chairmanPaymentVerificationNegative": {
+    "result": "PASS",
+    "httpStatus": 403,
+    "requestAndPaymentUnchanged": true
+  },
+  "secretOrSessionMaterialRecorded": false
+}

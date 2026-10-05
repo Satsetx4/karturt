@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "asOfDate": "2026-10-05",
+  "environment": "staging",
+  "scope": "SINGLE-RT synthetic only",
+  "snapshot": "Post-UAT aggregate counts from read-only queries",
+  "status": "PASS",
+  "counts": {
+    "rtUnits": 1,
+    "houses": 11,
+    "households": 11,
+    "people": 8,
+    "residentAccounts": 6,
+    "treasurerAccounts": 1,
+    "chairmanAccounts": 1,
+    "systemAdminAccounts": 2,
+    "appAccountsTotal": 10,
+    "officialAssignments": 2,
+    "billingYears": 1,
+    "feeRates": 2,
+    "monthlyDues": 72,
+    "dueAdjustments": 2,
+    "paymentRequests": 8,
+    "requestItems": 9,
+    "activeClaims": 1,
+    "payments": 5,
+    "allocations": 9,
+    "paymentReversals": 2,
+    "waiverActions": 2,
+    "waiverItems": 2,
+    "auditEvents": 40
+  },
+  "duesByState": {
+    "unpaid": 52,
+    "paid": 6,
+    "waived": 2,
+    "notDue": 12
+  },
+  "paymentRequestsByState": {
+    "pending": 1,
+    "verified": 3,
+    "rejected": 2,
+    "cancelled": 2
+  },
+  "paymentMethodAndReversalState": {
+    "cashActive": 1,
+    "cashReversed": 1,
+    "transferActive": 2,
+    "transferReversed": 1
+  },
+  "assignments": {
+    "treasurer": 1,
+    "chairman": 1
+  },
+  "note": "The synthetic base fixture was exercised through the real Preview; Chairman UAT added one synthetic household and resident, bringing houses/households to 11 and residents to 6. Financial state was created through application service/API flows; no direct financial ledger inserts.",
+  "secretsOrRealPiiRecorded": false,
+  "productionTouched": false
+}
