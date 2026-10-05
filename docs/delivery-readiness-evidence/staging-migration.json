@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "asOfDate": "2026-10-05",
+  "repository": "Satsetx4/karturt",
+  "branch": "feat/delivery-readiness-single-rt",
+  "baselineSha": "ef9b6efacea01e996aec43f6eeb1429b4e86044e",
+  "source": {
+    "projectName": "karturt-f3-staging-isolated",
+    "projectId": "wispy-sky-99637283",
+    "branchName": "staging",
+    "branchId": "br-morning-wind-b3tektlf",
+    "databaseName": "karturt_f3_staging",
+    "environmentLabels": {
+      "app": "staging",
+      "database": "staging",
+      "match": true
+    }
+  },
+  "beforeMigration": {
+    "userTableCount": 0,
+    "status": "PASS"
+  },
+  "migration": {
+    "command": "npm run db:migrate",
+    "status": "PASS",
+    "journalEntryCount": 14,
+    "firstMigration": "0000_phase_0_core_schema",
+    "head": "0013_phase_12_household_management",
+    "latestJournalHash": "a707f54fb504999323fd65860cfeea247288e20940d1319094195d067f30ab2c",
+    "latestSqlHashMatchesJournal": true,
+    "migration0014Present": false
+  },
+  "checks": {
+    "dbCheck": {
+      "command": "npm run db:check",
+      "status": "PASS",
+      "environmentLabelsMatch": true
+    },
+    "drizzleJournalConsistency": {
+      "command": "npx drizzle-kit check",
+      "status": "PASS"
+    },
+    "schemaDrift": {
+      "command": "npm run db:generate -- --name f3_schema_drift_check",
+      "status": "PASS",
+      "newSchemaChanges": false,
+      "migrationFileCreated": false
+    }
+  },
+  "productionTouched": false,
+  "fixturesCreated": false
+}

@@ -18,6 +18,7 @@ on:
       - "feat/phase-11-tariff-adjustment"
       - "feat/phase-12-household-management"
       - "feat/phase-13-reports"
+      - "feat/delivery-readiness-single-rt"
       - "fix/phase-13-1-acceptance-closure"
       - "feat/launch-safety-single-rt"
       - "fix/launch-safety-security-closure"
@@ -88,7 +89,7 @@ jobs:
         run: npm run build
 
   launch-safety-postgres-concurrency:
-    if: github.ref == 'refs/heads/feat/launch-safety-single-rt' || github.head_ref == 'feat/launch-safety-single-rt' || github.ref == 'refs/heads/fix/launch-safety-security-closure' || github.head_ref == 'fix/launch-safety-security-closure'
+    if: github.ref == 'refs/heads/feat/launch-safety-single-rt' || github.head_ref == 'feat/launch-safety-single-rt' || github.ref == 'refs/heads/fix/launch-safety-security-closure' || github.head_ref == 'fix/launch-safety-security-closure' || github.ref == 'refs/heads/feat/delivery-readiness-single-rt' || github.head_ref == 'feat/delivery-readiness-single-rt'
     name: Launch Safety independent PostgreSQL concurrency
     needs: gate-a
     runs-on: ubuntu-latest

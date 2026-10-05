@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "asOfDate": "2026-10-05",
+  "repository": "Satsetx4/karturt",
+  "branch": "feat/delivery-readiness-single-rt",
+  "baselineSha": "ef9b6efacea01e996aec43f6eeb1429b4e86044e",
+  "vercelProjectName": "karturt-f3-staging",
+  "vercelProjectId": "prj_OgnBy1d7z2beP8wQHRowF0yJc3PU",
+  "requestedDeploymentTarget": "F3 branch Preview on Vercel staging project",
+  "status": "SOURCE_CHECKPOINT_READY; BLOCKED_WAITING_FOR_BRANCH_PUSH",
+  "branchPresentOnOrigin": false,
+  "remoteBranchCheck": "No remote F3 ref at initial check; source checkpoint push authorized by coordinator and pending",
+  "deploymentCount": 0,
+  "latestDeployment": null,
+  "live": false,
+  "vercelProjectDefaultDomain": {
+    "hostname": "karturt-f3-staging.vercel.app",
+    "deploymentAssignment": "none; no deployments exist",
+    "customProductionDomainConfigured": false
+  },
+  "deploymentGate": {
+    "setting": "commandForIgnoringBuildStep",
+    "apiUpdateStatus": "accepted and re-applied with exact F3-only branch command on 2026-10-05",
+    "verificationStatus": "not independently verified; get_project omits the setting and no branch-triggered execution has occurred",
+    "intendedEligibleBranch": "feat/delivery-readiness-single-rt"
+  },
+  "nextPublicAppUrl": "unset; set only after a verified HTTPS F3 Preview deployment exists",
+  "previewVariables": "not configured because Vercel rejects exact branch scoping until the branch exists in the connected Git repository",
+  "productionDeployment": "none",
+  "productionTouched": false,
+  "migrationsRun": true,
+  "fixturesCreated": false,
+  "uatPerformed": false,
+  "performanceWorkPerformed": false
+}
