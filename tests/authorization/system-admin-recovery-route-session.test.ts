@@ -945,6 +945,39 @@ describe("System Admin recovery route cookie-session boundary", () => {
     }
   });
 
+  it("rejects malformed System Admin recovery references before changing target state", async () => {
+    const actor = await verifiedAdminSession("Malformed reference actor");
+    const target = await verifiedAdminSession("Malformed reference target");
+    const before = {
+      factors: await testDatabase.db.select().from(authTwoFactor).where(eq(authTwoFactor.userId, target.userId)),
+      sessions: await testDatabase.db.select().from(authSession).where(eq(authSession.userId, target.userId)),
+      account: await testDatabase.db.select({ enabled: authUser.twoFactorEnabled }).from(authUser).where(eq(authUser.id, target.userId)),
+      audits: await testDatabase.db.select().from(auditEvents).where(and(
+        eq(auditEvents.entityId, target.accountId),
+        eq(auditEvents.action, "system_admin.two_factor.emergency_recovery"),
+      )),
+    };
+    mocks.requestHeaders = new Headers({ cookie: actor.cookie });
+    const response = await recoverTwoFactor(new Request(
+      `http://localhost:3000/api/system-admin/accounts/${target.accountId}/recover-two-factor`,
+      {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:3000",
+          "content-type": "application/json",
+          cookie: actor.cookie,
+        },
+        body: JSON.stringify({
+          reason: "Malformed reference should be rejected before recovery.",
+          recoveryReference: "F3-2026-10-05-RECOVERY-03",
+        }),
+      },
+    ), { params: Promise.resolve({ accountId: target.accountId }) });
+
+    expect(response.status).toBe(400);
+    await assertTargetState(target.accountId, target.userId, before);
+  });
+
   it("validates structured System Admin resident PIN recovery before entering the transaction", async () => {
     const resident = await regularSession("Structured Recovery Resident", "resident");
     const admin = await verifiedAdminSession("Structured Recovery Admin");

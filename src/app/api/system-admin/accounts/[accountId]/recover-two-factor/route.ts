@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 const payloadSchema = z.object({
   reason: z.string().trim().min(1).max(500),
-  recoveryReference: z.string().trim().min(1).max(100),
+  recoveryReference: z.string().trim().min(1).max(100).regex(/^[A-Z]{2,10}-\d{4}-\d{3,8}$/),
 }).strict();
 
 export async function POST(request: Request, context: { params: Promise<{ accountId: string }> }) {
