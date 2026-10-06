@@ -70,6 +70,15 @@ export function yearMonths(dues: ResidentDue[], year: number) {
     due: dues.find((d) => d.billingYear === year && d.month === index + 1),
   }));
 }
+export function visibleYearMonths(dues: ResidentDue[], year: number, businessDate: string) {
+  const [currentYear, currentMonth] = businessDate.split("-").slice(0, 2).map(Number);
+  const visibleMonthCount = year < currentYear!
+    ? 12
+    : year === currentYear!
+      ? currentMonth!
+      : 0;
+  return yearMonths(dues, year).slice(0, visibleMonthCount);
+}
 export function duesSummary(dues: ResidentDue[]) {
   return dues.reduce(
     (total, due) => ({

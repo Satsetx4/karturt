@@ -9,6 +9,7 @@ vi.mock("@/db/client", () => ({ getDb: () => mocks.db }));
 vi.mock("@/lib/billing/resident-dues", () => ({
   getResidentMonthlyDues: mocks.dues,
 }));
+vi.mock("@/lib/time/jakarta", () => ({ jakartaBusinessDate: () => "2026-10-06" }));
 import { GET } from "../../src/app/api/resident/monthly-dues/route";
 import { UnauthenticatedError } from "../../src/lib/auth/principal";
 describe("resident dues HTTP authority", () => {
@@ -32,9 +33,9 @@ describe("resident dues HTTP authority", () => {
     const response = await GET();
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(mocks.dues).toHaveBeenLastCalledWith(mocks.db, principal);
+    expect(mocks.dues).toHaveBeenLastCalledWith(mocks.db, principal, "2026-10-06");
     expect(GET.length).toBe(0);
-    expect(await response.json()).toEqual({ dues });
+    expect(await response.json()).toEqual({ dues, businessDate: "2026-10-06" });
     for (const due of dues) {
       expect(due).not.toHaveProperty("id");
       expect(due).not.toHaveProperty("rtUnitId");
