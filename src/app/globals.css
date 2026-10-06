@@ -288,6 +288,7 @@ button { color: inherit; }
 .payment-request-reason { padding: 10px; border-left: 3px solid var(--line-strong); background: var(--surface-raised); }
 .payment-request-cancel-actions { margin-top: 10px; }
 .payment-request-cancel-actions .button, .payment-request-history-more { width: 100%; min-height: 46px; }
+.payment-request-whatsapp { display: flex; width: 100%; min-height: 46px; margin-top: 10px; align-items: center; justify-content: center; text-align: center; }
 .payment-request-cancel-confirm { padding: 11px; display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); }
 .payment-request-cancel-confirm p, .payment-request-cancel-feedback { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
 .payment-request-cancel-feedback { margin-top: 10px; }

@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   principal: vi.fn(),
   createRequest: vi.fn(),
   profile: vi.fn(),
+  history: vi.fn(),
   whatsapp: vi.fn(),
   database: {},
 }));
@@ -22,12 +23,16 @@ vi.mock("@/lib/billing/resident-payment-request", async () => {
   };
 });
 vi.mock("@/lib/billing/resident-profile", () => ({ getResidentProfile: mocks.profile }));
+vi.mock("@/lib/billing/resident-payment-request-history", () => ({
+  getResidentPaymentRequestHistory: mocks.history,
+  InvalidResidentPaymentHistoryCursorError: class InvalidResidentPaymentHistoryCursorError extends Error {},
+}));
 vi.mock("@/lib/billing/resident-payment-whatsapp", () => ({
   createResidentPaymentWhatsAppLink: mocks.whatsapp,
 }));
 vi.mock("@/lib/env", () => ({ getPublicAppUrl: () => "http://localhost:3000" }));
 
-import { POST } from "../../src/app/api/resident/payment-requests/route";
+import { GET, POST } from "../../src/app/api/resident/payment-requests/route";
 import { UnauthenticatedError } from "../../src/lib/auth/principal";
 
 const key = "b5d4b131-908a-45c2-9363-1ea1b84cd21e";
@@ -75,7 +80,7 @@ describe("resident payment request HTTP boundary", () => {
   it("uses the session principal and returns only public request details", async () => {
     mocks.principal.mockResolvedValue(resident);
     mocks.profile.mockResolvedValue({ name: "Warga Uji", houseNumber: "UJI-5", rtName: "RT Uji", startsOn: "2020-01-01" });
-    mocks.whatsapp.mockResolvedValue("https://wa.me/628123456789?text=hello");
+    mocks.whatsapp.mockReturnValue("https://wa.me/6289234234737?text=hello");
     mocks.createRequest.mockResolvedValue({
       requestCode: "KRT-91A2B3C4D5E6",
       status: "pending",
@@ -83,6 +88,15 @@ describe("resident payment request HTTP boundary", () => {
       totalAmount: 80000,
       createdAt: new Date("2026-06-18T03:00:00.000Z"),
       idempotentReplay: false,
+    });
+    mocks.history.mockResolvedValue({
+      requests: [{
+        requestCode: "KRT-91A2B3C4D5E6",
+        status: "pending",
+        items: [{ period: "2026-05", amount: 40000 }, { period: "2026-06", amount: 40000 }],
+        totalAmount: 80000,
+      }],
+      nextCursor: null,
     });
 
     const response = await POST(post({ period: "2026-06" }));
@@ -93,12 +107,23 @@ describe("resident payment request HTTP boundary", () => {
       period: "2026-06",
       idempotencyKey: key,
     });
+    expect(mocks.whatsapp).toHaveBeenCalledWith({
+      destinationNumber: process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER,
+      rtName: "RT Uji",
+      houseNumber: "UJI-5",
+      request: {
+        requestCode: "KRT-91A2B3C4D5E6",
+        status: "pending",
+        periods: ["2026-05", "2026-06"],
+        totalAmount: 80000,
+      },
+    });
     expect(body).toMatchObject({
       requestCode: "KRT-91A2B3C4D5E6",
       status: "pending",
       periods: ["2026-05", "2026-06"],
       totalAmount: 80000,
-      whatsappUrl: "https://wa.me/628123456789?text=hello",
+      whatsappUrl: "https://wa.me/6289234234737?text=hello",
     });
     expect(body).not.toHaveProperty("id");
     expect(body).not.toHaveProperty("rtUnitId");
@@ -111,7 +136,7 @@ describe("resident payment request HTTP boundary", () => {
   it("keeps the request successful when a Treasurer contact is unavailable", async () => {
     mocks.principal.mockResolvedValue(resident);
     mocks.profile.mockResolvedValue({ name: "Warga Uji", houseNumber: "UJI-5", rtName: "RT Uji", startsOn: "2020-01-01" });
-    mocks.whatsapp.mockResolvedValue(null);
+    mocks.whatsapp.mockReturnValue(null);
     mocks.createRequest.mockResolvedValue({
       requestCode: "KRT-91A2B3C4D5E6",
       status: "pending",
@@ -120,9 +145,52 @@ describe("resident payment request HTTP boundary", () => {
       createdAt: new Date("2026-06-18T03:00:00.000Z"),
       idempotentReplay: false,
     });
+    mocks.history.mockResolvedValue({
+      requests: [{
+        requestCode: "KRT-91A2B3C4D5E6",
+        status: "pending",
+        items: [{ period: "2026-06", amount: 40000 }],
+        totalAmount: 40000,
+      }],
+      nextCursor: null,
+    });
     const body = await (await POST(post({ period: "2026-06" }))).json();
     expect(body.whatsappUrl).toBeNull();
-    expect(body.contactMessage).toBe("Nomor WhatsApp Bendahara belum tersedia. Permintaan Anda tetap tercatat.");
+    expect(body.contactMessage).toBe("Tautan WhatsApp demo belum tersedia. Permintaan Anda tetap tercatat.");
     expect(body.message).toContain("Menunggu konfirmasi");
+  });
+
+  it("returns a demo WhatsApp link for existing pending requests from persisted history data", async () => {
+    mocks.principal.mockResolvedValue(resident);
+    mocks.profile.mockResolvedValue({ name: "Warga Uji", houseNumber: "D-07", rtName: "RT.05", startsOn: "2026-01-01" });
+    mocks.history.mockResolvedValue({
+      requests: [{
+        requestCode: "KRT-91A2B3C4D5E6",
+        status: "pending",
+        createdAt: new Date("2026-10-06T03:00:00.000Z"),
+        resolvedAt: null,
+        items: [{ period: "2026-07", amount: 40000 }, { period: "2026-08", amount: 40000 }, { period: "2026-09", amount: 40000 }],
+        totalAmount: 123000,
+        resolutionReason: null,
+      }],
+      nextCursor: null,
+    });
+    mocks.whatsapp.mockReturnValue("https://wa.me/6289234234737?text=hello");
+
+    const response = await GET(new Request("http://localhost:3000/api/resident/payment-requests"));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.requests[0].whatsappUrl).toBe("https://wa.me/6289234234737?text=hello");
+    expect(mocks.whatsapp).toHaveBeenCalledWith({
+      destinationNumber: process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER,
+      rtName: "RT.05",
+      houseNumber: "D-07",
+      request: {
+        requestCode: "KRT-91A2B3C4D5E6",
+        status: "pending",
+        periods: ["2026-07", "2026-08", "2026-09"],
+        totalAmount: 123000,
+      },
+    });
   });
 });

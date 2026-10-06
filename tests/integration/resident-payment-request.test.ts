@@ -14,7 +14,6 @@ import {
   paymentRequests,
   paymentAllocations,
   payments,
-  people,
   waiverActions,
   waiverItems,
 } from "../../src/db/schema";
@@ -624,57 +623,24 @@ describe("resident payment request transactions", () => {
       .resolves.toHaveLength(0);
   });
 
-  it("builds a WhatsApp deep link for the active Treasurer in the same RT", async () => {
-    const { db } = testDatabase;
-    const resident = await createResident(db);
-    const treasurerHousehold = await createHousehold(db, resident.rtUnitId, { number: "B-01" });
-    const treasurerUser = await createAuthUser(db, "Bendahara Uji");
-    await db.update(people).set({ phone: "08123456789" }).where(eq(people.id, treasurerHousehold.personId));
-    const [treasurerAccount] = await db.insert(appAccounts).values({
-      rtUnitId: resident.rtUnitId,
-      authUserId: treasurerUser.id,
-      accountType: "official",
-      loginIdentifier: `treasurer-${treasurerUser.id.slice(0, 8)}`,
-      personId: treasurerHousehold.personId,
-    }).returning({ id: appAccounts.id });
-    await db.insert(officialAssignments).values({
-      rtUnitId: resident.rtUnitId,
-      appAccountId: treasurerAccount.id,
-      role: "treasurer",
-      startsOn: "2020-01-01",
+  it("builds a manual demo WhatsApp link from request snapshot data", () => {
+    const link = createResidentPaymentWhatsAppLink({
+      destinationNumber: "6289234234737",
+      rtName: "RT.05",
+      houseNumber: "D-07",
+      request: {
+        requestCode: "KRT-91A2B3C4D5E6",
+        status: "pending",
+        periods: ["2024-11", "2026-02"],
+        totalAmount: 135000,
+      },
     });
-
-    const request = {
-      requestCode: "KRT-91A2B3C4D5E6",
-      status: "pending" as const,
-      periods: ["2024-11", "2026-02"],
-      totalAmount: 135000,
-      createdAt: new Date("2026-06-18T03:00:00.000Z"),
-      idempotentReplay: false,
-    };
-    const link = await createResidentPaymentWhatsAppLink(db as never, {
-      rtUnitId: resident.rtUnitId,
-      houseNumber: "R-07",
-      residentName: "Warga Uji",
-      request,
-    });
-
-    expect(link).toMatch(/^https:\/\/wa\.me\/628123456789\?text=/);
+    expect(link).toMatch(/^https:\/\/wa\.me\/6289234234737\?text=/);
     const message = new URL(link!).searchParams.get("text") ?? "";
-    expect(message).toContain("Nama: Warga Uji");
-    expect(message).toContain("Nomor rumah: R-07");
-    expect(message).toContain("November 2024, Februari 2026");
-    expect(message.replace(/\s/g, "")).toContain("Rp135.000");
-    expect(message).toContain("Waktu pengajuan:");
-    expect(message).toContain("Nomor pengajuan: KRT-91A2B3C4D5E6");
-
-    const otherRt = await createRt(db);
-    await expect(createResidentPaymentWhatsAppLink(db as never, {
-      rtUnitId: otherRt,
-      houseNumber: "R-07",
-      residentName: "Warga Uji",
-      request,
-    })).resolves.toBeNull();
+    expect(message).toContain("rumah D-07");
+    expect(message).toContain("November 2024, dan Februari 2026");
+    expect(message.replace(/[\s\u00a0]/g, "")).toContain("Rp135.000");
+    expect(message).toContain("Kode permintaan: KRT-91A2B3C4D5E6");
   });
 
   it("leaves no request, item, claim, or audit row when a domain constraint fails", async () => {

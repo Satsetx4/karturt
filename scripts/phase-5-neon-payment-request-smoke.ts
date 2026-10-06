@@ -27,7 +27,6 @@ import {
   createResidentPaymentRequest,
   PaymentRequestConflictError,
 } from "@/lib/billing/resident-payment-request";
-import { createResidentPaymentWhatsAppLink } from "@/lib/billing/resident-payment-whatsapp";
 
 const target = {
   projectId: "billowing-base-57949906",
@@ -224,19 +223,6 @@ async function main() {
   const auditRows = await database.select({ action: auditEvents.action }).from(auditEvents)
     .where(eq(auditEvents.actorAppAccountId, residentAccount.id));
   assert.equal(auditRows.filter((event) => event.action === "payment_request.created").length, 2);
-
-  const whatsappUrl = await createResidentPaymentWhatsAppLink(database as never, {
-    rtUnitId: rtUnit.id,
-    houseNumber: `SMOKE-${suffix}`,
-    residentName: `Phase 5 resident ${suffix}`,
-    request: winner.value,
-  });
-  if (!whatsappUrl?.startsWith("https://wa.me/628123456789?text=")) {
-    throw new Error("The synthetic request did not produce a WhatsApp link for its same-RT Treasurer.");
-  }
-  const whatsappText = new URL(whatsappUrl).searchParams.get("text") ?? "";
-  assert.ok(whatsappText.includes(winner.value.requestCode));
-  assert.ok(whatsappText.replace(/\s/g, "").includes("Rp77.000"));
 
   console.info(JSON.stringify({
     event: "phase_5.neon_payment_request_smoke",

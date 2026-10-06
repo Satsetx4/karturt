@@ -5,6 +5,7 @@ import type { AppDatabase } from "@/db/client";
 import { getDb } from "@/db/client";
 import { relationalSchema } from "@/db/schema";
 import { requireAuthEnvironment } from "@/lib/env";
+import { createAuthRateLimitOptions } from "@/lib/auth/rate-limit";
 
 export function createAuth(database: AppDatabase, options: { secret: string; baseURL: string }) {
   return betterAuth({
@@ -21,17 +22,7 @@ export function createAuth(database: AppDatabase, options: { secret: string; bas
       revokeSessionsOnPasswordReset: true,
     },
     plugins: [twoFactor({ issuer: "KartuRT" })],
-    rateLimit: {
-      enabled: true,
-      storage: "database",
-      window: 60,
-      max: 100,
-      customRules: {
-        "/sign-in/email": { window: 60, max: 5 },
-        "/two-factor/verify-totp": { window: 60, max: 5 },
-        "/two-factor/verify-backup-code": { window: 60, max: 5 },
-      },
-    },
+    rateLimit: createAuthRateLimitOptions(),
     session: { expiresIn: 60 * 60 * 8, updateAge: 60 * 30 },
     advanced: {
       useSecureCookies: options.baseURL.startsWith("https://"),

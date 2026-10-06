@@ -61,6 +61,8 @@ type PaymentRequestHistoryItem = {
   items: Array<{ period: string; amount: number }>;
   totalAmount: number;
   resolutionReason: string | null;
+  whatsappUrl: string | null;
+  contactMessage: string | null;
 };
 
 type PaymentRequestHistoryResponse = {
@@ -318,7 +320,7 @@ export function ResidentPaymentRequestPanel({
               <ResidentDueStatus token="PENDING" />
               {result.whatsappUrl ? (
                 <a className="button button--primary" href={result.whatsappUrl} target="_blank" rel="noreferrer">
-                  Buka WhatsApp Bendahara
+                  Hubungi Bendahara via WhatsApp
                 </a>
               ) : (
                 <p>{result.contactMessage ?? "Permintaan Anda tetap tercatat."}</p>
@@ -352,6 +354,13 @@ export function ResidentPaymentRequestPanel({
                   <span>{request.requestCode}</span>
                   <strong>{rupiah(request.totalAmount)}</strong>
                 </div>
+                {request.status === "pending" && (request.whatsappUrl ? (
+                  <a className="button button--primary payment-request-whatsapp" href={request.whatsappUrl} target="_blank" rel="noreferrer">
+                    Hubungi Bendahara via WhatsApp
+                  </a>
+                ) : (
+                  <p>{request.contactMessage ?? "Tautan WhatsApp demo belum tersedia. Permintaan Anda tetap tercatat."}</p>
+                ))}
                 {request.resolutionReason && (
                   <p className="payment-request-reason"><strong>Alasan:</strong> {request.resolutionReason}</p>
                 )}

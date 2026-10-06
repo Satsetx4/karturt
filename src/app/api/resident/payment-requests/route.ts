@@ -7,6 +7,7 @@ import {
   UnauthenticatedError,
 } from "@/lib/auth/principal";
 import { getResidentProfile } from "@/lib/billing/resident-profile";
+import { getResidentPaymentRequestHistory, InvalidResidentPaymentHistoryCursorError } from "@/lib/billing/resident-payment-request-history";
 import { getPublicAppUrl } from "@/lib/env";
 import {
   createResidentPaymentRequest,
@@ -16,7 +17,6 @@ import {
   PaymentRequestPeriodUnavailableError,
 } from "@/lib/billing/resident-payment-request";
 import { createResidentPaymentWhatsAppLink } from "@/lib/billing/resident-payment-whatsapp";
-import { getResidentPaymentRequestHistory, InvalidResidentPaymentHistoryCursorError } from "@/lib/billing/resident-payment-request-history";
 
 export const runtime = "nodejs";
 
@@ -72,11 +72,19 @@ export async function POST(request: Request) {
     let whatsappUrl: string | null = null;
     try {
       const profile = await getResidentProfile(database, principal);
-      whatsappUrl = await createResidentPaymentWhatsAppLink(database, {
-        rtUnitId: principal.rtUnitId!,
+      const history = await getResidentPaymentRequestHistory(database, principal);
+      const persistedRequest = history.requests.find((request) => request.requestCode === result.requestCode);
+      if (!persistedRequest) throw new Error("Created payment request is missing from resident history.");
+      whatsappUrl = createResidentPaymentWhatsAppLink({
+        destinationNumber: process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER,
+        rtName: profile.rtName,
         houseNumber: profile.houseNumber,
-        residentName: profile.name,
-        request: result,
+        request: {
+          requestCode: persistedRequest.requestCode,
+          status: persistedRequest.status,
+          periods: persistedRequest.items.map((item) => item.period),
+          totalAmount: persistedRequest.totalAmount,
+        },
       });
     } catch {
       // The payment request is already committed; a missing contact must not undo it.
@@ -92,7 +100,7 @@ export async function POST(request: Request) {
       message: "Permintaan tercatat dengan status Menunggu konfirmasi.",
       contactMessage: whatsappUrl
         ? null
-        : "Nomor WhatsApp Bendahara belum tersedia. Permintaan Anda tetap tercatat.",
+        : "Tautan WhatsApp demo belum tersedia. Permintaan Anda tetap tercatat.",
     }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     if (error instanceof UnauthenticatedError || error instanceof MfaEnrollmentRequiredError) {
@@ -117,8 +125,38 @@ export async function GET(request: Request) {
       return response("Riwayat permintaan hanya tersedia untuk akun warga.", 403);
     }
     const cursor = new URL(request.url).searchParams.get("cursor") ?? undefined;
-    const history = await getResidentPaymentRequestHistory(getDb(), principal, cursor);
-    return NextResponse.json(history, { headers: { "cache-control": "no-store" } });
+    const database = getDb();
+    const history = await getResidentPaymentRequestHistory(database, principal, cursor);
+    const pendingRequests = history.requests.filter((item) => item.status === "pending");
+    let whatsappByCode = new Map<string, string | null>();
+    if (pendingRequests.length > 0) {
+      try {
+        const profile = await getResidentProfile(database, principal);
+        whatsappByCode = new Map(pendingRequests.map((item) => [item.requestCode, createResidentPaymentWhatsAppLink({
+          destinationNumber: process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER,
+          rtName: profile.rtName,
+          houseNumber: profile.houseNumber,
+          request: {
+            requestCode: item.requestCode,
+            status: item.status,
+            periods: item.items.map((requestItem) => requestItem.period),
+            totalAmount: item.totalAmount,
+          },
+        })]));
+      } catch {
+        // The history remains available when demo contact configuration is missing.
+      }
+    }
+    return NextResponse.json({
+      ...history,
+      requests: history.requests.map((item) => ({
+        ...item,
+        whatsappUrl: whatsappByCode.get(item.requestCode) ?? null,
+        contactMessage: item.status === "pending" && !whatsappByCode.get(item.requestCode)
+          ? "Tautan WhatsApp demo belum tersedia. Permintaan Anda tetap tercatat."
+          : null,
+      })),
+    }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     if (error instanceof UnauthenticatedError || error instanceof MfaEnrollmentRequiredError) {
       return response("Sesi berakhir. Silakan masuk kembali.", 401);
