@@ -232,7 +232,7 @@ describe("Phase 12 household financial history safeguards", () => {
     const request = await createResidentPaymentRequest(database, scenario.residentPrincipal!, {
       period: "2026-11",
       idempotencyKey: randomUUID(),
-    });
+    }, "2026-11-01");
     const dueBefore = await dueRows(scenario);
 
     await expect(deactivateHousehold(database, scenario.chairman, {
@@ -260,8 +260,8 @@ describe("Phase 12 household financial history safeguards", () => {
     const request = await createResidentPaymentRequest(database, scenario.residentPrincipal!, {
       period: "2026-11",
       idempotencyKey: randomUUID(),
-    });
-    await verifyTreasurerPaymentRequest(database, scenario.treasurer, request.requestCode, businessDate);
+    }, "2026-11-01");
+    await verifyTreasurerPaymentRequest(database, scenario.treasurer, request.requestCode, "2026-11-01");
     const novemberDueId = scenario.dueIds.get(11)!;
     const [payment] = await testDatabase.db.select({ id: payments.id })
       .from(payments).innerJoin(paymentRequests, eq(paymentRequests.id, payments.paymentRequestId))
@@ -286,15 +286,15 @@ describe("Phase 12 household financial history safeguards", () => {
     const request = await createResidentPaymentRequest(database, scenario.residentPrincipal!, {
       period: "2026-11",
       idempotencyKey: randomUUID(),
-    });
-    await verifyTreasurerPaymentRequest(database, scenario.treasurer, request.requestCode, businessDate);
+    }, "2026-11-01");
+    await verifyTreasurerPaymentRequest(database, scenario.treasurer, request.requestCode, "2026-11-01");
     const [payment] = await testDatabase.db.select({ id: payments.id })
       .from(payments).innerJoin(paymentRequests, eq(paymentRequests.id, payments.paymentRequestId))
       .where(eq(paymentRequests.requestCode, request.requestCode));
     await reverseTreasurerPayment(database, scenario.treasurer, {
       paymentId: payment!.id,
       reason: "Reverse the test payment while retaining ledger history.",
-    }, businessDate);
+    }, "2026-11-01");
     const novemberDueId = scenario.dueIds.get(11)!;
 
     await expect(deactivateHousehold(database, scenario.chairman, {
@@ -451,14 +451,14 @@ describe("Phase 12 household financial history safeguards", () => {
       householdId: result.newHouseholdId,
       personId: result.newPersonId,
     };
-    const newResidentDues = await getResidentMonthlyDues(database, newResidentPrincipal);
-    expect(newResidentDues).toHaveLength(12);
-    expect(newResidentDues.slice(0, 10).every((due) => due.status === "not_due" && due.amount === 0 && due.outstanding === 0)).toBe(true);
-    expect(newResidentDues.slice(10).map((due) => ({ status: due.status, amount: due.amount, outstanding: due.outstanding })))
-      .toEqual([
-        { status: "unpaid", amount: 50_000, outstanding: 50_000 },
-        { status: "unpaid", amount: 50_000, outstanding: 50_000 },
-      ]);
+    const newResidentDues = await getResidentMonthlyDues(database, newResidentPrincipal, businessDate);
+    expect(newResidentDues).toHaveLength(10);
+    expect(newResidentDues.every((due) => due.status === "not_due" && due.amount === 0 && due.outstanding === 0)).toBe(true);
+    const storedNewResidentDues = await testDatabase.db.select({ month: monthlyDues.month, status: monthlyDues.status })
+      .from(monthlyDues).where(eq(monthlyDues.householdId, result.newHouseholdId));
+    expect(storedNewResidentDues).toHaveLength(12);
+    expect(storedNewResidentDues.filter((due) => due.month > 10).sort((a, b) => a.month - b.month))
+      .toEqual([{ month: 11, status: "unpaid" }, { month: 12, status: "unpaid" }]);
     expect(await getResidentPaymentHistory(database, newResidentPrincipal)).toEqual({ payments: [], nextPage: null });
 
     const management = await listHouseholdManagement(database, scenario.chairman, "", businessDate);
@@ -470,8 +470,8 @@ describe("Phase 12 household financial history safeguards", () => {
     const newRequest = await createResidentPaymentRequest(database, newResidentPrincipal, {
       period: "2026-11",
       idempotencyKey: randomUUID(),
-    });
-    const queue = await getTreasurerPaymentRequestQueue(database, scenario.treasurer, businessDate);
+    }, "2026-11-01");
+    const queue = await getTreasurerPaymentRequestQueue(database, scenario.treasurer, "2026-11-01");
     const oldQueueRequest = queue.find((item) => item.requestCode === oldPendingRequest.requestCode);
     const newQueueRequest = queue.find((item) => item.requestCode === newRequest.requestCode);
     expect(oldQueueRequest?.items.map((item) => item.period)).toEqual(

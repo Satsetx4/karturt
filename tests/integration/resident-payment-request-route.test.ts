@@ -54,7 +54,7 @@ const originalEnvironment = {
 beforeEach(() => {
   process.env.APP_ENV = "staging";
   process.env.DATABASE_ENV = "staging";
-  process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER = "6289234234737";
+  process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER = "6282333183444";
 });
 
 afterEach(() => {
@@ -101,12 +101,12 @@ describe("resident payment request HTTP boundary", () => {
   it("creates a WhatsApp CTA only when both environment labels are staging", async () => {
     mocks.principal.mockResolvedValue(resident);
     mocks.profile.mockResolvedValue({ name: "Warga Uji", houseNumber: "UJI-5", rtName: "RT Uji", startsOn: "2020-01-01" });
-    mocks.whatsapp.mockReturnValue("https://wa.me/6289234234737?text=hello");
+    mocks.whatsapp.mockReturnValue("https://wa.me/6282333183444?text=hello");
     mocks.createRequest.mockResolvedValue({
       requestCode: "KRT-91A2B3C4D5E6",
       status: "pending",
-      periods: ["2026-05", "2026-06"],
-      totalAmount: 80000,
+      periods: ["2026-09"],
+      totalAmount: 40000,
       createdAt: new Date("2026-06-18T03:00:00.000Z"),
       idempotentReplay: false,
     });
@@ -114,18 +114,18 @@ describe("resident payment request HTTP boundary", () => {
       requests: [{
         requestCode: "KRT-91A2B3C4D5E6",
         status: "pending",
-        items: [{ period: "2026-05", amount: 40000 }, { period: "2026-06", amount: 40000 }],
-        totalAmount: 80000,
+        items: [{ period: "2026-09", amount: 40000 }],
+        totalAmount: 40000,
       }],
       nextCursor: null,
     });
 
-    const response = await POST(post({ period: "2026-06" }));
+    const response = await POST(post({ period: "2026-09" }));
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(mocks.createRequest).toHaveBeenCalledWith(mocks.database, resident, {
-      period: "2026-06",
+      period: "2026-09",
       idempotencyKey: key,
     });
     expect(mocks.whatsapp).toHaveBeenCalledWith({
@@ -135,16 +135,16 @@ describe("resident payment request HTTP boundary", () => {
       request: {
         requestCode: "KRT-91A2B3C4D5E6",
         status: "pending",
-        periods: ["2026-05", "2026-06"],
-        totalAmount: 80000,
+        periods: ["2026-09"],
+        totalAmount: 40000,
       },
     });
     expect(body).toMatchObject({
       requestCode: "KRT-91A2B3C4D5E6",
       status: "pending",
-      periods: ["2026-05", "2026-06"],
-      totalAmount: 80000,
-      whatsappUrl: "https://wa.me/6289234234737?text=hello",
+      periods: ["2026-09"],
+      totalAmount: 40000,
+      whatsappUrl: "https://wa.me/6282333183444?text=hello",
     });
     expect(body).not.toHaveProperty("id");
     expect(body).not.toHaveProperty("rtUnitId");
@@ -190,18 +190,18 @@ describe("resident payment request HTTP boundary", () => {
         status: "pending",
         createdAt: new Date("2026-10-06T03:00:00.000Z"),
         resolvedAt: null,
-        items: [{ period: "2026-07", amount: 40000 }, { period: "2026-08", amount: 40000 }, { period: "2026-09", amount: 40000 }],
-        totalAmount: 123000,
+        items: [{ period: "2026-09", amount: 40000 }, { period: "2026-10", amount: 40000 }],
+        totalAmount: 80000,
         resolutionReason: null,
       }],
       nextCursor: null,
     });
-    mocks.whatsapp.mockReturnValue("https://wa.me/6289234234737?text=hello");
+    mocks.whatsapp.mockReturnValue("https://wa.me/6282333183444?text=hello");
 
     const response = await GET(new Request("http://localhost:3000/api/resident/payment-requests"));
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(body.requests[0].whatsappUrl).toBe("https://wa.me/6289234234737?text=hello");
+    expect(body.requests[0].whatsappUrl).toBe("https://wa.me/6282333183444?text=hello");
     expect(mocks.whatsapp).toHaveBeenCalledWith({
       destinationNumber: process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER,
       rtName: "RT.05",
@@ -209,8 +209,8 @@ describe("resident payment request HTTP boundary", () => {
       request: {
         requestCode: "KRT-91A2B3C4D5E6",
         status: "pending",
-        periods: ["2026-07", "2026-08", "2026-09"],
-        totalAmount: 123000,
+        periods: ["2026-09", "2026-10"],
+        totalAmount: 80000,
       },
     });
   });
@@ -246,7 +246,7 @@ describe("resident payment request HTTP boundary", () => {
       }],
       nextCursor: null,
     });
-    mocks.whatsapp.mockReturnValue("https://wa.me/6289234234737?text=hello");
+    mocks.whatsapp.mockReturnValue("https://wa.me/6282333183444?text=hello");
 
     const postResponse = await POST(post({ period: "2026-06" }));
     const postBody = await postResponse.json();

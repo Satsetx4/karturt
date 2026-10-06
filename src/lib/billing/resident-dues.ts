@@ -1,10 +1,15 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, lt, lte, or } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
 import { billingYears, monthlyDues } from "@/db/schema";
 import { getDueFinancialBalances } from "@/lib/billing/due-balance";
 import { assertCanPerform, type Principal } from "@/lib/auth/permissions";
+import { jakartaBusinessDate } from "@/lib/officials/lifecycle";
 
-export async function getResidentMonthlyDues(database: AppDatabase, principal: Principal) {
+export async function getResidentMonthlyDues(
+  database: AppDatabase,
+  principal: Principal,
+  businessDate = jakartaBusinessDate(),
+) {
   if (principal.role !== "resident" || !principal.rtUnitId || !principal.householdId) {
     throw new Error("Forbidden: monthly dues are available only to an active resident principal.");
   }
@@ -13,6 +18,7 @@ export async function getResidentMonthlyDues(database: AppDatabase, principal: P
     householdId: principal.householdId,
   });
 
+  const [currentYear, currentMonth] = businessDate.split("-").slice(0, 2).map(Number);
   const dues = await database
     .select({
       id: monthlyDues.id,
@@ -28,6 +34,10 @@ export async function getResidentMonthlyDues(database: AppDatabase, principal: P
     .where(and(
       eq(monthlyDues.rtUnitId, principal.rtUnitId),
       eq(monthlyDues.householdId, principal.householdId),
+      or(
+        lt(billingYears.year, currentYear!),
+        and(eq(billingYears.year, currentYear!), lte(monthlyDues.month, currentMonth!)),
+      ),
     ))
     .orderBy(asc(billingYears.year), asc(monthlyDues.month), asc(monthlyDues.id));
 

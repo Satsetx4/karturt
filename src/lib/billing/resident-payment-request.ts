@@ -12,6 +12,7 @@ import {
 import { appendAuditEvent } from "@/lib/audit/writer";
 import { assertCanPerform, type Principal } from "@/lib/auth/permissions";
 import { getDueFinancialBalances } from "@/lib/billing/due-balance";
+import { jakartaBusinessDate } from "@/lib/officials/lifecycle";
 
 const periodPattern = /^(\d{4})-(0[1-9]|1[0-2])$/;
 const idempotencyKeyPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -119,6 +120,7 @@ export async function createResidentPaymentRequest(
   database: AppDatabase,
   principal: Principal,
   input: { period: string; idempotencyKey: string },
+  businessDate = jakartaBusinessDate(),
 ): Promise<ResidentPaymentRequestResult> {
   if (principal.role !== "resident") {
     throw new Error("Forbidden: payment requests are available only to an active resident principal.");
@@ -136,6 +138,10 @@ export async function createResidentPaymentRequest(
   }
 
   const target = parsePeriod(input.period);
+  const [currentYear, currentMonth] = businessDate.split("-").slice(0, 2).map(Number);
+  if (target.year > currentYear! || (target.year === currentYear! && target.month > currentMonth!)) {
+    throw new PaymentRequestPeriodUnavailableError("Bulan iuran ini belum tersedia.");
+  }
   const fingerprint = requestFingerprint(input.period);
 
   try {

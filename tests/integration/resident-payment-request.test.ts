@@ -39,20 +39,31 @@ async function createVerifiedPaidHistory(
   database: TestDatabase["db"],
   input: { rtUnitId: string; householdId: string; residentAccountId: string; personId: string; dueId: string; period: string; amount: number },
 ) {
-  const treasurerUser = await createAuthUser(database);
-  const [treasurerAccount] = await database.insert(appAccounts).values({
-    rtUnitId: input.rtUnitId,
-    authUserId: treasurerUser.id,
-    accountType: "official",
-    loginIdentifier: `treasurer-${randomUUID().slice(0, 12)}`,
-    personId: input.personId,
-  }).returning({ id: appAccounts.id });
-  await database.insert(officialAssignments).values({
-    rtUnitId: input.rtUnitId,
-    appAccountId: treasurerAccount!.id,
-    role: "treasurer",
-    startsOn: "2020-01-01",
-  });
+  let [treasurerAccount] = await database.select({ id: appAccounts.id })
+    .from(officialAssignments)
+    .innerJoin(appAccounts, eq(appAccounts.id, officialAssignments.appAccountId))
+    .where(and(
+      eq(officialAssignments.rtUnitId, input.rtUnitId),
+      eq(officialAssignments.role, "treasurer"),
+      eq(appAccounts.status, "active"),
+    ))
+    .limit(1);
+  if (!treasurerAccount) {
+    const treasurerUser = await createAuthUser(database);
+    [treasurerAccount] = await database.insert(appAccounts).values({
+      rtUnitId: input.rtUnitId,
+      authUserId: treasurerUser.id,
+      accountType: "official",
+      loginIdentifier: `treasurer-${randomUUID().slice(0, 12)}`,
+      personId: input.personId,
+    }).returning({ id: appAccounts.id });
+    await database.insert(officialAssignments).values({
+      rtUnitId: input.rtUnitId,
+      appAccountId: treasurerAccount!.id,
+      role: "treasurer",
+      startsOn: "2020-01-01",
+    });
+  }
 
   const requestId = randomUUID();
   const requestCode = `KRT-${randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`;
@@ -309,6 +320,81 @@ describe("resident payment request transactions", () => {
 
   afterAll(async () => {
     await testDatabase.close();
+  });
+
+  it.each([
+    { businessDate: "2026-09-30", visibleThrough: 9, hidden: [10, 11, 12] },
+    { businessDate: "2026-10-01", visibleThrough: 10, hidden: [11, 12] },
+    { businessDate: "2026-10-31", visibleThrough: 10, hidden: [11, 12] },
+    { businessDate: "2026-11-01", visibleThrough: 11, hidden: [12] },
+  ])("limits Resident dues to the Jakarta calendar month on $businessDate", async ({ businessDate, visibleThrough, hidden }) => {
+    const resident = await createResident(testDatabase.db, {
+      dues: Array.from({ length: 12 }, (_, index) => ({ period: `2026-${String(index + 1).padStart(2, "0")}` })),
+    });
+
+    const dues = await getResidentMonthlyDues(testDatabase.db as never, resident.principal, businessDate);
+
+    expect(dues.map(({ month }) => month)).toEqual(Array.from({ length: visibleThrough }, (_, index) => index + 1));
+    for (const month of hidden) expect(dues.some((due) => due.month === month)).toBe(false);
+  });
+
+  it("rejects a future billing month server-side and allows September and October from October 1", async () => {
+    const resident = await createResident(testDatabase.db, { dues: [
+      { period: "2026-09" },
+      { period: "2026-10" },
+      { period: "2026-11" },
+    ] });
+
+    await expect(createResidentPaymentRequest(testDatabase.db as never, resident.principal, {
+      period: "2026-11",
+      idempotencyKey: key(),
+    }, "2026-10-01")).rejects.toBeInstanceOf(PaymentRequestPeriodUnavailableError);
+
+    const septemberResident = await createResident(testDatabase.db, { dues: [{ period: "2026-09" }] });
+    await expect(createResidentPaymentRequest(testDatabase.db as never, septemberResident.principal, {
+      period: "2026-09",
+      idempotencyKey: key(),
+    }, "2026-10-01")).resolves.toMatchObject({ periods: ["2026-09"], totalAmount: 40000 });
+
+    const octoberResident = await createResident(testDatabase.db, { dues: [
+      { period: "2026-09" },
+      { period: "2026-10" },
+    ] });
+    await expect(createResidentPaymentRequest(testDatabase.db as never, octoberResident.principal, {
+      period: "2026-10",
+      idempotencyKey: key(),
+    }, "2026-10-01")).resolves.toMatchObject({ periods: ["2026-09", "2026-10"], totalAmount: 80000 });
+  });
+
+  it("uses canonical unpaid dues after a Jan–Aug paid baseline for September-only and September–October requests", async () => {
+    const resident = await createResident(testDatabase.db, { dues: [
+      ...Array.from({ length: 8 }, (_, index) => ({
+        period: `2026-${String(index + 1).padStart(2, "0")}`,
+        status: "paid" as const,
+      })),
+      { period: "2026-09" },
+      { period: "2026-10" },
+    ] });
+
+    const september = await createResidentPaymentRequest(testDatabase.db as never, resident.principal, {
+      period: "2026-09",
+      idempotencyKey: key(),
+    }, "2026-10-01");
+    const octoberResident = await createResident(testDatabase.db, { dues: [
+      ...Array.from({ length: 8 }, (_, index) => ({
+        period: `2026-${String(index + 1).padStart(2, "0")}`,
+        status: "paid" as const,
+      })),
+      { period: "2026-09" },
+      { period: "2026-10" },
+    ] });
+    const october = await createResidentPaymentRequest(testDatabase.db as never, octoberResident.principal, {
+      period: "2026-10",
+      idempotencyKey: key(),
+    }, "2026-10-01");
+
+    expect(september).toMatchObject({ periods: ["2026-09"], totalAmount: 40000, status: "pending" });
+    expect(october).toMatchObject({ periods: ["2026-09", "2026-10"], totalAmount: 80000, status: "pending" });
   });
 
   it("auto-selects older unpaid months across billing years and keeps due status unchanged", async () => {
