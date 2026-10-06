@@ -239,7 +239,6 @@ async function main() {
     activePendingItems: claimCount.length,
     monthlyDueStatusesUnchanged: true,
     auditEvents: 2,
-    whatsappDeepLink: "same-RT Treasurer phone and prefilled request details verified",
   }));
 }
 

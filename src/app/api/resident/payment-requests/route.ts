@@ -34,6 +34,11 @@ function response(message: string, status: number) {
   });
 }
 
+function demoWhatsAppDestinationNumber() {
+  if (process.env.APP_ENV !== "staging" || process.env.DATABASE_ENV !== "staging") return undefined;
+  return process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER;
+}
+
 export async function POST(request: Request) {
   try {
     const principal = await getCurrentPrincipal();
@@ -71,21 +76,24 @@ export async function POST(request: Request) {
 
     let whatsappUrl: string | null = null;
     try {
-      const profile = await getResidentProfile(database, principal);
-      const history = await getResidentPaymentRequestHistory(database, principal);
-      const persistedRequest = history.requests.find((request) => request.requestCode === result.requestCode);
-      if (!persistedRequest) throw new Error("Created payment request is missing from resident history.");
-      whatsappUrl = createResidentPaymentWhatsAppLink({
-        destinationNumber: process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER,
-        rtName: profile.rtName,
-        houseNumber: profile.houseNumber,
-        request: {
-          requestCode: persistedRequest.requestCode,
-          status: persistedRequest.status,
-          periods: persistedRequest.items.map((item) => item.period),
-          totalAmount: persistedRequest.totalAmount,
-        },
-      });
+      const destinationNumber = demoWhatsAppDestinationNumber();
+      if (destinationNumber) {
+        const profile = await getResidentProfile(database, principal);
+        const history = await getResidentPaymentRequestHistory(database, principal);
+        const persistedRequest = history.requests.find((request) => request.requestCode === result.requestCode);
+        if (!persistedRequest) throw new Error("Created payment request is missing from resident history.");
+        whatsappUrl = createResidentPaymentWhatsAppLink({
+          destinationNumber,
+          rtName: profile.rtName,
+          houseNumber: profile.houseNumber,
+          request: {
+            requestCode: persistedRequest.requestCode,
+            status: persistedRequest.status,
+            periods: persistedRequest.items.map((item) => item.period),
+            totalAmount: persistedRequest.totalAmount,
+          },
+        });
+      }
     } catch {
       // The payment request is already committed; a missing contact must not undo it.
     }
@@ -131,18 +139,21 @@ export async function GET(request: Request) {
     let whatsappByCode = new Map<string, string | null>();
     if (pendingRequests.length > 0) {
       try {
-        const profile = await getResidentProfile(database, principal);
-        whatsappByCode = new Map(pendingRequests.map((item) => [item.requestCode, createResidentPaymentWhatsAppLink({
-          destinationNumber: process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER,
-          rtName: profile.rtName,
-          houseNumber: profile.houseNumber,
-          request: {
-            requestCode: item.requestCode,
-            status: item.status,
-            periods: item.items.map((requestItem) => requestItem.period),
-            totalAmount: item.totalAmount,
-          },
-        })]));
+        const destinationNumber = demoWhatsAppDestinationNumber();
+        if (destinationNumber) {
+          const profile = await getResidentProfile(database, principal);
+          whatsappByCode = new Map(pendingRequests.map((item) => [item.requestCode, createResidentPaymentWhatsAppLink({
+            destinationNumber,
+            rtName: profile.rtName,
+            houseNumber: profile.houseNumber,
+            request: {
+              requestCode: item.requestCode,
+              status: item.status,
+              periods: item.items.map((requestItem) => requestItem.period),
+              totalAmount: item.totalAmount,
+            },
+          })]));
+        }
       } catch {
         // The history remains available when demo contact configuration is missing.
       }

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   principal: vi.fn(),
@@ -45,6 +45,27 @@ const resident = {
   personId: "00000000-0000-4000-8000-000000000004",
 };
 
+const originalEnvironment = {
+  app: process.env.APP_ENV,
+  database: process.env.DATABASE_ENV,
+  whatsapp: process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER,
+};
+
+beforeEach(() => {
+  process.env.APP_ENV = "staging";
+  process.env.DATABASE_ENV = "staging";
+  process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER = "6289234234737";
+});
+
+afterEach(() => {
+  if (originalEnvironment.app === undefined) delete process.env.APP_ENV;
+  else process.env.APP_ENV = originalEnvironment.app;
+  if (originalEnvironment.database === undefined) delete process.env.DATABASE_ENV;
+  else process.env.DATABASE_ENV = originalEnvironment.database;
+  if (originalEnvironment.whatsapp === undefined) delete process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER;
+  else process.env.KARTURT_DEMO_TREASURER_WHATSAPP_NUMBER = originalEnvironment.whatsapp;
+});
+
 function post(body: unknown, options: { key?: string; origin?: string } = {}) {
   return new Request("http://localhost:3000/api/resident/payment-requests", {
     method: "POST",
@@ -77,7 +98,7 @@ describe("resident payment request HTTP boundary", () => {
     expect(mocks.createRequest).not.toHaveBeenCalled();
   });
 
-  it("uses the session principal and returns only public request details", async () => {
+  it("creates a WhatsApp CTA only when both environment labels are staging", async () => {
     mocks.principal.mockResolvedValue(resident);
     mocks.profile.mockResolvedValue({ name: "Warga Uji", houseNumber: "UJI-5", rtName: "RT Uji", startsOn: "2020-01-01" });
     mocks.whatsapp.mockReturnValue("https://wa.me/6289234234737?text=hello");
@@ -192,5 +213,48 @@ describe("resident payment request HTTP boundary", () => {
         totalAmount: 123000,
       },
     });
+  });
+
+  it.each([
+    { app: "production", database: "production" },
+    { app: "production", database: "staging" },
+    { app: "staging", database: "production" },
+    { app: "staging", database: "development" },
+  ])("omits WhatsApp CTAs unless both labels are staging ($app / $database)", async ({ app, database }) => {
+    process.env.APP_ENV = app;
+    process.env.DATABASE_ENV = database;
+    mocks.whatsapp.mockClear();
+    mocks.principal.mockResolvedValue(resident);
+    mocks.profile.mockResolvedValue({ name: "Warga Uji", houseNumber: "D-07", rtName: "RT.05", startsOn: "2026-01-01" });
+    mocks.createRequest.mockResolvedValue({
+      requestCode: "KRT-91A2B3C4D5E6",
+      status: "pending",
+      periods: ["2026-06"],
+      totalAmount: 40000,
+      createdAt: new Date("2026-10-06T03:00:00.000Z"),
+      idempotentReplay: false,
+    });
+    mocks.history.mockResolvedValue({
+      requests: [{
+        requestCode: "KRT-91A2B3C4D5E6",
+        status: "pending",
+        createdAt: new Date("2026-10-06T03:00:00.000Z"),
+        resolvedAt: null,
+        items: [{ period: "2026-06", amount: 40000 }],
+        totalAmount: 40000,
+        resolutionReason: null,
+      }],
+      nextCursor: null,
+    });
+    mocks.whatsapp.mockReturnValue("https://wa.me/6289234234737?text=hello");
+
+    const postResponse = await POST(post({ period: "2026-06" }));
+    const postBody = await postResponse.json();
+    const getResponse = await GET(new Request("http://localhost:3000/api/resident/payment-requests"));
+    const getBody = await getResponse.json();
+
+    expect(postBody.whatsappUrl).toBeNull();
+    expect(getBody.requests[0].whatsappUrl).toBeNull();
+    expect(mocks.whatsapp).not.toHaveBeenCalled();
   });
 });
