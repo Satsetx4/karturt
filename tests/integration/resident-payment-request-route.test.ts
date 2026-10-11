@@ -5,6 +5,9 @@ const mocks = vi.hoisted(() => ({
   createRequest: vi.fn(),
   profile: vi.fn(),
   whatsapp: vi.fn(),
+  treasurerNumber: vi.fn(),
+  whatsappUrl: vi.fn(),
+  history: vi.fn(),
   database: {},
 }));
 
@@ -24,10 +27,16 @@ vi.mock("@/lib/billing/resident-payment-request", async () => {
 vi.mock("@/lib/billing/resident-profile", () => ({ getResidentProfile: mocks.profile }));
 vi.mock("@/lib/billing/resident-payment-whatsapp", () => ({
   createResidentPaymentWhatsAppLink: mocks.whatsapp,
+  createResidentPaymentWhatsAppUrl: mocks.whatsappUrl,
+  getResidentTreasurerWhatsAppNumber: mocks.treasurerNumber,
+}));
+vi.mock("@/lib/billing/resident-payment-request-history", () => ({
+  getResidentPaymentRequestHistory: mocks.history,
+  InvalidResidentPaymentHistoryCursorError: class InvalidResidentPaymentHistoryCursorError extends Error {},
 }));
 vi.mock("@/lib/env", () => ({ getPublicAppUrl: () => "http://localhost:3000" }));
 
-import { POST } from "../../src/app/api/resident/payment-requests/route";
+import { GET, POST } from "../../src/app/api/resident/payment-requests/route";
 import { UnauthenticatedError } from "../../src/lib/auth/principal";
 
 const key = "b5d4b131-908a-45c2-9363-1ea1b84cd21e";
@@ -124,5 +133,76 @@ describe("resident payment request HTTP boundary", () => {
     expect(body.whatsappUrl).toBeNull();
     expect(body.contactMessage).toBe("Nomor WhatsApp Bendahara belum tersedia. Permintaan Anda tetap tercatat.");
     expect(body.message).toContain("Menunggu konfirmasi");
+  });
+});
+
+
+describe("resident persisted pending WhatsApp CTA", () => {
+  const pending = {
+    requestCode: "KRT-91A2B3C4D5E6",
+    status: "pending",
+    createdAt: new Date("2026-10-05T10:00:00.000Z"),
+    resolvedAt: null,
+    items: [{ period: "2026-09", amount: 40000 }],
+    totalAmount: 40000,
+    resolutionReason: null,
+  };
+
+  it("links only pending persisted snapshots for the same authenticated Resident and RT", async () => {
+    mocks.principal.mockResolvedValue(resident);
+    mocks.history.mockResolvedValue({
+      requests: [pending, { ...pending, requestCode: "KRT-0000000000000002", status: "verified" }],
+      nextCursor: null,
+    });
+    mocks.profile.mockResolvedValue({ name: "Warga Uji", houseNumber: "UJI-5", rtName: "RT Uji", startsOn: "2020-01-01" });
+    mocks.treasurerNumber.mockResolvedValue("628123456789");
+    mocks.whatsappUrl.mockReturnValue("https://wa.me/628123456789?text=pending");
+
+    const response = await GET(new Request("http://localhost:3000/api/resident/payment-requests"));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(mocks.history).toHaveBeenLastCalledWith(mocks.database, resident, undefined);
+    expect(mocks.treasurerNumber).toHaveBeenLastCalledWith(mocks.database, resident.rtUnitId);
+    expect(mocks.whatsappUrl).toHaveBeenLastCalledWith({
+      destinationNumber: "628123456789",
+      houseNumber: "UJI-5",
+      residentName: "Warga Uji",
+      request: {
+        requestCode: pending.requestCode,
+        status: "pending",
+        periods: ["2026-09"],
+        totalAmount: 40000,
+        createdAt: pending.createdAt,
+      },
+    });
+    expect(body.requests[0].whatsappUrl).toBe("https://wa.me/628123456789?text=pending");
+    expect(body.requests[1].whatsappUrl).toBeNull();
+    expect(body.requests[1].contactMessage).toBeNull();
+    expect(body.requests[0]).not.toHaveProperty("rtUnitId");
+  });
+
+  it("keeps pending history readable without a Treasurer number", async () => {
+    mocks.principal.mockResolvedValue(resident);
+    mocks.history.mockResolvedValue({ requests: [pending], nextCursor: null });
+    mocks.profile.mockResolvedValue({ name: "Warga Uji", houseNumber: "UJI-5" });
+    mocks.treasurerNumber.mockResolvedValue(null);
+    mocks.whatsappUrl.mockClear();
+    const response = await GET(new Request("http://localhost:3000/api/resident/payment-requests"));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.requests[0].whatsappUrl).toBeNull();
+    expect(body.requests[0].contactMessage).toContain("tidak tersedia");
+    expect(mocks.whatsappUrl).not.toHaveBeenCalled();
+  });
+
+  it("does not consult Treasurer contact for nonpending or empty history", async () => {
+    mocks.principal.mockResolvedValue(resident);
+    mocks.history.mockResolvedValue({ requests: [{ ...pending, status: "cancelled" }], nextCursor: null });
+    mocks.treasurerNumber.mockClear();
+    const response = await GET(new Request("http://localhost:3000/api/resident/payment-requests"));
+    expect(response.status).toBe(200);
+    expect(mocks.treasurerNumber).not.toHaveBeenCalled();
+    expect((await response.json()).requests[0]).not.toHaveProperty("whatsappUrl");
   });
 });
