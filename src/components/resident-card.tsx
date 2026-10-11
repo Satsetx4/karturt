@@ -15,7 +15,7 @@ import {
   formatResidentDate,
   monthNames,
   residentStatusLabels,
-  yearMonths,
+  visibleYearMonths,
   type ResidentDue,
   type ResidentStatusToken,
 } from "@/lib/billing/resident-card";
@@ -61,6 +61,8 @@ type PaymentRequestHistoryItem = {
   items: Array<{ period: string; amount: number }>;
   totalAmount: number;
   resolutionReason: string | null;
+  whatsappUrl?: string | null;
+  contactMessage?: string | null;
 };
 
 type PaymentRequestHistoryResponse = {
@@ -361,6 +363,16 @@ export function ResidentPaymentRequestPanel({
                   </time>
                 )}
                 {request.status === "pending" && (
+                  request.whatsappUrl ? (
+                    <a className="button button--primary payment-request-whatsapp"
+                      href={request.whatsappUrl} target="_blank" rel="noopener noreferrer">
+                      Hubungi Bendahara via WhatsApp
+                    </a>
+                  ) : (
+                    <p>{request.contactMessage ?? "Permintaan Anda tetap tercatat dan menunggu konfirmasi Bendahara."}</p>
+                  )
+                )}
+                {request.status === "pending" && (
                   <div className="payment-request-cancel-actions">
                     {cancelTarget === request.requestCode ? (
                       <div className="payment-request-cancel-confirm" role="group" aria-label="Konfirmasi pembatalan">
@@ -493,8 +505,18 @@ export function ResidentCard({
   const [tab, setTab] = useState("card");
   const [dues, setDues] = useState<ResidentDue[]>([]);
   const [state, setState] = useState("loading");
+  const [currentBusinessDate, setCurrentBusinessDate] = useState(businessDate);
   const [year, setYear] = useState(Number(businessDate.slice(0, 4)));
+  const currentYearRef = useRef(Number(businessDate.slice(0, 4)));
   const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    const currentYear = Number(currentBusinessDate.slice(0, 4));
+    const previousCurrentYear = currentYearRef.current;
+    if (currentYear !== previousCurrentYear) {
+      setYear((selectedYear) => selectedYear === previousCurrentYear ? currentYear : selectedYear);
+      currentYearRef.current = currentYear;
+    }
+  }, [currentBusinessDate]);
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
@@ -521,6 +543,7 @@ export function ResidentCard({
         if (!response.ok) throw new Error("load");
         const data = await response.json();
         setDues(data.dues);
+        setCurrentBusinessDate(data.businessDate);
         setState("ready");
       } catch {
         if (!controller.signal.aborted) setState("error");
@@ -546,7 +569,7 @@ export function ResidentCard({
   }
   const years = [
     ...new Set([
-      Number(businessDate.slice(0, 4)),
+      Number(currentBusinessDate.slice(0, 4)),
       ...dues.map((d) => d.billingYear),
     ]),
   ].sort((a, b) => b - a);
@@ -632,7 +655,7 @@ export function ResidentCard({
               <ResidentDuesSummary summary={summary} />
               <ResidentPaymentRequestPanel dues={dues} onCreated={() => setRetry((r) => r + 1)} />
               <ol className="dues-grid">
-                {yearMonths(dues, year).map(({ name, month, due }) => {
+                {visibleYearMonths(dues, year, currentBusinessDate).map(({ name, month, due }) => {
                   return (
                     <ResidentMonthCard key={month} name={name} due={due} />
                   );
