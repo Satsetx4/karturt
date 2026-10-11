@@ -192,7 +192,7 @@ describe("resident persisted pending WhatsApp CTA", () => {
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.requests[0].whatsappUrl).toBeNull();
-    expect(body.requests[0].contactMessage).toContain("tidak tersedia");
+    expect(body.requests[0].contactMessage).toContain("belum tersedia");
     expect(mocks.whatsappUrl).not.toHaveBeenCalled();
   });
 
