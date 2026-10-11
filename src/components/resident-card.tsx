@@ -15,7 +15,7 @@ import {
   formatResidentDate,
   monthNames,
   residentStatusLabels,
-  yearMonths,
+  visibleYearMonths,
   type ResidentDue,
   type ResidentStatusToken,
 } from "@/lib/billing/resident-card";
@@ -493,8 +493,18 @@ export function ResidentCard({
   const [tab, setTab] = useState("card");
   const [dues, setDues] = useState<ResidentDue[]>([]);
   const [state, setState] = useState("loading");
+  const [currentBusinessDate, setCurrentBusinessDate] = useState(businessDate);
   const [year, setYear] = useState(Number(businessDate.slice(0, 4)));
+  const currentYearRef = useRef(Number(businessDate.slice(0, 4)));
   const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    const currentYear = Number(currentBusinessDate.slice(0, 4));
+    const previousCurrentYear = currentYearRef.current;
+    if (currentYear !== previousCurrentYear) {
+      setYear((selectedYear) => selectedYear === previousCurrentYear ? currentYear : selectedYear);
+      currentYearRef.current = currentYear;
+    }
+  }, [currentBusinessDate]);
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
@@ -521,6 +531,7 @@ export function ResidentCard({
         if (!response.ok) throw new Error("load");
         const data = await response.json();
         setDues(data.dues);
+        setCurrentBusinessDate(data.businessDate);
         setState("ready");
       } catch {
         if (!controller.signal.aborted) setState("error");
@@ -546,7 +557,7 @@ export function ResidentCard({
   }
   const years = [
     ...new Set([
-      Number(businessDate.slice(0, 4)),
+      Number(currentBusinessDate.slice(0, 4)),
       ...dues.map((d) => d.billingYear),
     ]),
   ].sort((a, b) => b - a);
@@ -632,7 +643,7 @@ export function ResidentCard({
               <ResidentDuesSummary summary={summary} />
               <ResidentPaymentRequestPanel dues={dues} onCreated={() => setRetry((r) => r + 1)} />
               <ol className="dues-grid">
-                {yearMonths(dues, year).map(({ name, month, due }) => {
+                {visibleYearMonths(dues, year, currentBusinessDate).map(({ name, month, due }) => {
                   return (
                     <ResidentMonthCard key={month} name={name} due={due} />
                   );
