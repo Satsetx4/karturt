@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Source_Sans_3 } from "next/font/google";
 import { getPublicAppUrl } from "@/lib/env";
 import "./globals.css";
@@ -39,11 +39,22 @@ export const metadata: Metadata = {
     description: "Informasi iuran RT dan administrasi warga dalam satu tempat.",
     images: ["/og-karturt.svg"],
   },
-  icons: { icon: "/icon.svg" },
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "KartuRT", statusBarStyle: "default" },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/pwa-icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/pwa-icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
     ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
     : undefined,
 };
+
+export const viewport: Viewport = { themeColor: "#173745" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
