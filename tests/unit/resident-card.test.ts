@@ -12,6 +12,7 @@ import {
   formatResidentDate,
   residentStatusLabels,
   yearMonths,
+  visibleYearMonths,
   type ResidentStatusToken,
   type ResidentDue,
 } from "../../src/lib/billing/resident-card";
@@ -229,5 +230,18 @@ describe("resident card semantics", () => {
     expect(months[1].due).toBeUndefined();
     expect(months[11].due?.status).toBe("unpaid");
     expect(yearMonths([due("paid", 1)], 2025).every((m) => !m.due)).toBe(true);
+  });
+  it.each([
+    { businessDate: "2026-09-30", visibleThrough: 9 },
+    { businessDate: "2026-10-01", visibleThrough: 10 },
+    { businessDate: "2026-10-31", visibleThrough: 10 },
+    { businessDate: "2026-11-01", visibleThrough: 11 },
+  ])("shows Resident month cards only through the Jakarta month on $businessDate", ({ businessDate, visibleThrough }) => {
+    expect(visibleYearMonths([], 2026, businessDate).map((month) => month.month))
+      .toEqual(Array.from({ length: visibleThrough }, (_, index) => index + 1));
+  });
+  it("keeps prior years complete and future years empty", () => {
+    expect(visibleYearMonths([], 2025, "2026-10-01")).toHaveLength(12);
+    expect(visibleYearMonths([], 2027, "2026-10-01")).toHaveLength(0);
   });
 });
