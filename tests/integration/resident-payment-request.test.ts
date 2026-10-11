@@ -645,7 +645,7 @@ describe("resident payment request transactions", () => {
     });
 
     const request = {
-      requestCode: "KRT-91A2B3C4D5E6",
+      requestCode: "KRT-91A2B3C4D5E6F708",
       status: "pending" as const,
       periods: ["2024-11", "2026-02"],
       totalAmount: 135000,
@@ -666,7 +666,7 @@ describe("resident payment request transactions", () => {
     expect(message).toContain("November 2024, Februari 2026");
     expect(message.replace(/\s/g, "")).toContain("Rp135.000");
     expect(message).toContain("Waktu pengajuan:");
-    expect(message).toContain("Nomor pengajuan: KRT-91A2B3C4D5E6");
+    expect(message).toContain("Nomor pengajuan: KRT-91A2B3C4D5E6F708");
 
     const otherRt = await createRt(db);
     await expect(createResidentPaymentWhatsAppLink(db as never, {
