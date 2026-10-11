@@ -6,7 +6,7 @@ const base = {
   houseNumber: "A-02",
   residentName: "Warga Uji",
   request: {
-    requestCode: "KRT-91A2B3C4D5E6",
+    requestCode: "KRT-91A2B3C4D5E6F708",
     status: "pending" as const,
     periods: ["2026-08", "2026-09"],
     totalAmount: 80000,
