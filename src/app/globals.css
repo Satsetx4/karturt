@@ -1004,3 +1004,6 @@ button { color: inherit; }
   .chairman-report-button { transition-duration: .01ms; }
 }
 
+
+/* Optional external contact action, never automatic sending. */
+.payment-request-whatsapp { display: flex; min-height: 46px; align-items: center; justify-content: center; width: 100%; margin-top: 10px; text-align: center; }
