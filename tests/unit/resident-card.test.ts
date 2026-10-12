@@ -93,7 +93,7 @@ describe("resident card semantics", () => {
 
     expect(text).toContain("Belum bayar");
     expect(text).toContain("Menunggu konfirmasi");
-    expect(text).toContain("Lunas");
+    expect(text).toContain("Sudah bayar");
     expect(text).not.toMatch(/Tunggakan|Total belum dibayar|Total sudah dibayar/i);
     expect(text).not.toMatch(/2026-06-10|tanggal 10|jatuh tempo/i);
     expect(text).not.toMatch(/\b(PAID|UNPAID|WAIVED|NOT_DUE|PENDING)\b/i);
@@ -261,7 +261,7 @@ describe("resident card semantics", () => {
       receipts: [{ allocationAmount: 40000, method: "cash" as const,
         verifiedAt: "2026-10-12T03:35:00.000Z", reference: "KRT-ABCDEF012345" }] };
     const markup = renderToStaticMarkup(createElement(ResidentMonthCard, { name: "November", due: november }));
-    expect(visibleText(markup)).toContain("Lihat kuitansi");
+    expect(visibleText(markup)).toContain("Ketuk untuk lihat kuitansi");
     expect(visibleText(markup)).toContain("Tunai");
     expect(visibleText(markup)).toContain("Diverifikasi");
     expect(visibleText(markup)).toContain("KRT-ABCDEF012345");
