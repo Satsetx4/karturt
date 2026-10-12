@@ -97,6 +97,10 @@ const payloadSchema = z.object({
   website: z.string().max(200).optional(),
 });
 
+function noStoreLoginJson(message: string, status: number) {
+  return NextResponse.json({ message }, { status, headers: { "cache-control": "no-store" } });
+}
+
 function createCredentialAuthRequest(request: Request, email: string, password: string) {
   const forwardedHeaders = new Headers({ "content-type": "application/json" });
   for (const name of ["origin", "cookie", "x-forwarded-for", "x-real-ip", "user-agent", "accept-language"]) {
@@ -123,25 +127,25 @@ async function rejectLoginAttempt(request: Request, type: string, password: stri
 export async function POST(request: Request, context: { params: Promise<{ type: string }> }) {
   const { type } = await context.params;
   if (type !== "resident" && type !== "official" && type !== "system_admin") {
-    return NextResponse.json({ message: "Jenis akun tidak tersedia." }, { status: 404 });
+    return noStoreLoginJson("Jenis akun tidak tersedia.", 404);
   }
 
   let rawBody: unknown;
   try {
     rawBody = await request.json();
   } catch {
-    return NextResponse.json({ message: "Periksa kembali data yang diisi." }, { status: 400 });
+    return noStoreLoginJson("Periksa kembali data yang diisi.", 400);
   }
   const parsed = payloadSchema.safeParse(rawBody);
-  if (!parsed.success) return NextResponse.json({ message: "Periksa kembali data yang diisi." }, { status: 400 });
-  if (parsed.data.website) return NextResponse.json({ message: "Data masuk belum cocok atau akun belum aktif." }, { status: 401 });
+  if (!parsed.success) return noStoreLoginJson("Periksa kembali data yang diisi.", 400);
+  if (parsed.data.website) return noStoreLoginJson("Data masuk belum cocok atau akun belum aktif.", 401);
   if (type === "resident" && !/^\d{6}$/.test(parsed.data.password)) {
-    return NextResponse.json({ message: "Nomor rumah atau PIN belum cocok." }, { status: 401 });
+    return noStoreLoginJson("Nomor rumah atau PIN belum cocok.", 401);
   }
 
   const identifier = type === "resident" ? parsed.data.identifier.toUpperCase() : parsed.data.identifier.toLowerCase();
   if (type === "resident" && !/^[-A-Z0-9/ ]{1,40}$/.test(identifier)) {
-    return NextResponse.json({ message: "Nomor rumah atau PIN belum cocok." }, { status: 401 });
+    return noStoreLoginJson("Nomor rumah atau PIN belum cocok.", 401);
   }
 
   const db = getDb();

@@ -35,6 +35,28 @@ describe("resident house-number and PIN login route", () => {
     }
   });
 
+  it("marks early login validation responses as no-store", async () => {
+    const cases = [
+      { type: "unknown", body: "{}", status: 404 },
+      { type: "resident", body: "{", status: 400 },
+      { type: "resident", body: "{}", status: 400 },
+      { type: "resident", body: JSON.stringify({ identifier: "C-01", password: "593817", website: "filled" }), status: 401 },
+      { type: "resident", body: JSON.stringify({ identifier: "C-01", password: "59381" }), status: 401 },
+      { type: "resident", body: JSON.stringify({ identifier: "bad!", password: "593817" }), status: 401 },
+    ] as const;
+
+    for (const testCase of cases) {
+      const response = await POST(new Request("http://localhost:3000/api/login/resident", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: testCase.body,
+      }), { params: Promise.resolve({ type: testCase.type }) });
+
+      expect(response.status).toBe(testCase.status);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+  });
+
   it("authenticates a resident with the provisioned house number and exact numeric PIN", async () => {
     const rtUnitId = await createRt(testDatabase.db);
     const household = await createHousehold(testDatabase.db, rtUnitId, { number: "C-01" });
