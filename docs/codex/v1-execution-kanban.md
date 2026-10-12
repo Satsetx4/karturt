@@ -2,6 +2,8 @@
 
 **As-of:** 12 Oct 2026 WIB. **Canonical issue board:** [#25](https://github.com/Satsetx4/karturt/issues/25). **Legacy canonical roadmap:** [#17](https://github.com/Satsetx4/karturt/issues/17). **Detailed playbook:** [v1-codex-execution-plan.md](v1-codex-execution-plan.md). **Documentation PR:** [#24](https://github.com/Satsetx4/karturt/pull/24).
 
+> **CRITICAL 2026-10-12 OWNER POLICY SUPERSESSION:** This file is an original 22-task snapshot only. The **live Kanban now includes supplemental V1-123–V1-128 issues #49–#54**, dealing with post-demo 12-month display, transfer guard, Treasurer cash auto oldest→target, paid-month ledger receipt, demo sunset and reporting regressions. Previous assumption that resident **online** payment may target future months is revoked; that privilege is **cash/offline Treasurer only**. See [final policy](v1-final-post-demo-billing-policy.md), [stacked source PR #48](https://github.com/Satsetx4/karturt/pull/48), and [live issue #25](https://github.com/Satsetx4/karturt/issues/25). Status/counts below are the earlier baseline; coordinator must refresh after verification.
+
 > Source of truth = individual GitHub issue status prefix; this Markdown is an initial SNAPSHOT. Coordinator must refresh after every wave. NO CODEX EXECUTION OR TASK DELEGATION has been claimed at time of creation.
 
 ## Kanban counters
