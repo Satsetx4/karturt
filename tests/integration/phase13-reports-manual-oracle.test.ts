@@ -35,7 +35,7 @@ type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
 
 const YEAR = 2026;
 const BUSINESS_DATE = "2026-05-20";
-const BEFORE_MAY_DUE_DATE = "2026-05-05";
+const EARLY_MAY_DATE = "2026-05-05";
 const BEFORE_REPLACEMENT_DATE = "2026-02-28";
 
 const JAN_TO_MAY_EXPECTED = [
@@ -43,7 +43,7 @@ const JAN_TO_MAY_EXPECTED = [
   { month: 2, target: 80_000, effectiveTarget: 90_000, received: 50_000, transferReceived: 0, cashReceived: 50_000, waived: 0, outstanding: 40_000, obligationCount: 2, waivedCount: 0, notDueCount: 2, overdueCount: 1 },
   { month: 3, target: 120_000, effectiveTarget: 115_000, received: 80_000, transferReceived: 40_000, cashReceived: 40_000, waived: 0, outstanding: 35_000, obligationCount: 3, waivedCount: 0, notDueCount: 1, overdueCount: 1 },
   { month: 4, target: 120_000, effectiveTarget: 120_000, received: 40_000, transferReceived: 0, cashReceived: 40_000, waived: 40_000, outstanding: 40_000, obligationCount: 3, waivedCount: 1, notDueCount: 1, overdueCount: 1 },
-  { month: 5, target: 120_000, effectiveTarget: 120_000, received: 40_000, transferReceived: 0, cashReceived: 40_000, waived: 0, outstanding: 80_000, obligationCount: 3, waivedCount: 0, notDueCount: 1, overdueCount: 2 },
+  { month: 5, target: 120_000, effectiveTarget: 120_000, received: 40_000, transferReceived: 0, cashReceived: 40_000, waived: 0, outstanding: 80_000, obligationCount: 3, waivedCount: 0, notDueCount: 1, overdueCount: 0 },
 ] as const;
 
 const ANNUAL_EXPECTED = {
@@ -57,7 +57,7 @@ const ANNUAL_EXPECTED = {
   obligationCount: 34,
   waivedCount: 1,
   notDueCount: 14,
-  overdueCount: 5,
+  overdueCount: 3,
 };
 
 function projection(value: unknown) {
@@ -307,7 +307,7 @@ const DIRECT_MONTHLY_SQL = `${DIRECT_COMPONENTS_SQL}
     count(*) FILTER (WHERE status <> 'not_due')::int AS "obligationCount",
     count(*) FILTER (WHERE status = 'waived')::int AS "waivedCount",
     count(*) FILTER (WHERE status = 'not_due')::int AS "notDueCount",
-    count(*) FILTER (WHERE outstanding > 0 AND due_date < $3::date)::int AS "overdueCount"
+    count(*) FILTER (WHERE outstanding > 0 AND due_date < date_trunc('month', $3::date)::date)::int AS "overdueCount"
   FROM calculated_dues
   GROUP BY month
   ORDER BY month
@@ -324,7 +324,7 @@ const DIRECT_YEARLY_SQL = `${DIRECT_COMPONENTS_SQL}
     count(*) FILTER (WHERE status <> 'not_due')::int AS "obligationCount",
     count(*) FILTER (WHERE status = 'waived')::int AS "waivedCount",
     count(*) FILTER (WHERE status = 'not_due')::int AS "notDueCount",
-    count(*) FILTER (WHERE outstanding > 0 AND due_date < $3::date)::int AS "overdueCount"
+    count(*) FILTER (WHERE outstanding > 0 AND due_date < date_trunc('month', $3::date)::date)::int AS "overdueCount"
   FROM calculated_dues
 `;
 
@@ -341,7 +341,7 @@ const DIRECT_ARREARS_SQL = `${DIRECT_COMPONENTS_SQL}
     ON house.id = household.house_id AND house.rt_unit_id = household.rt_unit_id
   LEFT JOIN public.people person
     ON person.household_id = household.id AND person.rt_unit_id = household.rt_unit_id
-  WHERE due.outstanding > 0 AND due.due_date < $3::date
+  WHERE due.outstanding > 0 AND due.due_date < date_trunc('month', $3::date)::date
   GROUP BY due.household_id, house.number, household.status, household.starts_on,
     household.ends_on, due.month, due.due_date, due.outstanding, due.pending
   ORDER BY house.number, household.starts_on, due.month
@@ -574,7 +574,7 @@ describe("F13 PGlite manual reporting oracle", () => {
 
     const may20Before = await financialSnapshot(testDatabase, rtUnitId);
     const reportMay20 = await getRtFinancialReport(database, chairman, { year: YEAR, businessDate: BUSINESS_DATE });
-    const reportMay05 = await getRtFinancialReport(database, chairman, { year: YEAR, businessDate: BEFORE_MAY_DUE_DATE });
+    const reportMay05 = await getRtFinancialReport(database, chairman, { year: YEAR, businessDate: EARLY_MAY_DATE });
     const may20After = await financialSnapshot(testDatabase, rtUnitId);
     expect(may20After).toEqual(may20Before);
 
@@ -616,28 +616,22 @@ describe("F13 PGlite manual reporting oracle", () => {
 
     expect(reportMay05.monthly.map(financialProjection)).toEqual(reportMay20.monthly.map(financialProjection));
     expect(reportMay05.monthly.map(({ month, overdueCount }) => ({ month, overdueCount }))).toEqual(
-      reportMay20.monthly.map(({ month, overdueCount }) => ({ month, overdueCount: month === 5 ? 0 : overdueCount })),
+      reportMay20.monthly.map(({ month, overdueCount }) => ({ month, overdueCount })),
     );
-    expect(reportMay20.yearly.overdueCount).toBe(5);
-    expect(reportMay05.yearly).toEqual({ ...ANNUAL_EXPECTED, overdueCount: 3 });
+    expect(reportMay20.yearly.overdueCount).toBe(3);
+    expect(reportMay05.yearly).toEqual(ANNUAL_EXPECTED);
 
-    expect(reportMay20.arrears).toMatchObject({ totalOutstanding: 195_000, count: 5, householdCount: 3 });
+    expect(reportMay20.arrears).toMatchObject({ totalOutstanding: 115_000, count: 3, householdCount: 3 });
     expect(expectedReportHouseholds(reportMay20)).toEqual([
       {
         key: "H1", houseNumber: "A-01", lifecycle: "active", startsOn: "2024-01-01", endsOn: null,
-        residentNames: ["H1 Resident"], totalOutstanding: 75_000, pending: true,
-        periods: [
-          { month: 3, dueDate: "2026-03-10", outstanding: 35_000, pending: true },
-          { month: 5, dueDate: "2026-05-10", outstanding: 40_000, pending: true },
-        ],
+        residentNames: ["H1 Resident"], totalOutstanding: 35_000, pending: true,
+        periods: [{ month: 3, dueDate: "2026-03-10", outstanding: 35_000, pending: true }],
       },
       {
         key: "H3-new", houseNumber: "A-03", lifecycle: "active", startsOn: "2026-03-01", endsOn: null,
-        residentNames: ["H3 New Resident"], totalOutstanding: 80_000, pending: false,
-        periods: [
-          { month: 4, dueDate: "2026-04-10", outstanding: 40_000, pending: false },
-          { month: 5, dueDate: "2026-05-10", outstanding: 40_000, pending: false },
-        ],
+        residentNames: ["H3 New Resident"], totalOutstanding: 40_000, pending: false,
+        periods: [{ month: 4, dueDate: "2026-04-10", outstanding: 40_000, pending: false }],
       },
       {
         key: "H3-old", houseNumber: "A-03", lifecycle: "historical", startsOn: "2024-01-01", endsOn: "2026-02-28",
@@ -673,11 +667,11 @@ describe("F13 PGlite manual reporting oracle", () => {
       DIRECT_YEARLY_SQL, [rtUnitId, billingYear.id, BUSINESS_DATE],
     );
     const sqlMay05Yearly = await testDatabase.client.query<Record<string, number>>(
-      DIRECT_YEARLY_SQL, [rtUnitId, billingYear.id, BEFORE_MAY_DUE_DATE],
+      DIRECT_YEARLY_SQL, [rtUnitId, billingYear.id, EARLY_MAY_DATE],
     );
     expect(sqlMay20Monthly.rows.map(projection)).toEqual(reportMay20.monthly.map(projection));
     expect(sqlMay20Yearly.rows[0]).toMatchObject(ANNUAL_EXPECTED);
-    expect(sqlMay05Yearly.rows[0]).toMatchObject({ ...ANNUAL_EXPECTED, overdueCount: 3 });
+    expect(sqlMay05Yearly.rows[0]).toMatchObject(ANNUAL_EXPECTED);
 
     const sqlMay20Arrears = await testDatabase.client.query<{
       householdId: string;
@@ -697,9 +691,9 @@ describe("F13 PGlite manual reporting oracle", () => {
       month: number;
       outstanding: number;
       pending: boolean;
-    }>(DIRECT_ARREARS_SQL, [rtUnitId, billingYear.id, BEFORE_MAY_DUE_DATE]);
-    expect(sqlMay20Arrears.rows.reduce((sum, row) => sum + row.outstanding, 0)).toBe(195_000);
-    expect(sqlMay20Arrears.rows).toHaveLength(5);
+    }>(DIRECT_ARREARS_SQL, [rtUnitId, billingYear.id, EARLY_MAY_DATE]);
+    expect(sqlMay20Arrears.rows.reduce((sum, row) => sum + row.outstanding, 0)).toBe(115_000);
+    expect(sqlMay20Arrears.rows).toHaveLength(3);
     expect(new Set(sqlMay20Arrears.rows.map((row) => row.householdId)).size).toBe(3);
     expect(sqlMay05Arrears.rows.reduce((sum, row) => sum + row.outstanding, 0)).toBe(115_000);
     expect(sqlMay05Arrears.rows).toHaveLength(3);

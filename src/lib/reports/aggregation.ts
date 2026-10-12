@@ -26,6 +26,11 @@ export type MonthlyReportTotals = ReportTotals & {
   month: number;
 };
 
+export type YearlyOutstandingTiming = {
+  dueNowOutstanding: number;
+  futureUnpaidOutstanding: number;
+};
+
 export type ArrearsPeriod = {
   month: number;
   dueDate: string;
@@ -49,6 +54,7 @@ export type RtFinancialReportResponse = {
   year: number;
   availableYears: number[];
   yearly: ReportTotals;
+  yearlyOutstandingTiming: YearlyOutstandingTiming;
   monthly: MonthlyReportTotals[];
   arrears: {
     totalOutstanding: number;
@@ -140,7 +146,7 @@ function emptyTotals(): ReportTotals {
 }
 
 function isOverdue(outstanding: number, dueDate: string, businessDate: string) {
-  return outstanding > 0 && dueDate < businessDate;
+  return outstanding > 0 && dueDate.slice(0, 7) < businessDate.slice(0, 7);
 }
 
 function validateHouseholdIdentity(identity: ReportHouseholdIdentity) {
@@ -337,6 +343,18 @@ export function aggregateRtFinancialReport(
     throw new ReportInvariantError("Monthly totals do not reconcile to the yearly report.");
   }
 
+  const currentPeriod = input.businessDate.slice(0, 7);
+  const futureUnpaidOutstanding = monthly.reduce((total, month) => {
+    const period = `${input.year}-${String(month.month).padStart(2, "0")}`;
+    return period > currentPeriod
+      ? add(total, month.outstanding, "future unpaid outstanding total")
+      : total;
+  }, 0);
+  const dueNowOutstanding = yearlyFromMonths.outstanding - futureUnpaidOutstanding;
+  if (!Number.isSafeInteger(dueNowOutstanding) || dueNowOutstanding < 0) {
+    throw new ReportInvariantError("Yearly outstanding timing totals are inconsistent.");
+  }
+
   const households = [...arrearsByHousehold.values()]
     .sort((left, right) => left.houseNumber.localeCompare(right.houseNumber) || left.startsOn.localeCompare(right.startsOn) || left.householdId.localeCompare(right.householdId))
     .map((entry) => {
@@ -353,6 +371,10 @@ export function aggregateRtFinancialReport(
     year: input.year,
     availableYears: [...input.availableYears],
     yearly: yearlyFromMonths,
+    yearlyOutstandingTiming: {
+      dueNowOutstanding,
+      futureUnpaidOutstanding,
+    },
     monthly,
     arrears: {
       totalOutstanding: arrearsTotalOutstanding,

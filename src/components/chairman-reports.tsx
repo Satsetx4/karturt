@@ -74,11 +74,14 @@ function isReportAmounts(value: unknown): value is ReportAmounts {
 function isChairmanReport(value: unknown, expectedYear: number): value is ChairmanReport {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<ChairmanReport>;
+  const yearly = candidate.yearly;
+  const yearlyOutstandingTiming = candidate.yearlyOutstandingTiming;
   if (
     candidate.year !== expectedYear ||
     !Array.isArray(candidate.availableYears) ||
     !candidate.availableYears.every((year) => isSafeCount(year) && year >= 2000 && year <= 2200) ||
-    !isReportAmounts(candidate.yearly) ||
+    !yearly ||
+    !isReportAmounts(yearly) ||
     !Array.isArray(candidate.monthly) ||
     candidate.monthly.length !== 12 ||
     !candidate.monthly.every((month, index) =>
@@ -89,6 +92,16 @@ function isChairmanReport(value: unknown, expectedYear: number): value is Chairm
   ) {
     return false;
   }
+
+  if (
+    !yearlyOutstandingTiming ||
+    !isSafeCount(yearlyOutstandingTiming.dueNowOutstanding) ||
+    !isSafeCount(yearlyOutstandingTiming.futureUnpaidOutstanding)
+  ) {
+    return false;
+  }
+  const timingTotal = yearlyOutstandingTiming.dueNowOutstanding + yearlyOutstandingTiming.futureUnpaidOutstanding;
+  if (!Number.isSafeInteger(timingTotal) || timingTotal !== yearly.outstanding) return false;
 
   const arrears = candidate.arrears;
   if (
@@ -143,7 +156,7 @@ function isChairmanReport(value: unknown, expectedYear: number): value is Chairm
       total += month[field];
       if (!Number.isSafeInteger(total)) return false;
     }
-    if (total !== candidate.yearly[field]) return false;
+    if (total !== yearly[field]) return false;
   }
 
   let arrearsTotal = 0;
@@ -175,6 +188,42 @@ function Metric({ label, amount, count, countUnit }: { label: string; amount?: n
       <dt>{label}</dt>
       <dd>{amount === undefined ? `${integerFormat.format(count ?? 0)}${countUnit ? ` ${countUnit}` : ""}` : rupiah(amount)}</dd>
     </div>
+  );
+}
+
+export function ChairmanAnnualSummary({ data }: { data: ChairmanReport }) {
+  return (
+    <section className="chairman-report-panel" aria-labelledby="chairman-report-summary-title">
+      <div className="chairman-report-panel-heading">
+        <div>
+          <p className="eyebrow">TAHUN {data.year}</p>
+          <h2 id="chairman-report-summary-title">Ringkasan tahunan</h2>
+        </div>
+      </div>
+      <dl className="chairman-report-metrics">
+        <Metric label="Target awal" amount={data.yearly.target} />
+        <Metric label="Target efektif" amount={data.yearly.effectiveTarget} />
+        <Metric label="Diterima" amount={data.yearly.received} />
+        <Metric label="Sisa kewajiban tahunan" amount={data.yearly.outstanding} />
+        <Metric label="Jatuh tempo saat ini" amount={data.yearlyOutstandingTiming.dueNowOutstanding} />
+        <Metric label="Belum jatuh tempo" amount={data.yearlyOutstandingTiming.futureUnpaidOutstanding} />
+        <Metric label="Transfer" amount={data.yearly.transferReceived} />
+        <Metric label="Tunai" amount={data.yearly.cashReceived} />
+        <Metric label="Dibebaskan" amount={data.yearly.waived} />
+        <Metric label="Tidak ditagih" count={data.yearly.notDueCount} countUnit="tagihan" />
+      </dl>
+      <p className="chairman-report-identity">
+        Diterima + dibebaskan + sisa kewajiban tahunan = target efektif.
+        <span>{rupiah(data.yearly.received)} + {rupiah(data.yearly.waived)} + {rupiah(data.yearly.outstanding)} = {rupiah(data.yearly.effectiveTarget)}</span>
+      </p>
+      <p className="chairman-report-identity">
+        Jatuh tempo saat ini mencakup bulan berjalan dan sebelumnya; bulan setelah periode berjalan belum jatuh tempo. Tunggakan di bawah hanya menghitung periode sebelum bulan berjalan.
+      </p>
+      <p className="chairman-report-identity">
+        Transfer + tunai = diterima.
+        <span>{rupiah(data.yearly.transferReceived)} + {rupiah(data.yearly.cashReceived)} = {rupiah(data.yearly.received)}</span>
+      </p>
+    </section>
   );
 }
 
@@ -338,32 +387,7 @@ export function ChairmanReports({
             </div>
           )}
 
-          <section className="chairman-report-panel" aria-labelledby="chairman-report-summary-title">
-            <div className="chairman-report-panel-heading">
-              <div>
-                <p className="eyebrow">TAHUN {data.year}</p>
-                <h2 id="chairman-report-summary-title">Ringkasan tahunan</h2>
-              </div>
-            </div>
-            <dl className="chairman-report-metrics">
-              <Metric label="Target awal" amount={data.yearly.target} />
-              <Metric label="Target efektif" amount={data.yearly.effectiveTarget} />
-              <Metric label="Diterima" amount={data.yearly.received} />
-              <Metric label="Belum diterima" amount={data.yearly.outstanding} />
-              <Metric label="Transfer" amount={data.yearly.transferReceived} />
-              <Metric label="Tunai" amount={data.yearly.cashReceived} />
-              <Metric label="Dibebaskan" amount={data.yearly.waived} />
-              <Metric label="Tidak ditagih" count={data.yearly.notDueCount} countUnit="tagihan" />
-            </dl>
-            <p className="chairman-report-identity">
-              Diterima + dibebaskan + belum diterima = target efektif.
-              <span>{rupiah(data.yearly.received)} + {rupiah(data.yearly.waived)} + {rupiah(data.yearly.outstanding)} = {rupiah(data.yearly.effectiveTarget)}</span>
-            </p>
-            <p className="chairman-report-identity">
-              Transfer + tunai = diterima.
-              <span>{rupiah(data.yearly.transferReceived)} + {rupiah(data.yearly.cashReceived)} = {rupiah(data.yearly.received)}</span>
-            </p>
-          </section>
+          <ChairmanAnnualSummary data={data} />
 
           <section className="chairman-report-section" aria-labelledby="chairman-report-monthly-title">
             <div className="chairman-report-section-heading">

@@ -29,6 +29,44 @@ describe("runtime environment guards", () => {
     expect(() => requireDatabaseEnvironment()).toThrow("must both be set explicitly");
   });
 
+  it("blocks staging database access until the exact target and isolation are proven", () => {
+    const approvedTarget = "postgresql://synthetic-user:synthetic-password@ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech/karturt_stage?sslmode=require";
+    setEnvironment({ APP_ENV: "staging", DATABASE_ENV: "staging", DATABASE_URL: approvedTarget });
+    expect(() => requireDatabaseEnvironment()).toThrow("parent-data initialization");
+
+    setEnvironment({
+      APP_ENV: "staging",
+      DATABASE_ENV: "staging",
+      DATABASE_URL: "postgresql://synthetic-user:synthetic-password@wrong-endpoint.c-4.ap-southeast-1.aws.neon.tech/karturt_stage",
+    });
+    expect(() => requireDatabaseEnvironment()).toThrow("must target approved Neon project");
+    let errorMessage = "";
+    try {
+      requireDatabaseEnvironment();
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : String(error);
+    }
+    expect(errorMessage).not.toContain("synthetic-password");
+  });
+
+  it("rejects the approved staging endpoint under non-staging labels before database client creation", () => {
+    const stagingHosts = [
+      "ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech",
+      "ep-raspy-meadow-b3ppifq6-pooler.c-4.ap-southeast-1.aws.neon.tech",
+    ];
+
+    for (const environmentName of ["development", "production"] as const) {
+      for (const hostname of stagingHosts) {
+        setEnvironment({
+          APP_ENV: environmentName,
+          DATABASE_ENV: environmentName,
+          DATABASE_URL: `postgresql://synthetic-user:synthetic-password@${hostname}/karturt_stage`,
+        });
+        expect(() => requireDatabaseEnvironment()).toThrow("cannot be used unless APP_ENV and DATABASE_ENV both equal staging");
+      }
+    }
+  });
+
   it("requires explicit labels before generating deployment metadata", () => {
     setEnvironment({ NEXT_PUBLIC_APP_URL: "http://localhost:3000" });
     expect(() => getPublicAppUrl()).toThrow("must both be set explicitly");

@@ -1201,7 +1201,8 @@ export async function listHouseholdManagement(
         if (due.status === "unpaid") {
           unpaidCount += 1;
           outstandingAmount += balance.outstanding;
-          if (due.dueDate < date) arrearsAmount += balance.outstanding;
+          const duePeriod = `${due.year}-${String(due.month).padStart(2, "0")}`;
+          if (duePeriod < date.slice(0, 7)) arrearsAmount += balance.outstanding;
         } else if (due.status === "paid") paidCount += 1;
         else if (due.status === "waived") waivedCount += 1;
         else notDueCount += 1;
