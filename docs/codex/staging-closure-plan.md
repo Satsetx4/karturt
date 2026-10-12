@@ -7,6 +7,14 @@
 **Durable tracker:** docs/codex/staging-closure-tracker.md.
 **Kanban source:** GitHub issue #17. Keep its status prefixes and the three-card WIP limit authoritative.
 
+## V1 SINGLE RT PRODUCT SCOPE OVERRIDE — Owner directive, 12 Oct 2026 WIB
+
+**CURRENT PRODUCT GOAL: Finish KartuRT V1 for exactly ONE operational RT to production readiness. ALL multi-RT customer-facing or administrator-facing functionality is moved to V2, NOT a blocker for V1.** Full and authoritative [V1 scope, acceptance criteria and 10 smallest handoff tasks](v1-single-rt-production-readiness.md) are approved for this execution. Original `docs/mvp-single-rt-scope-freeze.md` was already APPROVED; this decision reconfirms it and includes the now-approved minimal PWA shell from PR #23.
+
+**Positive operational acceptance on staging:** bootstrap and serve **ONE synthetic RT** with Resident, Treasurer, Chairman and necessary Admin identities, households and iuran/payment/reporting flows. Never require two live RTs, RT selection, multi-RT switching, multi-RT customer onboarding or multi-tenant admin UI for V1. A separate synthetic RT may exist **only within a disposable automated negative security test fixture if indispensable** for tenant-isolation/cross-RT denial; this is not second operational staging tenant, not multi-RT functionality, and not manual browser multi-RT UAT. Keep `rtUnitId`, all cross-RT database foreign keys, tenant authorization and automated deny tests. Do not loosen finance/auth tenant security.
+
+**Priority:** get fresh isolated Neon Free/Vercel Hobby staging already PROVISIONED through canonical 14 migrations, protected READY Preview, single-RT browser/finance/PWA UAT, owner real Android/iPhone acceptance, release safety and one reviewed PR #23 merge; production and real household pilot remain separate explicit owner gates. Run staging Track S and release Track R in parallel. No new resources and no prod/demo/F3 actions. Max 3 concurrent tasks.
+
 ## Owner authorization and parallel execution amendment — 12 October 2026 (WIB)
 
 **Supersedes the previous all-or-nothing Gate 1 dependency for non-production staging.** Owner explicitly authorized: at most **one NEW Neon project on Free** and **one NEW Vercel project on Hobby**, zero incremental cost hard stop, staging-only credentials, official versioned Drizzle migrations, clearly synthetic test data, runtime/browser checks, and cleanup **only** of manifest-listed records/assets the agents themselves create. Never alter, copy, delete, or reuse production, historic demo, F3/UAT resources/data/secrets. Existing repo PUBLIC choice remains unchanged. Real Android/iPhone acceptance is reserved for the owner after READY preview. Production deployment/real pilot/F5 are *not* authorized.
@@ -78,7 +86,7 @@ Use only synthetic identities and the exact candidate SHA on the verified READY 
 
 | Card | Work and exit evidence |
 | --- | --- |
-| C12 | Auth and tenant: verify sign-in/out, expiry/re-authentication, role limits, same-tenant access, and cross-tenant denial. Confirm no private session or tenant data leaks between accounts. |
+| C12 | Single-RT auth and tenant security: verify sign-in/out, expiry/re-authentication, role limits, one operational RT access; cross-RT denial belongs to automated negative regression. Confirm no private session or tenant data leaks between accounts. |
 | C13 | Finance and WhatsApp: use canonical app flows for pending, verified, unpaid, and reversed states; verify current Jakarta month/year boundaries, future-period rejection, idempotency, persisted amount/period wording, and reconciliation. Confirm pending-only same-RT CTA, URL encoding, and fail-closed invalid/missing contact behavior. No automatic or manual WhatsApp send. |
 | C14 | PWA/runtime: verify manifest JSON, MIME, scope/start URL, icon responses and dimensions, install/standalone behavior, and online-only auth/finance. With network disabled, prove that private data, session tokens, and stale balances are not served from a private cache. |
 
@@ -93,14 +101,14 @@ Use only synthetic identities and the exact candidate SHA on the verified READY 
 
 ## Synthetic fixture and acceptance packet
 
-The future staging fixture must be unmistakably synthetic and disposable, isolated from production, the legacy demo, and F3/UAT. Suggested minimum: two separate RT tenants; for each, one synthetic Treasurer and two synthetic Residents in separate households. Use credentials generated only for the isolated staging environment and never put them in GitHub. Use a non-routable or disabled WhatsApp destination; inspect the generated URL only. If a safe destination cannot be configured, verify that the CTA fails closed.
+The future staging fixture must be unmistakably synthetic and disposable, isolated from production, the legacy demo, and F3/UAT. **V1 operational stage minimum: one synthetic RT tenant**, one synthetic Treasurer, one synthetic Chairman, and two synthetic Residents in separate households. Keep cross-RT negative authorization tests in automated isolated test harness; only if indispensable, use a disposable *security negative-test-only* second RT, not a second operational RT. Use credentials generated only for the isolated staging environment and never put them in GitHub. Use a non-routable or disabled WhatsApp destination; inspect the generated URL only. If a safe destination cannot be configured, verify that the CTA fails closed.
 
 Create financial states through canonical application flows, not direct database inserts: current and prior-month dues, future-period rejection, unpaid dues, pending request, verified payment, and reversed payment. Use the injected business-date mechanism for Jakarta month/year boundary cases. Do not copy names, phone numbers, or rows from any workbook or real household list.
 
 Browser/runtime cases:
 
 - Authentication, logout, expiry, role access, and fresh authentication after reconnect.
-- Tenant isolation for profiles, dues, requests, payment history, and Treasurer contact; cross-tenant requests must be denied.
+- Tenant safety for profiles, dues, requests, payment history, and Treasurer contact: validate same-RT behavior operationally and **automated negative cross-RT denial** (no positive multi-RT browser UAT, tenant switching or onboarding).
 - Current-month visibility at Jakarta date boundaries; future-period requests rejected by the server.
 - Canonical totals and periods persisted on requests; replay is idempotent; state changes return a safe conflict.
 - WhatsApp CTA appears only for eligible pending requests and a valid same-RT contact; values are URL-encoded and described as unverified; invalid/missing/ambiguous contact hides the CTA without hiding history. Inspect only; never send.
