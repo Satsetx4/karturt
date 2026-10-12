@@ -137,7 +137,7 @@ describe("Treasurer direct cash payment", () => {
       householdId: scenario.householdId,
       period: "2027-02",
       idempotencyKey: randomUUID(),
-    });
+    }, "2026-10-12");
 
     expect(result).toEqual({
       status: "recorded",
@@ -281,7 +281,7 @@ describe("Treasurer direct cash payment", () => {
       householdId: scenario.householdId,
       period: "2026-12",
       idempotencyKey: randomUUID(),
-    })).rejects.toBeInstanceOf(CashPaymentPendingRequestConflictError);
+    }, "2026-10-12")).rejects.toBeInstanceOf(CashPaymentPendingRequestConflictError);
     expect(await testDatabase.db.select().from(payments)
       .where(and(eq(payments.rtUnitId, scenario.rtUnitId), eq(payments.method, "cash")))).toHaveLength(0);
     expect(await testDatabase.db.select().from(paymentRequestClaims)
@@ -318,7 +318,7 @@ describe("Treasurer direct cash payment", () => {
       householdId: scenario.householdId,
       period: "2027-02",
       idempotencyKey: randomUUID(),
-    });
+    }, "2026-10-12");
     expect(cancelledCash.periods).toEqual(["2027-02"]);
     expect((await testDatabase.db.select().from(paymentRequests)
       .where(eq(paymentRequests.id, cancelledRequestRow!.id)))[0]!.status).toBe("cancelled");
