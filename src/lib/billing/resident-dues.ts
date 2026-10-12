@@ -90,7 +90,7 @@ export async function getResidentMonthlyDues(
       allocationAmount: row.amount,
       method: row.method,
       verifiedAt: row.verifiedAt.toISOString(),
-      reference: `KRT-${row.paymentId.slice(0, 12).toUpperCase()}`,
+      reference: `KRT-${row.paymentId.replace(/-/g, "").slice(0, 12).toUpperCase()}`,
     });
     receiptsByDueId.set(row.monthlyDueId, items);
   }
