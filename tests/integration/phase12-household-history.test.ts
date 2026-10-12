@@ -485,6 +485,22 @@ describe("Phase 12 household financial history safeguards", () => {
     expect(oldQueueRequest?.houseNumber).toBe(newQueueRequest?.houseNumber);
   });
 
+  it("counts arrears by billing period instead of the nominal due day", async () => {
+    const scenario = await createScenario();
+    await testDatabase.db.delete(monthlyDues).where(and(
+      eq(monthlyDues.householdId, scenario.household.householdId),
+      inArray(monthlyDues.month, [1, 2, 3, 4, 5, 6, 7, 8, 9]),
+    ));
+
+    const octoberManagement = await listHouseholdManagement(database, scenario.chairman, "", "2026-10-12");
+    const octoberHousehold = octoberManagement.households.find((item) => item.householdId === scenario.household.householdId);
+    expect(octoberHousehold?.financialHistory.arrearsAmount).toBe(0);
+
+    const novemberManagement = await listHouseholdManagement(database, scenario.chairman, "", "2026-11-01");
+    const novemberHousehold = novemberManagement.households.find((item) => item.householdId === scenario.household.householdId);
+    expect(novemberHousehold?.financialHistory.arrearsAmount).toBe(50_000);
+  });
+
   async function historySnapshot(
     scenario: Scenario,
     requestIds: string[],
