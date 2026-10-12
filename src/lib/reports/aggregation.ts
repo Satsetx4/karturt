@@ -140,7 +140,7 @@ function emptyTotals(): ReportTotals {
 }
 
 function isOverdue(outstanding: number, dueDate: string, businessDate: string) {
-  return outstanding > 0 && dueDate < businessDate;
+  return outstanding > 0 && dueDate.slice(0, 7) < businessDate.slice(0, 7);
 }
 
 function validateHouseholdIdentity(identity: ReportHouseholdIdentity) {
