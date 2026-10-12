@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assertDatabaseTargetForEnvironment } from "@/lib/staging-database-target";
 
 const environment = z.enum(["development", "staging", "production", "test"]);
 
@@ -55,6 +56,7 @@ export function requireDatabaseEnvironment() {
   if (!/^postgres(?:ql)?:\/\//i.test(env.databaseUrl)) {
     throw new Error("DATABASE_URL must be a PostgreSQL connection string.");
   }
+  assertDatabaseTargetForEnvironment(env.databaseUrl, env.databaseEnv);
   return { ...env, databaseUrl: env.databaseUrl };
 }
 
