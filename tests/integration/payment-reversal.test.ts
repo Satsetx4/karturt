@@ -259,7 +259,7 @@ describe("Treasurer payment reversal", () => {
     const afterReplacement = await getResidentMonthlyDues(database, scenario.residentPrincipal, "2025-12-12");
     expect(afterReplacement.every((due) => dueToken(due) === "PAID" && due.receipts?.length === 1)).toBe(true);
     expect(afterReplacement.every((due) => due.receipts?.[0]?.reference !==
-      `KRT-${originalPayment!.id.slice(0, 12).toUpperCase()}`)).toBe(true);
+      `KRT-${originalPayment!.id.replace(/-/g, "").slice(0, 12).toUpperCase()}`)).toBe(true);
   });
 
   it("releases only the reversed allocation after a paid due is adjusted and settled twice", async () => {
