@@ -159,6 +159,39 @@ describe("F13 report aggregation", () => {
     expect(afterDueDate.arrears.households[0]).toMatchObject({ pending: true, periods: [{ pending: true }] });
   });
 
+  it("reconciles future-paid November while future-unpaid December stays outside arrears", () => {
+    const identity = household({ householdId: "future-cash", houseNumber: "A-08" });
+    const dues = Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      return month <= 11
+        ? due(identity, month, { status: "paid", activeReceived: 40_000, cashReceived: 40_000 })
+        : due(identity, month);
+    });
+
+    const report = aggregateRtFinancialReport(dues, {
+      year: YEAR,
+      availableYears: [YEAR],
+      businessDate: "2026-10-12",
+    });
+
+    expect(report.monthly).toHaveLength(12);
+    expect(report.monthly[10]).toMatchObject({ month: 11, received: 40_000, cashReceived: 40_000, outstanding: 0, overdueCount: 0 });
+    expect(report.monthly[11]).toMatchObject({ month: 12, received: 0, cashReceived: 0, outstanding: 40_000, overdueCount: 0 });
+    expect(report.yearly).toMatchObject({
+      target: 480_000,
+      effectiveTarget: 480_000,
+      received: 440_000,
+      transferReceived: 0,
+      cashReceived: 440_000,
+      waived: 0,
+      outstanding: 40_000,
+      overdueCount: 0,
+    });
+    expect(report.yearly.effectiveTarget).toBe(report.yearly.received + report.yearly.waived + report.yearly.outstanding);
+    expect(report.yearly.transferReceived + report.yearly.cashReceived).toBe(report.yearly.received);
+    expect(report.arrears).toMatchObject({ totalOutstanding: 0, count: 0, householdCount: 0, households: [] });
+  });
+
   it("sums multiple active allocation methods and excludes reversed allocations", () => {
     const identity = household({ householdId: "mixed", houseNumber: "A-05" });
     const methodTotals = sumActiveAllocationMethods([
