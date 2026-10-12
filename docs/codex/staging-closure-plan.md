@@ -7,6 +7,17 @@
 **Durable tracker:** docs/codex/staging-closure-tracker.md.
 **Kanban source:** GitHub issue #17. Keep its status prefixes and the three-card WIP limit authoritative.
 
+## Owner authorization and parallel execution amendment — 12 October 2026 (WIB)
+
+**Supersedes the previous all-or-nothing Gate 1 dependency for non-production staging.** Owner explicitly authorized: at most **one NEW Neon project on Free** and **one NEW Vercel project on Hobby**, zero incremental cost hard stop, staging-only credentials, official versioned Drizzle migrations, clearly synthetic test data, runtime/browser checks, and cleanup **only** of manifest-listed records/assets the agents themselves create. Never alter, copy, delete, or reuse production, historic demo, F3/UAT resources/data/secrets. Existing repo PUBLIC choice remains unchanged. Real Android/iPhone acceptance is reserved for the owner after READY preview. Production deployment/real pilot/F5 are *not* authorized.
+
+**Two independent tracks, both must close before any merge:**
+
+- **Track S — Authorized isolated staging:** S0 validate exact team/org Hobby/Free, project counts and no billed-upgrade/on-demand behavior using account and vendor readback; create **at most one each** dedicated NEW staging resources with distinct names/IDs, no Git auto-deploy from main, protected SSO, staging-only branch-scoped secrets, cheapest/free compute within service limits. Provider quota exhaustion is a STOP (no upgrade, trial, payment method, overage, paid add-on). Record newly created IDs without secrets. Then run canonical versioned migrations and DB check only against new isolated database with explicit `APP_ENV=staging`/`DATABASE_ENV=staging` and positively verified target ID, create synthetic-only manifest-backed fixtures and exact PR #23 HEAD protected Preview. READY and live smoke are separate evidence gates, not assumed from deployment request. Do not use direct SQL to reconstruct migration history. If safe migrations/browser tools are unavailable, mark the stage as PROVISIONED/NOT READY and hand a narrowly scoped remaining executor task to Codex; do not claim PASS.
+- **Track R — Release governance:** independently repair/verify ruleset target `refs/heads/main`, required PR and `Gate A local verification` (plus independent concurrency where applicable), conversation resolution, no force/delete. Audit both historical linked Vercel projects' `main` triggers and prevent unapproved production deployments; retain SSO, demo/F3 untouched. The new staging project's intended deploys must be preview-only. Record authoritative readback; if GitHub admin access missing, provide owner-only settings steps, not a fake PASS.
+
+**Critical synchronization:** Track S may provision/test without waiting for Track R's `main` protection. **Track R and Track S and physical-device acceptance must all PASS before PR #23 merge**. No independent runtime/mobile PASS from code/CI alone. Existing PR #24 remains docs-only, unmerged; main unchanged. Any new Git-linked project must not automatically build/deploy `main`: start unlinked/protected, then explicitly configure safe preview-only source and inspect impact before any deployment. If UI/provider cannot prove a step harmless/cost-free, stop that step and document BLOCKED.
+
 ## Direction for future agents
 
 Read this plan, its tracker, issue #17, and the linked blocker issues before acting. Re-read the exact GitHub refs, issue/PR states, check runs, and provider state immediately before every write. Preserve unrelated worktrees and evidence. Do not treat a status comment, prior audit, ignored build, static review, or CI result as staging or device acceptance.
@@ -36,7 +47,7 @@ Links and the detailed evidence snapshot are in the tracker.
 
 ### Gate 1 — governance and staging readiness (C01–C08)
 
-All C01–C08 must be closed with evidence before staging resources, migrations, builds, or runtime tests are touched. Gate 1 is currently BLOCKED by main protection readback, deployment-trigger risk, unverified free quota/headroom, and unverified ignored-build behavior. A passing CI job cannot waive these blockers.
+**Revised:** C01/C05 per-account Free/Hobby identity and safe-cost checks plus explicit owner staging approval form **Gate S0** for creating the dedicated new staging-only resources, independently of GitHub main ruleset (C02) and historical production trigger audits (C04). C02/C03/C04 release governance is **Gate R** and may run in parallel with staging. C07/C08 preparation may run simultaneously. Missing release protection still blocks MERGE, not approved isolated staging. Do not use demo/F3/production as staging.
 
 | Card | Work and exit evidence |
 | --- | --- |
@@ -49,7 +60,7 @@ All C01–C08 must be closed with evidence before staging resources, migrations,
 | C07 | Prepare the synthetic fixture manifest and browser/runtime test matrix below. No records are created before Gate 1. |
 | C08 | Prepare the Android Chrome and iPhone Safari physical-device guide below. Device availability alone is not a PASS. |
 
-Gate 1 exit requires all of the following: the C01 docs PR is published and linked; C02 and C03 show enforceable main/PR checks; C04 proves merge-trigger behavior; C05 proves Rp0 headroom; C06 proves safe isolation and deployment protection; and C07/C08 packets are ready. If any item is BLOCKED or UNVERIFIED, keep C09–C18 locked.
+**Gate S0 exit:** owner approval (given), Free/Hobby plan/provisioning verified, count <=1 new Neon and <=1 new Vercel, and no billed use or existing resource reuse. C09–C11 may then advance within the scoped staging environment even while C02/C04 are blocked. **Gate R exit:** C02–C04 verify enforceable main protection and safe merge-trigger effects. C12–C15 need READY preview. C16–C17 need BOTH tracks, all runtime, physical-device and rollback gates PASS.
 
 ### Gate 2 — isolated staging closure (C09–C11)
 
