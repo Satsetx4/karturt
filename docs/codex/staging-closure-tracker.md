@@ -4,7 +4,7 @@
 **Repo:** Satsetx4/karturt. **Default branch:** main.
 **Current main:** 96c84588ae0c13f68a17cffd997a3e583fb7da82.
 **Candidate PR #23:** OPEN/DRAFT, head 344952c0a41342dea77989d5b9aa6fdb503a78e6, base main at 96c84588ae0c13f68a17cffd997a3e583fb7da82.
-**Current verdict:** Release Track R still BLOCKED; isolated staging Track S authorized for zero-cost provisioning after account tier verification. No staging READY/runtime/device gate has run. PR #23 is not eligible to merge.
+**Current verdict:** V1 scope is now SINGLE operational RT, multi-RT deferred to V2; release Track R still BLOCKED on main→Vercel production effect; isolated staging Track S is PROVISIONED (new Free/Hobby resources + preview secrets), but NOT READY (no migrations/deployment). No runtime/device gate has run. PR #23 is not eligible to merge.
 
 Status meanings: PASS = directly evidenced acceptance; PREPARED = checklist or test packet exists but was not executed; UNVERIFIED = evidence unavailable or inconclusive; BLOCKED = a prerequisite prevents progress; LOCKED = do not start until the listed gate passes; IN PROGRESS = current task being prepared.
 
@@ -39,6 +39,14 @@ References:
 - [#17 V2 checkpoint comment](https://github.com/Satsetx4/karturt/issues/17#issuecomment-6117234123)
 - [Gate A and concurrency PR run](https://github.com/Satsetx4/karturt/actions/runs/38197227481)
 - [Gate A and concurrency push run](https://github.com/Satsetx4/karturt/actions/runs/38197224318)
+
+## OWNER PRODUCT DIRECTIVE — V1 ONLY: SINGLE OPERATIONAL RT (12 Oct 2026 WIB)
+
+- **V1 goal:** one production deployment serves exactly **one RT**. Full [approved scope/acceptance + V1-01–V1-10 execution tasks](v1-single-rt-production-readiness.md); original [MVP Single-RT freeze](../mvp-single-rt-scope-freeze.md) already said APPROVED. User reiterates: finish V1 production-ready first, V2 only later enables multi-RT.
+- **Exclude from V1 acceptance:** RT selection/switching, onboarding multiple customer RTs, multi-RT UI and admin management; do not delay V1 for these. Minimal installable PWA shell included because PR #23 already implements it, but no offline finance cache, push notifications or advanced offline behaviors.
+- **RETAIN:** `rtUnitId`, all tenant/household constraints and server-side guards, *automated negative cross-RT denial* tests as permanent security invariants. **Operational staging fixtures: one synthetic RT only** (Treasurer, Chairman, Resident and necessary System Admin roles); any second RT solely in disposable security-only negative test harness if strictly needed. This is a correction to earlier V2 plan's two-RT positive staging test suggestion.
+- **Release state unchanged:** PR #23 remains draft and unmerged; new resource staging is PROVISIONED **NOT READY**, no 14 migrations, Preview URL, synthetic live QA or device tests. GitHub #22 ruleset PASS, main-merge Vercel production side-effect still unverified, so no merges.
+- **Immediate task queue:** V1-01 doc scope (done on this branch), V1-02 release trigger audit, V1-03 preview-only staging hookup + stable origin, V1-04 canonical staging migrations, V1-05 single-RT fixtures, V1-06 exact-head protected Preview READY, V1-07 single-RT runtime/security/finance QA, V1-08 owner physical Android/iPhone checks, V1-09 conditional safe merge, V1-10 separate production/pilot/handover GO. Keep staging vs release tracks parallel, at most 3 in progress; no re-provision.
 
 ## Release Track R — main protection independently verified (12 October 2026)
 
@@ -82,7 +90,7 @@ References:
 | C04 | UNVERIFIED / BLOCKED | Vercel read showed F3 main deployment dpl_4EhE94BV5P8p2r3Btb1znPqJH55B targeted the Vercel production environment but was CANCELED; latest feature deployments are canceled. Project Git integration/production-branch settings did not establish what a GitHub merge of #23 would trigger. Do not merge until this is read back and the no-production-mutation boundary is met. |
 | C05 | BLOCKED — Rp0 not proven | Published Vercel Hobby limits are documented: 6,000 build execution minutes/month, one concurrent build, 100 deployments/day, 45 minutes/deployment. The current Vercel team plan, account headroom, and zero incremental cost are not proven by the available readback. Neon org/project reads do not expose current free quota remaining or a no-charge guarantee. Official Neon sources differ: the Free FAQ says 0.5 GB/project; an Oct 2 vendor post announces 1 GB/project. Actual eligibility, usage, and remaining allowance are UNVERIFIED. STOP before provisioning if Rp0 is not proven. |
 | C06 | UNVERIFIED | GitHub’s Vercel statuses say “Canceled by Ignored Build Step”; the ignored-build configuration itself was not independently read back. No repo ignoreCommand was found. F3 staging SSO is enabled for all except custom domains; legacy demo SSO is enabled for all. A settings flag is not an anonymous/browser auth test. Preserve SSO. |
-| C07 | PREPARED | Agent C supplied a synthetic two-tenant fixture and browser matrix; no account, dataset, migration, test, deployment, or database write was made. See Plan V2. |
+| C07 | PREPARED | Earlier Agent C prepared a two-tenant matrix, now superseded for **positive operational UAT** by V1 SINGLE RT directive. Keep only an isolated automated security negative tenant fixture if required; no account, dataset, migration, test, deployment, or database write was made. See Plan V2. |
 | C08 | PREPARED | Agent C supplied physical Android Chrome and iPhone Safari steps. Device availability is known; no handset was used and no PASS is claimed. See Plan V2 and issue #9. |
 
 ### Delegation record
