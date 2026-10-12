@@ -20,6 +20,7 @@ import {
 } from "../../src/db/schema";
 import { resolvePrincipalForUser } from "../../src/lib/auth/principal";
 import { getResidentMonthlyDues } from "../../src/lib/billing/resident-dues";
+import { duesSummary } from "../../src/lib/billing/resident-card";
 import { getResidentPaymentHistory } from "../../src/lib/billing/payment-history";
 import { createResidentPaymentWhatsAppLink } from "../../src/lib/billing/resident-payment-whatsapp";
 import { verifyTreasurerPaymentRequest } from "../../src/lib/billing/treasurer-payment-verification";
@@ -324,19 +325,21 @@ describe("resident payment request transactions", () => {
   });
 
   it.each([
-    { businessDate: "2026-09-30", visibleThrough: 9, hidden: [10, 11, 12] },
-    { businessDate: "2026-10-01", visibleThrough: 10, hidden: [11, 12] },
-    { businessDate: "2026-10-31", visibleThrough: 10, hidden: [11, 12] },
-    { businessDate: "2026-11-01", visibleThrough: 11, hidden: [12] },
-  ])("limits Resident dues to the Jakarta calendar month on $businessDate", async ({ businessDate, visibleThrough, hidden }) => {
+    { businessDate: "2026-09-30", firstFuture: 10 },
+    { businessDate: "2026-10-01", firstFuture: 11 },
+    { businessDate: "2026-10-31", firstFuture: 11 },
+    { businessDate: "2026-11-01", firstFuture: 12 },
+  ])("returns all twelve Resident months but excludes future unpaid from due-now on $businessDate", async ({ businessDate, firstFuture }) => {
     const resident = await createResident(testDatabase.db, {
       dues: Array.from({ length: 12 }, (_, index) => ({ period: `2026-${String(index + 1).padStart(2, "0")}` })),
     });
 
     const dues = await getResidentMonthlyDues(testDatabase.db as never, resident.principal, businessDate);
-
-    expect(dues.map(({ month }) => month)).toEqual(Array.from({ length: visibleThrough }, (_, index) => index + 1));
-    for (const month of hidden) expect(dues.some((due) => due.month === month)).toBe(false);
+    expect(dues.map(({ month }) => month)).toEqual(Array.from({ length: 12 }, (_, index) => index + 1));
+    for (const due of dues) {
+      expect(due.periodTiming).toBe(due.month < firstFuture ? (due.month === firstFuture - 1 ? "current" : "past") : "future");
+    }
+    expect(duesSummary(dues).unpaid).toBe((firstFuture - 1) * 40000);
   });
 
   it("rejects a future billing month server-side and allows September and October from October 1", async () => {
