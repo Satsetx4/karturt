@@ -1,5 +1,7 @@
 # KartuRT V1 — Single RT Production Readiness (Owner Scope Freeze)
 
+> **LATEST OWNER BILLING POLICY (2026-10-12) overrides any earlier advance-transfer/multi-RT acceptance text below.** Resident cards display all 12 months; future unpaid = Belum jatuh tempo and not billable now; online requests only current/past; Treasurer cash may pay future and must auto-allocate oldest unpaid through target; tapping Lunas opens active per-month ledger receipt with WIB verifiedAt. Demo release path is closed. See [final binding policy](v1-final-post-demo-billing-policy.md) and [PR #48](https://github.com/Satsetx4/karturt/pull/48). No staging/production changes authorized by this note.
+
 **Owner decision:** 12 October 2026 (Asia/Jakarta). **Status:** APPROVED V1 SCOPE, technical gates pending.
 **Repo:** `Satsetx4/karturt`; **source of truth:** issue #17, combined candidate PR #23, V2 staging tracker in PR #24.
 **Original baseline:** `docs/mvp-single-rt-scope-freeze.md` already APPROVED. This document refreshes delivery gates without changing the tenant-safety architecture.
