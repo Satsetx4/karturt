@@ -40,6 +40,13 @@ References:
 - [Gate A and concurrency PR run](https://github.com/Satsetx4/karturt/actions/runs/38197227481)
 - [Gate A and concurrency push run](https://github.com/Satsetx4/karturt/actions/runs/38197224318)
 
+## Release Track R — main protection independently verified (12 October 2026)
+
+- **C02 PASS and KRT-18 #22 DONE/CLOSED.** GitHub now returns `main.protected=true`. Ruleset [Protect #24900928](https://github.com/Satsetx4/karturt/rules/24900928): target `~DEFAULT_BRANCH` = main; active; `pull_request` required, required GitHub Actions check `Gate A local verification` (integration ID 15368), review conversation resolution required, required approval count 0 (solo maintainer), deletion and force-push prohibited, no bypass actors. `strict_required_status_checks_policy=false` so branch-up-to-date enforcement is **not** claimed.
+- **C03 CI PASS** for exact PR #23 candidate `344952c` on two Gate A + independent PostgreSQL concurrency runs, with required check now formally enforced on main; CI at docs PR #24 latest head must still complete before any docs merge.
+- **C04 remains BLOCKED/UNVERIFIED:** historical F3 Vercel project has a branch `main` deployment targeted at Vercel `production` which was CANCELED; prove and isolate effects of any future main merge before merges #24 or #23. A newly created, Git-unlinked staging project does not resolve old project's merge trigger.
+- **C09/C10 staging PROVISIONED/PARTIAL**, canonical migrations and stable PREVIEW target pending. This track can run parallel to C04; both must finish before merge.
+
 ## Approved isolated staging provisioned — 12 October 2026 (WIB)
 
 **Resource creation PASS (only once per vendor, within owner limit). Neither is a READY application:**
@@ -70,8 +77,8 @@ References:
 | Card | Status | Evidence and blocker |
 | --- | --- | --- |
 | C01 | PASS for publication/link; docs CI pending | Fresh repo/issue/PR read completed. The docs-only branch is based on exact origin/main SHA. PR #24 is open and linked from #17; it does not close the issue. |
-| C02 | BLOCKED | GitHub ruleset API returned active Protect #24900928, with only deletion and non_fast_forward rules. ref_name include/exclude arrays are empty. main reports protected=false; branch protection endpoint returned 404. Effective targeting and PR/check rules are not proven. [Ruleset](https://github.com/Satsetx4/karturt/rules/24900928) |
-| C03 | PASS for observed candidate CI; BLOCKED for enforcement | Both Gate A jobs and both independent PostgreSQL concurrency jobs passed on exact #23 head, via runs #38197224318 and #38197227481. No required-check protection is demonstrated; see C02. Vercel ignored-build status is not a required READY deployment. |
+| C02 | PASS — 12 Oct updated readback | Active Protect #24900928 now targets DEFAULT_BRANCH/main; main.protected=true, required PR/CI and conversation resolution enforced, no bypass. #22 DONE. [Ruleset](https://github.com/Satsetx4/karturt/rules/24900928) |
+| C03 | PASS — exact candidate CI and main required-check config | Both Gate A jobs and both independent PostgreSQL concurrency jobs passed on exact #23 head, via runs #38197224318 and #38197227481; ruleset now requires Gate A local verification on main. Docs PR #24 latest push must re-run its own check. Vercel ignored-build status is not deployment READY. |
 | C04 | UNVERIFIED / BLOCKED | Vercel read showed F3 main deployment dpl_4EhE94BV5P8p2r3Btb1znPqJH55B targeted the Vercel production environment but was CANCELED; latest feature deployments are canceled. Project Git integration/production-branch settings did not establish what a GitHub merge of #23 would trigger. Do not merge until this is read back and the no-production-mutation boundary is met. |
 | C05 | BLOCKED — Rp0 not proven | Published Vercel Hobby limits are documented: 6,000 build execution minutes/month, one concurrent build, 100 deployments/day, 45 minutes/deployment. The current Vercel team plan, account headroom, and zero incremental cost are not proven by the available readback. Neon org/project reads do not expose current free quota remaining or a no-charge guarantee. Official Neon sources differ: the Free FAQ says 0.5 GB/project; an Oct 2 vendor post announces 1 GB/project. Actual eligibility, usage, and remaining allowance are UNVERIFIED. STOP before provisioning if Rp0 is not proven. |
 | C06 | UNVERIFIED | GitHub’s Vercel statuses say “Canceled by Ignored Build Step”; the ignored-build configuration itself was not independently read back. No repo ignoreCommand was found. F3 staging SSO is enabled for all except custom domains; legacy demo SSO is enabled for all. A settings flag is not an anonymous/browser auth test. Preserve SSO. |
@@ -101,7 +108,7 @@ Visible Neon project inventory included legacy demo project silent-lake-27332079
 
 ## Gate 1 result
 
-**REVISED:** Track R remains BLOCKED by C02/C04, and the prior C05/C06 staging audit was inconclusive. Owner has now explicitly approved one new project on each Free/Hobby provider under Rp0 hard stop. Track S can proceed through C09–C11 once free-tier evidence and safe new-project isolation are verified, without waiting for R. Neither track alone enables a merge. C07/C08 remain PREPARED, not tested.
+**REVISED:** Track R remains BLOCKED by C04 merge/auto-production deployment effects; C02 main protection is now PASS. The prior C05/C06 staging audit was inconclusive. Owner has now explicitly approved one new project on each Free/Hobby provider under Rp0 hard stop. Track S can proceed through C09–C11 once free-tier evidence and safe new-project isolation are verified, without waiting for R. Neither track alone enables a merge. C07/C08 remain PREPARED, not tested.
 
 ## C09–C18 — locked follow-on work
 
