@@ -12,6 +12,7 @@ import {
   formatResidentDate,
   residentStatusLabels,
   yearMonths,
+  visibleYearMonths,
   type ResidentStatusToken,
   type ResidentDue,
 } from "../../src/lib/billing/resident-card";
@@ -48,6 +49,8 @@ describe("resident card semantics", () => {
       "UNPAID",
       "WAIVED",
       "NOT_DUE",
+      "UPCOMING",
+      "OVERDUE",
       "PENDING",
     ];
     const markup = tokens
@@ -60,14 +63,16 @@ describe("resident card semantics", () => {
     const text = visibleText(markup);
 
     expect(text).toBe(
-      "Sudah bayarBelum bayarDibebaskanTidak perlu bayarMenunggu konfirmasi",
+      "LunasBelum bayarDibebaskanTidak perlu bayarBelum jatuh tempoMenunggakMenunggu konfirmasi",
     );
     expect(text).not.toMatch(/\b(PAID|UNPAID|WAIVED|NOT_DUE|PENDING)\b/i);
     expect(residentStatusLabels).toEqual({
-      PAID: "Sudah bayar",
+      PAID: "Lunas",
       UNPAID: "Belum bayar",
       WAIVED: "Dibebaskan",
       NOT_DUE: "Tidak perlu bayar",
+      UPCOMING: "Belum jatuh tempo",
+      OVERDUE: "Menunggak",
       PENDING: "Menunggu konfirmasi",
     });
   });
@@ -229,5 +234,39 @@ describe("resident card semantics", () => {
     expect(months[1].due).toBeUndefined();
     expect(months[11].due?.status).toBe("unpaid");
     expect(yearMonths([due("paid", 1)], 2025).every((m) => !m.due)).toBe(true);
+  });
+  it.each(["2026-09-30", "2026-10-01", "2026-10-31", "2026-11-01"])(
+    "always renders Jan–Dec on the annual card on $businessDate",
+    (businessDate) => {
+      expect(visibleYearMonths([], 2026, businessDate).map((month) => month.month))
+        .toEqual(Array.from({ length: 12 }, (_, index) => index + 1));
+    },
+  );
+  it("preserves missing months in historical and future year grids", () => {
+    expect(visibleYearMonths([], 2025, "2026-10-01")).toHaveLength(12);
+    expect(visibleYearMonths([], 2027, "2026-10-01")).toHaveLength(12);
+  });
+  it("treats future unpaid months as not due now, not as waived or 'not_due'", () => {
+    const future = { ...due("unpaid", 11), periodTiming: "future" as const };
+    const overdue = { ...due("unpaid", 9), periodTiming: "past" as const };
+    expect(dueToken(future)).toBe("UPCOMING");
+    expect(dueToken(overdue)).toBe("OVERDUE");
+    expect(duesSummary([future, overdue])).toEqual({ paid: 0, pending: 0, unpaid: 40000 });
+    const markup = renderToStaticMarkup(createElement(ResidentMonthCard, { name: "November", due: future }));
+    expect(visibleText(markup)).toContain("Belum jatuh tempo");
+    expect(visibleText(markup)).not.toContain("Rp");
+  });
+  it("exposes only month allocation, not the total of a multi-month cash transaction, in a paid card receipt", () => {
+    const november = { ...due("paid", 11), periodTiming: "future" as const,
+      receipts: [{ allocationAmount: 40000, method: "cash" as const,
+        verifiedAt: "2026-10-12T03:35:00.000Z", reference: "KRT-ABCDEF012345" }] };
+    const markup = renderToStaticMarkup(createElement(ResidentMonthCard, { name: "November", due: november }));
+    expect(visibleText(markup)).toContain("Ketuk untuk lihat kuitansi");
+    expect(visibleText(markup)).toContain("Tunai");
+    expect(visibleText(markup)).toContain("Diverifikasi");
+    expect(visibleText(markup)).toContain("KRT-ABCDEF012345");
+    expect(visibleText(markup)).not.toContain("Rp 480.000");
+    expect(visibleText(markup)).toContain("Lunas");
+    expect(markup).toContain("<details");
   });
 });
