@@ -10,7 +10,7 @@ Status meanings: PASS = directly evidenced acceptance; PREPARED = checklist or t
 
 ## C01 — source recheck and durable documents
 
-**Status: IN PROGRESS.** Fresh reads were completed for the repo AGENTS.md, issues #17/#19/#22/#12/#7/#9, PRs #18/#20/#21/#23, main, ruleset #24900928, and exact-head checks. A clean docs worktree was created from origin/main at 96c84588; the original dirty checkout remains untouched. Plan and tracker are being committed on branch docs/staging-closure-plan. The PR number and issue #17 link will be added after publication.
+**Status: PASS for requested publication and issue linkage; docs PR checks pending.** Fresh reads were completed for the repo AGENTS.md, issues #17/#19/#22/#12/#7/#9, PRs #18/#20/#21/#23, main, ruleset #24900928, and exact-head checks. A clean docs worktree was created from origin/main at 96c84588; the original dirty checkout remains untouched. Plan and tracker are published on branch docs/staging-closure-plan in [PR #24](https://github.com/Satsetx4/karturt/pull/24). The current issue #17 checkpoint is [linked here](https://github.com/Satsetx4/karturt/issues/17#issuecomment-6117234123).
 
 ## Fresh GitHub reference snapshot
 
@@ -20,6 +20,7 @@ Status meanings: PASS = directly evidenced acceptance; PREPARED = checklist or t
 - PR #20: OPEN/DRAFT, head 08a4173a2687a6b9f9302c05cf664065a64a0bf5, base main. Gate A run #38139749697 succeeded; no stage or runtime acceptance.
 - PR #21: OPEN/DRAFT, head 105df9636614949d050b104b93587ab2c9bf0258, base main. Gate A run #38139885448 succeeded; no stage or device acceptance.
 - PR #23: OPEN/DRAFT, head 344952c0a41342dea77989d5b9aa6fdb503a78e6, base main. MergeState CLEAN; no APPROVED review is recorded.
+- Documentation PR #24: OPEN on docs/staging-closure-plan, base main; its Gate A check was running when first read. It tracks #17 without closing the issue.
 - #23 push run #38197224318: Gate A SUCCESS; independent PostgreSQL concurrency job #114643885904 SUCCESS.
 - #23 PR run #38197227481: Gate A SUCCESS; independent PostgreSQL concurrency job #114644014877 SUCCESS.
 - The two Vercel status contexts appear successful because the projects ignored the build. For exact #23, F3 staging deployment dpl_F43BPEJxHAD5czZcTjCgSySQow6c and legacy demo deployment dpl_Aw7dPKGUn5PyXs78ygGRHFsPC8YX were CANCELED. These are not READY deployments or runtime tests.
@@ -34,6 +35,8 @@ References:
 - [#7 combined integration](https://github.com/Satsetx4/karturt/issues/7)
 - [#9 Android/iOS acceptance](https://github.com/Satsetx4/karturt/issues/9)
 - [PR #23 candidate](https://github.com/Satsetx4/karturt/pull/23)
+- [Documentation PR #24](https://github.com/Satsetx4/karturt/pull/24)
+- [#17 V2 checkpoint comment](https://github.com/Satsetx4/karturt/issues/17#issuecomment-6117234123)
 - [Gate A and concurrency PR run](https://github.com/Satsetx4/karturt/actions/runs/38197227481)
 - [Gate A and concurrency push run](https://github.com/Satsetx4/karturt/actions/runs/38197224318)
 
@@ -41,7 +44,7 @@ References:
 
 | Card | Status | Evidence and blocker |
 | --- | --- | --- |
-| C01 | IN PROGRESS | Fresh repo/issue/PR read completed. Docs-only branch is based on exact origin/main SHA. Publish the two files in a PR linked to #17; do not close #17. |
+| C01 | PASS for publication/link; docs CI pending | Fresh repo/issue/PR read completed. The docs-only branch is based on exact origin/main SHA. PR #24 is open and linked from #17; it does not close the issue. |
 | C02 | BLOCKED | GitHub ruleset API returned active Protect #24900928, with only deletion and non_fast_forward rules. ref_name include/exclude arrays are empty. main reports protected=false; branch protection endpoint returned 404. Effective targeting and PR/check rules are not proven. [Ruleset](https://github.com/Satsetx4/karturt/rules/24900928) |
 | C03 | PASS for observed candidate CI; BLOCKED for enforcement | Both Gate A jobs and both independent PostgreSQL concurrency jobs passed on exact #23 head, via runs #38197224318 and #38197227481. No required-check protection is demonstrated; see C02. Vercel ignored-build status is not a required READY deployment. |
 | C04 | UNVERIFIED / BLOCKED | Vercel read showed F3 main deployment dpl_4EhE94BV5P8p2r3Btb1znPqJH55B targeted the Vercel production environment but was CANCELED; latest feature deployments are canceled. Project Git integration/production-branch settings did not establish what a GitHub merge of #23 would trigger. Do not merge until this is read back and the no-production-mutation boundary is met. |
