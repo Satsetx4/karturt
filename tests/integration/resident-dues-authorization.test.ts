@@ -97,6 +97,8 @@ describe("resident monthly-dues authorization", () => {
       "originalAmount",
       "outstanding",
       "paymentRequestStatus",
+      "periodTiming",
+      "receipts",
       "status",
     ]);
     expect(dues.map((due) => due.paymentRequestStatus)).toEqual([null, null]);
