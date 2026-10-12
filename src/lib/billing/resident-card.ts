@@ -1,3 +1,10 @@
+export type ResidentMonthReceipt = {
+  allocationAmount: number;
+  method: "cash" | "transfer";
+  verifiedAt: string;
+  reference: string;
+};
+
 export type ResidentDue = {
   billingYear: number;
   month: number;
@@ -10,13 +17,19 @@ export type ResidentDue = {
   outstanding: number;
   dueDate: string;
   status: "paid" | "unpaid" | "waived" | "not_due";
+  /** Calendar display only, distinct from the stored due status. */
+  periodTiming?: "past" | "current" | "future";
+  /** Only active, non-reversed ledger allocations for this month's due. */
+  receipts?: ResidentMonthReceipt[];
   paymentRequestStatus?: "pending" | "verified" | "rejected" | "cancelled" | null;
 };
 export type CurrentResidentStatusToken =
   | "PAID"
   | "UNPAID"
   | "WAIVED"
-  | "NOT_DUE";
+  | "NOT_DUE"
+  | "UPCOMING"
+  | "OVERDUE";
 export type ResidentStatusToken = CurrentResidentStatusToken | "PENDING";
 
 export const monthNames = [
@@ -49,11 +62,16 @@ export const residentStatusLabels: Record<ResidentStatusToken, string> = {
   UNPAID: "Belum bayar",
   WAIVED: "Dibebaskan",
   NOT_DUE: "Tidak perlu bayar",
+  UPCOMING: "Belum jatuh tempo",
+  OVERDUE: "Menunggak",
   PENDING: "Menunggu konfirmasi",
 };
 
 export function dueToken(due: ResidentDue): ResidentStatusToken {
-  if (due.status === "unpaid" && due.paymentRequestStatus === "pending") return "PENDING";
+  // The future calendar label is never persisted as the database's 'not_due' status.
+  if (due.status === "unpaid" && due.periodTiming === "future") return "UPCOMING";
+  if (due.status === "unpaid" && due.periodTiming !== "future" && due.paymentRequestStatus === "pending") return "PENDING";
+  if (due.status === "unpaid" && due.periodTiming === "past") return "OVERDUE";
   return domainStatusTokens[due.status];
 }
 
@@ -70,14 +88,9 @@ export function yearMonths(dues: ResidentDue[], year: number) {
     due: dues.find((d) => d.billingYear === year && d.month === index + 1),
   }));
 }
-export function visibleYearMonths(dues: ResidentDue[], year: number, businessDate: string) {
-  const [currentYear, currentMonth] = businessDate.split("-").slice(0, 2).map(Number);
-  const visibleMonthCount = year < currentYear!
-    ? 12
-    : year === currentYear!
-      ? currentMonth!
-      : 0;
-  return yearMonths(dues, year).slice(0, visibleMonthCount);
+export function visibleYearMonths(dues: ResidentDue[], year: number, _businessDate: string) {
+  // Always show twelve months; future months are visual-only 'Belum jatuh tempo'.
+  return yearMonths(dues, year);
 }
 export function duesSummary(dues: ResidentDue[]) {
   return dues.reduce(
@@ -90,7 +103,7 @@ export function duesSummary(dues: ResidentDue[]) {
           : 0),
       unpaid:
         total.unpaid +
-        (due.status === "unpaid" && due.paymentRequestStatus !== "pending"
+        (due.status === "unpaid" && due.periodTiming !== "future" && due.paymentRequestStatus !== "pending"
           ? due.outstanding
           : 0),
     }),
