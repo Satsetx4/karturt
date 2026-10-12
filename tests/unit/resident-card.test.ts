@@ -63,11 +63,11 @@ describe("resident card semantics", () => {
     const text = visibleText(markup);
 
     expect(text).toBe(
-      "Sudah bayarBelum bayarDibebaskanTidak perlu bayarBelum jatuh tempoMenunggakMenunggu konfirmasi",
+      "LunasBelum bayarDibebaskanTidak perlu bayarBelum jatuh tempoMenunggakMenunggu konfirmasi",
     );
     expect(text).not.toMatch(/\b(PAID|UNPAID|WAIVED|NOT_DUE|PENDING)\b/i);
     expect(residentStatusLabels).toEqual({
-      PAID: "Sudah bayar",
+      PAID: "Lunas",
       UNPAID: "Belum bayar",
       WAIVED: "Dibebaskan",
       NOT_DUE: "Tidak perlu bayar",
@@ -93,7 +93,7 @@ describe("resident card semantics", () => {
 
     expect(text).toContain("Belum bayar");
     expect(text).toContain("Menunggu konfirmasi");
-    expect(text).toContain("Sudah bayar");
+    expect(text).toContain("Lunas");
     expect(text).not.toMatch(/Tunggakan|Total belum dibayar|Total sudah dibayar/i);
     expect(text).not.toMatch(/2026-06-10|tanggal 10|jatuh tempo/i);
     expect(text).not.toMatch(/\b(PAID|UNPAID|WAIVED|NOT_DUE|PENDING)\b/i);
@@ -266,7 +266,7 @@ describe("resident card semantics", () => {
     expect(visibleText(markup)).toContain("Diverifikasi");
     expect(visibleText(markup)).toContain("KRT-ABCDEF012345");
     expect(visibleText(markup)).not.toContain("Rp 480.000");
-    expect(visibleText(markup)).toContain("Lunas".replace("Lunas", "Sudah bayar"));
+    expect(visibleText(markup)).toContain("Lunas");
     expect(markup).toContain("<details");
   });
 });
