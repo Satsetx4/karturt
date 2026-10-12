@@ -15,7 +15,11 @@ import {
   PaymentRequestIdempotencyConflictError,
   PaymentRequestPeriodUnavailableError,
 } from "@/lib/billing/resident-payment-request";
-import { createResidentPaymentWhatsAppLink } from "@/lib/billing/resident-payment-whatsapp";
+import {
+  createResidentPaymentWhatsAppLink,
+  createResidentPaymentWhatsAppUrl,
+  getResidentTreasurerWhatsAppNumber,
+} from "@/lib/billing/resident-payment-whatsapp";
 import { getResidentPaymentRequestHistory, InvalidResidentPaymentHistoryCursorError } from "@/lib/billing/resident-payment-request-history";
 
 export const runtime = "nodejs";
@@ -117,8 +121,47 @@ export async function GET(request: Request) {
       return response("Riwayat permintaan hanya tersedia untuk akun warga.", 403);
     }
     const cursor = new URL(request.url).searchParams.get("cursor") ?? undefined;
-    const history = await getResidentPaymentRequestHistory(getDb(), principal, cursor);
-    return NextResponse.json(history, { headers: { "cache-control": "no-store" } });
+    const database = getDb();
+    const history = await getResidentPaymentRequestHistory(database, principal, cursor);
+    if (!history.requests.some((item) => item.status === "pending")) {
+      return NextResponse.json(history, { headers: { "cache-control": "no-store" } });
+    }
+
+    // The history is canonical and scoped by the authenticated principal.
+    // Missing Treasurer contact must never hide the history or alter a pending request.
+    let destinationNumber: string | null = null;
+    let profile: Awaited<ReturnType<typeof getResidentProfile>> | null = null;
+    try {
+      [destinationNumber, profile] = await Promise.all([
+        getResidentTreasurerWhatsAppNumber(database, principal.rtUnitId!),
+        getResidentProfile(database, principal),
+      ]);
+    } catch {
+      // Fail closed: show history but no contact link.
+    }
+    return NextResponse.json({
+      ...history,
+      requests: history.requests.map((item) => {
+        if (item.status !== "pending" || !profile || !destinationNumber) {
+          return { ...item, whatsappUrl: null, contactMessage: item.status === "pending"
+            ? "Nomor WhatsApp Bendahara belum tersedia. Permintaan Anda tetap tercatat." : null };
+        }
+        const whatsappUrl = createResidentPaymentWhatsAppUrl({
+          destinationNumber,
+          houseNumber: profile.houseNumber,
+          residentName: profile.name,
+          request: {
+            requestCode: item.requestCode,
+            status: item.status,
+            periods: item.items.map((requestItem) => requestItem.period),
+            totalAmount: item.totalAmount,
+            createdAt: item.createdAt,
+          },
+        });
+        return { ...item, whatsappUrl, contactMessage: whatsappUrl
+          ? null : "Tautan WhatsApp tidak tersedia. Permintaan Anda tetap tercatat." };
+      }),
+    }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     if (error instanceof UnauthenticatedError || error instanceof MfaEnrollmentRequiredError) {
       return response("Sesi berakhir. Silakan masuk kembali.", 401);
