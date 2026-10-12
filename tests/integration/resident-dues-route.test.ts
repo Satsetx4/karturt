@@ -32,7 +32,7 @@ describe("resident dues HTTP authority", () => {
     mocks.dues.mockResolvedValue(dues);
     const response = await GET();
     expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(mocks.dues).toHaveBeenLastCalledWith(mocks.db, principal, "2026-10-06");
     expect(GET.length).toBe(0);
     expect(await response.json()).toEqual({ dues, businessDate: "2026-10-06" });
@@ -44,11 +44,22 @@ describe("resident dues HTTP authority", () => {
   });
   it("returns 401 for expired session", async () => {
     mocks.principal.mockRejectedValue(new UnauthenticatedError());
-    expect((await GET()).status).toBe(401);
+    const response = await GET();
+    expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
   });
   it("denies financial access for non-resident", async () => {
     mocks.principal.mockResolvedValue({ role: "system_admin" });
     mocks.dues.mockRejectedValue(new Error("Forbidden: resident only"));
-    expect((await GET()).status).toBe(403);
+    const response = await GET();
+    expect(response.status).toBe(403);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+  });
+  it("marks unexpected errors private and non-cacheable", async () => {
+    mocks.principal.mockResolvedValue({ role: "resident", householdId: "own", rtUnitId: "own-rt" });
+    mocks.dues.mockRejectedValue(new Error("Database unavailable"));
+    const response = await GET();
+    expect(response.status).toBe(500);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
   });
 });
