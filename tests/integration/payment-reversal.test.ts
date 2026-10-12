@@ -19,6 +19,8 @@ import {
 import type { Principal } from "@/lib/auth/permissions";
 import { getResidentPaymentHistory, getTreasurerPaymentHistory } from "@/lib/billing/payment-history";
 import { getDueFinancialBalances } from "@/lib/billing/due-balance";
+import { getResidentMonthlyDues } from "@/lib/billing/resident-dues";
+import { dueToken } from "@/lib/billing/resident-card";
 import { cancelResidentPaymentRequest } from "@/lib/billing/payment-request-resolution";
 import {
   createResidentPaymentRequest,
@@ -209,6 +211,12 @@ describe("Treasurer payment reversal", () => {
       .where(and(eq(payments.rtUnitId, scenario.rtUnitId), eq(payments.method, "cash")));
     const originalAllocations = await testDatabase.db.select().from(paymentAllocations)
       .where(eq(paymentAllocations.paymentId, originalPayment!.id));
+    const paidBeforeReversal = await getResidentMonthlyDues(database, scenario.residentPrincipal, "2025-12-12");
+    expect(paidBeforeReversal).toHaveLength(3);
+    expect(paidBeforeReversal.every((due) =>
+      due.periodTiming === "future" && dueToken(due) === "PAID" &&
+      due.receipts?.length === 1 && due.receipts[0]!.allocationAmount === 40000,
+    )).toBe(true);
 
     await reverseTreasurerPayment(database, scenario.treasurerPrincipal, {
       paymentId: originalPayment!.id,
@@ -218,6 +226,10 @@ describe("Treasurer payment reversal", () => {
       .where(inArray(monthlyDues.id, scenario.dueIds));
     expect(newPayment?.status).toBe("unpaid");
     expect((await getResidentPaymentHistory(database, scenario.residentPrincipal)).payments[0]?.lifecycle).toBe("reversed");
+    const afterReversal = await getResidentMonthlyDues(database, scenario.residentPrincipal, "2025-12-12");
+    expect(afterReversal.every((due) =>
+      due.periodTiming === "future" && dueToken(due) === "UPCOMING" && due.receipts?.length === 0,
+    )).toBe(true);
 
     const second = await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
       householdId: scenario.householdId,
@@ -244,6 +256,10 @@ describe("Treasurer payment reversal", () => {
       .where(eq(paymentReversals.paymentId, originalPayment!.id))).length).toBe(1);
     expect(activeOwners).toHaveLength(3);
     expect(activeOwners.every((owner) => owner.paymentId === replacement.id)).toBe(true);
+    const afterReplacement = await getResidentMonthlyDues(database, scenario.residentPrincipal, "2025-12-12");
+    expect(afterReplacement.every((due) => dueToken(due) === "PAID" && due.receipts?.length === 1)).toBe(true);
+    expect(afterReplacement.every((due) => due.receipts?.[0]?.reference !==
+      `KRT-${originalPayment!.id.slice(0, 12).toUpperCase()}`)).toBe(true);
   });
 
   it("releases only the reversed allocation after a paid due is adjusted and settled twice", async () => {
