@@ -126,6 +126,21 @@ describe("resident card semantics", () => {
     expect(dueToken(pendingDue)).toBe("PENDING");
   });
 
+  it("excludes a legacy pending request on a future unpaid month from due-now totals", () => {
+    const futurePendingDue = {
+      ...due("unpaid", 11),
+      periodTiming: "future" as const,
+      paymentRequestStatus: "pending" as const,
+    };
+
+    expect(duesSummary([futurePendingDue])).toEqual({
+      paid: 0,
+      pending: 0,
+      unpaid: 0,
+    });
+    expect(dueToken(futurePendingDue)).toBe("UPCOMING");
+  });
+
   it("counts paid dues only under Sudah bayar", () => {
     expect(duesSummary([due("paid", 3)])).toEqual({
       paid: 40000,

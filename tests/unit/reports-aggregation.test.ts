@@ -130,6 +130,10 @@ describe("F13 report aggregation", () => {
       notDueCount: 14,
       overdueCount: 3,
     });
+    expect(result.yearlyOutstandingTiming).toEqual({
+      dueNowOutstanding: 195_000,
+      futureUnpaidOutstanding: 840_000,
+    });
     expect(result.yearly.effectiveTarget).toBe(result.yearly.received + result.yearly.waived + result.yearly.outstanding);
     expect(result.arrears).toMatchObject({ totalOutstanding: 115_000, count: 3, householdCount: 3 });
     expect(result.arrears.households).toEqual(expect.arrayContaining([
@@ -187,6 +191,10 @@ describe("F13 report aggregation", () => {
       waived: 0,
       outstanding: 40_000,
       overdueCount: 0,
+    });
+    expect(report.yearlyOutstandingTiming).toEqual({
+      dueNowOutstanding: 0,
+      futureUnpaidOutstanding: 40_000,
     });
     expect(report.yearly.effectiveTarget).toBe(report.yearly.received + report.yearly.waived + report.yearly.outstanding);
     expect(report.yearly.transferReceived + report.yearly.cashReceived).toBe(report.yearly.received);

@@ -98,7 +98,7 @@ export function duesSummary(dues: ResidentDue[]) {
       paid: total.paid + (due.status === "paid" || due.status === "unpaid" ? due.activeReceived : 0),
       pending:
         total.pending +
-        (due.status === "unpaid" && due.paymentRequestStatus === "pending"
+        (due.status === "unpaid" && due.periodTiming !== "future" && due.paymentRequestStatus === "pending"
           ? due.outstanding
           : 0),
       unpaid:
