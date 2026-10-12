@@ -40,6 +40,23 @@ References:
 - [Gate A and concurrency PR run](https://github.com/Satsetx4/karturt/actions/runs/38197227481)
 - [Gate A and concurrency push run](https://github.com/Satsetx4/karturt/actions/runs/38197224318)
 
+## Approved isolated staging provisioned — 12 October 2026 (WIB)
+
+**Resource creation PASS (only once per vendor, within owner limit). Neither is a READY application:**
+
+| Resource | Identity / evidence | Safety readback |
+| --- | --- | --- |
+| Neon | New **Free** org `satset`, project `karturt-review-staging-20261012` (`ancient-smoke-51787007`), branch `staging-empty` (`br-dry-block-b3fsqjo3`), database `karturt_stage` | New project, no parent-data clone, PostgreSQL 18, Singapore region; 0.25 CU maximum. Default compute suspend interval used, as customized suspend timeout is not permitted on this Free account. No demo/F3/prod branch/data copied. |
+| Vercel | New **Hobby** team `sekawan`, project `karturt-review-staging-20261012` (`prj_Mv4rABJvDNAvSD78SVt5WbjFakEq`) | SSO enabled for **all** deployment targets. Git NOT linked; 0 deployments; no automatic production/main build. No previous demo/F3 project settings modified. |
+
+**Staging Vercel Preview env metadata readback (values intentionally NOT disclosed):** `APP_ENV=staging` and `DATABASE_ENV=staging` (preview-only plain labels); `DATABASE_URL` (new Neon DB credential, encrypted and preview-only); `BETTER_AUTH_SECRET` (fresh random staging-only secret, encrypted and preview-only). `NEXT_PUBLIC_APP_URL` is **not configured yet**: it must be set to the actual protected stable HTTPS origin serving the staging deployment, without path or query, **before** running build/auth/browser smoke. Do not assume the historic demo or F3 URL, and do not hardcode a random preview hostname before readback.
+
+**No app deployment or migrations performed:** schema remains uninitialized until the repository's canonical `npm run db:migrate` then `npm run db:check` run against positively verified project `ancient-smoke-51787007` only; acquire credentials from staging secret manager without putting them in shell logs/artifacts/issues, and verify `APP_ENV=DATABASE_ENV=staging`. Auth runtime and finance/tenant smoke require actual Vercel READY preview and manifest-backed synthetic fixture, so remain BLOCKED. If CLI migrations cannot be safely run with available tools, delegate the narrowly scoped CLI step to Codex rather than ad-hoc SQL replays.
+
+**Next safe steps:** release track R (owner GitHub effective main PR/check protection and old linked project production-trigger audit) runs independently. Staging track S continues with safe preview-only Git source hookup (not main production), canonical migrations, stable protected HTTPS URL, set `NEXT_PUBLIC_APP_URL` to that exact origin, and redeploy exact verified #23 SHA. Never disable SSO, trigger a prod target, or mutate any old KartuRT demo/F3/database. Free tiers impose quota limits; stop on quota exhaustion, never add paid billing/trial.
+
+**Result:** Staging provisioning **PROVISIONED**, application **NOT READY**, runtime/device **NOT TESTED**, merge **NOT ELIGIBLE**; incremental paid resources/upgrades **none**. Count under this owner approval: **1/1 Neon project**, **1/1 Vercel project**; no further projects without fresh owner GO.
+
 ## Owner-approved parallel staging decision — 12 October 2026 WIB
 
 - **Owner GO:** create at most **one NEW Neon Free** and **one NEW Vercel Hobby** project for isolated KartuRT staging, only while incremental cost stays **Rp0**. Synthetic-only fixtures, canonical migrations, staged runtime tests, and only agent-created manifest-recorded cleanup are approved. No production/demo/F3 UAT reads-for-reuse, writes, clones, deletes, DNS, or auth changes. Real devices by owner later.
@@ -90,7 +107,7 @@ Visible Neon project inventory included legacy demo project silent-lake-27332079
 
 | Cards | Status | Start condition / acceptance |
 | --- | --- | --- |
-| C09–C11 | AUTHORIZED FOR SCOPED STAGING; NOT PASS | Track S0 free-tier project creation check, owner GO and maximum one new project per provider. New isolated synthetic-only resource, canonical migrations and READY protected Preview still need evidence. GitHub release Track R need not PASS to start S. |
+| C09–C11 | PARTIAL: resources PROVISIONED | New Neon Free `ancient-smoke-51787007` and new Vercel Hobby `prj_Mv4rABJvDNAvSD78SVt5WbjFakEq` created once each. Preview staging DB/auth secrets stored encrypted and explicit labels staged. Pending stable HTTPS origin, Git preview-only setup, canonical migrations, READY deployment and runtime acceptance. Release Track R remains independent. |
 | C12–C14 | LOCKED | C09–C11 PASS on exact PR #23 SHA; execute auth/tenant, finance/WhatsApp, and PWA/network-off runtime matrix. Never send WhatsApp. |
 | C15 | LOCKED | Verified READY Preview and runtime suite pass; physical Android Chrome and iPhone Safari evidence required. |
 | C16 | LOCKED | All objective gates pass; independently recheck exact refs, changes, ruleset, deployment effect, and reversible rollback plan. |
