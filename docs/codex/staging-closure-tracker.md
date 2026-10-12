@@ -4,7 +4,7 @@
 **Repo:** Satsetx4/karturt. **Default branch:** main.
 **Current main:** 96c84588ae0c13f68a17cffd997a3e583fb7da82.
 **Candidate PR #23:** OPEN/DRAFT, head 344952c0a41342dea77989d5b9aa6fdb503a78e6, base main at 96c84588ae0c13f68a17cffd997a3e583fb7da82.
-**Current verdict:** Gate 1 BLOCKED. No staging/runtime/device gate has run. PR #23 is not eligible to merge.
+**Current verdict:** Release Track R still BLOCKED; isolated staging Track S authorized for zero-cost provisioning after account tier verification. No staging READY/runtime/device gate has run. PR #23 is not eligible to merge.
 
 Status meanings: PASS = directly evidenced acceptance; PREPARED = checklist or test packet exists but was not executed; UNVERIFIED = evidence unavailable or inconclusive; BLOCKED = a prerequisite prevents progress; LOCKED = do not start until the listed gate passes; IN PROGRESS = current task being prepared.
 
@@ -39,6 +39,14 @@ References:
 - [#17 V2 checkpoint comment](https://github.com/Satsetx4/karturt/issues/17#issuecomment-6117234123)
 - [Gate A and concurrency PR run](https://github.com/Satsetx4/karturt/actions/runs/38197227481)
 - [Gate A and concurrency push run](https://github.com/Satsetx4/karturt/actions/runs/38197224318)
+
+## Owner-approved parallel staging decision — 12 October 2026 WIB
+
+- **Owner GO:** create at most **one NEW Neon Free** and **one NEW Vercel Hobby** project for isolated KartuRT staging, only while incremental cost stays **Rp0**. Synthetic-only fixtures, canonical migrations, staged runtime tests, and only agent-created manifest-recorded cleanup are approved. No production/demo/F3 UAT reads-for-reuse, writes, clones, deletes, DNS, or auth changes. Real devices by owner later.
+- **Dependency revision:** Track S (new staging) and Track R (main protections and automatic deployment audit) run **in parallel**. Release-protection blocking **does NOT** block approved newly isolated staging; it blocks PR #23 **MERGE**. User cannot be asked to approve the same staging scope again; additional cost or resource count requires fresh owner decision and a hard stop.
+- **Evidence for zero-cost tier:** direct Vercel team `sekawan` Hobby; direct Neon org `satset` Free; Vercel limits up to 200 Hobby projects, Neon new Free announcement 100 projects at 1 GB/project. Existing account inventory before staging creation: 22 Vercel projects, 6 Neon in satset. No paid add-ons, upgrade or trial authorized; utilization throttling on Free tiers accepted rather than billing. Actual runtime quota remaining must be monitored; if resource creation is rejected, stop. Source: https://vercel.com/docs/plans/hobby ; https://vercel.com/docs/plans ; https://neon.com/blog/neon-free-plan-1-gb-per-project .
+- **Next S steps:** select distinct project identifiers, verify none preexists, provision once; verify created org/team and type; protect Vercel staging by SSO, keep Git disconnected until safe source preview setup; get new Neon credentials privately, never log them; set staging-only env labels, migrate via canonical CLI, then deploy exact reviewed SHA as preview and test. No staging READY claim until URL and actual runtime proof.
+- **Next R steps:** verify GitHub Protect ruleset targets `main` and requires PR+CI; verify all Git-linked main → Vercel production triggers. No settings modifications to existing F3/demo/production without distinct approval. Do not merge PR #24 or #23 until impact is understood.
 
 ## C01–C08 — Gate 1 audit and readiness
 
@@ -76,13 +84,13 @@ Visible Neon project inventory included legacy demo project silent-lake-27332079
 
 ## Gate 1 result
 
-**BLOCKED.** C02, C04, C05, and C06 are not PASS. C03’s exact candidate jobs pass, but branch enforcement is not proven. C07/C08 are prepared only. Do not start C09–C11 or touch Vercel/Neon staging resources until every Gate 1 entry criterion in Plan V2 passes.
+**REVISED:** Track R remains BLOCKED by C02/C04, and the prior C05/C06 staging audit was inconclusive. Owner has now explicitly approved one new project on each Free/Hobby provider under Rp0 hard stop. Track S can proceed through C09–C11 once free-tier evidence and safe new-project isolation are verified, without waiting for R. Neither track alone enables a merge. C07/C08 remain PREPARED, not tested.
 
 ## C09–C18 — locked follow-on work
 
 | Cards | Status | Start condition / acceptance |
 | --- | --- | --- |
-| C09–C11 | LOCKED | Gate 1 PASS; establish a dedicated synthetic-only Rp0 route, provision only within proven free quota, apply canonical migrations, and produce a protected READY Preview. Do not reuse demo/F3 UAT databases or credentials. |
+| C09–C11 | AUTHORIZED FOR SCOPED STAGING; NOT PASS | Track S0 free-tier project creation check, owner GO and maximum one new project per provider. New isolated synthetic-only resource, canonical migrations and READY protected Preview still need evidence. GitHub release Track R need not PASS to start S. |
 | C12–C14 | LOCKED | C09–C11 PASS on exact PR #23 SHA; execute auth/tenant, finance/WhatsApp, and PWA/network-off runtime matrix. Never send WhatsApp. |
 | C15 | LOCKED | Verified READY Preview and runtime suite pass; physical Android Chrome and iPhone Safari evidence required. |
 | C16 | LOCKED | All objective gates pass; independently recheck exact refs, changes, ruleset, deployment effect, and reversible rollback plan. |
