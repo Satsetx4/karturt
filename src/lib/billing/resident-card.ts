@@ -58,7 +58,7 @@ const domainStatusTokens: Record<
 };
 
 export const residentStatusLabels: Record<ResidentStatusToken, string> = {
-  PAID: "Sudah bayar",
+  PAID: "Lunas",
   UNPAID: "Belum bayar",
   WAIVED: "Dibebaskan",
   NOT_DUE: "Tidak perlu bayar",
