@@ -25,6 +25,8 @@ const icons: Record<ResidentStatusToken, LucideIcon> = {
   UNPAID: CircleAlert,
   WAIVED: MinusCircle,
   NOT_DUE: CircleSlash,
+  UPCOMING: Clock,
+  OVERDUE: CircleAlert,
   PENDING: Clock,
 };
 const rupiah = (amount: number) =>
@@ -120,7 +122,8 @@ export function ResidentPaymentRequestPanel({
   const cancelInFlight = useRef(false);
   const idempotencyKey = useRef<string | null>(null);
   const requestableDues = dues.filter((due) =>
-    due.status === "unpaid" && due.outstanding > 0 && due.paymentRequestStatus !== "pending",
+    due.status === "unpaid" && due.periodTiming !== "future" &&
+    due.outstanding > 0 && due.paymentRequestStatus !== "pending",
   );
   const requestablePeriods = new Set(requestableDues.map(duePeriod));
   const selectedDues = requestableDues.filter((due) =>
@@ -455,12 +458,48 @@ export function ResidentMonthCard({
     due.adjustmentTotal > 0 && due.outstanding > 0
     ? `Penyesuaian bersih ${rupiah(due.adjustmentTotal)}. Sisa kewajiban ${rupiah(due.outstanding)} belum dibayar.`
     : null;
+  // A native <details> disclosure makes the entire paid tile keyboard/touch
+  // operable without persisting receipt details in local storage or an offline cache.
+  if (token === "PAID" && due) {
+    const receipts = due.receipts ?? [];
+    return (
+      <li className="due-card due-card--paid">
+        <details className="due-receipt">
+          <summary aria-label={`Lihat kuitansi iuran ${name} ${due.billingYear}`}>
+            <h2>{name}</h2>
+            <ResidentDueStatus token={token} />
+            <strong>{rupiah(due.effectiveTarget)}</strong>
+            <span className="due-receipt-hint">Ketuk untuk lihat kuitansi</span>
+          </summary>
+          <div className="due-receipt-detail">
+            <h3>Rincian pembayaran {name} {due.billingYear}</h3>
+            {receipts.length === 0 ? (
+              <p>Rincian kuitansi belum tersedia. Hubungi Bendahara RT.</p>
+            ) : (
+              <ul>
+                {receipts.map((receipt, index) => (
+                  <li key={`${receipt.reference}-${index}`}>
+                    <span>{receipt.method === "cash" ? "Tunai" : "Transfer"}</span>
+                    <strong>{rupiah(receipt.allocationAmount)}</strong>
+                    <time dateTime={receipt.verifiedAt}>Diverifikasi {requestHistoryDate(receipt.verifiedAt)} WIB</time>
+                    <small>Referensi {receipt.reference}</small>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="due-receipt-note">Nominal di atas adalah alokasi untuk bulan ini, bukan total satu transaksi lintas bulan.</p>
+          </div>
+        </details>
+      </li>
+    );
+  }
   return (
     <li className="due-card">
       <h2>{name}</h2>
       <ResidentDueStatus token={token} />
       <strong>
-        {due && due.status !== "not_due" ? rupiah(displayAmount ?? 0) : "—"}
+        {due && due.status !== "not_due" && !(due.status === "unpaid" && due.periodTiming === "future")
+          ? rupiah(displayAmount ?? 0) : "—"}
       </strong>
       {adjustmentMessage && <p>{adjustmentMessage}</p>}
     </li>
@@ -676,7 +715,7 @@ export function ResidentCard({
                         <strong>{monthNames[d.month - 1]}</strong>
                         <span>
                           {residentStatusLabels[dueToken(d)]} ·{" "}
-                          {d.status === "not_due"
+                          {d.status === "not_due" || (d.status === "unpaid" && d.periodTiming === "future")
                             ? "—"
                             : rupiah(d.status === "unpaid" ? d.outstanding : d.effectiveTarget)}
                         </span>

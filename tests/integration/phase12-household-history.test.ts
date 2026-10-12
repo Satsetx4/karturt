@@ -452,8 +452,12 @@ describe("Phase 12 household financial history safeguards", () => {
       personId: result.newPersonId,
     };
     const newResidentDues = await getResidentMonthlyDues(database, newResidentPrincipal, businessDate);
-    expect(newResidentDues).toHaveLength(10);
-    expect(newResidentDues.every((due) => due.status === "not_due" && due.amount === 0 && due.outstanding === 0)).toBe(true);
+    expect(newResidentDues).toHaveLength(12);
+    expect(newResidentDues.slice(0, 10).every((due) =>
+      due.status === "not_due" && due.amount === 0 && due.outstanding === 0,
+    )).toBe(true);
+    expect(newResidentDues.slice(10).map((due) => [due.month, due.status, due.periodTiming]))
+      .toEqual([[11, "unpaid", "future"], [12, "unpaid", "future"]]);
     const storedNewResidentDues = await testDatabase.db.select({ month: monthlyDues.month, status: monthlyDues.status })
       .from(monthlyDues).where(eq(monthlyDues.householdId, result.newHouseholdId));
     expect(storedNewResidentDues).toHaveLength(12);
