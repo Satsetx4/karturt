@@ -40,6 +40,10 @@ References:
 - [Gate A and concurrency PR run](https://github.com/Satsetx4/karturt/actions/runs/38197227481)
 - [Gate A and concurrency push run](https://github.com/Satsetx4/karturt/actions/runs/38197224318)
 
+## NEW FINAL DEMO SUNSET / BILLING POLICY — 12 October 2026 WIB
+
+**Binding final:** 12-month annual card, future-unpaid visual Belum jatuh tempo and excluded from due-now/arrears; resident online/transfer **ONLY past/current**; Treasurer CASH may pay future and must **automatically pay oldest unpaid→target**; tappable paid-month ledger receipt per allocation, timestamp WIB, reversal-safe. Historic Wave 1 QA documents suggesting online future prepayment are **SUPERSEDED**. Demo production is dead and demo branch/scripts must not be ported to V1. [Final policy](v1-final-post-demo-billing-policy.md) · [draft stacked PR #48](https://github.com/Satsetx4/karturt/pull/48) · issues #49–#54. No live stage READY/merge/prod permission. Original project caps and Rp0 rules intact.
+
 ## OWNER PRODUCT DIRECTIVE — V1 ONLY: SINGLE OPERATIONAL RT (12 Oct 2026 WIB)
 
 - **V1 goal:** one production deployment serves exactly **one RT**. Full [approved scope/acceptance + V1-01–V1-10 execution tasks](v1-single-rt-production-readiness.md); original [MVP Single-RT freeze](../mvp-single-rt-scope-freeze.md) already said APPROVED. User reiterates: finish V1 production-ready first, V2 only later enables multi-RT.
