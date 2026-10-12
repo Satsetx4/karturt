@@ -159,11 +159,11 @@ describe("F13 report aggregation", () => {
     expect(afterDueDate.arrears.households[0]).toMatchObject({ pending: true, periods: [{ pending: true }] });
   });
 
-  it("reconciles a cash sweep through future months while future unpaid stays outside arrears", () => {
+  it("reconciles future-paid November while future-unpaid December stays outside arrears", () => {
     const identity = household({ householdId: "future-cash", houseNumber: "A-08" });
     const dues = Array.from({ length: 12 }, (_, index) => {
       const month = index + 1;
-      return month <= 7
+      return month <= 11
         ? due(identity, month, { status: "paid", activeReceived: 40_000, cashReceived: 40_000 })
         : due(identity, month);
     });
@@ -171,21 +171,20 @@ describe("F13 report aggregation", () => {
     const report = aggregateRtFinancialReport(dues, {
       year: YEAR,
       availableYears: [YEAR],
-      businessDate: BUSINESS_DATE,
+      businessDate: "2026-10-12",
     });
 
     expect(report.monthly).toHaveLength(12);
-    expect(report.monthly[5]).toMatchObject({ month: 6, received: 40_000, cashReceived: 40_000, outstanding: 0, overdueCount: 0 });
-    expect(report.monthly[6]).toMatchObject({ month: 7, received: 40_000, cashReceived: 40_000, outstanding: 0, overdueCount: 0 });
-    expect(report.monthly.slice(7).every((month) => month.outstanding === 40_000 && month.overdueCount === 0)).toBe(true);
+    expect(report.monthly[10]).toMatchObject({ month: 11, received: 40_000, cashReceived: 40_000, outstanding: 0, overdueCount: 0 });
+    expect(report.monthly[11]).toMatchObject({ month: 12, received: 0, cashReceived: 0, outstanding: 40_000, overdueCount: 0 });
     expect(report.yearly).toMatchObject({
       target: 480_000,
       effectiveTarget: 480_000,
-      received: 280_000,
+      received: 440_000,
       transferReceived: 0,
-      cashReceived: 280_000,
+      cashReceived: 440_000,
       waived: 0,
-      outstanding: 200_000,
+      outstanding: 40_000,
       overdueCount: 0,
     });
     expect(report.yearly.effectiveTarget).toBe(report.yearly.received + report.yearly.waived + report.yearly.outstanding);
