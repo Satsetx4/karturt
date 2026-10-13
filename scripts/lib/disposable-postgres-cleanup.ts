@@ -8,6 +8,7 @@ export type DisposableContainerCommand = (args: string[]) => DisposableContainer
 
 type RunOwnedContainerOptions = {
   containerId: string | null;
+  containerName?: string | null;
   labelName: string;
   runCommand: DisposableContainerCommand;
   runId: string;
@@ -85,12 +86,31 @@ export function cleanupRunOwnedContainer(options: RunOwnedContainerOptions) {
     return false;
   };
 
-  const { containerId, runCommand } = options;
-  if (typeof containerId !== "string") {
-    verifyRunOwnedContainer(options);
-    return false;
+  const { runCommand, runId } = options;
+  let containerId = options.containerId;
+  if (typeof containerId !== "string" || !/^[a-f0-9]{12,64}$/i.test(containerId)) {
+    const expectedName = `karturt-pg-${runId}`;
+    if (options.containerName !== expectedName) {
+      return fail("Cleanup stopped: this run has no verified container ID or exact run-owned name.");
+    }
+
+    let resolved: DisposableContainerCommandResult;
+    try {
+      resolved = runCommand(["container", "inspect", "--format", "{{.Id}}", expectedName]);
+    } catch {
+      return fail("Cleanup stopped: the container engine could not resolve the run-owned name.");
+    }
+    if (!commandSucceeded(resolved)) {
+      return fail("Cleanup stopped: the container engine could not resolve the run-owned name.");
+    }
+    containerId = resolved.stdout.trim();
+    if (!/^[a-f0-9]{12,64}$/i.test(containerId)) {
+      return fail("Cleanup stopped: the run-owned name did not resolve to one full container ID.");
+    }
   }
-  if (!verifyRunOwnedContainer(options)) return false;
+
+  const verifiedOptions = { ...options, containerId };
+  if (!verifyRunOwnedContainer(verifiedOptions)) return false;
 
   const listExactContainer = () => {
     let listed: DisposableContainerCommandResult;
@@ -124,7 +144,7 @@ export function cleanupRunOwnedContainer(options: RunOwnedContainerOptions) {
     return fail("Cleanup stopped: the container list did not match the exact run-owned container.");
   }
 
-  if (!verifyRunOwnedContainer(options)) return false;
+  if (!verifyRunOwnedContainer(verifiedOptions)) return false;
 
   let removed: DisposableContainerCommandResult;
   try {

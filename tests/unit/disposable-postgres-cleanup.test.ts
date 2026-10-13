@@ -34,10 +34,12 @@ function makeRunner(results: Array<DisposableContainerCommandResult | Error>) {
 
 function clean(options: {
   containerId?: string | null;
+  containerName?: string | null;
   runCommand: (args: string[]) => DisposableContainerCommandResult;
 }) {
   return cleanupRunOwnedContainer({
     containerId: options.containerId === undefined ? containerId : options.containerId,
+    containerName: options.containerName,
     labelName,
     runCommand: options.runCommand,
     runId,
@@ -183,6 +185,79 @@ describe("disposable PostgreSQL container cleanup", () => {
 
     expect(clean({ runCommand: runner.runCommand })).toBe(false);
     expect(runner.calls.some((args) => args[0] === "container" && args[1] === "rm")).toBe(true);
+  });
+
+  it("recovers a missing ID from this run's exact name and verifies cleanup", () => {
+    const runner = makeRunner([
+      commandResult(0, containerId),
+      ...ownedInspectionResults(),
+      commandResult(0),
+      commandResult(0, ""),
+    ]);
+
+    expect(clean({
+      containerId: null,
+      containerName: `karturt-pg-${runId}`,
+      runCommand: runner.runCommand,
+    })).toBe(true);
+    expect(runner.calls[0]).toEqual([
+      "container", "inspect", "--format", "{{.Id}}", `karturt-pg-${runId}`,
+    ]);
+    expect(runner.calls.some((args) => args[0] === "container" && args[1] === "stop" && args.includes(containerId))).toBe(true);
+  });
+
+  it("refuses name recovery when the resolved container has a different run label", () => {
+    const runner = makeRunner([
+      commandResult(0, containerId),
+      commandResult(0, containerId),
+      commandResult(0, JSON.stringify({ [labelName]: "another-run" })),
+    ]);
+
+    expect(clean({
+      containerId: null,
+      containerName: `karturt-pg-${runId}`,
+      runCommand: runner.runCommand,
+    })).toBe(false);
+    expect(runner.calls.some((args) => args[0] === "container" && (args[1] === "stop" || args[1] === "rm"))).toBe(false);
+  });
+
+  it("rejects an abbreviated ID returned by exact-name inspection before mutation", () => {
+    const runner = makeRunner([
+      commandResult(0, containerId.slice(0, 12)),
+      commandResult(0, containerId),
+    ]);
+
+    expect(clean({
+      containerId: null,
+      containerName: `karturt-pg-${runId}`,
+      runCommand: runner.runCommand,
+    })).toBe(false);
+    expect(runner.calls).toHaveLength(2);
+    expect(runner.calls.some((args) => args[0] === "container" && (args[1] === "stop" || args[1] === "rm"))).toBe(false);
+  });
+
+  it("does not mutate when name recovery cannot be verified", () => {
+    const runner = makeRunner([commandResult(1)]);
+
+    expect(clean({
+      containerId: null,
+      containerName: `karturt-pg-${runId}`,
+      runCommand: runner.runCommand,
+    })).toBe(false);
+    expect(runner.calls).toHaveLength(1);
+    expect(runner.calls.some((args) => args[0] === "container" && (args[1] === "stop" || args[1] === "rm"))).toBe(false);
+  });
+
+  it("rejects ambiguous or malformed IDs returned by exact-name inspection", () => {
+    const runner = makeRunner([commandResult(0, `${containerId}\n${containerId}`)]);
+
+    expect(clean({
+      containerId: null,
+      containerName: `karturt-pg-${runId}`,
+      runCommand: runner.runCommand,
+    })).toBe(false);
+    expect(runner.calls).toHaveLength(1);
+    expect(runner.calls.some((args) => args[0] === "container" && (args[1] === "stop" || args[1] === "rm"))).toBe(false);
   });
 
   it("treats missing container identity as unverified cleanup", () => {

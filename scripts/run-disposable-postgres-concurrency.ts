@@ -59,9 +59,10 @@ async function waitForPostgres(engine: Engine, containerId: string) {
   throw new Error("The run-owned disposable PostgreSQL container did not become ready within 45 seconds.");
 }
 
-function cleanup(engine: Engine, containerId: string | null) {
+function cleanup(engine: Engine, containerId: string | null, containerName: string) {
   return cleanupRunOwnedContainer({
     containerId,
+    containerName,
     labelName,
     runCommand: (args) => run(engine.command, args),
     runId,
@@ -157,7 +158,7 @@ async function main() {
       process.stdout.write(`Run-owned PostgreSQL container ${name} passed the five concurrency races. Evidence: ${evidencePath}\n`);
     }
   } finally {
-    if (!cleanup(engine, containerId)) finalExitCode = 1;
+    if (!cleanup(engine, containerId, name)) finalExitCode = 1;
   }
 
   process.exitCode = finalExitCode;
