@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { cleanupRunOwnedContainer } from "./lib/disposable-postgres-cleanup";
 import { disposablePostgresMarker, disposablePostgresNames } from "./lib/disposable-postgres-identity";
 
 const image = "postgres:17";
@@ -46,19 +47,6 @@ function findEngines(): Engine[] {
   return engines;
 }
 
-function ownsContainer(engine: Engine, containerId: string) {
-  const inspected = run(engine.command, [
-    "container", "inspect", "--format", "{{json .Config.Labels}}", containerId,
-  ]);
-  if (inspected.status !== 0) return false;
-  try {
-    const labels = JSON.parse(inspected.stdout.trim()) as Record<string, unknown>;
-    return labels[labelName] === runId;
-  } catch {
-    return false;
-  }
-}
-
 async function waitForPostgres(engine: Engine, containerId: string) {
   const deadline = Date.now() + 45_000;
   while (Date.now() < deadline) {
@@ -71,23 +59,14 @@ async function waitForPostgres(engine: Engine, containerId: string) {
   throw new Error("The run-owned disposable PostgreSQL container did not become ready within 45 seconds.");
 }
 
-async function cleanup(engine: Engine, containerId: string | null) {
-  if (!containerId) return true;
-  if (!ownsContainer(engine, containerId)) {
-    process.stderr.write("Cleanup stopped: the container ownership label did not match this run.\n");
-    return false;
-  }
-
-  run(engine.command, ["container", "stop", "--time", "5", containerId]);
-  const inspected = run(engine.command, ["container", "inspect", "--format", "{{.Id}}", containerId]);
-  if (inspected.status === 0) {
-    const removed = run(engine.command, ["container", "rm", "--force", containerId]);
-    if (removed.status !== 0) {
-      process.stderr.write("Cleanup could not remove the run-owned disposable PostgreSQL container.\n");
-      return false;
-    }
-  }
-  return true;
+function cleanup(engine: Engine, containerId: string | null) {
+  return cleanupRunOwnedContainer({
+    containerId,
+    labelName,
+    runCommand: (args) => run(engine.command, args),
+    runId,
+    onFailure: (message) => process.stderr.write(`${message}\n`),
+  });
 }
 
 async function main() {
@@ -169,7 +148,7 @@ async function main() {
       process.stdout.write(`Run-owned PostgreSQL container ${name} passed the five concurrency races. Evidence: ${evidencePath}\n`);
     }
   } finally {
-    if (!(await cleanup(engine, containerId))) finalExitCode = 1;
+    if (!cleanup(engine, containerId)) finalExitCode = 1;
   }
 
   process.exitCode = finalExitCode;
