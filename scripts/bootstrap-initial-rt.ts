@@ -4,7 +4,7 @@ import { closeDb, getDb } from "@/db/client";
 import { initializeFirstBillingYear } from "@/lib/billing/chairman-fee-rates";
 import { isValidAccountPassword } from "@/lib/auth/account-password";
 import { hashApplicationPassword } from "@/lib/auth/password-hash";
-import { requireInitialBootstrapDatabaseEnvironment } from "@/lib/env";
+import { requireLocalDevelopmentBootstrapDatabaseEnvironment } from "@/lib/env";
 import { bootstrapFirstOperationalRt, bootstrapInitialChairman } from "@/lib/rt/bootstrap";
 import { jakartaBusinessDate } from "@/lib/time/jakarta";
 
@@ -33,7 +33,7 @@ function required(name: string) {
 
 async function main() {
   loadEnvConfig(process.cwd());
-  requireInitialBootstrapDatabaseEnvironment();
+  requireLocalDevelopmentBootstrapDatabaseEnvironment();
   const parsed = inputSchema.safeParse({
     confirmation: required("KARTUR_INITIAL_SETUP_CONFIRMATION"),
     rtCode: required("KARTUR_RT_CODE"),

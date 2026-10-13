@@ -1,6 +1,6 @@
 import { loadEnvConfig } from "@next/env";
 import { closeDb, getDb } from "@/db/client";
-import { requireDatabaseEnvironment } from "@/lib/env";
+import { requireLocalDevelopmentBootstrapDatabaseEnvironment } from "@/lib/env";
 import { bootstrapRtUnit } from "@/lib/rt/bootstrap";
 
 function required(name: string) {
@@ -11,7 +11,7 @@ function required(name: string) {
 
 async function main() {
   loadEnvConfig(process.cwd());
-  requireDatabaseEnvironment();
+  requireLocalDevelopmentBootstrapDatabaseEnvironment();
   const values = {
     code: required("KARTUR_RT_CODE"),
     rwCode: required("KARTUR_RW_CODE"),

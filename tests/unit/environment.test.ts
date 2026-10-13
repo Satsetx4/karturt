@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getPublicAppUrl, requireAuthEnvironment, requireDatabaseEnvironment, requireInitialBootstrapDatabaseEnvironment } from "../../src/lib/env";
+import { getPublicAppUrl, requireAuthEnvironment, requireDatabaseEnvironment, requireLocalDevelopmentBootstrapDatabaseEnvironment } from "../../src/lib/env";
 import { assertBootstrapDatabaseTarget } from "../../src/lib/staging-database-target";
 
 const variableNames = ["APP_ENV", "DATABASE_ENV", "DATABASE_URL", "BETTER_AUTH_SECRET", "NEXT_PUBLIC_APP_URL"] as const;
@@ -51,14 +51,14 @@ describe("runtime environment guards", () => {
     expect(() => requireDatabaseEnvironment()).toThrow("disabled in test");
 
     setEnvironment({ APP_ENV: "development", DATABASE_ENV: "development", DATABASE_URL: localDatabaseUrl });
-    expect(requireInitialBootstrapDatabaseEnvironment().databaseUrl).toBe(localDatabaseUrl);
+    expect(requireLocalDevelopmentBootstrapDatabaseEnvironment().databaseUrl).toBe(localDatabaseUrl);
 
     setEnvironment({
       APP_ENV: "development",
       DATABASE_ENV: "development",
       DATABASE_URL: "postgresql://synthetic:synthetic@ep-quiet-cake-azrhjiyh.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
     });
-    expect(() => requireInitialBootstrapDatabaseEnvironment())
+    expect(() => requireLocalDevelopmentBootstrapDatabaseEnvironment())
       .toThrow("must match the documented local development target exactly");
   });
 
@@ -94,7 +94,34 @@ describe("runtime environment guards", () => {
       .toThrow("matching application and database environment labels");
 
     setEnvironment({ APP_ENV: "production", DATABASE_ENV: "production", DATABASE_URL: url });
-    expect(() => requireInitialBootstrapDatabaseEnvironment()).toThrow("limited to matching development labels");
+    expect(() => requireLocalDevelopmentBootstrapDatabaseEnvironment()).toThrow("limited to matching development labels");
+  });
+
+  it("limits RT bootstrap commands to the documented loopback development database", () => {
+    const localDatabaseUrl = "postgresql://karturt:synthetic-local-password@localhost:5432/karturt_dev";
+    setEnvironment({ APP_ENV: "development", DATABASE_ENV: "development", DATABASE_URL: localDatabaseUrl });
+    expect(requireLocalDevelopmentBootstrapDatabaseEnvironment().databaseUrl).toBe(localDatabaseUrl);
+
+    const rejectedTargets = [
+      {
+        APP_ENV: "staging",
+        DATABASE_ENV: "staging",
+        DATABASE_URL: "postgresql://synthetic:synthetic@ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech/karturt_stage",
+      },
+      {
+        APP_ENV: "production",
+        DATABASE_ENV: "production",
+        DATABASE_URL: "postgresql://synthetic:synthetic@production.example:5432/karturt",
+      },
+      { APP_ENV: "test", DATABASE_ENV: "test", DATABASE_URL: undefined },
+    ] as const;
+
+    for (const target of rejectedTargets) {
+      setEnvironment(target);
+      expect(() => requireLocalDevelopmentBootstrapDatabaseEnvironment()).toThrow(
+        "limited to matching development labels",
+      );
+    }
   });
 
   it("blocks staging database access until the exact target and isolation are proven", () => {

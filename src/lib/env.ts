@@ -60,10 +60,10 @@ export function requireDatabaseEnvironment() {
   return { ...env, databaseUrl: env.databaseUrl };
 }
 
-export function requireInitialBootstrapDatabaseEnvironment() {
+export function requireLocalDevelopmentBootstrapDatabaseEnvironment() {
   const env = requireExplicitEnvironmentLabels();
   if (env.appEnv !== "development" || env.databaseEnv !== "development") {
-    throw new Error("Initial RT bootstrap is limited to matching development labels and the documented local database target.");
+    throw new Error("Database bootstrap is limited to matching development labels and the documented local database target.");
   }
   assertBootstrapDatabaseTarget(env.databaseUrl, env.appEnv, env.databaseEnv);
   if (!env.databaseUrl) {
