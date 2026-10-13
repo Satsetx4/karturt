@@ -19,13 +19,15 @@ function ownedInspectionResults() {
   ];
 }
 
-function makeRunner(results: DisposableContainerCommandResult[]) {
+function makeRunner(results: Array<DisposableContainerCommandResult | Error>) {
   const calls: string[][] = [];
   return {
     calls,
     runCommand: (args: string[]) => {
       calls.push(args);
-      return results.shift() ?? commandResult(1);
+      const next = results.shift();
+      if (next instanceof Error) throw next;
+      return next ?? commandResult(1);
     },
   };
 }
@@ -119,6 +121,68 @@ describe("disposable PostgreSQL container cleanup", () => {
 
     expect(clean({ runCommand: runner.runCommand })).toBe(false);
     expect(runner.calls.some((args) => args[0] === "container" && args[1] === "rm")).toBe(false);
+  });
+
+  it("treats stop command failure as cleanup failure without trying to remove", () => {
+    const runner = makeRunner([
+      ...ownedInspectionResults(),
+      commandResult(1),
+    ]);
+
+    expect(clean({ runCommand: runner.runCommand })).toBe(false);
+    expect(runner.calls.some((args) => args[0] === "container" && args[1] === "ls")).toBe(false);
+    expect(runner.calls.some((args) => args[0] === "container" && args[1] === "rm")).toBe(false);
+  });
+
+  it("treats force-remove failure as cleanup failure", () => {
+    const runner = makeRunner([
+      ...ownedInspectionResults(),
+      commandResult(0),
+      commandResult(0, containerId),
+      ...ownedInspectionResults(),
+      commandResult(1),
+    ]);
+
+    expect(clean({ runCommand: runner.runCommand })).toBe(false);
+    expect(runner.calls.some((args) => args[0] === "container" && args[1] === "rm")).toBe(true);
+  });
+
+  it("does not report success when a successful remove is followed by a listing that still contains the ID", () => {
+    const runner = makeRunner([
+      ...ownedInspectionResults(),
+      commandResult(0),
+      commandResult(0, containerId),
+      ...ownedInspectionResults(),
+      commandResult(0),
+      commandResult(0, containerId),
+    ]);
+
+    expect(clean({ runCommand: runner.runCommand })).toBe(false);
+    expect(runner.calls.filter((args) => args[0] === "container" && args[1] === "ls")).toHaveLength(2);
+  });
+
+  it("treats a thrown list adapter error as cleanup failure", () => {
+    const runner = makeRunner([
+      ...ownedInspectionResults(),
+      commandResult(0),
+      new Error("synthetic list adapter failure"),
+    ]);
+
+    expect(clean({ runCommand: runner.runCommand })).toBe(false);
+    expect(runner.calls.some((args) => args[0] === "container" && args[1] === "rm")).toBe(false);
+  });
+
+  it("treats a thrown remove adapter error as cleanup failure", () => {
+    const runner = makeRunner([
+      ...ownedInspectionResults(),
+      commandResult(0),
+      commandResult(0, containerId),
+      ...ownedInspectionResults(),
+      new Error("synthetic remove adapter failure"),
+    ]);
+
+    expect(clean({ runCommand: runner.runCommand })).toBe(false);
+    expect(runner.calls.some((args) => args[0] === "container" && args[1] === "rm")).toBe(true);
   });
 
   it("treats missing container identity as unverified cleanup", () => {

@@ -15,7 +15,7 @@ Wave 7 SHA: `34a2af3195a09220a6639bdcb2aff369a813d5c2`
 | W9-B03 — deterministic install | PASS | `npm ci --no-audit --no-fund` exited 0 and installed 442 packages. The lockfile remained unchanged. `node_modules` is a normal directory in this worktree. |
 | W9-B04 — local PostgreSQL engine preflight | BLOCKED | Docker, Podman, `psql`, `pg_isready`, `pg_ctl`, and `initdb` were absent from PATH; no matching Windows service/process or local port 5432 listener was found. No engine command or database connection was attempted. |
 | W9-B05 — five independent PostgreSQL races | BLOCKED / NOT RUN | No verified disposable local PostgreSQL target exists. The five races were not run. PGlite/full-suite results are not PostgreSQL concurrency evidence. |
-| W9-B06 — run identity and cleanup safety | PASS for mocked state transitions; runtime BLOCKED | The identity allowlist and database rechecks are described below. New cleanup tests use an injected command mock only; 11 focused tests passed across the cleanup and identity suites. No Docker/Podman command was invoked. |
+| W9-B06 — run identity and cleanup safety | PASS for mocked state transitions; runtime BLOCKED | The identity allowlist and database rechecks are described below. New cleanup tests use an injected command mock only; 16 focused tests passed across the cleanup and identity suites. No Docker/Podman command was invoked. |
 | W9-B07 — dependency audit classification | FINDINGS RECORDED | Wave 8's audit reported five HIGH package entries from one `braces` advisory chain. All five are marked dev-only in the unchanged lockfile. No upgrade was applied. Current patch availability was checked against the GitHub Advisory Database and npm package listing; the finding remains open. |
 
 ## Baseline and recovery bundle
@@ -57,7 +57,7 @@ The baseline cleanup code had a fail-open case: it ignored `container stop` stat
 - checks the run label again before force removal if the container remains;
 - reports success only when a successful, exact-ID filtered container list is empty after stop or removal.
 
-The tests cover auto-removal with absence readback, persistent-container removal with a second absence readback, ownership mismatch with no mutation, changed ownership before removal, inspect failure, list failure, and missing identity. They use an in-memory command-result queue and never invoke Docker or Podman.
+The 12 cleanup tests cover auto-removal with absence readback, persistent-container removal with a second absence readback, ownership mismatch with no mutation, changed ownership before removal, inspect/list/stop/remove failures, a lingering ID after successful force removal, thrown list/remove adapter errors, and missing identity. They use an in-memory command-result queue and never invoke Docker or Podman.
 
 The safely mockable seam is the injected `runCommand(args)` in `cleanupRunOwnedContainer`. If any future engine-specific behavior needs validation, test it through a fake command adapter that returns controlled inspect/list/stop/remove results; do not make the unit suite depend on a local daemon. A real teardown proof remains blocked here.
 
@@ -68,7 +68,7 @@ The container wrapper itself calls `docker info` / `podman info` when run. This 
 | Command | Exit | Result |
 | --- | ---: | --- |
 | `npm ci --no-audit --no-fund` | 0 | 442 packages installed; lockfile unchanged. |
-| `npx vitest run tests/unit/disposable-postgres-cleanup.test.ts tests/unit/disposable-postgres-identity.test.ts --maxWorkers=1` | 0 | 2 files, 11 tests passed; command adapter is mocked. |
+| `npx vitest run tests/unit/disposable-postgres-cleanup.test.ts tests/unit/disposable-postgres-identity.test.ts --maxWorkers=1` | 0 | 2 files, 16 tests passed; command adapter is mocked. |
 | `npx eslint scripts/lib/disposable-postgres-cleanup.ts scripts/run-disposable-postgres-concurrency.ts tests/unit/disposable-postgres-cleanup.test.ts` | 0 | No findings. |
 | `git diff --check` | 0 | No whitespace errors. |
 
