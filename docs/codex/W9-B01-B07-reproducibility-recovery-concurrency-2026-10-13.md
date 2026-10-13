@@ -70,9 +70,10 @@ The container wrapper itself calls `docker info` / `podman info` when run. This 
 | `npm ci --no-audit --no-fund` | 0 | 442 packages installed; lockfile unchanged. |
 | `npx vitest run tests/unit/disposable-postgres-cleanup.test.ts tests/unit/disposable-postgres-identity.test.ts --maxWorkers=1` | 0 | 2 files, 16 tests passed; command adapter is mocked. |
 | `npx eslint scripts/lib/disposable-postgres-cleanup.ts scripts/run-disposable-postgres-concurrency.ts tests/unit/disposable-postgres-cleanup.test.ts` | 0 | No findings. |
+| `npm run typecheck` | 0 | Passed on the follow-up Agent B branch revision after restoring the runner's `ownsContainer` call site as a thin wrapper over the shared ownership verifier. |
 | `git diff --check` | 0 | No whitespace errors. |
 
-The full lint/typecheck/build/full suite and five PostgreSQL races were not run in this lane at this SHA. Exact integrated-SHA results must be recorded by the coordinator after the read-only handoff.
+The coordinator reported that its typecheck of integrated candidate `69624a54eb00f96c6606aaabc05e08f08e731e50` found a missing `ownsContainer` symbol. This lane restored the call site on the Agent B branch and verified the follow-up branch revision with the commands above; it did not modify or recheck the coordinator worktree. Full lint/build/full suite and five PostgreSQL races were not run in this lane. Exact integrated-SHA results must be recorded by the coordinator after the read-only handoff.
 
 ## Five HIGH dependency entries
 

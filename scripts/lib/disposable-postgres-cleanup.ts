@@ -6,7 +6,7 @@ export type DisposableContainerCommandResult = {
 
 export type DisposableContainerCommand = (args: string[]) => DisposableContainerCommandResult;
 
-type CleanupRunOwnedContainerOptions = {
+type RunOwnedContainerOptions = {
   containerId: string | null;
   labelName: string;
   runCommand: DisposableContainerCommand;
@@ -26,7 +26,7 @@ function containerIds(result: DisposableContainerCommandResult) {
     .filter(Boolean);
 }
 
-export function cleanupRunOwnedContainer(options: CleanupRunOwnedContainerOptions) {
+export function verifyRunOwnedContainer(options: RunOwnedContainerOptions) {
   const fail = (message: string) => {
     options.onFailure?.(message);
     return false;
@@ -37,48 +37,56 @@ export function cleanupRunOwnedContainer(options: CleanupRunOwnedContainerOption
     return fail("Cleanup stopped: this run has no verifiable container ID.");
   }
 
-  const inspectOwnership = () => {
-    let idResult: DisposableContainerCommandResult;
-    try {
-      idResult = runCommand([
-        "container", "inspect", "--format", "{{.Id}}", containerId,
-      ]);
-    } catch {
-      return fail("Cleanup stopped: the container engine could not verify ownership.");
-    }
-    if (!commandSucceeded(idResult)) {
-      return fail("Cleanup stopped: the container engine could not verify ownership.");
-    }
-    if (idResult.stdout.trim().toLowerCase() !== containerId.toLowerCase()) {
-      return fail("Cleanup stopped: the inspected container ID did not match this run.");
-    }
+  let idResult: DisposableContainerCommandResult;
+  try {
+    idResult = runCommand([
+      "container", "inspect", "--format", "{{.Id}}", containerId,
+    ]);
+  } catch {
+    return fail("Cleanup stopped: the container engine could not verify ownership.");
+  }
+  if (!commandSucceeded(idResult)) {
+    return fail("Cleanup stopped: the container engine could not verify ownership.");
+  }
+  if (idResult.stdout.trim().toLowerCase() !== containerId.toLowerCase()) {
+    return fail("Cleanup stopped: the inspected container ID did not match this run.");
+  }
 
-    let labelsResult: DisposableContainerCommandResult;
-    try {
-      labelsResult = runCommand([
-        "container", "inspect", "--format", "{{json .Config.Labels}}", containerId,
-      ]);
-    } catch {
-      return fail("Cleanup stopped: the container engine could not verify ownership.");
-    }
-    if (!commandSucceeded(labelsResult)) {
-      return fail("Cleanup stopped: the container engine could not verify ownership.");
-    }
+  let labelsResult: DisposableContainerCommandResult;
+  try {
+    labelsResult = runCommand([
+      "container", "inspect", "--format", "{{json .Config.Labels}}", containerId,
+    ]);
+  } catch {
+    return fail("Cleanup stopped: the container engine could not verify ownership.");
+  }
+  if (!commandSucceeded(labelsResult)) {
+    return fail("Cleanup stopped: the container engine could not verify ownership.");
+  }
 
-    try {
-      const labels = JSON.parse(labelsResult.stdout.trim()) as unknown;
-      if (!labels || typeof labels !== "object" || Array.isArray(labels)) {
-        return fail("Cleanup stopped: the container ownership label was unreadable.");
-      }
-      if ((labels as Record<string, unknown>)[labelName] !== runId) {
-        return fail("Cleanup stopped: the container ownership label did not match this run.");
-      }
-    } catch {
+  try {
+    const labels = JSON.parse(labelsResult.stdout.trim()) as unknown;
+    if (!labels || typeof labels !== "object" || Array.isArray(labels)) {
       return fail("Cleanup stopped: the container ownership label was unreadable.");
     }
+    if ((labels as Record<string, unknown>)[labelName] !== runId) {
+      return fail("Cleanup stopped: the container ownership label did not match this run.");
+    }
+  } catch {
+    return fail("Cleanup stopped: the container ownership label was unreadable.");
+  }
 
-    return true;
+  return true;
+}
+
+export function cleanupRunOwnedContainer(options: RunOwnedContainerOptions) {
+  const fail = (message: string) => {
+    options.onFailure?.(message);
+    return false;
   };
+
+  const { containerId, runCommand } = options;
+  if (!verifyRunOwnedContainer(options)) return false;
 
   const listExactContainer = () => {
     let listed: DisposableContainerCommandResult;
@@ -92,8 +100,6 @@ export function cleanupRunOwnedContainer(options: CleanupRunOwnedContainerOption
     }
     return containerIds(listed);
   };
-
-  if (!inspectOwnership()) return false;
 
   let stopped: DisposableContainerCommandResult;
   try {
@@ -114,7 +120,7 @@ export function cleanupRunOwnedContainer(options: CleanupRunOwnedContainerOption
     return fail("Cleanup stopped: the container list did not match the exact run-owned container.");
   }
 
-  if (!inspectOwnership()) return false;
+  if (!verifyRunOwnedContainer(options)) return false;
 
   let removed: DisposableContainerCommandResult;
   try {

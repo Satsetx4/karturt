@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { cleanupRunOwnedContainer } from "./lib/disposable-postgres-cleanup";
+import { cleanupRunOwnedContainer, verifyRunOwnedContainer } from "./lib/disposable-postgres-cleanup";
 import { disposablePostgresMarker, disposablePostgresNames } from "./lib/disposable-postgres-identity";
 
 const image = "postgres:17";
@@ -66,6 +66,15 @@ function cleanup(engine: Engine, containerId: string | null) {
     runCommand: (args) => run(engine.command, args),
     runId,
     onFailure: (message) => process.stderr.write(`${message}\n`),
+  });
+}
+
+function ownsContainer(engine: Engine, containerId: string) {
+  return verifyRunOwnedContainer({
+    containerId,
+    labelName,
+    runCommand: (args) => run(engine.command, args),
+    runId,
   });
 }
 
