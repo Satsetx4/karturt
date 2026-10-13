@@ -1,6 +1,6 @@
 # Wave 10 C01–C08 — Owner Infrastructure Decision Packet
 
-**Status: BLOCKED / NO-GO for all cloud, publication, merge, and production gates.** Prepared 13 October 2026 (Asia/Bangkok) from local Wave 10 work and owner-supplied UI evidence. This packet is a decision aid; it does not change provider settings, create resources, connect to a database, publish source, run a Preview, merge, or deploy.
+**Status: BLOCKED / NO-GO for all cloud, publication, merge, and production gates.** Prepared 13 October 2026 (Asia/Bangkok) from the Wave 9 checkpoint and local Wave 10 work. No current owner-supplied Vercel, Neon, or billing UI evidence has been received. This packet is a decision aid; it does not change provider settings, create resources, connect to a database, publish source, run a Preview, merge, or deploy.
 
 ## Decision snapshot
 
@@ -75,7 +75,7 @@ Select one action per row. A GO must name the exact SHA and target, cite the evi
 | **4. PR #23 controlled merge** | PR #23 exact head SHA: ______; approved base: ______; completed-successful required CI run(s) for that exact SHA: ______; branch protection/readiness: ______; Vercel merge-trigger and production-domain effects: ______; cost/rollback proof: ______. PR #56 is comparison-only and is not a substitute. | [ ] GO to merge PR #23 at this exact SHA  [ ] NO-GO |
 | **5. Production** | Exact merged SHA: ______; project/domain/target: ______; production acceptance evidence: ______; operational owner: ______; billing/no-overage evidence: ______; verified healthy rollback deployment and separate data restore evidence: ______. | [ ] GO for this named production action  [ ] NO-GO |
 
-The current Wave 10 work has not supplied a final integrated SHA, current provider UI captures, account-specific Rp0 evidence, safe staging proof, protected Preview proof, or production acceptance. Therefore all five choices remain **NO-GO** unless and until the missing evidence is attached and the owner records a bounded decision.
+All five choices remain **NO-GO** until a later checkpoint identifies the final integrated SHA and the missing provider UI captures, account-specific Rp0 evidence, safe staging proof, protected Preview proof, and production acceptance are supplied. Local checks do not approve any owner gate.
 
 ## Stop and rollback
 
