@@ -1,10 +1,10 @@
 import { loadEnvConfig } from "@next/env";
-import { hashPassword } from "better-auth/crypto";
 import { z } from "zod";
 import { closeDb, getDb } from "@/db/client";
 import { initializeFirstBillingYear } from "@/lib/billing/chairman-fee-rates";
 import { isValidAccountPassword } from "@/lib/auth/account-password";
-import { requireDatabaseEnvironment } from "@/lib/env";
+import { hashApplicationPassword } from "@/lib/auth/password-hash";
+import { requireInitialBootstrapDatabaseEnvironment } from "@/lib/env";
 import { bootstrapFirstOperationalRt, bootstrapInitialChairman } from "@/lib/rt/bootstrap";
 import { jakartaBusinessDate } from "@/lib/time/jakarta";
 
@@ -33,10 +33,7 @@ function required(name: string) {
 
 async function main() {
   loadEnvConfig(process.cwd());
-  if (!new Set(["development", "staging", "test"]).has(process.env.APP_ENV ?? "") || process.env.APP_ENV !== process.env.DATABASE_ENV) {
-    throw new Error("Initial RT bootstrap requires matching development, staging, or test environment labels; production is not supported.");
-  }
-  requireDatabaseEnvironment();
+  requireInitialBootstrapDatabaseEnvironment();
   const parsed = inputSchema.safeParse({
     confirmation: required("KARTUR_INITIAL_SETUP_CONFIRMATION"),
     rtCode: required("KARTUR_RT_CODE"),
@@ -79,7 +76,7 @@ async function main() {
     rtUnitId: rt.id,
     loginIdentifier: input.chairmanLogin,
     displayName: input.chairmanName,
-    passwordHash: await hashPassword(input.chairmanPassword),
+    passwordHash: await hashApplicationPassword(input.chairmanPassword),
     startsOn: jakartaBusinessDate(),
   });
   const billing = await initializeFirstBillingYear(database, chairman.principal, {

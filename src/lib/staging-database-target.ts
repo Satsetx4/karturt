@@ -15,21 +15,54 @@ const stagingIsolationVerifiedEmpty = false;
 
 const approvedStagingPoolerHostname = `${approvedStagingTarget.endpointId}-pooler${approvedStagingTarget.hostname.slice(approvedStagingTarget.endpointId.length)}`;
 
+const localBootstrapTarget = {
+  protocol: "postgresql:",
+  username: "karturt",
+  hostname: "localhost",
+  port: "5432",
+  databaseName: "karturt_dev",
+} as const;
+
+function parsePostgresUrl(databaseUrl: string, invalidMessage: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(databaseUrl);
+  } catch {
+    throw new Error(invalidMessage);
+  }
+
+  const databaseName = parsed.pathname.startsWith("/") ? parsed.pathname.slice(1) : "";
+  const queryKeys = [...parsed.searchParams.keys()];
+  const hasDuplicateQueryKeys = new Set(queryKeys).size !== queryKeys.length;
+  const hasUnsafeQuery = queryKeys.some((key) => key !== "sslmode" && key !== "channel_binding");
+  if (
+    (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") ||
+    !parsed.hostname || !/^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,62}$/.test(parsed.username) ||
+    !parsed.password || !/^[a-zA-Z0-9_-]+$/.test(databaseName) || parsed.hash ||
+    (parsed.port !== "" && parsed.port !== "5432") || hasDuplicateQueryKeys || hasUnsafeQuery ||
+    (parsed.searchParams.has("sslmode") && !new Set(["require", "verify-full"]).has(parsed.searchParams.get("sslmode") ?? "")) ||
+    (parsed.searchParams.has("channel_binding") && parsed.searchParams.get("channel_binding") !== "require")
+  ) {
+    throw new Error(invalidMessage);
+  }
+  return { parsed, databaseName };
+}
+
 function isApprovedStagingEndpoint(hostname: string) {
   const normalizedHostname = hostname.toLowerCase();
   return normalizedHostname === approvedStagingTarget.hostname || normalizedHostname === approvedStagingPoolerHostname;
 }
 
 export function assertDatabaseTargetForEnvironment(databaseUrl: string, databaseEnv: string) {
-  let parsed: URL;
+  const { parsed, databaseName } = parsePostgresUrl(
+    databaseUrl,
+    databaseEnv === "staging"
+      ? "Staging DATABASE_URL is not an unambiguous PostgreSQL connection URL."
+      : "DATABASE_URL is not an unambiguous PostgreSQL connection URL.",
+  );
 
-  try {
-    parsed = new URL(databaseUrl);
-  } catch {
-    if (databaseEnv === "staging") {
-      throw new Error("Staging DATABASE_URL is not a valid PostgreSQL connection URL.");
-    }
-    return;
+  if (databaseEnv === "test") {
+    throw new Error("Database URL connections are disabled in test; use in-memory PGlite instead.");
   }
 
   if (databaseEnv !== "staging") {
@@ -39,7 +72,6 @@ export function assertDatabaseTargetForEnvironment(databaseUrl: string, database
     return;
   }
 
-  const databaseName = decodeURIComponent(parsed.pathname.replace(/^\//, ""));
   const port = parsed.port || "5432";
   const endpointParameter = parsed.searchParams.get("endpoint");
 
@@ -60,4 +92,37 @@ export function assertDatabaseTargetForEnvironment(databaseUrl: string, database
       `Staging database access is blocked for Neon project ${approvedStagingTarget.projectId}, branch ${approvedStagingTarget.branchId}: provider metadata reports parent-data initialization and does not prove the branch is empty.`,
     );
   }
+}
+
+export function assertBootstrapDatabaseTarget(
+  databaseUrl: string | undefined,
+  appEnv: string,
+  databaseEnv: string,
+): "pglite" | "local-development-postgres" {
+  if (appEnv !== databaseEnv) {
+    throw new Error("Bootstrap requires matching application and database environment labels.");
+  }
+  if (appEnv === "test") {
+    if (databaseUrl !== undefined) {
+      throw new Error("Test bootstrap must use in-memory PGlite and must not receive DATABASE_URL.");
+    }
+    return "pglite";
+  }
+  if (appEnv !== "development") {
+    throw new Error("Bootstrap database access is disabled for production and staging environments.");
+  }
+  if (databaseUrl === undefined) {
+    throw new Error("DATABASE_URL is required for local development bootstrap.");
+  }
+
+  const { parsed, databaseName } = parsePostgresUrl(databaseUrl, "Bootstrap DATABASE_URL must target the documented local development database.");
+  if (
+    parsed.protocol !== localBootstrapTarget.protocol || parsed.href !== databaseUrl ||
+    parsed.username !== localBootstrapTarget.username || parsed.hostname !== localBootstrapTarget.hostname ||
+    parsed.port !== localBootstrapTarget.port || databaseName !== localBootstrapTarget.databaseName ||
+    parsed.search || parsed.hash
+  ) {
+    throw new Error("Bootstrap DATABASE_URL must match the documented local development target exactly.");
+  }
+  return "local-development-postgres";
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { assertDatabaseTargetForEnvironment } from "@/lib/staging-database-target";
+import { assertBootstrapDatabaseTarget, assertDatabaseTargetForEnvironment } from "@/lib/staging-database-target";
 
 const environment = z.enum(["development", "staging", "production", "test"]);
 
@@ -57,6 +57,18 @@ export function requireDatabaseEnvironment() {
     throw new Error("DATABASE_URL must be a PostgreSQL connection string.");
   }
   assertDatabaseTargetForEnvironment(env.databaseUrl, env.databaseEnv);
+  return { ...env, databaseUrl: env.databaseUrl };
+}
+
+export function requireInitialBootstrapDatabaseEnvironment() {
+  const env = requireExplicitEnvironmentLabels();
+  if (env.appEnv !== "development" || env.databaseEnv !== "development") {
+    throw new Error("Initial RT bootstrap is limited to matching development labels and the documented local database target.");
+  }
+  assertBootstrapDatabaseTarget(env.databaseUrl, env.appEnv, env.databaseEnv);
+  if (!env.databaseUrl) {
+    throw new Error("DATABASE_URL is required for the local development bootstrap.");
+  }
   return { ...env, databaseUrl: env.databaseUrl };
 }
 

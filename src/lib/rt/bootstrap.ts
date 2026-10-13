@@ -16,6 +16,7 @@ import {
 } from "@/db/schema";
 import { appendAuditEvent } from "@/lib/audit/writer";
 import type { Principal } from "@/lib/auth/permissions";
+import { isBetterAuthPasswordHash, type BetterAuthPasswordHash } from "@/lib/auth/password-hash";
 import { jakartaBusinessDate, officialAssignmentActiveOn } from "@/lib/officials/lifecycle";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -36,7 +37,16 @@ export async function bootstrapRtUnit(database: AppDatabase, values: typeof rtUn
     let id = inserted?.id;
     if (!id) {
       const [existing] = await transaction
-        .select({ id: rtUnits.id })
+        .select({
+          id: rtUnits.id,
+          code: rtUnits.code,
+          rwCode: rtUnits.rwCode,
+          name: rtUnits.name,
+          village: rtUnits.village,
+          district: rtUnits.district,
+          city: rtUnits.city,
+          province: rtUnits.province,
+        })
         .from(rtUnits)
         .where(and(
           eq(rtUnits.code, values.code),
@@ -44,6 +54,14 @@ export async function bootstrapRtUnit(database: AppDatabase, values: typeof rtUn
           eq(rtUnits.village, values.village),
         ))
         .limit(1);
+      if (existing && (
+        existing.code !== values.code || existing.rwCode !== values.rwCode ||
+        existing.name !== values.name || existing.village !== values.village ||
+        existing.district !== (values.district ?? null) || existing.city !== (values.city ?? null) ||
+        existing.province !== (values.province ?? null)
+      )) {
+        throw new InitialRtBootstrapConflictError("RT bootstrap identity conflicts with an existing RT unit.");
+      }
       id = existing?.id;
     }
     if (!id) throw new Error("RT unit could not be created or found after the insert.");
@@ -99,7 +117,7 @@ export interface BootstrapInitialChairmanInput {
   rtUnitId: string;
   loginIdentifier: string;
   displayName: string;
-  passwordHash: string;
+  passwordHash: BetterAuthPasswordHash;
   startsOn?: string;
 }
 
@@ -145,7 +163,7 @@ export async function bootstrapInitialChairman(
     !rtUnitId || !UUID_PATTERN.test(rtUnitId) ||
     !loginIdentifier || loginIdentifier.length > 100 || /\s/.test(loginIdentifier) ||
     !displayName || displayName.length > 160 ||
-    typeof passwordHash !== "string" || passwordHash.length < 16 || passwordHash.length > 4096 ||
+    !isBetterAuthPasswordHash(passwordHash) ||
     !validDate(startsOn)
   ) {
     throw new InvalidInitialChairmanBootstrapInputError("Initial Chairman setup values are incomplete or invalid.");

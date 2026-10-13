@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getPublicAppUrl, requireAuthEnvironment, requireDatabaseEnvironment } from "../../src/lib/env";
+import { getPublicAppUrl, requireAuthEnvironment, requireDatabaseEnvironment, requireInitialBootstrapDatabaseEnvironment } from "../../src/lib/env";
+import { assertBootstrapDatabaseTarget } from "../../src/lib/staging-database-target";
 
 const variableNames = ["APP_ENV", "DATABASE_ENV", "DATABASE_URL", "BETTER_AUTH_SECRET", "NEXT_PUBLIC_APP_URL"] as const;
 const originalValues = new Map(variableNames.map((name) => [name, process.env[name]]));
@@ -27,6 +28,73 @@ describe("runtime environment guards", () => {
 
     setEnvironment({ DATABASE_URL: "postgresql://local/db" });
     expect(() => requireDatabaseEnvironment()).toThrow("must both be set explicitly");
+  });
+
+  it("fails closed on malformed PostgreSQL URLs before a database client can be created", () => {
+    setEnvironment({ APP_ENV: "development", DATABASE_ENV: "development", DATABASE_URL: "postgresql://" });
+    expect(() => requireDatabaseEnvironment()).toThrow("unambiguous PostgreSQL connection URL");
+  });
+
+  it("allows only the documented local bootstrap target and URL-free PGlite tests", () => {
+    const localDatabaseUrl = "postgresql://karturt:synthetic-local-password@localhost:5432/karturt_dev";
+    expect(assertBootstrapDatabaseTarget(localDatabaseUrl, "development", "development"))
+      .toBe("local-development-postgres");
+    expect(assertBootstrapDatabaseTarget(undefined, "test", "test")).toBe("pglite");
+    expect(() => assertBootstrapDatabaseTarget("postgresql://synthetic:synthetic@test.invalid:5432/karturt", "test", "test"))
+      .toThrow("must use in-memory PGlite");
+
+    setEnvironment({
+      APP_ENV: "test",
+      DATABASE_ENV: "test",
+      DATABASE_URL: "postgresql://synthetic:synthetic@test.invalid:5432/karturt",
+    });
+    expect(() => requireDatabaseEnvironment()).toThrow("disabled in test");
+
+    setEnvironment({ APP_ENV: "development", DATABASE_ENV: "development", DATABASE_URL: localDatabaseUrl });
+    expect(requireInitialBootstrapDatabaseEnvironment().databaseUrl).toBe(localDatabaseUrl);
+
+    setEnvironment({
+      APP_ENV: "development",
+      DATABASE_ENV: "development",
+      DATABASE_URL: "postgresql://synthetic:synthetic@ep-quiet-cake-azrhjiyh.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
+    });
+    expect(() => requireInitialBootstrapDatabaseEnvironment())
+      .toThrow("must match the documented local development target exactly");
+  });
+
+  it("rejects host, port, database, user, protocol, and URL spoofing in bootstrap targets", () => {
+    const invalidUrls = [
+      "postgres://karturt:synthetic-local-password@localhost:5432/karturt_dev",
+      "postgresql://other:synthetic-local-password@localhost:5432/karturt_dev",
+      "postgresql://karturt:synthetic-local-password@localhost.evil:5432/karturt_dev",
+      "postgresql://karturt:synthetic-local-password@127.0.0.1:5432/karturt_dev",
+      "postgresql://karturt:synthetic-local-password@localhost:5433/karturt_dev",
+      "postgresql://karturt:synthetic-local-password@localhost:5432/karturt_stage",
+      "postgresql://karturt:synthetic-local-password@localhost:5432/karturt_dev/extra",
+      "postgresql://karturt:synthetic-local-password@localhost:5432/karturt_dev?host=localhost",
+      "postgresql://karturt:synthetic-local-password@localhost:5432/karturt_dev?sslmode=require",
+      "postgresql://karturt:synthetic-local-password@localhost:5432/karturt_dev#fragment",
+      "postgresql://karturt:synthetic-local-password@localhost:5432/karturt%2Fdev",
+      "postgresql://:synthetic-local-password@localhost:5432/karturt_dev",
+      "postgresql://karturt@localhost:5432/karturt_dev",
+    ];
+    for (const databaseUrl of invalidUrls) {
+      expect(() => assertBootstrapDatabaseTarget(databaseUrl, "development", "development"), databaseUrl)
+        .toThrow();
+    }
+  });
+
+  it("rejects production, staging, and mismatched labels for the bootstrap path", () => {
+    const url = "postgresql://karturt:synthetic-local-password@localhost:5432/karturt_dev";
+    for (const environmentName of ["production", "staging"] as const) {
+      expect(() => assertBootstrapDatabaseTarget(url, environmentName, environmentName))
+        .toThrow("disabled for production and staging");
+    }
+    expect(() => assertBootstrapDatabaseTarget(url, "development", "staging"))
+      .toThrow("matching application and database environment labels");
+
+    setEnvironment({ APP_ENV: "production", DATABASE_ENV: "production", DATABASE_URL: url });
+    expect(() => requireInitialBootstrapDatabaseEnvironment()).toThrow("limited to matching development labels");
   });
 
   it("blocks staging database access until the exact target and isolation are proven", () => {

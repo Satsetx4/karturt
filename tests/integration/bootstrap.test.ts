@@ -27,11 +27,13 @@ import {
 } from "../../src/lib/billing/chairman-fee-rates";
 import { generateHouseholdDues } from "../../src/lib/billing/generator";
 import { createHouseholdResident } from "../../src/lib/households/lifecycle";
+import { hashApplicationPassword, type BetterAuthPasswordHash } from "../../src/lib/auth/password-hash";
 import {
   bootstrapInitialChairman,
   bootstrapFirstOperationalRt,
   bootstrapRtUnit,
   InitialChairmanBootstrapConflictError,
+  InvalidInitialChairmanBootstrapInputError,
   InitialRtBootstrapConflictError,
 } from "../../src/lib/rt/bootstrap";
 import { createTestDatabase } from "../helpers/database";
@@ -62,10 +64,14 @@ function failOnInsert(database: AppDatabase, tableToFail: unknown): AppDatabase 
 describe("protected empty RT bootstrap", () => {
   let testDatabase: TestDatabase;
   let database: AppDatabase;
+  let passwordHash: BetterAuthPasswordHash;
+  let alternatePasswordHash: BetterAuthPasswordHash;
 
   beforeAll(async () => {
     testDatabase = await createTestDatabase();
     database = testDatabase.db as unknown as AppDatabase;
+    passwordHash = await hashApplicationPassword("synthetic-wave-six-chairman-password");
+    alternatePasswordHash = await hashApplicationPassword("synthetic-wave-six-retry-password");
   });
 
   afterAll(async () => {
@@ -86,7 +92,7 @@ describe("protected empty RT bootstrap", () => {
       rtUnitId,
       loginIdentifier,
       displayName: `Chairman ${loginIdentifier}`,
-      passwordHash: "$argon2id$synthetic-test-hash-only",
+      passwordHash,
       startsOn: "2026-01-01",
     });
   }
@@ -101,6 +107,10 @@ describe("protected empty RT bootstrap", () => {
     expect(retry).toEqual({ id: first.id, created: false });
     expect(units).toHaveLength(1);
     expect(settings).toHaveLength(1);
+    await expect(bootstrapRtUnit(database, { ...values, name: "Conflicting RT identity" }))
+      .rejects.toBeInstanceOf(InitialRtBootstrapConflictError);
+    expect(await testDatabase.db.select().from(rtSettings).where(eq(rtSettings.rtUnitId, first.id)))
+      .toHaveLength(1);
   });
 
   it("serializes first-RT creation and rejects a concurrent second operational RT", async () => {
@@ -149,7 +159,7 @@ describe("protected empty RT bootstrap", () => {
       rtUnitId,
       loginIdentifier: `chair-${randomUUID()}`,
       displayName: "Ketua RT Synthetic",
-      passwordHash: "$argon2id$synthetic-test-hash-only",
+      passwordHash,
       startsOn: "2026-01-01",
     };
     const concurrent = await Promise.all([
@@ -160,7 +170,7 @@ describe("protected empty RT bootstrap", () => {
     const concurrentRetry = concurrent.find((result) => !result.created)!;
     const originalCredential = await testDatabase.db.select({ password: authAccount.password })
       .from(authAccount).where(eq(authAccount.userId, created.authUserId));
-    const replay = await bootstrapInitialChairman(database, { ...input, passwordHash: "different-retry-hash-ignored" });
+    const replay = await bootstrapInitialChairman(database, { ...input, passwordHash: alternatePasswordHash });
     const accounts = await testDatabase.db.select().from(appAccounts).where(eq(appAccounts.rtUnitId, rtUnitId));
     const assigned = await testDatabase.db.select().from(officialAssignments)
       .where(eq(officialAssignments.appAccountId, created.appAccountId));
@@ -186,6 +196,22 @@ describe("protected empty RT bootstrap", () => {
       .rejects.toBeInstanceOf(InitialChairmanBootstrapConflictError);
   });
 
+  it("rejects an arbitrary passwordHash before any account rows are written", async () => {
+    const { id: rtUnitId } = await createEmptyRt(`RT-${randomUUID().slice(0, 8)}`);
+    const input = {
+      rtUnitId,
+      loginIdentifier: `chair-${randomUUID()}`,
+      displayName: "Invalid Hash Synthetic",
+      passwordHash: "$argon2id$synthetic-test-hash-only" as unknown as BetterAuthPasswordHash,
+      startsOn: "2026-01-01",
+    };
+
+    await expect(bootstrapInitialChairman(database, input))
+      .rejects.toBeInstanceOf(InvalidInitialChairmanBootstrapInputError);
+    expect(await testDatabase.db.select().from(appAccounts).where(eq(appAccounts.rtUnitId, rtUnitId)))
+      .toHaveLength(0);
+  });
+
   it("rolls back the person and auth user when credential creation fails", async () => {
     const { id: rtUnitId } = await createEmptyRt(`RT-${randomUUID().slice(0, 8)}`);
     const beforeUsers = await testDatabase.db.select({ id: authUser.id }).from(authUser);
@@ -193,7 +219,7 @@ describe("protected empty RT bootstrap", () => {
       rtUnitId,
       loginIdentifier: `chair-${randomUUID()}`,
       displayName: "Rollback Synthetic",
-      passwordHash: "$argon2id$synthetic-test-hash-only",
+      passwordHash,
       startsOn: "2026-01-01",
     };
 
