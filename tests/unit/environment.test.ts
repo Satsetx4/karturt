@@ -108,7 +108,7 @@ describe("runtime environment guards", () => {
       {
         APP_ENV: "staging",
         DATABASE_ENV: "staging",
-        DATABASE_URL: "postgresql://synthetic:synthetic@ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech/karturt_stage",
+        DATABASE_URL: "postgresql://synthetic:synthetic@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/karturt_staging",
       },
       {
         APP_ENV: "production",
@@ -126,30 +126,50 @@ describe("runtime environment guards", () => {
     }
   });
 
-  it("blocks staging database access until the exact target and isolation are proven", () => {
-    const approvedTarget = "postgresql://synthetic-user:synthetic-password@ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech/karturt_stage?sslmode=require";
+  it("matches the exact staging target and keeps access blocked while isolation is unverified", () => {
+    const approvedTarget = "postgresql://synthetic-user:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/karturt_staging?sslmode=require";
     setEnvironment({ APP_ENV: "staging", DATABASE_ENV: "staging", DATABASE_URL: approvedTarget });
     expect(() => requireDatabaseEnvironment()).toThrow("parent-data initialization");
+  });
+
+  it("rejects legacy, mismatched, and unrelated staging target identities", () => {
+    const rejectedTargets = [
+      "postgresql://synthetic-user:synthetic-password@ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech/karturt_stage",
+      "postgresql://synthetic-user:synthetic-password@ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech/karturt_staging",
+      "postgresql://synthetic-user:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/karturt_stage",
+      "postgresql://synthetic-user:synthetic-password@wrong-endpoint.ap-southeast-1.aws.neon.tech/karturt_staging",
+      "postgresql://synthetic-user:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/karturt_staging?endpoint=ep-raspy-meadow-b3ppifq6",
+      "postgresql://synthetic-user@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/karturt_staging",
+    ];
+
+    for (const databaseUrl of rejectedTargets) {
+      setEnvironment({ APP_ENV: "staging", DATABASE_ENV: "staging", DATABASE_URL: databaseUrl });
+      expect(() => requireDatabaseEnvironment()).toThrow();
+    }
 
     setEnvironment({
       APP_ENV: "staging",
       DATABASE_ENV: "staging",
-      DATABASE_URL: "postgresql://synthetic-user:synthetic-password@wrong-endpoint.c-4.ap-southeast-1.aws.neon.tech/karturt_stage",
+      DATABASE_URL: rejectedTargets[0],
     });
-    expect(() => requireDatabaseEnvironment()).toThrow("must target approved Neon project");
     let errorMessage = "";
     try {
       requireDatabaseEnvironment();
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error);
     }
+    expect(errorMessage).toContain("must target approved Neon project");
+    expect(errorMessage).toContain("wild-art-99835126");
+    expect(errorMessage).toContain("br-hidden-cake-a1ge5xqp");
+    expect(errorMessage).toContain("karturt_staging (database id 42079960)");
+    expect(errorMessage).toContain("ep-snowy-meadow-a10304d9");
     expect(errorMessage).not.toContain("synthetic-password");
   });
 
   it("rejects the approved staging endpoint under non-staging labels before database client creation", () => {
     const stagingHosts = [
-      "ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech",
-      "ep-raspy-meadow-b3ppifq6-pooler.c-4.ap-southeast-1.aws.neon.tech",
+      "ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech",
+      "ep-snowy-meadow-a10304d9-pooler.ap-southeast-1.aws.neon.tech",
     ];
 
     for (const environmentName of ["development", "production"] as const) {
@@ -157,7 +177,7 @@ describe("runtime environment guards", () => {
         setEnvironment({
           APP_ENV: environmentName,
           DATABASE_ENV: environmentName,
-          DATABASE_URL: `postgresql://synthetic-user:synthetic-password@${hostname}/karturt_stage`,
+          DATABASE_URL: `postgresql://synthetic-user:synthetic-password@${hostname}/karturt_staging`,
         });
         expect(() => requireDatabaseEnvironment()).toThrow("cannot be used unless APP_ENV and DATABASE_ENV both equal staging");
       }

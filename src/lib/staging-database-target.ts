@@ -1,16 +1,14 @@
 const approvedStagingTarget = {
-  projectId: "ancient-smoke-51787007",
-  branchId: "br-dry-block-b3fsqjo3",
-  databaseId: 604003,
-  databaseName: "karturt_stage",
-  endpointId: "ep-raspy-meadow-b3ppifq6",
-  hostname: "ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech",
+  projectId: "wild-art-99835126",
+  branchId: "br-hidden-cake-a1ge5xqp",
+  databaseId: 42079960,
+  databaseName: "karturt_staging",
+  endpointId: "ep-snowy-meadow-a10304d9",
+  hostname: "ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech",
 } as const;
 
-// Neon reports init_source=parent-data and a 31,686,656-byte logical size for
-// this branch, with no visible parent identity. Metadata does not prove that
-// inherited data is empty, so staging connections stay disabled until that is
-// independently resolved and this value is deliberately changed in review.
+// Provider metadata reports init_source=parent-data and permits passwordless access.
+// Database lineage and contents remain unverified, so staging stays disabled for this wave.
 const stagingIsolationVerifiedEmpty = false;
 
 const approvedStagingPoolerHostname = `${approvedStagingTarget.endpointId}-pooler${approvedStagingTarget.hostname.slice(approvedStagingTarget.endpointId.length)}`;
