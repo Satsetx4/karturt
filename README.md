@@ -20,7 +20,7 @@ KartuRT is a mobile-first RT dues administration app. Milestone 1 establishes th
 6. Run `npm install`, `npm run db:migrate`, and `npm run db:check`.
 7. Run `npm run dev`.
 
-Database and operator CLIs that load project environment files check authorization before reading them. In the parent shell, set `APP_ENV=development`, `DATABASE_ENV=development`, and `KARTUR_ALLOW_LOCAL_ENV_FILE_LOAD=1` before running those commands. The opt-in is not read from `.env.local`. Tests and production builds refuse project `.env*` files; pass any needed non-secret build or test settings through the process environment.
+Database and operator CLIs, plus `npm run dev`, check authorization before loading project environment files. In the parent shell, set `APP_ENV=development`, `DATABASE_ENV=development`, and `KARTUR_ALLOW_LOCAL_ENV_FILE_LOAD=1` before running those commands. The opt-in is not read from `.env.local`. Tests, production builds, and `npm run start` refuse project `.env*` files; pass any needed non-secret build or test settings through the process environment. Use the repository's npm scripts for Next.js commands: direct arbitrary `next` CLI invocations bypass these wrappers, and Next.js 16.3.8 loads project environment files before evaluating `next.config.*`.
 
 The repository has no default resident, official, or System Admin account. Do not add sample names or PINs to the running app. Ordinary account provisioning uses existing person and household records.
 

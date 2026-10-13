@@ -75,6 +75,8 @@ describe("runtime environment guards", () => {
       "postgresql://karturt:synthetic-local-password@localhost:5432/karturt_dev?sslmode=require",
       "postgresql://karturt:synthetic-local-password@localhost:5432/karturt_dev#fragment",
       "postgresql://karturt:synthetic-local-password@localhost:5432/karturt%2Fdev",
+      "postgresql://karturt:synthetic-local-password@ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech/karturt_stage",
+      "postgresql://karturt:synthetic-local-password@production.example:5432/karturt",
       "postgresql://:synthetic-local-password@localhost:5432/karturt_dev",
       "postgresql://karturt@localhost:5432/karturt_dev",
     ];

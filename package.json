@@ -6,9 +6,9 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "tsx scripts/run-next-dev.ts",
     "build": "tsx scripts/run-next-build.ts",
-    "start": "next start",
+    "start": "tsx scripts/run-next-start.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
