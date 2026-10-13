@@ -32,6 +32,8 @@
     "smoke:phase-9-http": "tsx scripts/phase-9-payment-reversal-http-smoke.ts",
     "smoke:phase-11-http": "tsx scripts/phase-11-tariff-adjustment-http-smoke.ts",
     "db:generate": "drizzle-kit generate",
+    "db:generate:offline": "drizzle-kit generate --config drizzle.offline.config.ts",
+    "db:check:offline": "drizzle-kit check --config drizzle.offline.config.ts",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:check": "tsx scripts/check-db.ts",
     "db:bootstrap-rt": "tsx scripts/bootstrap-rt.ts",

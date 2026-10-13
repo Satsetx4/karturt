@@ -71,10 +71,10 @@ jobs:
       - name: Full test suite
         run: npm test -- --maxWorkers=1
       - name: Drizzle migration journal consistency
-        run: npx drizzle-kit check
+        run: npm run db:check:offline
       - name: Drizzle schema drift check
         run: |
-          npm run db:generate -- --name gate_a_ci_drift
+          npm run db:generate:offline -- --name gate_a_ci_drift
           git diff --exit-code -- drizzle
           if test -n "$(git status --porcelain --untracked-files=all -- drizzle)"; then
             echo "Schema drift generated untracked migration files."
