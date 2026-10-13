@@ -86,6 +86,10 @@ export function cleanupRunOwnedContainer(options: RunOwnedContainerOptions) {
   };
 
   const { containerId, runCommand } = options;
+  if (typeof containerId !== "string") {
+    verifyRunOwnedContainer(options);
+    return false;
+  }
   if (!verifyRunOwnedContainer(options)) return false;
 
   const listExactContainer = () => {
