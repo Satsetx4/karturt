@@ -20,9 +20,11 @@ KartuRT is a mobile-first RT dues administration app. Milestone 1 establishes th
 6. Run `npm install`, `npm run db:migrate`, and `npm run db:check`.
 7. Run `npm run dev`.
 
-The repository has no default resident, official, or System Admin account. Provision accounts only after the RT, house, household, and person records exist. Do not add sample names or PINs to the running app.
+The repository has no default resident, official, or System Admin account. Do not add sample names or PINs to the running app. Ordinary account provisioning uses existing person and household records.
 
 For a new development unit, set `KARTUR_RT_CODE`, `KARTUR_RW_CODE`, `KARTUR_RT_NAME`, and `KARTUR_VILLAGE` in `.env.local`, then run `npm run db:bootstrap-rt`. Optional district, city, and province values use `KARTUR_DISTRICT`, `KARTUR_CITY`, and `KARTUR_PROVINCE`. The command creates the RT unit and its date/currency settings atomically; it does not invent houses or residents.
+
+For the first empty RT, the operator-only `scripts/bootstrap-initial-rt.ts` command also creates the standalone person and official account for its first Chairman, then initializes a future billing year with its January tariff in one audited transaction. Run it only with matching explicit `APP_ENV` and `DATABASE_ENV` labels for development, staging, or test; production is refused, and the normal staging database target guard still applies. The command also refuses to create a second RT and permits a retry against the exact same RT identity. Set the RT values above plus `KARTUR_INITIAL_SETUP_CONFIRMATION=INITIALIZE_EMPTY_KARTUR_RT`, `KARTUR_INITIAL_CHAIRMAN_LOGIN`, `KARTUR_INITIAL_CHAIRMAN_NAME`, `KARTUR_INITIAL_CHAIRMAN_PASSWORD`, `KARTUR_INITIAL_BILLING_YEAR`, `KARTUR_INITIAL_JANUARY_MONTHLY_AMOUNT`, and a stable UUID v4 in `KARTUR_INITIAL_BILLING_IDEMPOTENCY_KEY` in the ignored `.env.local` file. Run `npx tsx scripts/bootstrap-initial-rt.ts`. The command refuses non-future years and existing household/person/account/year state, exposes no HTTP setup route, and prints only record IDs and creation status. Retrying before creating the first household does not reset the Chairman password; the billing idempotency key must stay the same for a retry. After setup, create the first household through the normal Chairman flow.
 
 ## Provision an account
 

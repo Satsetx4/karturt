@@ -174,6 +174,23 @@ function normalizeContext(action: string, context: AuditContext | undefined): Au
     return { period, monthlyAmount };
   }
 
+  if (action === "billing_year.initialized") {
+    assertContextKeys(keys, "januaryFeeRateId,year");
+    assertAuditUuid(value.januaryFeeRateId);
+    if (typeof value.year !== "number" || !Number.isInteger(value.year) || value.year < 2000 || value.year > 2200) {
+      throw new Error("Billing-year audit year must be a supported calendar year.");
+    }
+    return { januaryFeeRateId: value.januaryFeeRateId as string, year: value.year };
+  }
+
+  if (action === "rt.initial_chairman_provisioned") {
+    assertContextKeys(keys, "source");
+    if (value.source !== "protected_cli_bootstrap") {
+      throw new Error("Initial Chairman audit source must be the protected CLI.");
+    }
+    return { source: value.source };
+  }
+
   if (action === "billing.adjustment_created") {
     if (keys.join(",") !== "amountDelta,effectiveTargetAfter,originalAmount") {
       throw new Error("Audit context fields do not match the action contract.");

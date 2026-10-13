@@ -6,6 +6,7 @@ import {
   billingYears,
   feeRates,
   officialAssignments,
+  rtUnits,
 } from "@/db/schema";
 import { appendAuditEvent } from "@/lib/audit/writer";
 import { canPerform, type Principal } from "@/lib/auth/permissions";
@@ -51,8 +52,28 @@ export interface ChairmanFeeRateResult extends ChairmanFeeRateView {
   idempotentReplay: boolean;
 }
 
+export interface InitializeFirstBillingYearInput {
+  year: number;
+  monthlyAmount: number;
+  idempotencyKey: string;
+}
+
+export interface InitializeFirstBillingYearResult {
+  billingYearId: string;
+  feeRateId: string;
+  year: number;
+  status: "open";
+  idempotentReplay: boolean;
+}
+
 function canonicalPeriod(year: number, month: number) {
   return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function isCanonicalDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 function fingerprint(input: Omit<CreateChairmanFeeRateInput, "idempotencyKey">) {
@@ -322,6 +343,185 @@ export async function createChairmanFeeRate(
     }
     if (isUniqueConstraintViolation(error, "fee_rates_rt_actor_idempotency_uq")) {
       throw new ChairmanFeeRateIdempotencyConflictError("Kunci permintaan ini sudah digunakan untuk tarif yang berbeda.");
+    }
+    throw error;
+  }
+}
+
+/**
+ * Atomically opens an RT's first future billing year with its January rate.
+ * The database's tariff trigger requires an open year before rate insertion,
+ * while ordinary year activation requires that January rate. Both transitions
+ * stay inside this transaction, so no caller can observe an incomplete year.
+ */
+export async function initializeFirstBillingYear(
+  database: AppDatabase,
+  principal: Principal,
+  input: InitializeFirstBillingYearInput,
+  businessDate = jakartaBusinessDate(),
+): Promise<InitializeFirstBillingYearResult> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new InvalidChairmanFeeRateInputError("Data tahun tagihan belum lengkap.");
+  }
+  const allowedKeys = new Set(["year", "monthlyAmount", "idempotencyKey"]);
+  if (Object.keys(input).some((key) => !allowedKeys.has(key))) {
+    throw new InvalidChairmanFeeRateInputError("Data tahun tagihan belum lengkap.");
+  }
+  if (
+    !Number.isInteger(input.year) || input.year < 2000 || input.year > 2200 ||
+    !Number.isSafeInteger(input.monthlyAmount) || input.monthlyAmount <= 0 || input.monthlyAmount > MAX_POSTGRES_INTEGER ||
+    typeof input.idempotencyKey !== "string" || !uuidV4Pattern.test(input.idempotencyKey) ||
+    !isCanonicalDate(businessDate)
+  ) {
+    throw new InvalidChairmanFeeRateInputError("Periksa kembali tahun, tarif, dan kunci permintaan.");
+  }
+  if (input.year <= Number(businessDate.slice(0, 4))) {
+    throw new ChairmanFeeRateConflictError("Tahun awal harus dimulai pada tahun kalender mendatang.");
+  }
+
+  const rtUnitId = principal.rtUnitId;
+  if (
+    principal.role !== "rt_chairman" ||
+    !rtUnitId ||
+    !canPerform(principal, "fee_rate:manage", { rtUnitId })
+  ) {
+    throw new ChairmanFeeRateForbiddenError("Hanya Ketua RT aktif yang dapat menyiapkan tahun tagihan awal.");
+  }
+  const requestFingerprint = createHash("sha256").update(JSON.stringify({
+    version: 1,
+    year: input.year,
+    monthlyAmount: input.monthlyAmount,
+  })).digest("hex");
+
+  try {
+    return await database.transaction(async (transaction) => {
+      const transactionDatabase = transaction as unknown as AppDatabase;
+      const { appAccountId } = await assertActiveChairman(transactionDatabase, principal, businessDate);
+      const [rtUnit] = await transaction
+        .select({ id: rtUnits.id })
+        .from(rtUnits)
+        .where(eq(rtUnits.id, rtUnitId))
+        .limit(1)
+        .for("update");
+      if (!rtUnit) throw new ChairmanFeeRateNotFoundError("RT tidak ditemukan.");
+
+      const [existingRate] = await transaction
+        .select({
+          id: feeRates.id,
+          billingYearId: feeRates.billingYearId,
+          effectiveMonth: feeRates.effectiveMonth,
+          monthlyAmount: feeRates.monthlyAmount,
+          requestFingerprint: feeRates.requestFingerprint,
+        })
+        .from(feeRates)
+        .where(and(
+          eq(feeRates.rtUnitId, rtUnitId),
+          eq(feeRates.createdByAccountId, appAccountId),
+          eq(feeRates.createdByAccountType, "official"),
+          eq(feeRates.idempotencyKey, input.idempotencyKey),
+        ))
+        .limit(1)
+        .for("update");
+      if (existingRate) {
+        if (existingRate.requestFingerprint !== requestFingerprint) {
+          throw new ChairmanFeeRateIdempotencyConflictError("Kunci permintaan ini sudah digunakan untuk tahun atau tarif yang berbeda.");
+        }
+        const [year] = await transaction
+          .select({ year: billingYears.year, status: billingYears.status })
+          .from(billingYears)
+          .where(and(
+            eq(billingYears.id, existingRate.billingYearId),
+            eq(billingYears.rtUnitId, rtUnitId),
+          ))
+          .limit(1);
+        if (
+          !year || year.year !== input.year || year.status !== "open" ||
+          existingRate.effectiveMonth !== 1 || existingRate.monthlyAmount !== input.monthlyAmount
+        ) {
+          throw new ChairmanFeeRateInvariantError("The saved initial billing year is incomplete.");
+        }
+        return {
+          billingYearId: existingRate.billingYearId,
+          feeRateId: existingRate.id,
+          year: year.year,
+          status: "open",
+          idempotentReplay: true,
+        };
+      }
+
+      const [existingYear] = await transaction
+        .select({ id: billingYears.id })
+        .from(billingYears)
+        .where(eq(billingYears.rtUnitId, rtUnitId))
+        .limit(1);
+      if (existingYear) {
+        throw new ChairmanFeeRateConflictError("Tahun tagihan awal hanya dapat dibuat pada RT yang belum memiliki tahun tagihan.");
+      }
+
+      const [draft] = await transaction
+        .insert(billingYears)
+        .values({ rtUnitId, year: input.year, status: "draft" })
+        .returning({ id: billingYears.id });
+      if (!draft) throw new ChairmanFeeRateInvariantError("The initial billing year could not be created.");
+
+      const [opened] = await transaction
+        .update(billingYears)
+        .set({ status: "open" })
+        .where(and(eq(billingYears.id, draft.id), eq(billingYears.rtUnitId, rtUnitId), eq(billingYears.status, "draft")))
+        .returning({ id: billingYears.id });
+      if (!opened) throw new ChairmanFeeRateInvariantError("The initial billing year could not be opened.");
+
+      const [rate] = await transaction
+        .insert(feeRates)
+        .values({
+          rtUnitId,
+          billingYearId: opened.id,
+          effectiveMonth: 1,
+          monthlyAmount: input.monthlyAmount,
+          createdByAccountId: appAccountId,
+          createdByAccountType: "official",
+          idempotencyKey: input.idempotencyKey,
+          requestFingerprint,
+        })
+        .returning({ id: feeRates.id });
+      if (!rate) throw new ChairmanFeeRateInvariantError("The initial January fee rate could not be created.");
+
+      const period = canonicalPeriod(input.year, 1);
+      await appendAuditEvent(transaction, {
+        actorAppAccountId: appAccountId,
+        action: "fee_rate.created",
+        entityType: "fee_rate",
+        entityId: rate.id,
+        reason: null,
+        context: { period, monthlyAmount: input.monthlyAmount },
+      });
+      await appendAuditEvent(transaction, {
+        actorAppAccountId: appAccountId,
+        action: "billing_year.initialized",
+        entityType: "billing_year",
+        entityId: opened.id,
+        reason: null,
+        context: { year: input.year, januaryFeeRateId: rate.id },
+      });
+
+      return {
+        billingYearId: opened.id,
+        feeRateId: rate.id,
+        year: input.year,
+        status: "open",
+        idempotentReplay: false,
+      };
+    });
+  } catch (error) {
+    if (error instanceof ChairmanFeeRateConflictError) throw error;
+    if (isUniqueConstraintViolation(error, "billing_years_rt_year_uq") || isUniqueConstraintViolation(error, "billing_years_one_open_per_rt_uq")) {
+      throw new ChairmanFeeRateConflictError("Tahun tagihan awal sudah diinisialisasi untuk RT ini.");
+    }
+    if (isUniqueConstraintViolation(error, "fee_rates_year_month_uq")) {
+      throw new ChairmanFeeRateConflictError("Sudah ada tarif Januari untuk tahun tagihan ini.");
+    }
+    if (isUniqueConstraintViolation(error, "fee_rates_rt_actor_idempotency_uq")) {
+      throw new ChairmanFeeRateIdempotencyConflictError("Kunci permintaan ini sudah digunakan untuk tahun atau tarif yang berbeda.");
     }
     throw error;
   }
