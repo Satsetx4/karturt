@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { Pool } from "pg";
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle as drizzlePostgres } from "drizzle-orm/node-postgres";
@@ -43,6 +44,7 @@ import {
   HouseholdConflictError,
   replaceHouseholdResident,
 } from "@/lib/households/lifecycle";
+import { validateDisposablePostgresTarget, type DisposablePostgresTarget } from "./lib/disposable-postgres-identity";
 import {
   createAuthUser,
   createFeeRateFixture,
@@ -69,36 +71,8 @@ const runId = randomUUID().replaceAll("-", "").slice(0, 10);
 const appNameA = `krt-launch-${runId}-a`;
 const appNameB = `krt-launch-${runId}-b`;
 let localDatabaseUrl: string;
-
-function validateDatabaseUrl(value: string | undefined) {
-  if (!value) {
-    throw new Error("LAUNCH_SAFETY_POSTGRES_URL is required; the independent PostgreSQL suite fails closed.");
-  }
-
-  let target: URL;
-  try {
-    target = new URL(value);
-  } catch {
-    throw new Error("LAUNCH_SAFETY_POSTGRES_URL is malformed; no database connection was opened.");
-  }
-
-  const databaseName = target.pathname.replace(/^\//, "");
-  const allowedHost = target.hostname === "127.0.0.1";
-  const allowedTarget = target.protocol === "postgresql:"
-    && allowedHost
-    && target.port === "5432"
-    && databaseName === "karturt_concurrency_test"
-    && decodeURIComponent(target.username) === "karturt_concurrency_test"
-    && target.password.length > 0
-    && target.search.length === 0
-    && target.hash.length === 0;
-
-  if (!allowedTarget || process.env.APP_ENV !== "test" || process.env.DATABASE_ENV !== "test") {
-    throw new Error("PostgreSQL concurrency requires the isolated loopback karturt_concurrency_test target with APP_ENV=test and DATABASE_ENV=test; no database connection was opened.");
-  }
-
-  return value;
-}
+let disposableTarget: DisposablePostgresTarget;
+let evidencePath: string;
 
 function makePool(applicationName: string, max: number): DbPool {
   return new Pool({
@@ -111,7 +85,6 @@ function makePool(applicationName: string, max: number): DbPool {
 }
 
 const migrationsDirectory = resolve(process.cwd(), "drizzle");
-const evidencePath = resolve(process.cwd(), "docs/launch-safety-evidence/postgres-independent-concurrency.json");
 const migrationNames = readdirSync(migrationsDirectory).filter((name) => name.endsWith(".sql")).sort();
 if (migrationNames.length !== 14 || migrationNames.at(-1) !== "0013_phase_12_household_management.sql") {
   throw new Error("Concurrency proof requires the checked-in 0000–0013 migration set.");
@@ -229,16 +202,42 @@ async function applyMigrations(pool: DbPool) {
   const { rows } = await pool.query<{ current_database: string; server_version: string; server_version_num: string }>(
     "SELECT current_database() AS current_database, current_setting('server_version') AS server_version, current_setting('server_version_num') AS server_version_num",
   );
-  assert.equal(rows[0]?.current_database, "karturt_concurrency_test", "refuse to migrate a database outside the disposable test target");
-  const { rows: existingSchema } = await pool.query<{ exists: string | null }>(
-    "SELECT to_regclass('public.rt_units')::text AS exists",
-  );
-  assert.equal(existingSchema[0]?.exists, null, "the disposable PostgreSQL test database must start empty");
+  assert.equal(rows[0]?.current_database, disposableTarget.databaseName, "refuse to migrate a database outside this disposable run");
 
   for (const name of migrationNames) {
     await pool.query(readFileSync(resolve(migrationsDirectory, name), "utf8"));
   }
   return { version: rows[0]!.server_version, versionNumber: rows[0]!.server_version_num };
+}
+
+async function assertDisposableDatabaseIdentity(pool: DbPool) {
+  const { rows } = await pool.query<{
+    current_database: string;
+    current_user: string;
+    identity_marker: string | null;
+    server_version: string;
+  }>(`
+    SELECT current_database() AS current_database,
+      current_user AS current_user,
+      obj_description(database.oid, 'pg_database') AS identity_marker,
+      current_setting('server_version') AS server_version
+    FROM pg_database AS database
+    WHERE database.datname = current_database()
+  `);
+  assert.equal(rows.length, 1, "the connected PostgreSQL database must be identifiable");
+  assert.equal(rows[0]?.current_database, disposableTarget.databaseName, "the connected database name must be derived from this run identity");
+  assert.equal(rows[0]?.current_user, disposableTarget.username, "the connected database user must be derived from this run identity");
+  assert.equal(rows[0]?.identity_marker, disposableTarget.identityMarker, "the database must carry this run's unique disposable identity marker");
+
+  const { rows: objects } = await pool.query<{ count: string }>(`
+    SELECT count(*)::text AS count
+    FROM pg_class AS relation
+    JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND namespace.nspname NOT LIKE 'pg_toast%'
+      AND relation.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
+  `);
+  assert.equal(Number(objects[0]?.count), 0, "a run-owned disposable database must have no pre-existing user relations before migrations");
 }
 
 async function backendPid(pool: DbPool) {
@@ -290,25 +289,31 @@ async function installLockHoldingTrigger(config: DelayTrigger) {
   const triggerName = `launch_safety_hold_${suffix}_trigger`;
   const condition = config.condition ? `IF ${config.condition} THEN` : "";
   const finishCondition = config.condition ? "END IF;" : "";
-  await fixturePool.query(`
-    CREATE FUNCTION public.${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
-    BEGIN
-      ${condition}
-        PERFORM pg_sleep(${lockHoldSeconds});
-      ${finishCondition}
-      RETURN NEW;
-    END;
-    $$;
-    CREATE TRIGGER ${triggerName}
-      ${config.event} ON public.${config.table}
-      FOR EACH ROW EXECUTE FUNCTION public.${functionName}();
-  `);
-  return async () => {
-    await fixturePool.query(`
-      DROP TRIGGER ${triggerName} ON public.${config.table};
-      DROP FUNCTION public.${functionName}();
-    `);
+  const removeCreatedObjects = async () => {
+    await fixturePool.query(`DROP TRIGGER IF EXISTS ${triggerName} ON public.${config.table}`);
+    await fixturePool.query(`DROP FUNCTION IF EXISTS public.${functionName}()`);
   };
+  try {
+    await fixturePool.query(`
+      CREATE FUNCTION public.${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        ${condition}
+          PERFORM pg_sleep(${lockHoldSeconds});
+        ${finishCondition}
+        RETURN NEW;
+      END;
+      $$
+    `);
+    await fixturePool.query(`
+      CREATE TRIGGER ${triggerName}
+        ${config.event} ON public.${config.table}
+        FOR EACH ROW EXECUTE FUNCTION public.${functionName}()
+    `);
+    return removeCreatedObjects;
+  } catch (error) {
+    await removeCreatedObjects().catch(() => undefined);
+    throw error;
+  }
 }
 
 async function proveContendedRace<T>(input: {
@@ -637,7 +642,10 @@ let pidA: number;
 let pidB: number;
 
 async function main() {
-  localDatabaseUrl = validateDatabaseUrl(process.env.LAUNCH_SAFETY_POSTGRES_URL);
+  disposableTarget = validateDisposablePostgresTarget(process.env);
+  localDatabaseUrl = disposableTarget.connectionString;
+  evidencePath = resolve(process.env.LAUNCH_SAFETY_POSTGRES_EVIDENCE_PATH
+    ?? `${tmpdir()}/karturt-postgres-concurrency-${disposableTarget.runId}.json`);
   observerPool = makePool(`krt-launch-${runId}-observer`, 2);
   fixturePool = makePool(`krt-launch-${runId}-fixtures`, 2);
   poolA = makePool(appNameA, 1);
@@ -647,6 +655,7 @@ async function main() {
   databaseB = drizzlePostgres(poolB, { schema: relationalSchema }) as unknown as AppDatabase;
   fixtureDatabaseAsApp = fixtureDatabase as unknown as AppDatabase;
 
+  await assertDisposableDatabaseIdentity(observerPool);
   const postgresVersion = await applyMigrations(fixturePool);
   pidA = await backendPid(poolA);
   pidB = await backendPid(poolB);
@@ -670,7 +679,16 @@ async function main() {
     event: "launch_safety.independent_postgres_concurrency_proof",
     generatedAt: new Date().toISOString(),
     result: "PASS",
-    databaseTarget: "disposable loopback PostgreSQL test database; URL redacted",
+    databaseTarget: {
+      kind: "run-owned disposable PostgreSQL",
+      host: "127.0.0.1",
+      port: disposableTarget.port,
+      databaseName: disposableTarget.databaseName,
+      username: disposableTarget.username,
+      runId: disposableTarget.runId,
+      uniqueIdentityMarkerVerified: true,
+      identityToken: "redacted",
+    },
     postgresVersion,
     migrationsApplied: migrationNames.length,
     independentBackends: {
@@ -685,7 +703,7 @@ async function main() {
     productionAccess: "none",
     migrationFilesChanged: 0,
   };
-  writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+  writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
   process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
 }
 
