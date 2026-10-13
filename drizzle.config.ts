@@ -1,8 +1,8 @@
 import { defineConfig } from "drizzle-kit";
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "./src/lib/env-file-preflight";
 import { requireDatabaseEnvironment } from "./src/lib/env";
 
-loadEnvConfig(process.cwd());
+loadProjectEnvConfig(process.cwd());
 const { databaseUrl } = requireDatabaseEnvironment();
 
 export default defineConfig({

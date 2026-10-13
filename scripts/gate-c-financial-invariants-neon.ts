@@ -1,4 +1,4 @@
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { Pool, type PoolClient } from "@neondatabase/serverless";
 import { requireDatabaseEnvironment } from "../src/lib/env";
 
@@ -780,7 +780,7 @@ async function runAnomalyQuery(client: PoolClient, check: { name: string; sql: s
 }
 
 async function main() {
-  loadEnvConfig(process.cwd());
+  loadProjectEnvConfig(process.cwd());
   const environment = requireDatabaseEnvironment();
   const configuredProjectId = process.env.KARTURT_NEON_DEV_PROJECT_ID;
   const configuredBranchId = process.env.KARTURT_NEON_DEV_BRANCH_ID;

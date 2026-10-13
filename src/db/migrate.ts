@@ -1,10 +1,10 @@
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "@/lib/env-file-preflight";
 import { migrate } from "drizzle-orm/neon-serverless/migrator";
 import { closeDb, getDb } from "@/db/client";
 import { requireDatabaseEnvironment } from "@/lib/env";
 
 async function main() {
-  loadEnvConfig(process.cwd());
+  loadProjectEnvConfig(process.cwd());
   requireDatabaseEnvironment();
   await migrate(getDb(), { migrationsFolder: "./drizzle" });
   console.info(JSON.stringify({ event: "database.migrations.applied", environment: process.env.DATABASE_ENV ?? "development" }));

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { Pool, type PoolClient } from "@neondatabase/serverless";
 import { requireDatabaseEnvironment } from "../src/lib/env";
 
@@ -32,7 +32,7 @@ async function expectSqlState(
 }
 
 async function main() {
-  loadEnvConfig(process.cwd());
+  loadProjectEnvConfig(process.cwd());
   const environment = requireDatabaseEnvironment();
   const expectedProjectId = process.env.KARTURT_NEON_DEV_PROJECT_ID;
   const expectedBranchId = process.env.KARTURT_NEON_DEV_BRANCH_ID;

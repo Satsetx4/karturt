@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { Pool, type PoolClient } from "@neondatabase/serverless";
 import { requireDatabaseEnvironment } from "../src/lib/env";
 
@@ -806,7 +806,7 @@ async function main() {
   const conflictFinancialFingerprintExpected = asString(conflictFinancialContent.fingerprint, "conflict.before.financialContent.fingerprint");
   const conflictFinancialRowCountExpected = asFiniteNumber(conflictFinancialContent.rowCount, "conflict.before.financialContent.rowCount");
 
-  loadEnvConfig(process.cwd());
+  loadProjectEnvConfig(process.cwd());
   const environment = requireDatabaseEnvironment();
   if (environment.appEnv !== "development" || environment.databaseEnv !== "development") {
     throw new Error("Lifecycle audit requires APP_ENV and DATABASE_ENV to both be development.");

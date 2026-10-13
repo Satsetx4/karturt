@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -32,7 +32,7 @@ function todayInJakarta() {
 }
 
 async function main() {
-  loadEnvConfig(process.cwd());
+  loadProjectEnvConfig(process.cwd());
   requireDatabaseEnvironment();
   const parsed = inputSchema.safeParse({
     type: envValue("KARTURT_ACCOUNT_TYPE"),

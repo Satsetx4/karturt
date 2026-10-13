@@ -1,4 +1,4 @@
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { Pool, type PoolClient } from "@neondatabase/serverless";
 import { requireDatabaseEnvironment } from "../src/lib/env";
 
@@ -293,7 +293,7 @@ async function targetGuard(client: PoolClient) {
 }
 
 async function runNeon() {
-  loadEnvConfig(process.cwd());
+  loadProjectEnvConfig(process.cwd());
   const env = requireDatabaseEnvironment();
   if (env.appEnv !== "development" || env.databaseEnv !== "development" ||
       process.env.KARTURT_NEON_DEV_PROJECT_ID !== expectedTarget.projectId ||

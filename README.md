@@ -20,6 +20,8 @@ KartuRT is a mobile-first RT dues administration app. Milestone 1 establishes th
 6. Run `npm install`, `npm run db:migrate`, and `npm run db:check`.
 7. Run `npm run dev`.
 
+Database and operator CLIs that load project environment files check authorization before reading them. In the parent shell, set `APP_ENV=development`, `DATABASE_ENV=development`, and `KARTUR_ALLOW_LOCAL_ENV_FILE_LOAD=1` before running those commands. The opt-in is not read from `.env.local`. Tests and production builds refuse project `.env*` files; pass any needed non-secret build or test settings through the process environment.
+
 The repository has no default resident, official, or System Admin account. Do not add sample names or PINs to the running app. Ordinary account provisioning uses existing person and household records.
 
 For a new local development unit, set `APP_ENV=development`, `DATABASE_ENV=development`, and the documented local `localhost:5432/karturt_dev` database target alongside `KARTUR_RT_CODE`, `KARTUR_RW_CODE`, `KARTUR_RT_NAME`, and `KARTUR_VILLAGE` in `.env.local`, then run `npm run db:bootstrap-rt`. Staging, test, and production targets are refused. Optional district, city, and province values use `KARTUR_DISTRICT`, `KARTUR_CITY`, and `KARTUR_PROVINCE`. The command creates the RT unit and its date/currency settings atomically; it does not invent houses or residents.

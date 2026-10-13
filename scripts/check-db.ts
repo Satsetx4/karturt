@@ -1,10 +1,10 @@
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { sql } from "drizzle-orm";
 import { closeDb, getDb } from "@/db/client";
 import { requireDatabaseEnvironment } from "@/lib/env";
 
 async function main() {
-  loadEnvConfig(process.cwd());
+  loadProjectEnvConfig(process.cwd());
   const env = requireDatabaseEnvironment();
   await getDb().execute(sql`select 1`);
   console.info(JSON.stringify({ event: "database.connection.ready", appEnvironment: env.appEnv, databaseEnvironment: env.databaseEnv }));

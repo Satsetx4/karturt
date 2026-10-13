@@ -1,4 +1,4 @@
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { z } from "zod";
 import { closeDb, getDb } from "@/db/client";
 import { initializeFirstBillingYear } from "@/lib/billing/chairman-fee-rates";
@@ -32,7 +32,7 @@ function required(name: string) {
 }
 
 async function main() {
-  loadEnvConfig(process.cwd());
+  loadProjectEnvConfig(process.cwd());
   requireLocalDevelopmentBootstrapDatabaseEnvironment();
   const parsed = inputSchema.safeParse({
     confirmation: required("KARTUR_INITIAL_SETUP_CONFIRMATION"),

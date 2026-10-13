@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { closeDb, getDb } from "@/db/client";
@@ -1468,7 +1468,7 @@ async function continueHouseholdLifecycleSmoke(sourceHead: string) {
 
 
 async function main() {
-  loadEnvConfig(sourceRoot);
+  loadProjectEnvConfig(sourceRoot);
   const sourceHead = assertSource();
   const verifiedTarget = assertTarget();
   if (process.argv.includes("--preflight-only")) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "@/db/client";
@@ -72,7 +72,7 @@ function postgresCode(error: unknown): string | undefined {
 }
 
 async function main() {
-  loadEnvConfig(process.cwd());
+  loadProjectEnvConfig(process.cwd());
   const { baseUrl, databaseHost } = assertDevelopmentTarget();
   const database = getDb();
   const suffix = randomBytes(5).toString("hex").toUpperCase();

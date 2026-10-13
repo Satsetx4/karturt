@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { migrate } from "drizzle-orm/neon-serverless/migrator";
 import { and, eq } from "drizzle-orm";
 import { closeDb, getDb } from "@/db/client";
@@ -56,7 +56,7 @@ function assertDevelopmentTarget() {
 }
 
 async function main() {
-  loadEnvConfig(process.cwd());
+  loadProjectEnvConfig(process.cwd());
   assertDevelopmentTarget();
   const database = getDb();
   await migrate(database, { migrationsFolder: "./drizzle" });

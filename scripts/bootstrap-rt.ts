@@ -1,4 +1,4 @@
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { closeDb, getDb } from "@/db/client";
 import { requireLocalDevelopmentBootstrapDatabaseEnvironment } from "@/lib/env";
 import { bootstrapRtUnit } from "@/lib/rt/bootstrap";
@@ -10,7 +10,7 @@ function required(name: string) {
 }
 
 async function main() {
-  loadEnvConfig(process.cwd());
+  loadProjectEnvConfig(process.cwd());
   requireLocalDevelopmentBootstrapDatabaseEnvironment();
   const values = {
     code: required("KARTUR_RT_CODE"),

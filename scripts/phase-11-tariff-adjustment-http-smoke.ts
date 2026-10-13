@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/neon-serverless/migrator";
@@ -879,7 +879,7 @@ async function testChairmanBrowserFlow(
 }
 
 async function main() {
-  loadEnvConfig(root);
+  loadProjectEnvConfig(root);
   process.env.NEXT_PUBLIC_APP_URL = baseUrl;
   assertSourceBranch();
   const verifiedTarget = assertDevelopmentTarget();
@@ -1337,7 +1337,7 @@ async function main() {
   }));
 }
 
-loadEnvConfig(root);
+loadProjectEnvConfig(root);
 process.env.NEXT_PUBLIC_APP_URL = baseUrl;
 main()
   .catch((error: unknown) => {

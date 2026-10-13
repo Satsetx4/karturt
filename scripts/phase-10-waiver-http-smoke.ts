@@ -6,7 +6,7 @@ import { once } from "node:events";
 import { join, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { closeDb, getDb } from "@/db/client";
@@ -710,7 +710,7 @@ async function runGlobalInvariantChecks() {
 
 async function main() {
   process.env.NEXT_PUBLIC_APP_URL = `http://127.0.0.1:${expectedPort}`;
-  loadEnvConfig(root);
+  loadProjectEnvConfig(root);
   const verifiedTarget = assertDevelopmentTarget();
 
   // Revalidate immediately before opening the development database and writing fixtures.

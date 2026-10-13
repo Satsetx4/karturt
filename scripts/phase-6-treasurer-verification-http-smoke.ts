@@ -6,7 +6,7 @@ import { once } from "node:events";
 import { join, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
-import { loadEnvConfig } from "@next/env";
+import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { closeDb, getDb } from "@/db/client";
@@ -921,7 +921,7 @@ async function runBrowserSmoke(
 }
 
 async function main() {
-  loadEnvConfig(root);
+  loadProjectEnvConfig(root);
   const { baseUrl, databaseHost } = assertDevelopmentTarget();
   currentSmokeStage = "starting local Next server";
   await startNext(baseUrl);
