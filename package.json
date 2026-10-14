@@ -37,7 +37,7 @@
     "db:generate": "drizzle-kit generate",
     "db:generate:offline": "drizzle-kit generate --config drizzle.offline.config.ts",
     "db:check:offline": "drizzle-kit check --config drizzle.offline.config.ts",
-    "db:migrate": "tsx src/db/migrate.ts",
+    "db:migrate": "tsx src/db/migrate-development.ts",
     "db:migrate:staging:operator": "tsx src/db/migrate.ts --execute-once",
     "db:check": "tsx scripts/check-db.ts",
     "db:bootstrap-rt": "tsx scripts/bootstrap-rt.ts",
