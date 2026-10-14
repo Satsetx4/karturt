@@ -147,6 +147,13 @@ function hasRow(rows, predicate) {
   return rows.some(predicate);
 }
 
+function aclPrivilegeFlags(rawAcl, grantee) {
+  const entries = String(rawAcl || "").replace(/^\{|\}$/g, "").split(",");
+  const prefix = grantee + "=";
+  const entry = entries.find((item) => item.startsWith(prefix));
+  return entry ? entry.slice(prefix.length).split("/")[0] : "";
+}
+
 function validateCleanPacket(rows) {
   const versionNum = Number(rows.get("Q06")[0][0]);
   assert(rows.get("Q02")[0][0] === "1", "guard did not pass on the correct target");
@@ -164,7 +171,18 @@ function validateSyntheticPacket(rows) {
   assert(hasRow(memberships, (r) => r[0] === "qa_reader" && r[1] === targetRole && r[2] === "postgres" && r[3] === "f" && r[4] === "t" && r[5] === "f"), "INHERIT=true/SET=false membership edge or grantor was not preserved");
   assert(hasRow(rows.get("Q10"), (r) => r[0] === databaseName && r[1] === "qa_owner" && r[2].includes("qa_reader=c*")), "database CONNECT grant-option ACL missing");
   assert(hasRow(rows.get("Q11"), (r) => r[0] === "app" && r[1] === "qa_owner" && r[2].includes("qa_reader=U")), "schema USAGE ACL missing");
-  assert(hasRow(rows.get("Q13"), (r) => r[0] === "app" && r[1] === "records" && r[4] === "qa_owner" && r[5].includes("qa_reader=m*")), "table MAINTAIN grant-option ACL missing");
+  const recordsRows = rows.get("Q13").filter((r) => r[0] === "app" && r[1] === "records");
+  const recordsRow = recordsRows[0];
+  const maintainFlags = aclPrivilegeFlags(recordsRow?.[5], "qa_reader");
+  if (!recordsRow || recordsRow[4] !== "qa_owner" || !maintainFlags.includes("m*")) {
+    throw new ValidationFailure(
+      "table MAINTAIN raw ACL check failed; row_count=" + recordsRows.length +
+      "; owner_match=" + Boolean(recordsRow && recordsRow[4] === "qa_owner") +
+      "; reader_entry_present=" + Boolean(maintainFlags) +
+      "; maintain_present=" + maintainFlags.includes("m") +
+      "; maintain_grant_option_present=" + maintainFlags.includes("m*"),
+    );
+  }
   assert(hasRow(rows.get("Q14"), (r) => r[0] === "app" && r[1] === "records" && r[2] === "id" && r[4].includes("qa_reader=r*")), "column SELECT grant-option evidence missing");
   assert(hasRow(rows.get("Q15"), (r) => r[0] === "app" && r[1] === "identity_fn" && r[4] === "qa_owner" && r[5].includes("qa_reader=X*")), "routine EXECUTE grant-option ACL missing");
   assert(hasRow(rows.get("Q16"), (r) => r[0] === "app" && r[1] === "status" && r[4] === "qa_owner" && r[5].includes("qa_reader=U*")), "type USAGE grant-option ACL missing");
@@ -224,6 +242,23 @@ function validatePsqlRollback(containerId) {
   const check = psql(containerId, "postgres", databaseName,
     "SELECT count(*) FROM public.__wave13b1r_rollback_probe;\n");
   assert(check.status === 0 && check.stdout.trim() === "0", "single-transaction did not roll back the synthetic marker row");
+}
+
+function validatePsqlCommit(containerId) {
+  // TEST ONLY: this synthetic DML verifies the successful psql --single-transaction commit path.
+  const probe = [
+    "\\echo __COMMIT_INSERT__",
+    "INSERT INTO public.__wave13b1r_rollback_probe (marker) VALUES (2);",
+    "\\echo __COMMIT_FILE_END__",
+  ].join("\n") + "\n";
+  const committed = psql(containerId, "postgres", databaseName, probe, true);
+  assert(committed.status === 0, "single-transaction commit probe failed");
+  assert(committed.stdout.includes("__COMMIT_INSERT__") && committed.stdout.includes("__COMMIT_FILE_END__"), "commit probe did not complete its psql file");
+
+  // A separate psql invocation verifies that the successful transaction committed its marker.
+  const check = psql(containerId, "postgres", databaseName,
+    "SELECT count(*), min(marker) FROM public.__wave13b1r_rollback_probe;\n");
+  assert(check.status === 0 && check.stdout.trim() === ["1", "2"].join(separator), "single-transaction did not commit the synthetic marker row");
 }
 
 function main() {
@@ -290,6 +325,7 @@ function main() {
     "CREATE TABLE public.__wave13b1r_rollback_probe (marker integer PRIMARY KEY);",
     "test-only rollback marker table");
   validatePsqlRollback(containerId);
+  validatePsqlCommit(containerId);
 
   executeSetup(containerId, databaseName, [
     "CREATE SCHEMA unexpected_probe AUTHORIZATION qa_owner;",
