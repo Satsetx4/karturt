@@ -647,12 +647,21 @@ async function runPhase9To12Fixtures(pool: Pool, journal: MigrationJournal, runI
   assert.ok(adjustmentTable.rows[0]?.relation, "A valid 0012 migration must create the due adjustment ledger.");
 
   currentStage = "0013 negative overlapping-household preflight and clean retry";
-  const overlap = await pool.query<{ id: string }>(`
-    INSERT INTO public.households (rt_unit_id, house_id, starts_on)
-    VALUES ($1, $2, '2026-06-01')
+  const overlapId = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+  assert.ok(tenant.householdId < overlapId, "The synthetic household must sort before the deterministic overlap fixture ID.");
+  const retiredHousehold = await pool.query<{ id: string }>(`
+    UPDATE public.households
+    SET status = 'inactive', ends_on = '2026-06-30'
+    WHERE id = $1 AND status = 'active'
     RETURNING id
-  `, [tenant.rtUnitId, tenant.houseId]);
-  const overlapId = overlap.rows[0]!.id;
+  `, [tenant.householdId]);
+  assert.equal(retiredHousehold.rows.length, 1, "The original run-owned household must become inactive before creating the overlap fixture.");
+  const overlap = await pool.query<{ id: string }>(`
+    INSERT INTO public.households (id, rt_unit_id, house_id, starts_on)
+    VALUES ($1, $2, $3, '2026-06-01')
+    RETURNING id
+  `, [overlapId, tenant.rtUnitId, tenant.houseId]);
+  assert.equal(overlap.rows[0]?.id, overlapId);
   await expectMigratorFailure(pool, journal, 13, runId, "23514", "phase12_household_period_overlap_preflight", 12);
   await assertNoFunction(pool, "public.guard_phase12_household_period_v1()");
   const phase12IndexAfterFailure = await pool.query<{ relation: string | null }>("SELECT to_regclass('public.households_rt_house_period_idx') AS relation");
