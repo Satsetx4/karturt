@@ -47,6 +47,9 @@ function sanitizedFailureDetail(error: unknown) {
     "The migrated public schema has no user triggers.",
     "The migrated public schema has no functions.",
     "The migrated public schema has no enum types.",
+    "The generated migration must fail specifically with division by zero.",
+    "The Drizzle migration ledger differs from the checked-in journal and SQL files.",
+    "The injected migration failure must leave the real schema catalog intact.",
   ]);
   if (fixedChecks.has(error.message)
     || /^The migrated public schema is missing an expected (constraints|enums|functions|indexes|triggers) object\.$/.test(error.message)) {
@@ -311,10 +314,14 @@ async function exerciseInjectedMigrationFailure(
     } catch (error) {
       failureCode = (error as { code?: unknown }).code;
     }
+    currentStage = "injected migration failure SQLSTATE validation";
     assert.equal(failureCode, "22012", "The generated migration must fail specifically with division by zero.");
 
+    currentStage = "injected migration rollback ledger validation";
     const ledgerAfterFailure = await readMigrationLedger(pool);
     assertMigrationLedger(ledgerAfterFailure, expectedLedger);
+
+    currentStage = "injected migration rollback catalog validation";
     assert.deepEqual(await readPostMigrationCatalog(pool), expectedCatalog, "The injected migration failure must leave the real schema catalog intact.");
   } finally {
     await removeOwnedTempDirectory(tempDirectory);
