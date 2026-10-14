@@ -3,8 +3,8 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const fixturePath = "tests/fixtures/wave13b1r-fixed-reference.md";
-const expectedBlobSha1 = "5ebe2abd9f2c08bea6858acfce8144930814208f";
-const expectedManifestSha256 = "992cc429dd4abdad1b76a6ed43b01405c3bd09c297504fe558afd61db380d5ce";
+const expectedBlobSha1 = "e011f0e843d42d53c7c4c76ba479854644137fc9";
+const expectedManifestSha256 = "ab7193d72520482a50081fdb65edc098fdac1cc9530d161430ddc6b9a0759db0";
 const targetRole = "karturt_staging_owner";
 const databaseName = "karturt_staging";
 const separator = "\u001f";
@@ -121,7 +121,20 @@ function runPacket(containerId, queries, label) {
     const rowLines = result.stdout.slice(start, end).split(/\r?\n/).filter((line) => line.length > 0);
     const rows = rowLines.map((line) => line.split(separator));
     const cap = queries[i].id === "Q25" ? 2 : 501;
-    assert(rows.length < cap, "result cap reached in " + queries[i].id + " during " + label);
+    if (rows.length >= cap) {
+      let counts = "returned_rows=" + rows.length;
+      if (queries[i].id === "Q26") {
+        const classes = ["database", "schema", "table", "column", "sequence", "routine", "type"];
+        const classCounts = new Map(classes.map((name) => [name, 0]));
+        let other = 0;
+        for (const row of rows) {
+          if (classCounts.has(row[0])) classCounts.set(row[0], classCounts.get(row[0]) + 1);
+          else other += 1;
+        }
+        counts += "; class_counts=" + classes.map((name) => name + ":" + classCounts.get(name)).join(",") + ",other:" + other;
+      }
+      throw new ValidationFailure("result cap reached in " + queries[i].id + " during " + label + "; " + counts);
+    }
     for (const row of rows) {
       assert(row.length === columnCounts.get(queries[i].id), "result column count mismatch in " + queries[i].id + " during " + label);
     }
