@@ -7,6 +7,7 @@ import { join, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
+import { spawnNextCommand } from "./lib/next-command";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { closeDb, getDb } from "@/db/client";
@@ -110,24 +111,16 @@ function getChromePath() {
 
 async function startNext(baseUrl: string) {
   const appUrl = new URL(baseUrl);
-  nextProcess = spawn(process.execPath, [
-    resolve(root, "node_modules/next/dist/bin/next"),
-    "start",
-    "--hostname",
-    "127.0.0.1",
-    "--port",
-    String(expectedPort),
-  ], {
-    cwd: root,
-      // Keep the optimized local smoke server on the test label while it
-      // connects to the development Neon URL validated by this parent process.
-      env: {
-        ...process.env,
-        NODE_ENV: "production",
-        APP_ENV: "test",
-        DATABASE_ENV: "test",
-        NEXT_PUBLIC_APP_URL: appUrl.origin,
-      },
+  nextProcess = spawnNextCommand("start", {
+    projectDirectory: root,
+    args: ["--hostname", "127.0.0.1", "--port", String(expectedPort)],
+    environment: {
+      ...process.env,
+      NODE_ENV: "production",
+      APP_ENV: "test",
+      DATABASE_ENV: "test",
+      NEXT_PUBLIC_APP_URL: appUrl.origin,
+    },
     stdio: "ignore",
     windowsHide: true,
   });

@@ -8,6 +8,7 @@ import { join, resolve, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
 import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
+import { spawnNextCommand } from "./lib/next-command";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { closeDb, getDb } from "@/db/client";
@@ -142,9 +143,10 @@ async function startServer(simulatedBusinessDate?: string) {
   const preload = simulatedBusinessDate ? createClockPreload(simulatedBusinessDate) : undefined;
   const preloadPath = preload?.replaceAll("\\", "/");
   const nodeOptions = [process.env.NODE_OPTIONS, preloadPath ? "--require=" + JSON.stringify(preloadPath) : ""].filter(Boolean).join(" ");
-  nextProcess = spawn(process.execPath, [resolve(root, "node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(port)], {
-    cwd: root,
-    env: { ...process.env, ...(nodeOptions ? { NODE_OPTIONS: nodeOptions } : {}), NODE_ENV: "development", APP_ENV: "development", DATABASE_ENV: "development", NEXT_PUBLIC_APP_URL: baseUrl },
+  nextProcess = spawnNextCommand("dev", {
+    projectDirectory: root,
+    args: ["--hostname", "127.0.0.1", "--port", String(port)],
+    environment: { ...process.env, ...(nodeOptions ? { NODE_OPTIONS: nodeOptions } : {}), NODE_ENV: "development", APP_ENV: "development", DATABASE_ENV: "development", NEXT_PUBLIC_APP_URL: baseUrl },
     stdio: "ignore",
     windowsHide: true,
   });

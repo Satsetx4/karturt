@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { EventEmitter } from "node:events";
+import type { ChildProcess } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runNextCommand, type NextCommandInvoker } from "../../scripts/lib/next-command";
+import { runNextCommand, spawnNextCommand, type NextCommandInvoker, type NextCommandSpawnInvoker } from "../../scripts/lib/next-command";
 
 const projectDirectories: string[] = [];
 
@@ -90,5 +92,89 @@ describe("repository-owned Next.js commands", () => {
     const invoke = vi.fn<NextCommandInvoker>(() => ({ status: 17 }));
 
     expect(runNextCommand("build", { projectDirectory, environment: {}, invoke })).toBe(17);
+  });
+
+  it("refuses mismatched smoke environment labels before the first child spawn", () => {
+    const projectDirectory = mkdtempSync(join(tmpdir(), "karturt-next-smoke-env-mismatch-"));
+    projectDirectories.push(projectDirectory);
+    const child = new EventEmitter() as ChildProcess;
+    const spawnProcess = vi.fn<NextCommandSpawnInvoker>(() => child);
+
+    expect(() => spawnNextCommand("dev", {
+      projectDirectory,
+      args: ["--port", "3210"],
+      environment: {
+        NODE_ENV: "development",
+        APP_ENV: "development",
+        DATABASE_ENV: "staging",
+        DATABASE_URL: "postgresql://synthetic:synthetic@127.0.0.1:5432/karturt_dev",
+      },
+      spawnProcess,
+    })).toThrow("APP_ENV and DATABASE_ENV must match");
+
+    expect(spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("refuses a project env file before a smoke start can load it", () => {
+    const secretCanary = `async-smoke-${randomUUID()}`;
+    const projectDirectory = createProjectWithEnvFile(secretCanary);
+    const child = new EventEmitter() as ChildProcess;
+    const spawnProcess = vi.fn<NextCommandSpawnInvoker>(() => child);
+
+    let message = "";
+    try {
+      spawnNextCommand("start", {
+        projectDirectory,
+        args: ["--port", "3210"],
+        environment: {
+          NODE_ENV: "production",
+          APP_ENV: "test",
+          DATABASE_ENV: "test",
+          DATABASE_URL: "postgresql://synthetic:synthetic@127.0.0.1:5432/karturt_dev",
+        },
+        spawnProcess,
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain("refuses to load project environment files");
+    expect(message).not.toContain(secretCanary);
+    expect(message).not.toContain("postgresql://");
+    expect(spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("preserves the safe Next child arguments and returns the original lifecycle handle", () => {
+    const projectDirectory = createProjectWithEnvFile(`safe-smoke-${randomUUID()}`);
+    const child = new EventEmitter() as ChildProcess;
+    const spawnProcess = vi.fn<NextCommandSpawnInvoker>(() => child);
+    const environment = {
+      NODE_ENV: "development",
+      APP_ENV: "development",
+      DATABASE_ENV: "development",
+      KARTUR_ALLOW_LOCAL_ENV_FILE_LOAD: "1",
+      DATABASE_URL: "postgresql://synthetic:synthetic@127.0.0.1:5432/karturt_dev",
+    };
+
+    const result = spawnNextCommand("dev", {
+      projectDirectory,
+      args: ["--hostname", "127.0.0.1", "--port", "3210"],
+      environment,
+      stdio: "ignore",
+      windowsHide: true,
+      spawnProcess,
+    });
+
+    expect(result).toBe(child);
+    expect(spawnProcess).toHaveBeenCalledWith(
+      process.execPath,
+      [join(projectDirectory, "node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", "3210"],
+      { cwd: projectDirectory, env: environment, stdio: "ignore", windowsHide: true },
+    );
+
+    const onExit = vi.fn();
+    result.once("exit", onExit);
+    child.emit("exit", 17, null);
+    expect(onExit).toHaveBeenCalledWith(17, null);
   });
 });

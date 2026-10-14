@@ -8,6 +8,7 @@ import { join, resolve, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
 import { loadProjectEnvConfig } from "../src/lib/env-file-preflight";
+import { spawnNextCommand } from "./lib/next-command";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/neon-serverless/migrator";
@@ -220,16 +221,10 @@ async function assertPortFree() {
 
 async function startNext() {
   let spawnFailure: NodeJS.ErrnoException | undefined;
-  nextProcess = spawn(process.execPath, [
-    resolve(root, "node_modules/next/dist/bin/next"),
-    "dev",
-    "--hostname",
-    "127.0.0.1",
-    "--port",
-    String(expectedPort),
-  ], {
-    cwd: root,
-    env: {
+  nextProcess = spawnNextCommand("dev", {
+    projectDirectory: root,
+    args: ["--hostname", "127.0.0.1", "--port", String(expectedPort)],
+    environment: {
       ...process.env,
       NODE_ENV: "development",
       APP_ENV: "development",
