@@ -20,7 +20,7 @@ import {
 } from "../../src/db/schema";
 import { resolvePrincipalForUser } from "../../src/lib/auth/principal";
 import { getResidentMonthlyDues } from "../../src/lib/billing/resident-dues";
-import { duesSummary } from "../../src/lib/billing/resident-card";
+import { dueToken, duesSummary, visibleYearMonths } from "../../src/lib/billing/resident-card";
 import { getResidentPaymentHistory } from "../../src/lib/billing/payment-history";
 import { createResidentPaymentWhatsAppLink } from "../../src/lib/billing/resident-payment-whatsapp";
 import { verifyTreasurerPaymentRequest } from "../../src/lib/billing/treasurer-payment-verification";
@@ -340,6 +340,62 @@ describe("resident payment request transactions", () => {
       expect(due.periodTiming).toBe(due.month < firstFuture ? (due.month === firstFuture - 1 ? "current" : "past") : "future");
     }
     expect(duesSummary(dues).unpaid).toBe((firstFuture - 1) * 40000);
+  });
+
+  it("matches the complete owner D5 status and due-now matrix on 2026-10-12", async () => {
+    const businessDate = "2026-10-12";
+    const resident = await createResident(testDatabase.db, { dues: [
+      { period: "2026-01", status: "paid" },
+      { period: "2026-02", status: "paid" },
+      { period: "2026-03", status: "waived" },
+      { period: "2026-04", status: "not_due" },
+      ...Array.from({ length: 8 }, (_, index) => ({ period: `2026-${String(index + 5).padStart(2, "0")}` })),
+    ] });
+
+    await createResidentPaymentRequest(testDatabase.db as never, resident.principal, {
+      period: "2026-05",
+      idempotencyKey: key(),
+    }, businessDate);
+
+    const dues = await getResidentMonthlyDues(testDatabase.db as never, resident.principal, businessDate);
+    const annualMonths = visibleYearMonths(dues, 2026, businessDate);
+    expect(annualMonths.map(({ month }) => month)).toEqual(Array.from({ length: 12 }, (_, index) => index + 1));
+    expect(dues.map((due) => [due.billingYear, due.month, due.status, due.periodTiming, dueToken(due)])).toEqual([
+      [2026, 1, "paid", "past", "PAID"],
+      [2026, 2, "paid", "past", "PAID"],
+      [2026, 3, "waived", "past", "WAIVED"],
+      [2026, 4, "not_due", "past", "NOT_DUE"],
+      [2026, 5, "unpaid", "past", "PENDING"],
+      [2026, 6, "unpaid", "past", "OVERDUE"],
+      [2026, 7, "unpaid", "past", "OVERDUE"],
+      [2026, 8, "unpaid", "past", "OVERDUE"],
+      [2026, 9, "unpaid", "past", "OVERDUE"],
+      [2026, 10, "unpaid", "current", "UNPAID"],
+      [2026, 11, "unpaid", "future", "UPCOMING"],
+      [2026, 12, "unpaid", "future", "UPCOMING"],
+    ]);
+    expect(duesSummary(dues)).toEqual({ paid: 80000, pending: 40000, unpaid: 200000 });
+  });
+
+  it("rolls resident month timing from December 2026 into January 2027", async () => {
+    const businessDate = "2027-01-01";
+    const resident = await createResident(testDatabase.db, { dues: [
+      { period: "2026-12" },
+      { period: "2027-01" },
+      { period: "2027-02" },
+    ] });
+
+    const dues = await getResidentMonthlyDues(testDatabase.db as never, resident.principal, businessDate);
+    expect(dues.map((due) => [`${due.billingYear}-${String(due.month).padStart(2, "0")}`, due.periodTiming, dueToken(due)])).toEqual([
+      ["2026-12", "past", "OVERDUE"],
+      ["2027-01", "current", "UNPAID"],
+      ["2027-02", "future", "UPCOMING"],
+    ]);
+    expect(visibleYearMonths(dues, 2026, businessDate).map(({ month, due }) => [month, due?.billingYear ?? null]))
+      .toEqual(Array.from({ length: 12 }, (_, index) => [index + 1, index === 11 ? 2026 : null]));
+    expect(visibleYearMonths(dues, 2027, businessDate).map(({ month, due }) => [month, due?.billingYear ?? null]))
+      .toEqual(Array.from({ length: 12 }, (_, index) => [index + 1, index < 2 ? 2027 : null]));
+    expect(duesSummary(dues)).toEqual({ paid: 0, pending: 0, unpaid: 80000 });
   });
 
   it("rejects a future billing month server-side and allows September and October from October 1", async () => {

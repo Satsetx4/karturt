@@ -11,9 +11,12 @@ import {
   paymentAllocations,
   paymentRequestClaims,
   paymentRequests,
+  paymentReversals,
   payments,
 } from "@/db/schema";
 import type { Principal } from "@/lib/auth/permissions";
+import { createChairmanAdjustment } from "@/lib/billing/chairman-adjustment";
+import { getDueFinancialBalances } from "@/lib/billing/due-balance";
 import { getResidentMonthlyDues } from "@/lib/billing/resident-dues";
 import { dueToken, duesSummary } from "@/lib/billing/resident-card";
 import { createResidentPaymentRequest } from "@/lib/billing/resident-payment-request";
@@ -30,6 +33,7 @@ import {
   recordTreasurerCashPayment,
   searchTreasurerCashPaymentHouseholds,
 } from "@/lib/billing/treasurer-cash-payments";
+import { reverseTreasurerPayment } from "@/lib/billing/treasurer-payment-reversal";
 import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 
 type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
@@ -91,6 +95,29 @@ describe("Treasurer direct cash payment", () => {
       personId: household.personId,
     };
 
+    const chairmanUser = await createAuthUser(testDatabase.db, "Chairman Fixture");
+    const [chairmanAccount] = await testDatabase.db.insert(appAccounts).values({
+      rtUnitId,
+      authUserId: chairmanUser.id,
+      accountType: "official",
+      loginIdentifier: `chairman-${randomUUID()}`,
+      personId: household.personId,
+    }).returning({ id: appAccounts.id });
+    await testDatabase.db.insert(officialAssignments).values({
+      rtUnitId,
+      appAccountId: chairmanAccount!.id,
+      role: "rt_chairman",
+      startsOn: "2020-01-01",
+    });
+    const chairmanPrincipal: Principal = {
+      authUserId: chairmanUser.id,
+      appAccountId: chairmanAccount!.id,
+      role: "rt_chairman",
+      rtUnitId,
+      householdId: null,
+      personId: household.personId,
+    };
+
     const years = new Map<number, string>();
     for (const year of [...new Set(periods.map((period) => Number(period.slice(0, 4))))]) {
       const [billingYear] = await testDatabase.db.insert(billingYears).values({
@@ -126,6 +153,7 @@ describe("Treasurer direct cash payment", () => {
       householdId: household.householdId,
       residentPrincipal,
       treasurerPrincipal,
+      chairmanPrincipal,
       treasurerAccountId: treasurerAccount!.id,
       dueIds: dueRows.map((row) => row.id),
     };
@@ -191,6 +219,92 @@ describe("Treasurer direct cash payment", () => {
       expect(due.receipts![0]!.reference).toMatch(/^KRT-[A-F0-9]{12}$/);
       expect(new Date(due.receipts![0]!.verifiedAt).toString()).not.toBe("Invalid Date");
     }
+  });
+
+  it("shows two active same-month allocations as scoped receipts and excludes reversed history", async () => {
+    const scenario = await createScenario(["2026-09", "2026-10"]);
+    const septemberDueId = scenario.dueIds[0]!;
+    const firstKey = randomUUID();
+    await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: scenario.householdId,
+      period: "2026-09",
+      idempotencyKey: firstKey,
+    }, "2026-10-12");
+
+    await createChairmanAdjustment(database, scenario.chairmanPrincipal, {
+      monthlyDueId: septemberDueId,
+      amountDelta: 10000,
+      reason: "Koreksi nominal September",
+      idempotencyKey: randomUUID(),
+    }, "2026-10-13");
+    const secondKey = randomUUID();
+    await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: scenario.householdId,
+      period: "2026-09",
+      idempotencyKey: secondKey,
+    }, "2026-10-14");
+
+    const reversedKey = randomUUID();
+    await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: scenario.householdId,
+      period: "2026-10",
+      idempotencyKey: reversedKey,
+    }, "2026-10-14");
+    const [reversedPayment] = await testDatabase.db.select().from(payments)
+      .where(eq(payments.cashIdempotencyKey, reversedKey));
+    await reverseTreasurerPayment(database, scenario.treasurerPrincipal, {
+      paymentId: reversedPayment!.id,
+      reason: "Koreksi transaksi Oktober",
+    }, "2026-10-15");
+
+    const [septemberDue] = await testDatabase.db.select({
+      billingYearId: monthlyDues.billingYearId,
+      feeRateId: monthlyDues.feeRateId,
+    }).from(monthlyDues).where(eq(monthlyDues.id, septemberDueId));
+    const otherHousehold = await createHousehold(testDatabase.db, scenario.rtUnitId);
+    await testDatabase.db.insert(monthlyDues).values({
+      rtUnitId: scenario.rtUnitId,
+      householdId: otherHousehold.householdId,
+      billingYearId: septemberDue!.billingYearId,
+      feeRateId: septemberDue!.feeRateId,
+      month: 11,
+      amount: 40000,
+      dueDate: "2026-11-10",
+      status: "unpaid",
+    });
+    await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: otherHousehold.householdId,
+      period: "2026-11",
+      idempotencyKey: randomUUID(),
+    }, "2026-10-15");
+
+    const residentDues = await getResidentMonthlyDues(database, scenario.residentPrincipal, "2026-10-15");
+    const september = residentDues.find((due) => due.billingYear === 2026 && due.month === 9)!;
+    const october = residentDues.find((due) => due.billingYear === 2026 && due.month === 10)!;
+    const [canonicalBalance] = await getDueFinancialBalances(database, [septemberDueId]);
+    const activeSeptemberPayments = await testDatabase.db.select({ id: payments.id })
+      .from(payments)
+      .where(inArray(payments.cashIdempotencyKey, [firstKey, secondKey]));
+    const reversedRows = await testDatabase.db.select().from(paymentReversals)
+      .where(eq(paymentReversals.paymentId, reversedPayment!.id));
+
+    expect(residentDues.map((due) => due.month)).toEqual([9, 10]);
+    expect(september).toMatchObject({
+      status: "paid",
+      effectiveTarget: 50000,
+      activeReceived: 50000,
+      outstanding: 0,
+      periodTiming: "past",
+    });
+    expect(september.receipts).toHaveLength(2);
+    expect(september.receipts!.map((receipt) => receipt.allocationAmount).sort((left, right) => left - right))
+      .toEqual([10000, 40000]);
+    expect(september.receipts!.reduce((total, receipt) => total + receipt.allocationAmount, 0))
+      .toBe(canonicalBalance!.activeReceived);
+    expect(september.receipts!.map((receipt) => receipt.reference).sort())
+      .toEqual(activeSeptemberPayments.map(({ id }) => `KRT-${id.replace(/-/g, "").slice(0, 12).toUpperCase()}`).sort());
+    expect(october).toMatchObject({ status: "unpaid", activeReceived: 0, outstanding: 40000, receipts: [] });
+    expect(reversedRows).toHaveLength(1);
   });
 
   it("replays the same key and rejects reuse for a different period or household", async () => {
@@ -268,18 +382,18 @@ describe("Treasurer direct cash payment", () => {
   });
 
   it("blocks pending claims without mutation, then records cash after rejection and cancellation without rewriting history", async () => {
-    const scenario = await createScenario(["2026-11", "2026-12", "2027-02"]);
+    const scenario = await createScenario(["2026-09", "2026-10", "2026-11", "2027-02"]);
     const request = await createResidentPaymentRequest(database, scenario.residentPrincipal, {
-      period: "2026-12",
+      period: "2026-09",
       idempotencyKey: randomUUID(),
-    }, "2026-12-01");
+    }, "2026-10-12");
     const [requestRow] = await testDatabase.db.select().from(paymentRequests)
       .where(eq(paymentRequests.requestCode, request.requestCode));
     const claimsBefore = await testDatabase.db.select().from(paymentRequestClaims)
       .where(eq(paymentRequestClaims.requestId, requestRow!.id));
     await expect(recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
       householdId: scenario.householdId,
-      period: "2026-12",
+      period: "2026-11",
       idempotencyKey: randomUUID(),
     }, "2026-10-12")).rejects.toBeInstanceOf(CashPaymentPendingRequestConflictError);
     expect(await testDatabase.db.select().from(payments)
@@ -289,13 +403,13 @@ describe("Treasurer direct cash payment", () => {
     expect((await testDatabase.db.select().from(paymentRequests)
       .where(eq(paymentRequests.id, requestRow!.id)))[0]!.status).toBe("pending");
 
-    await rejectTreasurerPaymentRequest(database, scenario.treasurerPrincipal, request.requestCode, "Pembayaran diterima tunai", "2026-12-01");
+    await rejectTreasurerPaymentRequest(database, scenario.treasurerPrincipal, request.requestCode, "Pembayaran diterima tunai", "2026-10-12");
     const cash = await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
       householdId: scenario.householdId,
-      period: "2026-12",
+      period: "2026-11",
       idempotencyKey: randomUUID(),
-    }, "2026-12-01");
-    expect(cash.periods).toEqual(["2026-11", "2026-12"]);
+    }, "2026-10-12");
+    expect(cash.periods).toEqual(["2026-09", "2026-10", "2026-11"]);
     expect((await testDatabase.db.select().from(paymentRequests)
       .where(eq(paymentRequests.id, requestRow!.id)))[0]!.status).toBe("rejected");
     expect(await testDatabase.db.select().from(payments)
@@ -318,7 +432,7 @@ describe("Treasurer direct cash payment", () => {
       householdId: scenario.householdId,
       period: "2027-02",
       idempotencyKey: randomUUID(),
-    }, "2026-10-12");
+    }, "2027-02-01");
     expect(cancelledCash.periods).toEqual(["2027-02"]);
     expect((await testDatabase.db.select().from(paymentRequests)
       .where(eq(paymentRequests.id, cancelledRequestRow!.id)))[0]!.status).toBe("cancelled");
