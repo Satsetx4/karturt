@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -37,6 +37,25 @@ const oldStagingUrl =
   "postgresql://karturt_staging_owner:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech:5432/karturt_staging?sslmode=require";
 
 describe("Wave 13A.1 source regression audit", () => {
+  it("keeps all six asynchronous smoke callers behind the guarded Next spawn helper", () => {
+    const smokeCallsites = [
+      "scripts/phase-6-treasurer-verification-http-smoke.ts",
+      "scripts/phase-8-cash-payment-http-smoke.ts",
+      "scripts/phase-9-payment-reversal-http-smoke.ts",
+      "scripts/phase-10-waiver-http-smoke.ts",
+      "scripts/phase-11-tariff-adjustment-http-smoke.ts",
+      "scripts/phase-12-household-browser-smoke.ts",
+    ];
+
+    for (const callsite of smokeCallsites) {
+      const source = readFileSync(join(process.cwd(), callsite), "utf8");
+      expect(source, callsite).toContain("spawnNextCommand");
+      expect(source, callsite).toMatch(/spawnNextCommand\(["'](?:dev|start)["']/);
+      expect(source, callsite).toContain("APP_ENV");
+      expect(source, callsite).toContain("DATABASE_ENV");
+    }
+  });
+
   it("keeps development bootstrap on the exact local target and rejects both staging URLs", () => {
     expect(assertBootstrapDatabaseTarget(localDevelopmentUrl, "development", "development"))
       .toBe("local-development-postgres");
@@ -132,6 +151,32 @@ describe("Wave 13A.1 source regression audit", () => {
     expect(errorMessage).toContain("APP_ENV and DATABASE_ENV must match");
     expect(errorMessage).not.toContain(canary);
     expect(errorMessage).not.toContain("postgresql://");
+    expect(spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("blocks a project environment file before spawning even with matching labels", () => {
+    const projectDirectory = createTemporaryProject();
+    const canary = `wave13a1-env-${randomUUID()}`;
+    writeFileSync(join(projectDirectory, ".env.local"), `SYNTHETIC_CANARY=${canary}\n`, { flag: "wx" });
+    const spawnProcess = vi.fn<NextCommandSpawnInvoker>(() => new EventEmitter() as ChildProcess);
+
+    let errorMessage = "";
+    try {
+      spawnNextCommand("dev", {
+        projectDirectory,
+        environment: {
+          NODE_ENV: "development",
+          APP_ENV: "development",
+          DATABASE_ENV: "development",
+        },
+        spawnProcess,
+      });
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(errorMessage).toContain("explicit local opt-in");
+    expect(errorMessage).not.toContain(canary);
     expect(spawnProcess).not.toHaveBeenCalled();
   });
 });
