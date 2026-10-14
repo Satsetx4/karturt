@@ -48,12 +48,20 @@ jobs:
           APP_ENV: test
           DATABASE_ENV: test
           PG18_SERVICE_ID: ${{ job.services.postgres.id }}
-          LAUNCH_SAFETY_POSTGRES_URL: postgresql://karturt_runner_${{ github.run_id }}_${{ github.run_attempt }}@127.0.0.1:${{ job.services.postgres.ports[5432] }}/karturt_concurrency_${{ github.run_id }}_${{ github.run_attempt }}
-        run: npm run prepare:postgres-concurrency-ci
+          PG18_PORT: ${{ job.services.postgres.ports[5432] }}
+        run: |
+          set -euo pipefail
+          export LAUNCH_SAFETY_POSTGRES_URL="postgresql://karturt_runner_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}@127.0.0.1:${PG18_PORT}/karturt_concurrency_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          printf '::add-mask::%s\n' "$LAUNCH_SAFETY_POSTGRES_URL"
+          npm run prepare:postgres-concurrency-ci
       - name: Apply and verify the checked-in Drizzle journal on PostgreSQL 18
         env:
           APP_ENV: test
           DATABASE_ENV: test
           PG18_SERVICE_ID: ${{ job.services.postgres.id }}
-          LAUNCH_SAFETY_POSTGRES_URL: postgresql://karturt_runner_${{ github.run_id }}_${{ github.run_attempt }}@127.0.0.1:${{ job.services.postgres.ports[5432] }}/karturt_concurrency_${{ github.run_id }}_${{ github.run_attempt }}
-        run: npm run db:rehearse:pg18
+          PG18_PORT: ${{ job.services.postgres.ports[5432] }}
+        run: |
+          set -euo pipefail
+          export LAUNCH_SAFETY_POSTGRES_URL="postgresql://karturt_runner_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}@127.0.0.1:${PG18_PORT}/karturt_concurrency_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          printf '::add-mask::%s\n' "$LAUNCH_SAFETY_POSTGRES_URL"
+          npm run db:rehearse:pg18

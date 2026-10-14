@@ -52,10 +52,23 @@ function sanitizedFailureDetail(error: unknown) {
     "The injected migration failure must leave the real schema catalog intact.",
   ]);
   if (fixedChecks.has(error.message)
+    || /^Injected migration SQLSTATE mismatch; observed (?:[A-Z0-9]{5}|unavailable)\.$/.test(error.message)
     || /^The migrated public schema is missing an expected (constraints|enums|functions|indexes|triggers) object\.$/.test(error.message)) {
     return error.message;
   }
   return "Database URLs, credentials, SQL text, and driver errors are intentionally omitted.";
+}
+
+function postgresSqlState(error: unknown): string | null {
+  const visited = new Set<object>();
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current && typeof current === "object" && !visited.has(current); depth += 1) {
+    visited.add(current);
+    const candidate = current as { code?: unknown; cause?: unknown };
+    if (typeof candidate.code === "string" && /^[A-Z0-9]{5}$/.test(candidate.code)) return candidate.code;
+    current = candidate.cause;
+  }
+  return null;
 }
 
 function readExpectedLedger() {
@@ -308,14 +321,16 @@ async function exerciseInjectedMigrationFailure(
       flag: "wx",
     });
 
-    let failureCode: unknown;
+    let failureCode: string | null = null;
     try {
       await migrate(drizzle(pool), { migrationsFolder: tempDirectory });
     } catch (error) {
-      failureCode = (error as { code?: unknown }).code;
+      failureCode = postgresSqlState(error);
     }
     currentStage = "injected migration failure SQLSTATE validation";
-    assert.equal(failureCode, "22012", "The generated migration must fail specifically with division by zero.");
+    if (failureCode !== "22012") {
+      throw new Error(`Injected migration SQLSTATE mismatch; observed ${failureCode ?? "unavailable"}.`);
+    }
 
     currentStage = "injected migration rollback ledger validation";
     const ledgerAfterFailure = await readMigrationLedger(pool);
