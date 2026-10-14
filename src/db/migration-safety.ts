@@ -229,45 +229,79 @@ export type MigrationExecutionDependencies<Client> = {
   runMigrations: (client: Client) => Promise<void>;
   closeClient: (client: Client) => Promise<void>;
   timeoutMs?: number;
+  shutdownTimeoutMs?: number;
 };
+
+type BoundedPromiseResult<T> =
+  | { status: "fulfilled"; value: T }
+  | { status: "rejected" }
+  | { status: "timed-out" };
+
+function assertPositiveTimer(name: string, milliseconds: number) {
+  if (!Number.isSafeInteger(milliseconds) || milliseconds < 1 || milliseconds > 2_147_483_647) {
+    throw new MigrationPreflightError(`${name} must be a positive, supported millisecond duration.`);
+  }
+}
+
+function settleWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<BoundedPromiseResult<T>> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const observed = promise.then<BoundedPromiseResult<T>, BoundedPromiseResult<T>>(
+    (value) => ({ status: "fulfilled", value }),
+    () => ({ status: "rejected" }),
+  );
+  const deadline = new Promise<BoundedPromiseResult<T>>((resolveDeadline) => {
+    timer = setTimeout(() => resolveDeadline({ status: "timed-out" }), timeoutMs);
+  });
+
+  return Promise.race([observed, deadline]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+function migrationOutcomeUnknownMessage(
+  migrationStatus: BoundedPromiseResult<void>["status"],
+  shutdownStatus: BoundedPromiseResult<void>["status"],
+) {
+  let migrationDetail: string;
+  switch (migrationStatus) {
+    case "timed-out":
+      migrationDetail = "The migration exceeded its JavaScript deadline; server-side work may still be running.";
+      break;
+    case "rejected":
+      migrationDetail = "The migration call failed; changes may have been partially applied.";
+      break;
+    default:
+      migrationDetail = "Migration calls completed, but the client shutdown was not confirmed.";
+  }
+
+  let shutdownDetail = "";
+  if (shutdownStatus === "timed-out") {
+    shutdownDetail = " Bounded client shutdown did not settle before its deadline.";
+  } else if (shutdownStatus === "rejected") {
+    shutdownDetail = " Client shutdown reported a failure.";
+  }
+
+  return `${migrationDetail}${shutdownDetail} Database outcome is unverified. STOP: keep this approval consumed and do not retry. Request separately authorized read-only reconciliation of the migration ledger and schema state before any new approval or execution. Client shutdown does not prove backend cancellation or rollback.`;
+}
 
 export async function executeApprovedMigrationsOnce<Client>(
   context: ApprovedMigrationContext,
   dependencies: MigrationExecutionDependencies<Client>,
 ) {
-  const client = dependencies.createClient(context.databaseUrl);
   const timeoutMs = dependencies.timeoutMs ?? 15 * 60 * 1000;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let timeoutReached = false;
+  const shutdownTimeoutMs = dependencies.shutdownTimeoutMs ?? 10_000;
+  assertPositiveTimer("The migration timeout", timeoutMs);
+  assertPositiveTimer("The client shutdown timeout", shutdownTimeoutMs);
+
+  const client = dependencies.createClient(context.databaseUrl);
   const migrationPromise = Promise.resolve().then(() => dependencies.runMigrations(client));
-  migrationPromise.catch(() => undefined);
-  const timeoutPromise = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      timeoutReached = true;
-      reject(new Error("migration timed out"));
-    }, timeoutMs);
-  });
+  const migrationResult = await settleWithin(migrationPromise, timeoutMs);
+  const shutdownPromise = Promise.resolve().then(() => dependencies.closeClient(client));
+  const shutdownResult = await settleWithin(shutdownPromise, shutdownTimeoutMs);
 
-  let completed = false;
-  try {
-    await Promise.race([migrationPromise, timeoutPromise]);
-    completed = true;
-  } catch {
-    completed = false;
-  } finally {
-    if (timer) clearTimeout(timer);
-    try {
-      await dependencies.closeClient(client);
-    } catch {
-      completed = false;
-    }
-  }
-
-  if (!completed) {
+  if (migrationResult.status !== "fulfilled" || shutdownResult.status !== "fulfilled") {
     throw new MigrationOutcomeUnknownError(
-      timeoutReached
-        ? "The migration timed out; its database outcome may be partial. Do not retry; request read-only reconciliation."
-        : "The migration failed; its database outcome may be partial. Do not retry; request read-only reconciliation.",
+      migrationOutcomeUnknownMessage(migrationResult.status, shutdownResult.status),
     );
   }
 }

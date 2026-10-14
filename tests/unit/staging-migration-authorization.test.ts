@@ -256,6 +256,7 @@ describe("staging migration command gates", () => {
     });
 
     expect(order).toEqual(["consume", "client", "migrate", "close"]);
+    expect(createClient).toHaveBeenCalledTimes(1);
     expect(context.authorizationId).toBe(authorizationId);
     expect(setup.confirmChallenge.mock.calls[0]?.[0]).not.toContain(authorizationId);
     const visibleText = JSON.stringify({ order, challenge: setup.confirmChallenge.mock.calls[0]?.[0] });
@@ -282,11 +283,19 @@ describe("staging migration command gates", () => {
       throw new Error("synthetic password-token and URL must not escape");
     });
     const closeAfterFailure = vi.fn(async () => undefined);
-    await expect(executeApprovedMigrationsOnce(context, {
-      createClient: () => ({}),
-      runMigrations: failedRun,
-      closeClient: closeAfterFailure,
-    })).rejects.toThrow(MigrationOutcomeUnknownError);
+    let migrationFailure: unknown;
+    try {
+      await executeApprovedMigrationsOnce(context, {
+        createClient: () => ({}),
+        runMigrations: failedRun,
+        closeClient: closeAfterFailure,
+      });
+    } catch (error) {
+      migrationFailure = error;
+    }
+    expect(migrationFailure).toBeInstanceOf(MigrationOutcomeUnknownError);
+    expect((migrationFailure as Error).message).not.toContain("synthetic password-token");
+    expect((migrationFailure as Error).message).not.toContain(syntheticMigrationUrl);
     expect(failedRun).toHaveBeenCalledTimes(1);
     expect(closeAfterFailure).toHaveBeenCalledTimes(1);
 
@@ -304,7 +313,7 @@ describe("staging migration command gates", () => {
       timeoutError = error;
     }
     expect(timeoutError).toBeInstanceOf(MigrationOutcomeUnknownError);
-    expect((timeoutError as Error).message).toContain("timed out");
+    expect((timeoutError as Error).message).toContain("deadline");
     expect((timeoutError as Error).message).not.toContain("synthetic");
     expect(neverSettles).toHaveBeenCalledTimes(1);
     expect(closeAfterTimeout).toHaveBeenCalledTimes(1);
@@ -315,8 +324,135 @@ describe("staging migration command gates", () => {
     expect(safeFailureText).not.toContain("synthetic password");
     expect(safeFailureText).not.toContain(signedArtifact());
   });
+
+  it("bounds a client shutdown that never settles and leaves the outcome unknown", async () => {
+    vi.useFakeTimers();
+    const context = {
+      databaseUrl: syntheticMigrationUrl,
+      sourceSha,
+      targetManifestFingerprint: targetFingerprint,
+      migrationManifestFingerprint: migrationFingerprint,
+      authorizationId,
+    };
+    const createClient = vi.fn(() => ({}));
+    const runMigrations = vi.fn(async () => undefined);
+    const closeClient = vi.fn(() => new Promise<void>(() => undefined));
+    const command = executeApprovedMigrationsOnce(context, {
+      createClient,
+      runMigrations,
+      closeClient,
+      timeoutMs: 1_000,
+      shutdownTimeoutMs: 25,
+    });
+
+    await vi.advanceTimersByTimeAsync(25);
+    await expect(command).rejects.toMatchObject({
+      category: "outcome-unknown",
+      message: expect.stringContaining("Bounded client shutdown did not settle"),
+    });
+    expect(createClient).toHaveBeenCalledTimes(1);
+    expect(runMigrations).toHaveBeenCalledTimes(1);
+    expect(closeClient).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a late migration success classified as timed out and never retries", async () => {
+    vi.useFakeTimers();
+    const context = {
+      databaseUrl: syntheticMigrationUrl,
+      sourceSha,
+      targetManifestFingerprint: targetFingerprint,
+      migrationManifestFingerprint: migrationFingerprint,
+      authorizationId,
+    };
+    let resolveMigration!: () => void;
+    const delayedMigration = new Promise<void>((resolve) => { resolveMigration = resolve; });
+    const createClient = vi.fn(() => ({}));
+    const runMigrations = vi.fn(() => delayedMigration);
+    const closeClient = vi.fn(async () => undefined);
+    const command = executeApprovedMigrationsOnce(context, {
+      createClient,
+      runMigrations,
+      closeClient,
+      timeoutMs: 10,
+      shutdownTimeoutMs: 10,
+    });
+
+    await vi.advanceTimersByTimeAsync(10);
+    await expect(command).rejects.toMatchObject({
+      category: "outcome-unknown",
+      message: expect.stringContaining("exceeded its JavaScript deadline"),
+    });
+    resolveMigration();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(createClient).toHaveBeenCalledTimes(1);
+    expect(runMigrations).toHaveBeenCalledTimes(1);
+    expect(closeClient).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when client shutdown rejects and does not expose driver details", async () => {
+    const context = {
+      databaseUrl: syntheticMigrationUrl,
+      sourceSha,
+      targetManifestFingerprint: targetFingerprint,
+      migrationManifestFingerprint: migrationFingerprint,
+      authorizationId,
+    };
+    const createClient = vi.fn(() => ({}));
+    const runMigrations = vi.fn(async () => undefined);
+    const closeClient = vi.fn(async () => {
+      throw new Error(`driver echoed ${syntheticMigrationUrl} synthetic-secret`);
+    });
+
+    let failure: unknown;
+    try {
+      await executeApprovedMigrationsOnce(context, {
+        createClient,
+        runMigrations,
+        closeClient,
+        shutdownTimeoutMs: 25,
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(MigrationOutcomeUnknownError);
+    expect((failure as Error).message).toContain("Client shutdown reported a failure");
+    expect((failure as Error).message).not.toContain(syntheticMigrationUrl);
+    expect((failure as Error).message).not.toContain("synthetic-secret");
+    expect(createClient).toHaveBeenCalledTimes(1);
+    expect(runMigrations).toHaveBeenCalledTimes(1);
+    expect(closeClient).toHaveBeenCalledTimes(1);
+  });
+
+  it("consumes replay state before opening one client and rejects duplicate execution", async () => {
+    const setup = makeDependencies();
+    const consumed = new Set<string>();
+    setup.consumeAuthorizationOnce.mockImplementation((id) => {
+      if (consumed.has(id)) throw new Error("authorization already consumed");
+      consumed.add(id);
+    });
+    const createClient = vi.fn(() => ({}));
+    const runMigrations = vi.fn(async () => undefined);
+    const closeClient = vi.fn(async () => undefined);
+    const dependencies = {
+      ...setup.dependencies,
+      createClient,
+      runMigrations,
+      closeClient,
+    };
+
+    await expect(runStagingMigrationCommandOnce(dependencies)).resolves.toMatchObject({ authorizationId });
+    await expect(runStagingMigrationCommandOnce(dependencies)).rejects.toBeInstanceOf(MigrationPreflightError);
+
+    expect(setup.consumeAuthorizationOnce).toHaveBeenCalledTimes(2);
+    expect(createClient).toHaveBeenCalledTimes(1);
+    expect(runMigrations).toHaveBeenCalledTimes(1);
+    expect(closeClient).toHaveBeenCalledTimes(1);
+  });
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
