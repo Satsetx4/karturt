@@ -64,6 +64,13 @@ function sanitizedPostgresFailure(error: unknown) {
   return undefined;
 }
 
+function sanitizedFailureDiagnostic(error: unknown) {
+  if (!(error instanceof Error)) return undefined;
+  if (/^Migration ledger row count mismatch \(expected \d+, observed \d+\)\.$/.test(error.message)) return error.message;
+  if (/^Migration ledger (?:hash|timestamp) mismatch at journal index \d+\.$/.test(error.message)) return error.message;
+  return undefined;
+}
+
 function quoteIdentifier(identifier: string) {
   assert.match(identifier, /^[a-z0-9_]{1,63}$/, "A run-scoped PostgreSQL identifier must be lowercase and bounded.");
   return `"${identifier}"`;
@@ -112,10 +119,16 @@ async function readLedger(pool: Pool) {
 async function assertLedgerThrough(pool: Pool, journal: MigrationJournal, highestIndex: number) {
   const expected = expectedLedger(journal, highestIndex);
   const actual = await readLedger(pool);
-  assert.equal(actual.length, expected.length, "The Drizzle ledger must stop at the requested journal entry.");
+  if (actual.length !== expected.length) {
+    throw new Error(`Migration ledger row count mismatch (expected ${expected.length}, observed ${actual.length}).`);
+  }
   for (const [index, expectation] of expected.entries()) {
-    assert.equal(actual[index]?.hash, expectation.hash, `Unexpected migration hash at journal index ${index}.`);
-    assert.equal(actual[index]?.created_at, expectation.createdAt, `Unexpected migration timestamp at journal index ${index}.`);
+    if (actual[index]?.hash !== expectation.hash) {
+      throw new Error(`Migration ledger hash mismatch at journal index ${index}.`);
+    }
+    if (actual[index]?.created_at !== expectation.createdAt) {
+      throw new Error(`Migration ledger timestamp mismatch at journal index ${index}.`);
+    }
   }
 }
 
@@ -589,6 +602,7 @@ async function runPhase9To12Fixtures(pool: Pool, journal: MigrationJournal, runI
   assert.equal(Number(remainingLegacyWaived.rows[0]?.count), 0, "The clean retry fixture database must contain no legacy WAIVED dues.");
   currentStage = "0011 clean retry after removing the synthetic WAIVED fixture";
   await applyJournalThrough(pool, journal, 11, runId);
+  currentStage = "0011 verify successful clean retry ledger";
   await assertLedgerThrough(pool, journal, 11);
   const waiverTable = await pool.query<{ relation: string | null }>("SELECT to_regclass('public.waiver_actions') AS relation");
   assert.ok(waiverTable.rows[0]?.relation, "A clean 0011 retry must create the waiver ledger.");
@@ -705,6 +719,7 @@ void main().catch((error: unknown) => {
     outcome: "FAIL",
     stage: currentStage,
     ...(sanitizedPostgresFailure(error) ? { postgres: sanitizedPostgresFailure(error) } : {}),
+    ...(sanitizedFailureDiagnostic(error) ? { diagnostic: sanitizedFailureDiagnostic(error) } : {}),
     details: "Database URLs, credentials, SQL text, synthetic row values, and driver errors are intentionally omitted.",
   })}\n`, "utf8");
   process.exitCode = 1;
