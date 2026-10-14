@@ -34,7 +34,7 @@ The timeout path does not claim that the server canceled a query or rolled back 
 
 ## Verification
 
-- npm ci completed in the coordinator worktree. Database-related environment variables were removed from the verification processes.
+- npm ci completed in the coordinator worktree and reported 5 high dependency advisories. Dependency updates were outside this wave and none were made. Database-related environment variables were removed from the verification processes.
 - npm test -- --maxWorkers=1: **78 test files passed, 543 tests passed**.
 - npm run lint: passed with **0 errors and 2 existing warnings** in scripts/phase-12-household-browser-smoke.ts and src/lib/billing/resident-card.ts.
 - npm run typecheck: passed.
