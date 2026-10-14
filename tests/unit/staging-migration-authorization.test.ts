@@ -16,6 +16,7 @@ import {
   MigrationPreflightError,
   parseStagingMigrationInvocation,
   runStagingMigrationCommandOnce,
+  releaseMigrationPoolClientForShutdown,
   type MigrationSafetyDependencies,
   type StagingMigrationReviewContext,
 } from "../../src/db/migration-safety";
@@ -257,6 +258,7 @@ describe("staging migration command gates", () => {
 
     expect(order).toEqual(["consume", "client", "migrate", "close"]);
     expect(createClient).toHaveBeenCalledTimes(1);
+    expect(closeClient).toHaveBeenCalledWith({}, "fulfilled");
     expect(context.authorizationId).toBe(authorizationId);
     expect(setup.confirmChallenge.mock.calls[0]?.[0]).not.toContain(authorizationId);
     const visibleText = JSON.stringify({ order, challenge: setup.confirmChallenge.mock.calls[0]?.[0] });
@@ -283,10 +285,11 @@ describe("staging migration command gates", () => {
       throw new Error("synthetic password-token and URL must not escape");
     });
     const closeAfterFailure = vi.fn(async () => undefined);
+    const failedClient = {};
     let migrationFailure: unknown;
     try {
       await executeApprovedMigrationsOnce(context, {
-        createClient: () => ({}),
+        createClient: () => failedClient,
         runMigrations: failedRun,
         closeClient: closeAfterFailure,
       });
@@ -298,13 +301,15 @@ describe("staging migration command gates", () => {
     expect((migrationFailure as Error).message).not.toContain(syntheticMigrationUrl);
     expect(failedRun).toHaveBeenCalledTimes(1);
     expect(closeAfterFailure).toHaveBeenCalledTimes(1);
+    expect(closeAfterFailure).toHaveBeenCalledWith(failedClient, "rejected");
 
     const neverSettles = vi.fn(() => new Promise<void>(() => undefined));
     const closeAfterTimeout = vi.fn(async () => undefined);
+    const timedOutClient = {};
     let timeoutError: unknown;
     try {
       await executeApprovedMigrationsOnce(context, {
-        createClient: () => ({}),
+        createClient: () => timedOutClient,
         runMigrations: neverSettles,
         closeClient: closeAfterTimeout,
         timeoutMs: 5,
@@ -317,6 +322,7 @@ describe("staging migration command gates", () => {
     expect((timeoutError as Error).message).not.toContain("synthetic");
     expect(neverSettles).toHaveBeenCalledTimes(1);
     expect(closeAfterTimeout).toHaveBeenCalledTimes(1);
+    expect(closeAfterTimeout).toHaveBeenCalledWith(timedOutClient, "timed-out");
     const safeFailureText = formatStagingMigrationFailure(new Error(
       `driver echoed ${syntheticMigrationUrl} synthetic password and one-time token ${signedArtifact()}`,
     ));
@@ -344,12 +350,13 @@ describe("staging migration command gates", () => {
       timeoutMs: 1_000,
       shutdownTimeoutMs: 25,
     });
-
-    await vi.advanceTimersByTimeAsync(25);
-    await expect(command).rejects.toMatchObject({
+    const outcomeAssertion = expect(command).rejects.toMatchObject({
       category: "outcome-unknown",
       message: expect.stringContaining("Bounded client shutdown did not settle"),
     });
+
+    await vi.advanceTimersByTimeAsync(25);
+    await outcomeAssertion;
     expect(createClient).toHaveBeenCalledTimes(1);
     expect(runMigrations).toHaveBeenCalledTimes(1);
     expect(closeClient).toHaveBeenCalledTimes(1);
@@ -376,12 +383,13 @@ describe("staging migration command gates", () => {
       timeoutMs: 10,
       shutdownTimeoutMs: 10,
     });
-
-    await vi.advanceTimersByTimeAsync(10);
-    await expect(command).rejects.toMatchObject({
+    const outcomeAssertion = expect(command).rejects.toMatchObject({
       category: "outcome-unknown",
       message: expect.stringContaining("exceeded its JavaScript deadline"),
     });
+
+    await vi.advanceTimersByTimeAsync(10);
+    await outcomeAssertion;
     resolveMigration();
     await Promise.resolve();
     await Promise.resolve();
@@ -425,12 +433,32 @@ describe("staging migration command gates", () => {
     expect(closeClient).toHaveBeenCalledTimes(1);
   });
 
+  it("uses the public PoolClient release error to discard an unverified connection", () => {
+    const successfulRelease = vi.fn();
+    releaseMigrationPoolClientForShutdown({ release: successfulRelease }, "fulfilled");
+    expect(successfulRelease).toHaveBeenCalledTimes(1);
+    expect(successfulRelease).toHaveBeenCalledWith();
+
+    const rejectedRelease = vi.fn();
+    releaseMigrationPoolClientForShutdown({ release: rejectedRelease }, "rejected");
+    const rejectedReason = rejectedRelease.mock.calls[0]?.[0];
+    expect(rejectedReason).toBeInstanceOf(Error);
+    expect((rejectedReason as Error).message).toBe("One-shot migration ended without verified completion.");
+
+    const timedOutRelease = vi.fn();
+    releaseMigrationPoolClientForShutdown({ release: timedOutRelease }, "timed-out");
+    const timeoutReason = timedOutRelease.mock.calls[0]?.[0];
+    expect(timeoutReason).toBeInstanceOf(Error);
+    expect((timeoutReason as Error).message).not.toContain(syntheticMigrationUrl);
+    expect((timeoutReason as Error).message).not.toContain(signedArtifact());
+  });
+
   it("consumes replay state before opening one client and rejects duplicate execution", async () => {
     const setup = makeDependencies();
     const consumed = new Set<string>();
-    setup.consumeAuthorizationOnce.mockImplementation((id) => {
-      if (consumed.has(id)) throw new Error("authorization already consumed");
-      consumed.add(id);
+    setup.consumeAuthorizationOnce.mockImplementation(() => {
+      if (consumed.has(authorizationId)) throw new Error("authorization already consumed");
+      consumed.add(authorizationId);
     });
     const createClient = vi.fn(() => ({}));
     const runMigrations = vi.fn(async () => undefined);

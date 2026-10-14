@@ -13,8 +13,10 @@ import {
 } from "@/lib/staging-database-target";
 import { PINNED_STAGING_MIGRATION_APPROVAL_PUBLIC_KEY_PEM } from "@/db/migration-approval";
 import {
+  releaseMigrationPoolClientForShutdown,
   runStagingMigrationCommandOnce,
   formatStagingMigrationFailure,
+  type MigrationPoolClientHandle,
   type StagingMigrationGitIdentity,
 } from "@/db/migration-safety";
 
@@ -102,6 +104,7 @@ function createMigrationPool(databaseUrl: string) {
 
 async function main() {
   const repositoryRoot = process.cwd();
+  let activeMigrationClient: MigrationPoolClientHandle | undefined;
   await runStagingMigrationCommandOnce({
     environment: {
       APP_ENV: process.env.APP_ENV,
@@ -122,10 +125,20 @@ async function main() {
     approvalPublicKeyPem: PINNED_STAGING_MIGRATION_APPROVAL_PUBLIC_KEY_PEM,
     createClient: createMigrationPool,
     runMigrations: async (pool) => {
-      const migrationDb = drizzle({ client: pool });
+      const migrationClient = await pool.connect();
+      activeMigrationClient = migrationClient;
+      const migrationDb = drizzle({ client: migrationClient });
       await migrate(migrationDb, { migrationsFolder: resolve(repositoryRoot, "drizzle") });
     },
-    closeClient: (pool) => pool.end(),
+    closeClient: async (pool, migrationStatus) => {
+      const migrationClient = activeMigrationClient;
+      activeMigrationClient = undefined;
+      const closingPool = pool.end();
+
+      if (migrationClient) releaseMigrationPoolClientForShutdown(migrationClient, migrationStatus);
+
+      await closingPool;
+    },
   });
   console.info("The one-shot migration command returned successfully. Separate read-only post-migration acceptance is still required.");
 }

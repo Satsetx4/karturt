@@ -227,10 +227,28 @@ export async function authorizeStagingMigration(dependencies: MigrationSafetyDep
 export type MigrationExecutionDependencies<Client> = {
   createClient: (databaseUrl: string) => Client;
   runMigrations: (client: Client) => Promise<void>;
-  closeClient: (client: Client) => Promise<void>;
+  closeClient: (
+    client: Client,
+    migrationStatus: "fulfilled" | "rejected" | "timed-out",
+  ) => Promise<void>;
   timeoutMs?: number;
   shutdownTimeoutMs?: number;
 };
+
+export type MigrationPoolClientHandle = {
+  release: (error?: Error | boolean) => void;
+};
+
+export function releaseMigrationPoolClientForShutdown(
+  client: MigrationPoolClientHandle,
+  migrationStatus: "fulfilled" | "rejected" | "timed-out",
+) {
+  if (migrationStatus === "fulfilled") {
+    client.release();
+    return;
+  }
+  client.release(new Error("One-shot migration ended without verified completion."));
+}
 
 type BoundedPromiseResult<T> =
   | { status: "fulfilled"; value: T }
@@ -296,7 +314,7 @@ export async function executeApprovedMigrationsOnce<Client>(
   const client = dependencies.createClient(context.databaseUrl);
   const migrationPromise = Promise.resolve().then(() => dependencies.runMigrations(client));
   const migrationResult = await settleWithin(migrationPromise, timeoutMs);
-  const shutdownPromise = Promise.resolve().then(() => dependencies.closeClient(client));
+  const shutdownPromise = Promise.resolve().then(() => dependencies.closeClient(client, migrationResult.status));
   const shutdownResult = await settleWithin(shutdownPromise, shutdownTimeoutMs);
 
   if (migrationResult.status !== "fulfilled" || shutdownResult.status !== "fulfilled") {
