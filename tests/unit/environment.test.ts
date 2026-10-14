@@ -26,6 +26,14 @@ describe("runtime environment guards", () => {
     setEnvironment({ APP_ENV: "development", DATABASE_ENV: "production", DATABASE_URL: "postgresql://local/db" });
     expect(() => requireDatabaseEnvironment()).toThrow("Environment mismatch");
 
+    setEnvironment({
+      APP_ENV: "development",
+      DATABASE_ENV: "staging",
+      DATABASE_URL:
+        "postgresql://karturt_staging_owner:synthetic-password@ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech:5432/karturt_staging?sslmode=require",
+    });
+    expect(() => requireDatabaseEnvironment()).toThrow("Environment mismatch");
+
     setEnvironment({ DATABASE_URL: "postgresql://local/db" });
     expect(() => requireDatabaseEnvironment()).toThrow("must both be set explicitly");
   });
@@ -127,19 +135,19 @@ describe("runtime environment guards", () => {
   });
 
   it("matches the exact staging target and keeps access blocked while isolation is unverified", () => {
-    const approvedTarget = "postgresql://synthetic-user:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/karturt_staging?sslmode=require";
+    const approvedTarget = "postgresql://karturt_staging_owner:synthetic-password@ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech:5432/karturt_staging?sslmode=require";
     setEnvironment({ APP_ENV: "staging", DATABASE_ENV: "staging", DATABASE_URL: approvedTarget });
-    expect(() => requireDatabaseEnvironment()).toThrow("parent-data initialization");
+    expect(() => requireDatabaseEnvironment()).toThrow("runtime readiness and verified emptiness are not established");
   });
 
   it("rejects legacy, mismatched, and unrelated staging target identities", () => {
     const rejectedTargets = [
-      "postgresql://synthetic-user:synthetic-password@ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech/karturt_stage",
-      "postgresql://synthetic-user:synthetic-password@ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech/karturt_staging",
-      "postgresql://synthetic-user:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/karturt_stage",
-      "postgresql://synthetic-user:synthetic-password@wrong-endpoint.ap-southeast-1.aws.neon.tech/karturt_staging",
-      "postgresql://synthetic-user:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/karturt_staging?endpoint=ep-raspy-meadow-b3ppifq6",
-      "postgresql://synthetic-user@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/karturt_staging",
+      "postgresql://karturt_staging_owner:synthetic-password@ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech/karturt_stage?sslmode=require",
+      "postgresql://karturt_staging_owner:synthetic-password@ep-raspy-meadow-b3ppifq6.c-4.ap-southeast-1.aws.neon.tech/karturt_staging?sslmode=require",
+      "postgresql://karturt_staging_owner:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/karturt_stage?sslmode=require",
+      "postgresql://karturt_staging_owner:synthetic-password@wrong-endpoint.ap-southeast-1.aws.neon.tech/karturt_staging?sslmode=require",
+      "postgresql://karturt_staging_owner:synthetic-password@ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech/karturt_staging?sslmode=require&endpoint=ep-raspy-meadow-b3ppifq6",
+      "postgresql://synthetic-user:synthetic-password@ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech/karturt_staging?sslmode=require",
     ];
 
     for (const databaseUrl of rejectedTargets) {
@@ -158,16 +166,18 @@ describe("runtime environment guards", () => {
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error);
     }
-    expect(errorMessage).toContain("must target approved Neon project");
-    expect(errorMessage).toContain("wild-art-99835126");
-    expect(errorMessage).toContain("br-hidden-cake-a1ge5xqp");
-    expect(errorMessage).toContain("karturt_staging (database id 42079960)");
-    expect(errorMessage).toContain("ep-snowy-meadow-a10304d9");
+    expect(errorMessage).toContain("reviewed direct target identity manifest");
+    expect(errorMessage).toContain("falling-bread-33359184");
+    expect(errorMessage).toContain("br-muddy-frost-azot13fb");
+    expect(errorMessage).toContain("karturt_staging / 702718");
+    expect(errorMessage).toContain("ep-silent-butterfly-azrflu40");
     expect(errorMessage).not.toContain("synthetic-password");
   });
 
   it("rejects the approved staging endpoint under non-staging labels before database client creation", () => {
     const stagingHosts = [
+      "ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech",
+      "ep-silent-butterfly-azrflu40-pooler.c-3.ap-southeast-1.aws.neon.tech",
       "ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech",
       "ep-snowy-meadow-a10304d9-pooler.ap-southeast-1.aws.neon.tech",
     ];
