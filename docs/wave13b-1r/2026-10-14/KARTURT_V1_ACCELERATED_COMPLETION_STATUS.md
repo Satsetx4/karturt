@@ -1,0 +1,46 @@
+# KartuRT V1 — Accelerated Completion Status
+
+Date: 2026-10-14
+
+Status: **IN PROGRESS — source work and offline evidence continue; staging and release are blocked by explicit gates.**
+
+## Product target
+
+V1 is one operational RT. All 12 calendar months remain visible. Future unpaid months are “Belum jatuh tempo” and excluded from current arrears/due-now classification. Residents may request transfer for current or past dues only. Authorized Treasurer cash advances allocate oldest eligible unpaid dues through the selected target. A paid month exposes a scoped per-month receipt from the active, reversal-safe ledger.
+
+## Current source candidate and verification
+
+- PR #48, `fix/v1-post-demo-billing-20261012`, exact head `12539d83b8537d845015a2b0030d47162dae0203`, remains OPEN/DRAFT and stacked on OPEN/DRAFT PR #23. No merge occurred.
+- Exact-head GitHub Actions run `38225424975`: Gate A passed and the independent PostgreSQL concurrency job passed five race scenarios.
+- Local exact-head checks: lint passed with 0 errors and 2 existing warnings; typecheck passed; full suite passed: 67 files / 427 tests.
+- Reporting review found a policy mismatch: `src/lib/reports/aggregation.ts` treats an unpaid due as overdue when its day-10 due date has passed. The pinned D1/D5 owner policy defines arrears by Asia/Jakarta year-month: on 2026-10-12, September is arrears, October is current-month unpaid, November/December are future. A narrow fix with month-boundary and Dec→Jan regression coverage is underway on isolated branch `codex/v1-d5-report-arrears-20261014`, based on the exact PR #48 head. No new branch result is yet counted as PASS.
+- Remaining #49–#51/#53 review gaps include full D5 and December-to-January acceptance, same-month multiple active receipt reconciliation, a chronologically valid September-pending/November-cash conflict, and reports that reconcile future cash allocations. Treat these as missing evidence until separately covered and verified.
+
+## Release and staging gates
+
+| Gate | Current state | Evidence needed to advance |
+|---|---|---|
+| Source integration | PR #48 and #23 open/draft; no merge | Final exact candidate SHA, required CI/concurrency, independent code review, and separate merge decision after all release gates |
+| D1v2 Neon catalog preflight | **Not executed — access/safety blocked** | psql client, verified CA, owner-only local credential path, approved privilege/object baseline, and fresh non-waking target identity check |
+| Staging isolation | **Blocked** | Positive independent lineage and content evidence proving isolated empty/synthetic-only data; the current `parent-data` metadata, zero tracked writes, and bounded catalog result are insufficient |
+| Migration authorization | **Blocked** | Exact final source SHA and 15 migration hashes, owner key ceremony and verified public-key pin, plus one-time Ed25519 approval bound to exact target/source/migration within 15 minutes |
+| Staging network/security | **Blocked** | Reviewed least-privilege migration/runtime/human roles and evidenced network restriction; current branch is unprotected and public connections are not blocked |
+| Rp0/no-overage | **Unproven** | Current account-level usage/headroom and no-overage controls; Free/Hobby labels alone are insufficient |
+| Protected Preview and runtime QA | **Not ready** | Safe isolated staging schema, exact-SHA protected READY Preview, tenant-negative deny, billing/report/receipt regression, accessible/mobile and privacy review |
+| Owner devices | **Not started** | Owner Android and iPhone acceptance after protected staging is genuinely ready |
+| Production/rollout | **NO-GO** | Separate owner production GO after source, provider, budget, operational and recovery evidence; no GO is implied by this document |
+
+## Current execution evidence
+
+- The frozen 26-statement D1v2 reference matches blob SHA-1 `e011f0e843d42d53c7c4c76ba479854644137fc9`; ordered manifest SHA-256 is `ab7193d72520482a50081fdb65edc098fdac1cc9530d161430ddc6b9a0759db0`. Its psql behavior passed on disposable PostgreSQL 18.6 in run `38586768128` at separate SHA `1bdf371bb3d18265af2bb82602882b8ad93a5139`. This is not Neon evidence.
+- Current-wave metadata matched the approved Neon org/project/branch/compute/database/role tuple without waking the endpoint. No SQL, credential read, wake, migration, or provider mutation occurred.
+- The only Vercel project returned by the connected readback was the unlinked staging project `karturt-review-staging-20261012`, SSO-protected, with zero deployments. This does not resolve the separate legacy main-to-production trigger risk.
+- No new project/resource, paid tier, purchase, deployment, merge, or production/data action was performed. Incremental spend: **Rp0**.
+
+## Next work
+
+1. Finish the isolated arrears correction, update independent SQL/unit/integration oracles, run focused tests, and obtain independent review.
+2. Improve the missing receipt and Treasurer conflict acceptance cases without touching database/provider state.
+3. Publish the exact D1v2 outcome and owner next-gate packet on the documentation branch; leave the fixed SQL companion unchanged.
+4. Continue offline code/security/release readiness while preserving `stagingIsolationVerifiedEmpty=false` and the unpinned migration public key.
+5. Stop before database SQL if the local psql/TLS/credential/baseline prerequisites remain unavailable. Never fall back to the old staging target or Neon MCP query tools.
