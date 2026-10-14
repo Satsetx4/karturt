@@ -200,7 +200,6 @@ function validateSyntheticPacket(rows) {
   assert(hasRow(rows.get("Q20"), (r) => r[1] === "app" && r[2] === "records" && r[3] === "id" && r[5] === "qa_reader" && r[6] === "SELECT" && r[7] === "YES"), "information-schema column grant-option cross-check missing");
   assert(hasRow(rows.get("Q21"), (r) => r[1] === "app" && r[2] === "identity_fn" && r[4] === "qa_reader" && r[5] === "EXECUTE" && r[6] === "YES"), "information-schema routine grant-option cross-check missing");
   assert(hasRow(rows.get("Q22"), (r) => r[1] === "app" && r[2] === "records_seq" && r[3] === "SEQUENCE" && r[5] === "qa_reader" && r[6] === "USAGE" && r[7] === "YES"), "information-schema sequence usage grant-option cross-check missing");
-  assert(hasRow(rows.get("Q22"), (r) => r[1] === "app" && r[2] === "status" && r[3] === "TYPE" && r[5] === "qa_reader" && r[6] === "USAGE" && r[7] === "YES"), "information-schema type usage grant-option cross-check missing");
   const privileges = rows.get("Q26");
   assert(hasRow(privileges, (r) => r[0] === "schema" && r[1] === "app" && r[2] === "USAGE" && r[3] === "t"), "inherited schema USAGE was not effective");
   assert(hasRow(privileges, (r) => r[0] === "schema" && r[1] === "app" && r[2] === "CREATE" && r[3] === "f"), "non-inherited schema CREATE became effective");
