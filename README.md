@@ -14,7 +14,7 @@ KartuRT is a mobile-first RT dues administration app. Milestone 1 establishes th
 
 1. Use Node.js 22.12 or newer.
 2. Copy `.env.example` to `.env.local`.
-3. Create a **development-only** Neon branch and set `DATABASE_URL` to that branch. Keep the development, staging, and production connection strings separate.
+3. Set `DATABASE_URL` to the documented local PostgreSQL development target `localhost:5432/karturt_dev` with the local `karturt` role. `npm run db:migrate` refuses Neon, staging, production, test, remote, and unexpected database targets.
 4. Set `BETTER_AUTH_SECRET` to a unique random value of at least 32 characters.
 5. Keep `APP_ENV` and `DATABASE_ENV` equal (`development`, `staging`, `production`, or `test`). Database commands stop when those labels differ.
 6. Run `npm install`, `npm run db:migrate`, and `npm run db:check`.
@@ -54,11 +54,11 @@ Login identifiers are unique within each RT. Until sign-in includes an RT select
 
 ```text
 npm run db:generate  # generate a migration from the Drizzle schema
-npm run db:migrate   # apply reviewed migrations to the configured database
+npm run db:migrate   # apply reviewed migrations to the documented local PostgreSQL target only
 npm run db:check     # verify the active connection with SELECT 1
 ```
 
-Never run development commands with production Neon credentials. Runtime and CLI checks require matching `APP_ENV` and `DATABASE_ENV`. Production secrets belong in the deployment secret store, not Git.
+Never run development commands with staging or production credentials. Runtime and CLI checks require matching explicit `APP_ENV` and `DATABASE_ENV`; `npm run db:migrate` is restricted to the documented local development PostgreSQL target. Production secrets belong in the deployment secret store, not Git.
 
 ## Quality gates
 

@@ -20,7 +20,7 @@ afterEach(() => {
   for (const name of environmentNames) {
     const value = originalValues.get(name);
     if (value === undefined) delete process.env[name];
-    else process.env[name] = value;
+    else Reflect.set(process.env, name, value);
   }
 });
 
@@ -89,7 +89,9 @@ describe("development migration command flow", () => {
       dependencies: {
         environment,
         projectDirectory: "synthetic-project",
-        loadEnvironment: vi.fn(() => calls.push("load-env")),
+        loadEnvironment: vi.fn(() => {
+          calls.push("load-env");
+        }),
         getDatabase: vi.fn(() => {
           calls.push("connect");
           return database;
