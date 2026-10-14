@@ -25,6 +25,7 @@ function validEnvironment() {
     GITHUB_RUN_ATTEMPT: "1",
     APP_ENV: "test",
     DATABASE_ENV: "test",
+    PG18_SERVICE_ID: "b".repeat(64),
     LAUNCH_SAFETY_POSTGRES_URL: "present-only-for-test",
   } satisfies NodeJS.ProcessEnv;
 }
@@ -39,6 +40,8 @@ describe("PostgreSQL 18 rehearsal safety assertions", () => {
     ["wrong branch", (env: NodeJS.ProcessEnv) => { env.GITHUB_REF = "refs/heads/main"; }],
     ["non-push event", (env: NodeJS.ProcessEnv) => { env.GITHUB_EVENT_NAME = "pull_request"; }],
     ["wrong repository", (env: NodeJS.ProcessEnv) => { env.GITHUB_REPOSITORY = "another/repository"; }],
+    ["missing service container identity", (env: NodeJS.ProcessEnv) => { delete env.PG18_SERVICE_ID; }],
+    ["invalid service container identity", (env: NodeJS.ProcessEnv) => { env.PG18_SERVICE_ID = "not-a-container-id"; }],
     ["general app database URL", (env: NodeJS.ProcessEnv) => { env.DATABASE_URL = "must-not-be-used"; }],
   ])("fails closed for %s", (_label, mutate) => {
     const env = validEnvironment();

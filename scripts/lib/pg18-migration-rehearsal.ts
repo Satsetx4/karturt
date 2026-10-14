@@ -94,6 +94,10 @@ export function validatePg18RehearsalEnvironment(env: RehearsalEnvironment): str
   );
   requireCondition(Boolean(env.GITHUB_RUN_ID && env.GITHUB_RUN_ATTEMPT), "PG18 rehearsal run identity is missing.");
   requireCondition(env.APP_ENV === "test" && env.DATABASE_ENV === "test", "PG18 rehearsal requires test-only application and database modes.");
+  requireCondition(
+    Boolean(env.PG18_SERVICE_ID && /^[a-f0-9]{64}$/.test(env.PG18_SERVICE_ID)),
+    "The PostgreSQL 18 service container identity is missing or invalid.",
+  );
   for (const forbiddenName of ["DATABASE_URL", "DATABASE_URL_UNPOOLED", "DIRECT_URL", "POSTGRES_URL"]) {
     requireCondition(!env[forbiddenName], "PG18 rehearsal rejects general application database connection variables.");
   }

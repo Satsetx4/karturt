@@ -37,7 +37,7 @@ async function main() {
     }>(`
       SELECT current_database() AS current_database,
         current_user AS current_user,
-        obj_description(database.oid, 'pg_database') AS identity_marker
+        shobj_description(database.oid, 'pg_database') AS identity_marker
       FROM pg_database AS database
       WHERE database.datname = current_database()
     `);
@@ -59,7 +59,7 @@ async function main() {
     const marker = disposablePostgresMarker(runId, identityToken);
     await pool.query(`COMMENT ON DATABASE "${target.databaseName}" IS '${marker}'`);
     const { rows: readback } = await pool.query<{ identity_marker: string | null }>(`
-      SELECT obj_description(database.oid, 'pg_database') AS identity_marker
+      SELECT shobj_description(database.oid, 'pg_database') AS identity_marker
       FROM pg_database AS database
       WHERE database.datname = current_database()
     `);
