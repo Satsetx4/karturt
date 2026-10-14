@@ -65,6 +65,7 @@ async function main() {
     `);
     assert.equal(readback[0]?.identity_marker, marker, "the run-scoped PostgreSQL identity marker must read back exactly");
 
+    process.stdout.write(`::add-mask::${identityToken}\n`);
     appendFileSync(githubEnvironmentFile, `KARTURT_POSTGRES_RUN_ID=${runId}\nKARTURT_POSTGRES_IDENTITY_TOKEN=${identityToken}\n`, "utf8");
     process.stdout.write("GitHub PostgreSQL service identity initialized and read back; identity token redacted.\n");
   } finally {

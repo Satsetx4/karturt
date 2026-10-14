@@ -410,9 +410,14 @@ async function main() {
     currentStage = "repository Drizzle migrator applying the checked-in journal";
     await migrate(drizzle(pool), { migrationsFolder: resolve(process.cwd(), "drizzle") });
 
-    currentStage = "migration ledger and catalog validation";
+    currentStage = "migration ledger count validation";
     const ledger = await readMigrationLedger(pool);
+    assert.equal(ledger.length, expectedLedger.length, "The Drizzle migration ledger does not contain exactly 14 entries.");
+
+    currentStage = "migration ledger hash and timestamp validation";
     assertMigrationLedger(ledger, expectedLedger);
+
+    currentStage = "post-migration catalog count and named-object validation";
     const catalog = await readPostMigrationCatalog(pool);
     assertPostMigrationCatalog(catalog);
 
