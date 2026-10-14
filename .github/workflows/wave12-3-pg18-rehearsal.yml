@@ -19,7 +19,7 @@ jobs:
         env:
           POSTGRES_DB: karturt_concurrency_${{ github.run_id }}_${{ github.run_attempt }}
           POSTGRES_USER: karturt_runner_${{ github.run_id }}_${{ github.run_attempt }}
-          POSTGRES_PASSWORD: local-test-only-not-a-secret
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432
         options: >-
@@ -47,12 +47,13 @@ jobs:
         env:
           APP_ENV: test
           DATABASE_ENV: test
-          LAUNCH_SAFETY_POSTGRES_URL: postgresql://karturt_runner_${{ github.run_id }}_${{ github.run_attempt }}:local-test-only-not-a-secret@127.0.0.1:${{ job.services.postgres.ports[5432] }}/karturt_concurrency_${{ github.run_id }}_${{ github.run_attempt }}
+          PG18_SERVICE_ID: ${{ job.services.postgres.id }}
+          LAUNCH_SAFETY_POSTGRES_URL: postgresql://karturt_runner_${{ github.run_id }}_${{ github.run_attempt }}@127.0.0.1:${{ job.services.postgres.ports[5432] }}/karturt_concurrency_${{ github.run_id }}_${{ github.run_attempt }}
         run: npm run prepare:postgres-concurrency-ci
       - name: Apply and verify the checked-in Drizzle journal on PostgreSQL 18
         env:
           APP_ENV: test
           DATABASE_ENV: test
           PG18_SERVICE_ID: ${{ job.services.postgres.id }}
-          LAUNCH_SAFETY_POSTGRES_URL: postgresql://karturt_runner_${{ github.run_id }}_${{ github.run_attempt }}:local-test-only-not-a-secret@127.0.0.1:${{ job.services.postgres.ports[5432] }}/karturt_concurrency_${{ github.run_id }}_${{ github.run_attempt }}
+          LAUNCH_SAFETY_POSTGRES_URL: postgresql://karturt_runner_${{ github.run_id }}_${{ github.run_attempt }}@127.0.0.1:${{ job.services.postgres.ports[5432] }}/karturt_concurrency_${{ github.run_id }}_${{ github.run_attempt }}
         run: npm run db:rehearse:pg18

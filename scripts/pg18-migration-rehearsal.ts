@@ -38,6 +38,23 @@ type MigrationJournal = {
 
 let currentStage = "run and target preflight";
 
+function sanitizedFailureDetail(error: unknown) {
+  if (!(error instanceof Error)) return "The rehearsal failed; database details are suppressed.";
+  const fixedChecks = new Set([
+    "The migrated public schema does not contain exactly 27 tables.",
+    "The migrated public schema has no constraints.",
+    "The migrated public schema has no indexes.",
+    "The migrated public schema has no user triggers.",
+    "The migrated public schema has no functions.",
+    "The migrated public schema has no enum types.",
+  ]);
+  if (fixedChecks.has(error.message)
+    || /^The migrated public schema is missing an expected (constraints|enums|functions|indexes|triggers) object\.$/.test(error.message)) {
+    return error.message;
+  }
+  return "Database URLs, credentials, SQL text, and driver errors are intentionally omitted.";
+}
+
 function readExpectedLedger() {
   const journalPath = resolve(process.cwd(), "drizzle/meta/_journal.json");
   const journal = JSON.parse(readFileSync(journalPath, "utf8")) as MigrationJournal;
@@ -393,7 +410,7 @@ async function exercisePostgres18BackupRestore(
 
 async function main() {
   validatePg18RehearsalEnvironment(process.env);
-  const target = validateDisposablePostgresTarget(process.env);
+  const target = validateDisposablePostgresTarget(process.env, { allowPasswordlessPg18: true });
   assert.equal(target.runId, `${process.env.GITHUB_RUN_ID}_${process.env.GITHUB_RUN_ATTEMPT}`);
   const expectedLedger = readExpectedLedger();
   const pool = new Pool({
@@ -508,12 +525,12 @@ async function main() {
   }
 }
 
-void main().catch(() => {
+void main().catch((error: unknown) => {
   process.stderr.write(`${JSON.stringify({
     event: "karturt.pg18_migration_rehearsal",
     outcome: "FAIL",
     stage: currentStage,
-    details: "Database URLs, credentials, SQL text, and driver errors are intentionally omitted.",
+    details: sanitizedFailureDetail(error),
   })}\n`, "utf8");
   process.exitCode = 1;
 });

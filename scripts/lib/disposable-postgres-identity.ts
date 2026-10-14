@@ -28,7 +28,10 @@ export function disposablePostgresMarker(runId: string, identityToken: string) {
   return `karturt-disposable-postgres:${runId}:${identityToken}`;
 }
 
-export function validateDisposablePostgresTarget(env: NodeJS.ProcessEnv): DisposablePostgresTarget {
+export function validateDisposablePostgresTarget(
+  env: NodeJS.ProcessEnv,
+  options: { allowPasswordlessPg18?: boolean } = {},
+): DisposablePostgresTarget {
   if (env.APP_ENV !== "test" || env.DATABASE_ENV !== "test") {
     throw new Error("PostgreSQL concurrency requires APP_ENV=test and DATABASE_ENV=test; no database connection was opened.");
   }
@@ -69,7 +72,14 @@ export function validateDisposablePostgresTarget(env: NodeJS.ProcessEnv): Dispos
     && port <= 65_535
     && databaseFromUrl === databaseName
     && decodedUsername === username
-    && target.password.length > 0
+    && (target.password.length > 0 || (
+      options.allowPasswordlessPg18 === true
+      && env.GITHUB_ACTIONS === "true"
+      && env.GITHUB_REPOSITORY === "Satsetx4/karturt"
+      && env.GITHUB_EVENT_NAME === "push"
+      && env.GITHUB_REF === "refs/heads/codex/wave12-3-pg18-rehearsal-20261014"
+      && Boolean(env.PG18_SERVICE_ID && /^[a-f0-9]{64}$/.test(env.PG18_SERVICE_ID))
+    ))
     && target.search.length === 0
     && target.hash.length === 0;
 

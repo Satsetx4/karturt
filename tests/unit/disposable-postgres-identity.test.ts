@@ -43,6 +43,22 @@ describe("disposable PostgreSQL concurrency identity", () => {
     });
   });
 
+  it("allows passwordless access only for the exact isolated PostgreSQL 18 branch job", () => {
+    const passwordlessUrl = `postgresql://${username}@127.0.0.1:49152/${databaseName}`;
+    const pg18Environment = validEnvironment({
+      GITHUB_ACTIONS: "true",
+      GITHUB_REPOSITORY: "Satsetx4/karturt",
+      GITHUB_EVENT_NAME: "push",
+      GITHUB_REF: "refs/heads/codex/wave12-3-pg18-rehearsal-20261014",
+      PG18_SERVICE_ID: "b".repeat(64),
+      LAUNCH_SAFETY_POSTGRES_URL: passwordlessUrl,
+    });
+    expect(validateDisposablePostgresTarget(pg18Environment, { allowPasswordlessPg18: true }))
+      .toMatchObject({ databaseName, username, port: 49_152 });
+    expect(() => validateDisposablePostgresTarget(pg18Environment))
+      .toThrow("exact loopback database and user derived from this disposable run");
+  });
+
   it("fails before opening a connection when the run identity or environment is missing", () => {
     expect(() => validateDisposablePostgresTarget(validEnvironment({ KARTURT_POSTGRES_IDENTITY_TOKEN: undefined })))
       .toThrow("run-scoped disposable PostgreSQL identity");

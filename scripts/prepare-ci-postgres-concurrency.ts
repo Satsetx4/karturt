@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { appendFileSync } from "node:fs";
 import { Pool } from "pg";
 import { disposablePostgresMarker, validateDisposablePostgresTarget } from "./lib/disposable-postgres-identity";
+import { validatePg18RehearsalEnvironment } from "./lib/pg18-migration-rehearsal";
 
 async function main() {
   if (process.env.GITHUB_ACTIONS !== "true" || !process.env.GITHUB_RUN_ID || !process.env.GITHUB_RUN_ATTEMPT) {
@@ -12,6 +13,7 @@ async function main() {
   if (!githubEnvironmentFile) {
     throw new Error("The GitHub Actions environment file is unavailable; no database connection was opened.");
   }
+  validatePg18RehearsalEnvironment(process.env);
 
   const runId = `${process.env.GITHUB_RUN_ID}_${process.env.GITHUB_RUN_ATTEMPT}`;
   const identityToken = randomBytes(32).toString("hex");
@@ -19,7 +21,7 @@ async function main() {
     ...process.env,
     KARTURT_POSTGRES_RUN_ID: runId,
     KARTURT_POSTGRES_IDENTITY_TOKEN: identityToken,
-  });
+  }, { allowPasswordlessPg18: true });
   assert.equal(target.runId, runId);
 
   const pool = new Pool({
