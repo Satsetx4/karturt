@@ -131,12 +131,14 @@ ORDER BY n.nspname
 LIMIT 501;
 ~~~
 
-### Q12 — extension names, versions, and schemas only
+### Q12 — extension names, versions, schemas, and owners
 
 ~~~sql
-SELECT e.extname AS extension_name, e.extversion AS extension_version, n.nspname AS schema_name
+SELECT e.extname AS extension_name, e.extversion AS extension_version, n.nspname AS schema_name,
+       owner.rolname AS owner_name
 FROM pg_catalog.pg_extension AS e
 JOIN pg_catalog.pg_namespace AS n ON n.oid = e.extnamespace
+JOIN pg_catalog.pg_roles AS owner ON owner.oid = e.extowner
 ORDER BY e.extname
 LIMIT 501;
 ~~~
@@ -151,7 +153,7 @@ FROM pg_catalog.pg_class AS c
 JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
 JOIN pg_catalog.pg_roles AS owner ON owner.oid = c.relowner
 WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND n.nspname !~ '^pg_(toast|temp)_'
+  AND n.nspname !~ '^pg_(toast|temp)(_|$)'
 ORDER BY n.nspname, c.relname, c.relkind
 LIMIT 501;
 ~~~
@@ -169,7 +171,7 @@ WHERE a.attnum > 0
   AND NOT a.attisdropped
   AND a.attacl IS NOT NULL
   AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND n.nspname !~ '^pg_(toast|temp)_'
+  AND n.nspname !~ '^pg_(toast|temp)(_|$)'
 ORDER BY n.nspname, c.relname, a.attnum
 LIMIT 501;
 ~~~
@@ -184,7 +186,7 @@ FROM pg_catalog.pg_proc AS p
 JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
 JOIN pg_catalog.pg_roles AS owner ON owner.oid = p.proowner
 WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND n.nspname !~ '^pg_(toast|temp)_'
+  AND n.nspname !~ '^pg_(toast|temp)(_|$)'
 ORDER BY n.nspname, p.proname, p.oid
 LIMIT 501;
 ~~~
@@ -198,7 +200,7 @@ FROM pg_catalog.pg_type AS t
 JOIN pg_catalog.pg_namespace AS n ON n.oid = t.typnamespace
 JOIN pg_catalog.pg_roles AS owner ON owner.oid = t.typowner
 WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND n.nspname !~ '^pg_(toast|temp)_'
+  AND n.nspname !~ '^pg_(toast|temp)(_|$)'
 ORDER BY n.nspname, t.typname, t.oid
 LIMIT 501;
 ~~~
@@ -206,7 +208,7 @@ LIMIT 501;
 ### Q17 — global and per-schema default ACLs
 
 ~~~sql
-SELECT owner.rolname AS grantor_owner, n.nspname AS schema_name, d.defaclobjtype,
+SELECT owner.rolname AS object_owner, n.nspname AS schema_name, d.defaclobjtype,
        d.defaclacl::text AS raw_default_acl
 FROM pg_catalog.pg_default_acl AS d
 JOIN pg_catalog.pg_roles AS owner ON owner.oid = d.defaclrole
@@ -253,6 +255,8 @@ LIMIT 501;
 ~~~sql
 SELECT table_catalog, table_schema, table_name, grantor, grantee, privilege_type, is_grantable
 FROM information_schema.table_privileges
+WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+  AND table_schema !~ '^pg_(toast|temp)(_|$)'
 ORDER BY table_catalog, table_schema, table_name, grantor, grantee, privilege_type
 LIMIT 501;
 ~~~
@@ -262,6 +266,8 @@ LIMIT 501;
 ~~~sql
 SELECT table_catalog, table_schema, table_name, column_name, grantor, grantee, privilege_type, is_grantable
 FROM information_schema.column_privileges
+WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+  AND table_schema !~ '^pg_(toast|temp)(_|$)'
 ORDER BY table_catalog, table_schema, table_name, column_name, grantor, grantee, privilege_type
 LIMIT 501;
 ~~~
@@ -271,6 +277,8 @@ LIMIT 501;
 ~~~sql
 SELECT routine_catalog, routine_schema, routine_name, grantor, grantee, privilege_type, is_grantable
 FROM information_schema.routine_privileges
+WHERE routine_schema NOT IN ('pg_catalog', 'information_schema')
+  AND routine_schema !~ '^pg_(toast|temp)(_|$)'
 ORDER BY routine_catalog, routine_schema, routine_name, grantor, grantee, privilege_type
 LIMIT 501;
 ~~~
@@ -280,6 +288,10 @@ LIMIT 501;
 ~~~sql
 SELECT object_catalog, object_schema, object_name, object_type, grantor, grantee, privilege_type, is_grantable
 FROM information_schema.usage_privileges
+WHERE object_schema IS NULL
+   OR object_schema = ''
+   OR (object_schema NOT IN ('pg_catalog', 'information_schema')
+       AND object_schema !~ '^pg_(toast|temp)(_|$)')
 ORDER BY object_catalog, object_schema, object_name, object_type, grantor, grantee
 LIMIT 501;
 ~~~
@@ -295,28 +307,28 @@ FROM (
   JOIN pg_catalog.pg_class AS c ON c.oid = t.tgrelid
   JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
   WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-    AND n.nspname !~ '^pg_(toast|temp)_'
+    AND n.nspname !~ '^pg_(toast|temp)(_|$)'
   UNION ALL
   SELECT 'constraint', n.nspname::text, con.conname::text, con.oid::text,
          COALESCE(con.conrelid, con.contypid)::text
   FROM pg_catalog.pg_constraint AS con
   JOIN pg_catalog.pg_namespace AS n ON n.oid = con.connamespace
   WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-    AND n.nspname !~ '^pg_(toast|temp)_'
+    AND n.nspname !~ '^pg_(toast|temp)(_|$)'
   UNION ALL
   SELECT 'policy', n.nspname::text, p.polname::text, p.oid::text, c.oid::text
   FROM pg_catalog.pg_policy AS p
   JOIN pg_catalog.pg_class AS c ON c.oid = p.polrelid
   JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
   WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-    AND n.nspname !~ '^pg_(toast|temp)_'
+    AND n.nspname !~ '^pg_(toast|temp)(_|$)'
   UNION ALL
   SELECT 'rewrite_rule', n.nspname::text, r.rulename::text, r.oid::text, c.oid::text
   FROM pg_catalog.pg_rewrite AS r
   JOIN pg_catalog.pg_class AS c ON c.oid = r.ev_class
   JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
   WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-    AND n.nspname !~ '^pg_(toast|temp)_'
+    AND n.nspname !~ '^pg_(toast|temp)(_|$)'
 ) AS secondary_objects
 ORDER BY object_class, schema_name, object_name, object_oid
 LIMIT 501;
@@ -340,11 +352,9 @@ FROM (
   FROM pg_catalog.pg_subscription AS s
   JOIN pg_catalog.pg_roles AS owner ON owner.oid = s.subowner
   UNION ALL
-  SELECT 'user_mapping', COALESCE(grantee.rolname, 'PUBLIC')::text || '@' || server.srvname::text,
-         m.oid::text, COALESCE(grantee.rolname, 'PUBLIC')::text
-  FROM pg_catalog.pg_user_mapping AS m
-  LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = m.umuser
-  JOIN pg_catalog.pg_foreign_server AS server ON server.oid = m.umserver
+  SELECT 'user_mapping', COALESCE(m.usename::text, 'PUBLIC') || '@' || m.srvname::text,
+         m.umid::text, COALESCE(m.usename::text, 'PUBLIC')
+  FROM pg_catalog.pg_user_mappings AS m
 ) AS named_objects
 ORDER BY object_class, object_name
 LIMIT 501;
@@ -391,7 +401,7 @@ WITH target_role AS (
                      ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')) AS p(privilege_type)
   WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
     AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-    AND n.nspname !~ '^pg_(toast|temp)_'
+    AND n.nspname !~ '^pg_(toast|temp)(_|$)'
   UNION ALL
   SELECT 'column', n.nspname::text || '.' || c.relname::text || '.' || a.attname::text,
          p.privilege_type,
@@ -404,7 +414,7 @@ WITH target_role AS (
   WHERE a.attnum > 0
     AND NOT a.attisdropped
     AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-    AND n.nspname !~ '^pg_(toast|temp)_'
+    AND n.nspname !~ '^pg_(toast|temp)(_|$)'
   UNION ALL
   SELECT 'sequence', n.nspname::text || '.' || c.relname::text, p.privilege_type,
          pg_catalog.has_sequence_privilege(r.rolname, c.oid, p.privilege_type)
@@ -414,7 +424,7 @@ WITH target_role AS (
   CROSS JOIN (VALUES ('USAGE'::text), ('SELECT'), ('UPDATE')) AS p(privilege_type)
   WHERE c.relkind = 'S'
     AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-    AND n.nspname !~ '^pg_(toast|temp)_'
+    AND n.nspname !~ '^pg_(toast|temp)(_|$)'
   UNION ALL
   SELECT 'routine', n.nspname::text || '.' || p0.proname::text || '#' || p0.oid::text,
          'EXECUTE'::text, pg_catalog.has_function_privilege(r.rolname, p0.oid, 'EXECUTE')
@@ -422,7 +432,7 @@ WITH target_role AS (
   JOIN pg_catalog.pg_namespace AS n ON n.oid = p0.pronamespace
   CROSS JOIN target_role AS r
   WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-    AND n.nspname !~ '^pg_(toast|temp)_'
+    AND n.nspname !~ '^pg_(toast|temp)(_|$)'
   UNION ALL
   SELECT 'type', n.nspname::text || '.' || t.typname::text || '#' || t.oid::text,
          'USAGE'::text, pg_catalog.has_type_privilege(r.rolname, t.oid, 'USAGE')
@@ -430,7 +440,7 @@ WITH target_role AS (
   JOIN pg_catalog.pg_namespace AS n ON n.oid = t.typnamespace
   CROSS JOIN target_role AS r
   WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-    AND n.nspname !~ '^pg_(toast|temp)_'
+    AND n.nspname !~ '^pg_(toast|temp)(_|$)'
 )
 SELECT object_class, object_identity, privilege_type, effective
 FROM effective
@@ -457,23 +467,23 @@ Per-statement SHA-256 is computed over the exact UTF-8 SQL body shown above, aft
 | Q09 | 438aaeec6e0dc24acd958de973c79892553f74c0742121ecca742102eda121a6 |
 | Q10 | 42f79f8ab7e1a7f1ba4050ae91206891640755d499f4420a1347b9fcc71de1f7 |
 | Q11 | 002aec0172c1136d7448cfc019c22a24fa04a7c846273421424fc56a7b1c62bc |
-| Q12 | 42fccee1ab6fad0408a32a6f77115cbc38759ae5e5a899a3e6507b14f951852c |
-| Q13 | e621cacb48dac82f120fad0f4a92057ed93ff271dbd995a799abeb8f874dad57 |
-| Q14 | 04c07fb5847d9c0b9d1de3be9fc4dadde2d7e4bd0df021384570e4665d760c11 |
-| Q15 | 8251f79b1ccdfec1a5765704c1db9ef3e1f6389d21987d277c80c6d068565522 |
-| Q16 | 4bc988aa02b5cbc81b47672a7b78228a6940d0b835c1b9d29c259bf28e0b7353 |
-| Q17 | 10a486de0002c70ebf077fcbf78cb0905c6aea8d706c817929eaf82be27b4bed |
+| Q12 | 3faa44ecc14f9c61cbf7d608e0f646157aa9b3dac8e88e8f00b9f3129865f36a |
+| Q13 | 071e2ef8e083d8187639fc288b6d566630f14604423254c2754d50a9ce70a153 |
+| Q14 | 32600e68188002e18d6b8636851c6deb02dbdaa8be8727b38cc1a0e68225f515 |
+| Q15 | 253511ad7c0867d0373e9db85893f9e63cdab1368ad09fc856d6669aa1bdd110 |
+| Q16 | a9f367b92738ad55eda9bab0eaf60456a1f11e21ec109c94619ca99c8ee822f5 |
+| Q17 | 86ca99347938861d32d1a7d703d28b600e41a6924e778fdc404b405e5edf183b |
 | Q18 | 231141136588c09957b6eeffd18b4382dbde3619387c1cf7f96be91bfc6e56e6 |
-| Q19 | 6a5aed0302dc8ebed793c5c475c0dabf2b65eccf63b6fe2e6f436395e019c971 |
-| Q20 | 612538291fef43ef59e7897f3b73819cf983b6fe8e23aac38c7468ac0e912268 |
-| Q21 | 524a033f2064d23a84a66311f7ca842f101c87231ea336d36a03e8d8c292c185 |
-| Q22 | c7492c3ac7973947e12d201023dafdbfd17eb574848263a2ddbd7b393555dc55 |
-| Q23 | 24ee80b818a892ec86379bdc55f53dd1dea47d88f2c346fb2895ebc33ce9634e |
-| Q24 | 3863fb5294c824ffd374e9cc08ad6687e100b1a5d737bcadf42afca645ef2df4 |
+| Q19 | 56f65a742ba9e04efa2de46fbbddc93a6d283401f6a63be2a37d65f9541b5b7f |
+| Q20 | 7db87acf5c7c4dc923cabb20044cff8fdeadd4e79e45e128d157c617aa4f6e34 |
+| Q21 | 097c4e2c14358904ce445e162413819bbf7fff84f96885d12523cb97d0777616 |
+| Q22 | fc2d89e2c946681712aa8384d65929ecdb354b9fbbcb926d0301f4a171a4ec54 |
+| Q23 | 5f789f25ee8742f1767b1363a7a5b192a80a276cc20b38303ab32890f8694c6c |
+| Q24 | ffeb9101f76dc126a418ffe5a32591c8a47c1d09872dfdbbea9a011862c86d21 |
 | Q25 | c658cdb1dc9f3d86a2775146a7bcb6e4c46b7eeed4ea278da35a94b33f745c09 |
-| Q26 | 8b988754ba9efe5d2ab89652eba5ed08d21f0afd56065c41dfa0ab53698f277c |
+| Q26 | 408a5aa56cab5a988707de4fb9dfb116d421dbe5cb9dbfbdff1fb3d9cf55722a |
 
-The ordered manifest is one LF-terminated line per statement in the form Qnn:<statement SHA-256>. Its SHA-256 is **f433b6452e55952bde752bf000ead6198874139fecc0fcdb0c3662e3616d98cb**. The manifest is only a fingerprint for review; it is not an approval token or signature.
+The ordered manifest is one LF-terminated line per statement in the form Qnn:<statement SHA-256>. Its SHA-256 is **ab7193d72520482a50081fdb65edc098fdac1cc9530d161430ddc6b9a0759db0**. The manifest is only a fingerprint for review; it is not an approval token or signature.
 
 ## Classification and stop rules
 
@@ -502,6 +512,7 @@ The expected migration baseline must be frozen separately by the owner before ex
 - [GRANT and privilege kinds](https://www.postgresql.org/docs/18/sql-grant.html)
 - [Role membership catalog](https://www.postgresql.org/docs/18/catalog-pg-auth-members.html)
 - [Role attributes](https://www.postgresql.org/docs/18/role-attributes.html)
+- [Extension catalog](https://www.postgresql.org/docs/18/catalog-pg-extension.html)
 - [Database catalog](https://www.postgresql.org/docs/18/catalog-pg-database.html)
 - [Schema catalog](https://www.postgresql.org/docs/18/catalog-pg-namespace.html)
 - [Relation catalog](https://www.postgresql.org/docs/18/catalog-pg-class.html)
@@ -510,6 +521,7 @@ The expected migration baseline must be frozen separately by the owner before ex
 - [Type catalog](https://www.postgresql.org/docs/18/catalog-pg-type.html)
 - [Default ACL catalog](https://www.postgresql.org/docs/18/catalog-pg-default-acl.html)
 - [Configuration-parameter ACL catalog](https://www.postgresql.org/docs/18/catalog-pg-parameter-acl.html)
+- [Public user-mapping view](https://www.postgresql.org/docs/18/view-pg-user-mappings.html)
 - [Information-schema applicable_roles](https://www.postgresql.org/docs/18/infoschema-applicable-roles.html)
 - [Information-schema table_privileges](https://www.postgresql.org/docs/18/infoschema-table-privileges.html)
 - [Information-schema usage_privileges](https://www.postgresql.org/docs/18/infoschema-usage-privileges.html)

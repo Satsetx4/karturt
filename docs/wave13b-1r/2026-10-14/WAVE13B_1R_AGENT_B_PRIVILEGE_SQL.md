@@ -1,12 +1,12 @@
 # Wave 13B.1R — Agent B Privilege and SQL Coverage Review
 
-**Result: bounded candidate prepared; no live SQL executed; independent PostgreSQL 18 syntax/behavior validation pending.**
+**Result: bounded candidate prepared; disposable PostgreSQL 18.6 syntax/behavior validation PASS; no live SQL executed.** The exact frozen packet passed run `38586768128` on test-branch SHA `1bdf371bb3d18265af2bb82602882b8ad93a5139`; see [Agent C's independent report](WAVE13B_1R_AGENT_C_INDEPENDENT_VALIDATION.md).
 
 ## Scope and predecessor evidence
 
 Reviewed the six Wave13B.1 reports under docs/wave13b-1/2026-10-14, the previous Wave13B.0 SQL reference, and its D1 result/owner packet. The historical reference remains the approved 29-statement set and its Git blob SHA-1 is 78501ab327bdc7b7a9a06a0a0f66fe039fc8d148; its 29 SQL fences are unchanged. The predecessor outcome is UNKNOWN — NOT EXECUTED — CONTRACT/SAFETY BLOCKED. Connector behavior and privilege evidence were insufficient for a D1 result. This review did not run database SQL, invoke a Neon SQL tool, connect to Neon, or change provider state.
 
-The new candidate is WAVE13B_1R_FIXED_SQL_REFERENCE.md: 26 fixed SQL statements with per-statement SHA-256 and an ordered manifest hash. It is a proposal for independent Agent C validation and later owner review. It does not inherit approval from the prior 29-statement set.
+The new candidate is WAVE13B_1R_FIXED_SQL_REFERENCE.md: 26 fixed SQL statements with per-statement SHA-256 and an ordered manifest hash. Agent C independently validated it on a disposable PostgreSQL 18.6 service. It remains an unapproved candidate for later owner review and does not inherit approval from the prior 29-statement set.
 
 ## Requirement-to-evidence matrix
 
@@ -23,14 +23,14 @@ The new candidate is WAVE13B_1R_FIXED_SQL_REFERENCE.md: 26 fixed SQL statements 
 | Effective/inherited privileges for the migration role | Q26 reports built-in has_*_privilege booleans for the fixed target role on databases, schemas, tables (including MAINTAIN), columns, sequences, routines, and types; reconcile with Q07–Q18 raw ownership/ACL evidence and Q08 membership options | Review effective access including owner, PUBLIC, and applicable role paths for every core object/privilege pair | Exact target role only; Q26 is capped at 500 rows plus sentinel and covers only named core classes. Any cap, error, or unexplained result is UNKNOWN |
 | Column grants and grant options | Q14 non-null attacl on non-system columns; Q20 information-schema cross-check | No unapproved explicit column grant or grant option; account for table-level ACLs separately | No Q14 row means no explicit column ACL, not no effective access. Information-schema is filtered |
 | Routines | Q15 owner, routine kind, security-definer/leakproof flags, raw proacl; Q21 cross-check | No unexpected routine, owner, ACL, grant option, or security-definer routine | Definitions, arguments, config, and full routine bodies are excluded. Effective privilege is not calculated |
-| Types and domains | Q16 owner, type kind/category, raw typacl; Q22 usage cross-check | No unexpected user-defined type/domain owner or usage grant | Q22 is filtered and does not establish cluster-wide effective privilege |
+| Types and domains | Q16 owner, type kind/category, raw typacl; Q26 built-in effective type-privilege checks; Q22 only cross-checks domain USAGE among its supported object classes | No unexpected user-defined type/domain owner or usage grant | PostgreSQL 18 `usage_privileges` does not cover user-defined TYPE privileges; use Q16 raw ACL plus Q26 effective checks for types. Q22 is filtered and does not establish cluster-wide effective privilege |
 | Default ACLs | Q17 visible global/per-schema default ACL rows, owner, object type, raw ACL | Require exact approved default-ACL set before future object creation | NULL object ACL means built-in default behavior, not no privilege. pg_default_acl applies to future objects |
 | FDW and foreign-server privileges | Q18 owner and raw ACL for wrappers/servers; Q22 USAGE cross-check | No unexpected wrapper/server grant, owner, or grant option | Foreign options, connection details, and external-system permissions are excluded; visibility may block |
 | Language privileges | Q18 owner and raw ACL for procedural languages | Require only approved language/object owner/ACL state | Does not inspect runtime binaries or language behavior |
 | Large-object grants | Q18 large-object metadata OID, owner, raw ACL | No unexpected large-object metadata or ACL | Does not inspect content, size, references, or physical storage; result cap applies |
 | Tablespace privileges | Q18 tablespace name, owner, raw ACL | Compare CREATE grants and ownership with approved baseline | Does not inspect tablespace path/configuration or provider storage policy |
 | Configuration-parameter privileges | Q18 parameter name and raw paracl | Compare SET / ALTER SYSTEM grants and grant options with approved baseline | Parameter values and other configuration state are excluded; owner/default privilege representation must be reconciled |
-| Extension inventory | Q12 extension names/version/schema | Require exact approved extension list and schema placement | Does not inspect extension definitions or all extension-owned objects |
+| Extension inventory and ownership | Q12 extension names/version/schema/owner | Require exact approved extension list, schema placement, and owner | Does not inspect extension definitions or all extension-owned objects |
 | Relation-owned secondary objects | Q23 safe names/OIDs for triggers, constraints, policies, rewrite rules and parent OIDs | No unexpected secondary object under exact allowlist; map owner through parent relation/type | No expressions, definitions, policy contents, or standalone effective-ownership expansion |
 | Events, publications, subscriptions, user mappings | Q24 names/OIDs and owner or grantee identity; no options | No unexpected listed object; mapped role/server and owner identity are explicit | No per-table publication membership, subscription connection data, user-mapping options, or provider-side replication state |
 | Migration ledger | Q25 exact relation-presence check only | Baseline states whether ledger object must be absent/present; unexpected state stops | Does not read ledger rows, migration names, or checksums; it is not a migration-status assertion |
@@ -49,7 +49,7 @@ Before a future migration is considered, the owner must define an exact migratio
 5. The public schema and user-visible object inventories are compared with an exact allowlist. Expected extensions and ledger-object state are explicit.
 6. All 26 statements complete with stable result shapes below caps. No result is inferred from a missing row, filtered information-schema view, or tool-description claim.
 
-This minimum is **not satisfied yet**. The candidate has not been validated on PostgreSQL 18; actual connector transaction semantics remain unverified; and there is no approved effective-privilege baseline. No future query is authorized.
+This minimum is **not satisfied yet**. The candidate passed bounded validation on PostgreSQL 18.6 using synthetic fixtures, but actual connected transaction semantics remain unverified and there is no owner-approved effective-privilege baseline. No future query is authorized.
 
 ### Extended coverage in the candidate
 
@@ -60,6 +60,7 @@ The candidate adds role-edge options, raw ACLs and ownership for major grantable
 - pg_auth_members records membership edges with grantor and independent ADMIN, INHERIT, and SET options. Reconcile its edge list with applicable_roles. Neither source alone proves every effective privilege.
 - PostgreSQL privilege checks combine direct grants, grants to applicable roles, PUBLIC, object ownership, and built-in defaults. An ACL string records direct ACL entries and grant-option state; it is not an effective-access matrix. Q26 calls only PostgreSQL built-in has_*_privilege functions for the fixed target role and enumerated core classes; it is not a user-defined helper. It does not calculate effective booleans for every object class, every role, or every cluster object. Reconcile Q26 with raw ACLs, ownership, and separate ADMIN/INHERIT/SET edge facts. Any unexplained grant path is UNKNOWN.
 - PostgreSQL 18 adds MAINTAIN to table privileges. The information-schema table_privileges list documents SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, and TRIGGER, not MAINTAIN. Use raw pg_class.relacl for MAINTAIN and reconcile it explicitly.
+- Schema-family filters in the fixed reference exclude the exact `pg_toast` / `pg_temp` names and their suffixed forms; the exact system schema must not be missed by a suffix-only pattern.
 - usage_privileges covers USAGE for collations, domains, FDWs, servers, and sequences. Sequence SELECT and UPDATE are PostgreSQL extensions and are not shown there; use the raw relation ACL. Q19–Q22 are visibility-filtered cross-checks, not the ACL source of truth.
 - A NULL object ACL denotes PostgreSQL's hard-wired default for that object; it does not mean there are no privileges. pg_default_acl applies when future objects are created and does not retroactively rewrite current ACLs.
 - This candidate is bounded, not a complete PostgreSQL cluster-wide privilege universe. Q26 gives inherited/effective evidence for its core classes and the fixed migration role, but not for every object class or role. Current-database catalogs do not expose all object state in all databases; provider restrictions and visibility may hide data. The candidate omits role/database setting values, some object classes with implicit ownership but no ordinary GRANT privilege, extension-owned object details, per-publication table membership, subscription contents, and server-side policy. Do not call a clean bounded packet cluster-wide clean, empty, isolated, or lineage-proven.
@@ -67,7 +68,7 @@ The candidate adds role-edge options, raw ACLs and ownership for major grantable
 
 ## Disposition and stop boundary
 
-Outcome remains **UNKNOWN — NOT EXECUTED — CONNECTOR CONTRACT AND PRIVILEGE RECONCILIATION UNVERIFIED**. Agent C must review SQL syntax, guards, empty and unexpected catalogs, synthetic privilege combinations, result completeness, and abort/rollback behavior on a genuinely disposable PostgreSQL 18 instance. Connector review must independently establish actual current implementation semantics.
+Live-target outcome remains **UNKNOWN — NOT EXECUTED — CONNECTOR CONTRACT AND PRIVILEGE RECONCILIATION UNVERIFIED**. Agent C confirmed SQL syntax, guards, clean and unexpected catalogs, synthetic privilege combinations, result completeness, and psql abort/rollback/commit behavior on disposable PostgreSQL 18.6. This cannot establish actual connector semantics, staging state, or an approved baseline.
 
 If required evidence cannot be established, keep the result UNKNOWN and present a narrow alternative execution method for separate owner review. No Neon SQL, database connection, compute wake, provider mutation, migration, key operation, runtime guard change, Vercel action, merge, or D1v2/D2/D3 work is authorized here. The prior D1 approval applies only to its original 29-statement set.
 
@@ -78,6 +79,7 @@ If required evidence cannot be established, keep the result UNKNOWN and present 
 - [Role attributes](https://www.postgresql.org/docs/18/role-attributes.html)
 - [Role membership edges](https://www.postgresql.org/docs/18/catalog-pg-auth-members.html)
 - [Applicable roles](https://www.postgresql.org/docs/18/infoschema-applicable-roles.html)
+- [Extension catalog](https://www.postgresql.org/docs/18/catalog-pg-extension.html)
 - [Database ACL catalog](https://www.postgresql.org/docs/18/catalog-pg-database.html)
 - [Schema ACL catalog](https://www.postgresql.org/docs/18/catalog-pg-namespace.html)
 - [Relation ACL and relation kinds](https://www.postgresql.org/docs/18/catalog-pg-class.html)

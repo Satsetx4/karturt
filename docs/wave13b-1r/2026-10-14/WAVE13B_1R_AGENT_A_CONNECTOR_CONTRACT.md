@@ -1,4 +1,4 @@
-# Wave 13B.1R Agent A — Connected Transaction Contrac
+# Wave 13B.1R Agent A — Connected Transaction Contract
 
 Date: 2026-10-14
 Result: **G1 UNVERIFIED — connected runtime contract not established**
