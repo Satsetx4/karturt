@@ -12,7 +12,7 @@ The one new Wave 12.4 SQL permission was used once and only once after exact-tar
 - Project `karturt-v1-staging` / `wild-art-99835126`, PostgreSQL 18, Singapore region `aws-ap-southeast-1`.
 - Branch `staging` / `br-hidden-cake-a1ge5xqp`.
 - Database `karturt_staging` / `42079960`, role `karturt_staging_owner`.
-- Endpoint `ep-snowy-meadow-a10304d9` at the approved Neon hostname.
+- Endpoint `ep-snowy-meadow-a10304d9`, hostname `ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech`.
 
 The server reported `transaction_read_only=on`, the exact database/role guard returned `1`, and all 26 ordered statement result groups were present. The fixed catalog scope found only the expected `public` namespace and the system `plpgsql` extension. All inventoried object families and the Drizzle journal check returned zero rows. Agent B classifies this as **SCHEMA-CLEAN VERIFIED FOR DEFINED SCOPE**.
 

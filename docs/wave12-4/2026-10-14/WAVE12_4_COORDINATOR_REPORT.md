@@ -57,7 +57,7 @@ Additional reviewed boundaries: app-layer RT authorization does not provide a da
 
 The required documentation branch is `docs/wave12-4-staging-readiness-20261014`, based on the exact documentation SHA above. It contains exactly the five sanitized reports listed below. The source checkout and migration files were not changed.
 
-Static workflow review found no matching `push` workflow for this docs branch: Gate A’s push filter is an explicit allowlist, and the PG18 workflow targets only the Wave 12.3 source branch. The unfiltered pull-request trigger was not activated because no PR was created. Post-push Actions state will be checked and reported separately.
+Static workflow review found no matching `push` workflow for this docs branch: Gate A’s push filter is an explicit allowlist, and the PG18 workflow targets only the Wave 12.3 source branch. The unfiltered pull-request trigger was not activated because no PR was created. A post-push GitHub Actions readback returned no workflow runs for this docs branch; no workflow pass is claimed.
 
 Read-only metadata for Vercel project `karturt-review-staging-20261012` / `prj_Mv4rABJvDNAvSD78SVt5WbjFakEq` returned `live=false`, no latest deployment, no domains, and no deployments. The response omitted Git-linkage data, so current Git linkage is not independently verified. No deployment or project setting was changed.
 
