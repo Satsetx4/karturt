@@ -171,19 +171,19 @@ async function readPostMigrationCatalog(pool: Pool): Promise<PostMigrationCatalo
         WHERE n.nspname = 'public' AND p.prokind = 'f')::text AS function_count,
       (SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
         WHERE n.nspname = 'public' AND t.typtype = 'e')::text AS enum_count,
-      (SELECT coalesce(array_agg(c.conname ORDER BY c.conname), ARRAY[]::text[])
+      (SELECT coalesce(array_agg(c.conname::text ORDER BY c.conname::text), ARRAY[]::text[])
         FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace WHERE n.nspname = 'public') AS constraint_names,
-      (SELECT coalesce(array_agg(c.relname ORDER BY c.relname), ARRAY[]::text[])
+      (SELECT coalesce(array_agg(c.relname::text ORDER BY c.relname::text), ARRAY[]::text[])
         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'public' AND c.relkind = 'i') AS index_names,
-      (SELECT coalesce(array_agg(t.tgname ORDER BY t.tgname), ARRAY[]::text[])
+      (SELECT coalesce(array_agg(t.tgname::text ORDER BY t.tgname::text), ARRAY[]::text[])
         FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
         JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'public' AND NOT t.tgisinternal) AS trigger_names,
-      (SELECT coalesce(array_agg(p.proname ORDER BY p.proname), ARRAY[]::text[])
+      (SELECT coalesce(array_agg(p.proname::text ORDER BY p.proname::text), ARRAY[]::text[])
         FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname = 'public' AND p.prokind = 'f') AS function_names,
-      (SELECT coalesce(array_agg(t.typname ORDER BY t.typname), ARRAY[]::text[])
+      (SELECT coalesce(array_agg(t.typname::text ORDER BY t.typname::text), ARRAY[]::text[])
         FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
         WHERE n.nspname = 'public' AND t.typtype = 'e') AS enum_names
   `);
