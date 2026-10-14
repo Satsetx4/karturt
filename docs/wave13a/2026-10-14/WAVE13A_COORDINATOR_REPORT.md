@@ -1,6 +1,7 @@
 # KartuRT V1 Wave 13A Coordinator Report
 
-**Decision: `SECURITY/PREFLIGHT PARTIAL`**  
+**Decision:** `SECURITY/PREFLIGHT PARTIAL`
+
 **Date:** 2026-10-14
 
 Wave 13A implemented the source-side staging target guard, an operator-only migration gate, and guarded asynchronous Next.js smoke launches. The source patch is local and reviewable. The separate approval packet is preparation for a later decision; it grants no database or deployment permission.
