@@ -46,7 +46,7 @@ type SyntheticTenant = {
 
 let currentStage = "run and PostgreSQL service identity preflight";
 
-function sanitizedPostgresFailure(error: unknown) {
+function readPostgresFailure(error: unknown) {
   const visited = new Set<object>();
   let current: unknown = error;
   for (let depth = 0; depth < 5 && current && typeof current === "object" && !visited.has(current); depth += 1) {
@@ -57,11 +57,18 @@ function sanitizedPostgresFailure(error: unknown) {
         && /^[a-z][a-z0-9_]{0,79}$/.test(candidate.constraint)
         ? candidate.constraint
         : undefined;
-      return { sqlstate: candidate.code, ...(constraint ? { constraint } : {}) };
+      return { code: candidate.code, ...(constraint ? { constraint } : {}) };
     }
     current = candidate.cause;
   }
   return undefined;
+}
+
+function sanitizedPostgresFailure(error: unknown) {
+  const failure = readPostgresFailure(error);
+  return failure
+    ? { sqlstate: failure.code, ...(failure.constraint ? { constraint: failure.constraint } : {}) }
+    : undefined;
 }
 
 function sanitizedFailureDiagnostic(error: unknown) {
@@ -172,11 +179,11 @@ async function expectMigratorFailure(
   expectedConstraint: string,
   ledgerIndexAfterFailure: number,
 ) {
-  let caught: { code?: unknown; constraint?: unknown } | undefined;
+  let caught: ReturnType<typeof readPostgresFailure>;
   try {
     await applyJournalThrough(pool, journal, highestIndex, runId);
   } catch (error) {
-    caught = error as { code?: unknown; constraint?: unknown };
+    caught = readPostgresFailure(error);
   }
   assert.equal(caught?.code, expectedCode, "The expected migration preflight SQLSTATE was not returned.");
   assert.equal(caught?.constraint, expectedConstraint, "The expected migration preflight name was not returned.");
