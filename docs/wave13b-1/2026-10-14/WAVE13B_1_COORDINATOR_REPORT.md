@@ -51,3 +51,13 @@ Before the docs push, the configured Vercel staging project was read back. It ha
 The source branch was not edited. Its staging isolation guard remains false, and the pinned migration approval public key remains null. No provider configuration, endpoint setting, role, network allowlist, or plan was changed. No migration, seed, reset, rebuild, delete, or runtime enablement occurred.
 
 Wave 13B.1 ends here. D2 and D3 were not started. The 14-migration run remains NO-GO pending separate owner decisions and evidence.
+
+## Post-publication verification
+
+The first push published commit 98df02e0a323ad22186d30c2e8c0b7ae8cc73ef3. Remote readback confirmed the docs branch at that SHA, with the required docs-base SHA as an ancestor and exactly the six report paths listed in this branch diff. The source branch remained at 48b92abbe93fbd499448b6c885d3042cb49c2128 and historical main remained at 96c84588ae0c13f68a17cffd997a3e583fb7da82. The docs-base branch remained at 8e97e0bed0f1c8f13288ad9368b1b314fdf471b6. The remote diff check was clean.
+
+GitHub Actions returned zero workflow runs for this branch. This is no run, not a CI pass. Vercel readback after the push showed the review-staging project still had no Git repository link, no latest deployment, and zero deployments. The project search filtered by the karturt repository returned no linked project.
+
+Post-push Neon control-plane readbacks, without SQL, again matched the approved organization, Free project, PostgreSQL 18, staging branch, database ID/name, role, endpoint ID/host, region, and endpoint state. The branch remained ready with init_source=parent-data; the endpoint remained idle and read-write. The operation listing contained five completed lifecycle entries (create_timeline, start_compute, epc_sync, apply_config, suspend_compute). These metadata checks do not establish grants, physical emptiness, or lineage.
+
+No SQL, provider mutation, migration, deployment, or workflow dispatch occurred during publication verification.
