@@ -18,7 +18,10 @@ import {
 const CHILD_HARD_TIMEOUT_MS = 8_000;
 const MIGRATION_TIMEOUT_MS = 300;
 const SHUTDOWN_TIMEOUT_MS = 5_000;
-const BACKEND_EXIT_TIMEOUT_MS = 3_000;
+const BACKEND_ACTIVE_OBSERVATION_MS = 3_000;
+const BACKEND_COMPLETION_WAIT_MS = 70_000;
+const BACKEND_COMPLETION_POLL_MS = 500;
+const DISPOSABLE_APP_NAME = "karturt-wave13a2-pg18-timeout-verification";
 const ADMIN_USERNAME = "karturt_w13a2_bootstrap";
 const ADMIN_PASSWORD = "wave13a2-disposable-bootstrap-only";
 
@@ -49,7 +52,7 @@ function pgConnectionConfig(config: Wave13A2Pg18RuntimeConfig, databaseName = co
     database: databaseName,
     user: config.username,
     password: config.password,
-    application_name: "karturt-wave13a2-pg18-timeout-verification",
+    application_name: DISPOSABLE_APP_NAME,
     max: 1,
     connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 0,
@@ -234,17 +237,42 @@ function parseChildEvidence(result: ChildResult, scenario: Scenario, config: Wav
   return evidence;
 }
 
-async function assertBackendGone(pool: Pool, pid: number) {
-  const deadline = Date.now() + BACKEND_EXIT_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const activity = await pool.query<{ exists: boolean }>(
-      "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = $1) AS exists",
-      [pid],
-    );
-    if (activity.rows[0]?.exists === false) return;
+async function readDisposableBackendActivity(pool: Pool, pid: number) {
+  const activity = await pool.query<{ application_name: string; state: string | null }>(
+    "SELECT application_name, state FROM pg_stat_activity WHERE pid = $1",
+    [pid],
+  );
+  return activity.rows[0];
+}
+
+async function assertBackendRemainsActiveAfterChildExit(pool: Pool, pid: number) {
+  const observationStartedAt = Date.now();
+  const observationDeadline = observationStartedAt + BACKEND_ACTIVE_OBSERVATION_MS;
+  while (Date.now() < observationDeadline) {
+    const activity = await readDisposableBackendActivity(pool, pid);
+    assert.ok(activity, "The timed-out backend must remain visible after its Node child exits.");
+    assert.equal(activity.application_name, DISPOSABLE_APP_NAME);
+    assert.equal(activity.state, "active", "The synthetic pg_sleep backend must still be active after child exit.");
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error("The timed-out synthetic PostgreSQL backend remained visible after the client connection was discarded.");
+
+  const activity = await readDisposableBackendActivity(pool, pid);
+  assert.ok(activity, "The timed-out backend must still be visible 3 seconds after child exit.");
+  assert.equal(activity.application_name, DISPOSABLE_APP_NAME);
+  assert.equal(activity.state, "active", "The synthetic pg_sleep backend must remain active 3 seconds after child exit.");
+  return Date.now() - observationStartedAt;
+}
+
+async function waitForBackendToFinishNaturally(pool: Pool, pid: number) {
+  const startedAt = Date.now();
+  const deadline = startedAt + BACKEND_COMPLETION_WAIT_MS;
+  while (Date.now() < deadline) {
+    const activity = await readDisposableBackendActivity(pool, pid);
+    if (!activity) return Date.now() - startedAt;
+    assert.equal(activity.application_name, DISPOSABLE_APP_NAME);
+    await new Promise((resolve) => setTimeout(resolve, BACKEND_COMPLETION_POLL_MS));
+  }
+  throw new Error("The synthetic pg_sleep backend did not finish within the bounded 70-second observation window; no cancellation was sent.");
 }
 
 async function runChildAndAssert(
@@ -382,7 +410,9 @@ async function runIntegration() {
     assert.ok(timedOut.evidence.backendPid, "The synthetic long-running PostgreSQL backend PID must be captured.");
 
     currentStage = "disposable PostgreSQL backend activity after timeout shutdown";
-    await assertBackendGone(observer, timedOut.evidence.backendPid!);
+    const backendActiveAfterChildExitMs = await assertBackendRemainsActiveAfterChildExit(observer, timedOut.evidence.backendPid!);
+    currentStage = "natural completion of the disposable PostgreSQL pg_sleep backend";
+    const backendCompletionWaitMs = await waitForBackendToFinishNaturally(observer, timedOut.evidence.backendPid!);
 
     process.stdout.write(`${JSON.stringify({
       event: "karturt.wave13a2.pg18.timeout_runtime",
@@ -395,9 +425,11 @@ async function runIntegration() {
       scenarios: {
         normalQueryAndClose: "PASS; child natural exit 0; one invocation; one query",
         immediateQueryError: "PASS; child natural exit 1; one invocation; no retry",
-        timedOutPgSleep: "PASS; 300ms JavaScript deadline; child natural exit 1 within 8s hard bound; one invocation; no retry",
-        backendActivityAfterShutdown: "PASS; pg_stat_activity no longer lists the disposable backend within 3s",
+        timedOutPgSleepChild: "PASS; 300ms JavaScript deadline; child naturally exited 1 within the 8s hard bound; one invocation; no retry",
+        backendAfterChildExit: `OBSERVED; the synthetic pg_sleep backend remained active in pg_stat_activity for at least ${BACKEND_ACTIVE_OBSERVATION_MS}ms after child exit (${backendActiveAfterChildExitMs}ms observed)`,
+        backendNaturalCompletion: `PASS; backend disappeared from pg_stat_activity after ${backendCompletionWaitMs}ms of bounded observation; no cancellation request was sent`,
       },
+      migrationWrites: "none; the runtime scenarios issue synthetic SELECT statements only and do not apply migrations",
       shutdownTimeoutMs: SHUTDOWN_TIMEOUT_MS,
       childHardTimeoutMs: CHILD_HARD_TIMEOUT_MS,
       neonServerlessTransportParity: "NOT TESTED; local PostgreSQL is direct TCP and does not provide the Neon WebSocket proxy",
