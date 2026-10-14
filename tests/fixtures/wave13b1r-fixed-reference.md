@@ -134,9 +134,11 @@ LIMIT 501;
 ### Q12 — extension names, versions, and schemas only
 
 ~~~sql
-SELECT e.extname AS extension_name, e.extversion AS extension_version, n.nspname AS schema_name
+SELECT e.extname AS extension_name, e.extversion AS extension_version, n.nspname AS schema_name,
+       owner.rolname AS owner_name
 FROM pg_catalog.pg_extension AS e
 JOIN pg_catalog.pg_namespace AS n ON n.oid = e.extnamespace
+JOIN pg_catalog.pg_roles AS owner ON owner.oid = e.extowner
 ORDER BY e.extname
 LIMIT 501;
 ~~~
@@ -465,7 +467,7 @@ Per-statement SHA-256 is computed over the exact UTF-8 SQL body shown above, aft
 | Q09 | 438aaeec6e0dc24acd958de973c79892553f74c0742121ecca742102eda121a6 |
 | Q10 | 42f79f8ab7e1a7f1ba4050ae91206891640755d499f4420a1347b9fcc71de1f7 |
 | Q11 | 002aec0172c1136d7448cfc019c22a24fa04a7c846273421424fc56a7b1c62bc |
-| Q12 | 42fccee1ab6fad0408a32a6f77115cbc38759ae5e5a899a3e6507b14f951852c |
+| Q12 | 3faa44ecc14f9c61cbf7d608e0f646157aa9b3dac8e88e8f00b9f3129865f36a |
 | Q13 | e621cacb48dac82f120fad0f4a92057ed93ff271dbd995a799abeb8f874dad57 |
 | Q14 | 04c07fb5847d9c0b9d1de3be9fc4dadde2d7e4bd0df021384570e4665d760c11 |
 | Q15 | 8251f79b1ccdfec1a5765704c1db9ef3e1f6389d21987d277c80c6d068565522 |
@@ -481,7 +483,7 @@ Per-statement SHA-256 is computed over the exact UTF-8 SQL body shown above, aft
 | Q25 | c658cdb1dc9f3d86a2775146a7bcb6e4c46b7eeed4ea278da35a94b33f745c09 |
 | Q26 | 8b988754ba9efe5d2ab89652eba5ed08d21f0afd56065c41dfa0ab53698f277c |
 
-The ordered manifest is one LF-terminated line per statement in the form Qnn:<statement SHA-256>. Its SHA-256 is **ae6364e8a2b02d73fb7b4747166eae2995345912e0f294be066b28e7ad62752d**. The manifest is only a fingerprint for review; it is not an approval token or signature.
+The ordered manifest is one LF-terminated line per statement in the form Qnn:<statement SHA-256>. Its SHA-256 is **992cc429dd4abdad1b76a6ed43b01405c3bd09c297504fe558afd61db380d5ce**. The manifest is only a fingerprint for review; it is not an approval token or signature.
 
 ## Classification and stop rules
 
@@ -510,6 +512,7 @@ The expected migration baseline must be frozen separately by the owner before ex
 - [GRANT and privilege kinds](https://www.postgresql.org/docs/18/sql-grant.html)
 - [Role membership catalog](https://www.postgresql.org/docs/18/catalog-pg-auth-members.html)
 - [Role attributes](https://www.postgresql.org/docs/18/role-attributes.html)
+- [Extension catalog](https://www.postgresql.org/docs/18/catalog-pg-extension.html)
 - [Database catalog](https://www.postgresql.org/docs/18/catalog-pg-database.html)
 - [Schema catalog](https://www.postgresql.org/docs/18/catalog-pg-namespace.html)
 - [Relation catalog](https://www.postgresql.org/docs/18/catalog-pg-class.html)

@@ -3,15 +3,17 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const fixturePath = "tests/fixtures/wave13b1r-fixed-reference.md";
-const expectedBlobSha1 = "741803cc54c73c3122e10fcf6549660dfaf076be";
-const expectedManifestSha256 = "ae6364e8a2b02d73fb7b4747166eae2995345912e0f294be066b28e7ad62752d";
+const expectedBlobSha1 = "5ebe2abd9f2c08bea6858acfce8144930814208f";
+const expectedManifestSha256 = "992cc429dd4abdad1b76a6ed43b01405c3bd09c297504fe558afd61db380d5ce";
 const targetRole = "karturt_staging_owner";
 const databaseName = "karturt_staging";
 const separator = "\u001f";
 
 function assert(condition, message) {
-  if (!condition) throw new Error(message);
+  if (!condition) throw new ValidationFailure(message);
 }
+
+class ValidationFailure extends Error {}
 
 function digest(algorithm, value) {
   return crypto.createHash(algorithm).update(value).digest("hex");
@@ -90,7 +92,7 @@ function executeSetup(containerId, database, sql, label) {
 
 const columnCounts = new Map([
   ["Q01", 0], ["Q02", 1], ["Q03", 1], ["Q04", 3], ["Q05", 1], ["Q06", 1],
-  ["Q07", 9], ["Q08", 6], ["Q09", 3], ["Q10", 3], ["Q11", 3], ["Q12", 3],
+  ["Q07", 9], ["Q08", 6], ["Q09", 3], ["Q10", 3], ["Q11", 3], ["Q12", 4],
   ["Q13", 9], ["Q14", 5], ["Q15", 8], ["Q16", 6], ["Q17", 4], ["Q18", 4],
   ["Q19", 7], ["Q20", 8], ["Q21", 7], ["Q22", 8], ["Q23", 5], ["Q24", 4],
   ["Q25", 3], ["Q26", 4],
@@ -180,6 +182,10 @@ function validateSyntheticPacket(rows) {
   assert(rows.get("Q25").length === 0, "synthetic grant case unexpectedly contains a migration ledger");
 }
 
+function validateExtensionOwnership(rows) {
+  assert(hasRow(rows.get("Q12"), (r) => r[0] === "plpgsql" && r[3] === "postgres"), "default plpgsql extension ownership evidence missing");
+}
+
 function expectGuardFailure(containerId, user, database, sql, label) {
   const result = psql(containerId, user, database, sql, true);
   assert(result.status !== 0, "guard unexpectedly succeeded: " + label);
@@ -221,6 +227,7 @@ function main() {
 
   const clean = runPacket(containerId, queries, "clean catalog");
   validateCleanPacket(clean);
+  validateExtensionOwnership(clean);
 
   executeSetup(containerId, databaseName, [
     "CREATE ROLE qa_parent NOLOGIN;",
@@ -292,7 +299,8 @@ function main() {
 
 try {
   main();
-} catch {
-  console.error("result=FAIL; database output withheld");
+} catch (error) {
+  const diagnostic = error instanceof ValidationFailure ? error.message : "unexpected validation error";
+  console.error("result=FAIL; " + diagnostic + "; database output withheld");
   process.exitCode = 1;
 }
