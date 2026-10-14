@@ -17,7 +17,6 @@ import {
   parseStagingMigrationInvocation,
   runStagingMigrationCommandOnce,
   type MigrationSafetyDependencies,
-  type StagingMigrationReviewContext,
 } from "../../src/db/migration-safety";
 
 const now = Date.parse("2026-10-14T05:00:00.000Z");
@@ -71,7 +70,7 @@ function makeDependencies(overrides: Partial<MigrationSafetyDependencies> = {}) 
   const consumeAuthorizationOnce = vi.fn(() => {
     events.push("consume");
   });
-  const confirmChallenge = vi.fn(async (challenge: string, _review: StagingMigrationReviewContext) => {
+  const confirmChallenge = vi.fn(async (challenge: string) => {
     events.push("confirm");
     return challenge;
   });
@@ -123,9 +122,12 @@ describe("staging migration approval artifact", () => {
     ["source SHA", { sourceSha: "e".repeat(40) }],
     ["target manifest", { targetManifestFingerprint: "f".repeat(64) }],
     ["migration manifest", { migrationManifestFingerprint: "1".repeat(64) }],
-  ])("rejects an approval bound to a different %s", (_name, wrongExpectation) => {
+  ])("rejects an approval bound to a different %s", (review, wrongExpectation) => {
     const artifact = parseStagingMigrationAuthorizationArtifact(signedArtifact());
-    expect(() => assertStagingMigrationAuthorization(artifact, expectations(wrongExpectation), publicKeyPem)).toThrow();
+    expect(
+      () => assertStagingMigrationAuthorization(artifact, expectations(wrongExpectation), publicKeyPem),
+      review,
+    ).toThrow();
   });
 
   it("rejects a missing trust anchor, invalid signature, expired ticket, and oversized artifact", () => {
@@ -206,8 +208,11 @@ describe("staging migration command gates", () => {
     const wrongSource = makeDependencies({
       readAuthorizationFile: () => signedArtifact(createPayload({ sourceSha: "e".repeat(40) })),
     });
+    const replayConsumeAuthorizationOnce = vi.fn(() => {
+      throw new Error("already consumed");
+    });
     const replay = makeDependencies({
-      consumeAuthorizationOnce: () => { throw new Error("already consumed"); },
+      consumeAuthorizationOnce: replayConsumeAuthorizationOnce,
     });
 
     for (const setup of [targetMismatch, missingApproval, invalidApproval, wrongSource, replay]) {
@@ -222,7 +227,7 @@ describe("staging migration command gates", () => {
       expect(createClient).not.toHaveBeenCalled();
     }
     expect(targetMismatch.readAuthorizationFile).not.toHaveBeenCalled();
-    expect(replay.consumeAuthorizationOnce).toHaveBeenCalledTimes(1);
+    expect(replayConsumeAuthorizationOnce).toHaveBeenCalledTimes(1);
   });
 
   it("consumes the signed approval before opening the client and never logs connection details or token material", async () => {
