@@ -33,6 +33,11 @@ describe("disposable PostgreSQL concurrency identity", () => {
     );
   });
 
+  it("keeps the longest run-scoped fixture database identifier within PostgreSQL's limit", () => {
+    const longestRunDatabase = disposablePostgresNames("a".repeat(24)).databaseName;
+    expect(`${longestRunDatabase}_fixture10`.length).toBeLessThanOrEqual(63);
+  });
+
   it("accepts a run-scoped loopback database on a dynamically assigned port", () => {
     expect(validateDisposablePostgresTarget(validEnvironment())).toMatchObject({
       databaseName,

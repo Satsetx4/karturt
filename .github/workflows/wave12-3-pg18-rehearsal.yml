@@ -65,3 +65,14 @@ jobs:
           export LAUNCH_SAFETY_POSTGRES_URL="postgresql://karturt_runner_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}@127.0.0.1:${PG18_PORT}/karturt_concurrency_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
           printf '::add-mask::%s\n' "$LAUNCH_SAFETY_POSTGRES_URL"
           npm run db:rehearse:pg18
+      - name: Rehearse synthetic legacy migration fixtures on PostgreSQL 18
+        env:
+          APP_ENV: test
+          DATABASE_ENV: test
+          PG18_SERVICE_ID: ${{ job.services.postgres.id }}
+          PG18_PORT: ${{ job.services.postgres.ports[5432] }}
+        run: |
+          set -euo pipefail
+          export LAUNCH_SAFETY_POSTGRES_URL="postgresql://karturt_runner_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}@127.0.0.1:${PG18_PORT}/karturt_concurrency_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          printf '::add-mask::%s\n' "$LAUNCH_SAFETY_POSTGRES_URL"
+          npm run db:rehearse:pg18:fixtures
