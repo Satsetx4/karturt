@@ -20,6 +20,8 @@
     "test:postgres-concurrency": "tsx scripts/run-disposable-postgres-concurrency.ts",
     "test:postgres-concurrency:runner": "tsx scripts/launch-safety-postgres-concurrency.ts",
     "prepare:postgres-concurrency-ci": "tsx scripts/prepare-ci-postgres-concurrency.ts",
+    "db:rehearse:pg18": "tsx scripts/pg18-migration-rehearsal.ts",
+    "test:pg18-rehearsal:guard": "vitest run tests/unit/pg18-migration-rehearsal.test.ts tests/unit/disposable-postgres-identity.test.ts --maxWorkers=1",
     "db:test-audit-neon": "tsx scripts/phase-4-5-neon-audit-check.ts",
     "db:test-payment-request-neon": "tsx scripts/phase-5-neon-payment-request-smoke.ts",
     "db:test-waiver-neon": "tsx scripts/phase-10-waiver-http-smoke.ts",

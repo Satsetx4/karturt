@@ -1,0 +1,56 @@
+name: Wave 12.3 PostgreSQL 18 migration rehearsal
+
+on:
+  push:
+    branches:
+      - codex/wave12-3-pg18-rehearsal-20261014
+
+permissions:
+  contents: read
+
+jobs:
+  pg18-migration-rehearsal:
+    name: Disposable PostgreSQL 18 migration rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: karturt_concurrency_${{ github.run_id }}_${{ github.run_attempt }}
+          POSTGRES_USER: karturt_runner_${{ github.run_id }}_${{ github.run_attempt }}
+          POSTGRES_PASSWORD: local-test-only-not-a-secret
+        ports:
+          - 5432
+        options: >-
+          --health-cmd "pg_isready -U karturt_runner_${{ github.run_id }}_${{ github.run_attempt }} -d karturt_concurrency_${{ github.run_id }}_${{ github.run_attempt }}"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_ENV: test
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Rehearsal guard unit tests
+        run: npm run test:pg18-rehearsal:guard
+      - name: Initialize run-scoped PostgreSQL identity
+        env:
+          APP_ENV: test
+          DATABASE_ENV: test
+          LAUNCH_SAFETY_POSTGRES_URL: postgresql://karturt_runner_${{ github.run_id }}_${{ github.run_attempt }}:local-test-only-not-a-secret@127.0.0.1:${{ job.services.postgres.ports[5432] }}/karturt_concurrency_${{ github.run_id }}_${{ github.run_attempt }}
+        run: npm run prepare:postgres-concurrency-ci
+      - name: Apply and verify the checked-in Drizzle journal on PostgreSQL 18
+        env:
+          APP_ENV: test
+          DATABASE_ENV: test
+          LAUNCH_SAFETY_POSTGRES_URL: postgresql://karturt_runner_${{ github.run_id }}_${{ github.run_attempt }}:local-test-only-not-a-secret@127.0.0.1:${{ job.services.postgres.ports[5432] }}/karturt_concurrency_${{ github.run_id }}_${{ github.run_attempt }}
+        run: npm run db:rehearse:pg18
