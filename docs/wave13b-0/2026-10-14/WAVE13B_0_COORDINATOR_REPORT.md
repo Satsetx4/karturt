@@ -51,4 +51,12 @@ D1 authorizes only the exact read-only query set and exact IDs if the owner late
 
 ## Publication readback
 
-This section is completed after the documentation commit is pushed. It records the exact remote commit, changed paths, ref ancestry, post-push Actions applicability, and Vercel readback. The report must remain documentation-only and must not be extended by source/provider actions.
+The initial documentation publication commit is `c0c1de08acd4a70440c7a794ca01c6d40f76d2c7`; its parent is the exact docs base `b30597abef9375435ea8524b093690375e4824e1`. A fresh read after pushing confirmed:
+
+- `origin/docs/wave13b-0-security-approval-20261014` pointed to `c0c1de08acd4a70440c7a794ca01c6d40f76d2c7`.
+- The GitHub compare readback was one commit ahead of the exact docs base, zero commits behind, and listed only the six Markdown paths in this folder. No source or workflow file changed.
+- Source branch remained at `48b92abbe93fbd499448b6c885d3042cb49c2128`; docs base remained `b30597abef9375435ea8524b093690375e4824e1`; `main` remained `96c84588ae0c13f68a17cffd997a3e583fb7da82`.
+- GitHub reported zero check runs for the published SHA and `gh run list` returned an empty list for the docs branch. This is **no workflow run / CI not applicable**, not a CI pass. The only workflow at the base does not include this branch in its push allowlist; this task did not open a PR or dispatch a workflow.
+- Vercel project `karturt-review-staging-20261012` (`prj_Mv4rABJvDNAvSD78SVt5WbjFakEq`) still reported `live=false`, `latestDeployment=null`, and no domains; its deployment list count was zero. A repository-URL project search returned zero projects, and the team's linked Git projects contained no `Satsetx4/karturt` link.
+
+The published package is documentation-only. No PR, merge, workflow dispatch, Vercel deployment, or source/provider action was performed. The final delivery message reports the current remote branch SHA after the report-only verification update.
