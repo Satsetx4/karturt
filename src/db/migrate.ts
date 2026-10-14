@@ -13,7 +13,7 @@ import {
 } from "@/lib/staging-database-target";
 import { PINNED_STAGING_MIGRATION_APPROVAL_PUBLIC_KEY_PEM } from "@/db/migration-approval";
 import {
-  releaseMigrationPoolClientForShutdown,
+  closeMigrationPoolForShutdown,
   runStagingMigrationCommandOnce,
   formatStagingMigrationFailure,
   type MigrationPoolClientHandle,
@@ -133,11 +133,7 @@ async function main() {
     closeClient: async (pool, migrationStatus) => {
       const migrationClient = activeMigrationClient;
       activeMigrationClient = undefined;
-      const closingPool = pool.end();
-
-      if (migrationClient) releaseMigrationPoolClientForShutdown(migrationClient, migrationStatus);
-
-      await closingPool;
+      await closeMigrationPoolForShutdown(pool, migrationClient, migrationStatus);
     },
   });
   console.info("The one-shot migration command returned successfully. Separate read-only post-migration acceptance is still required.");

@@ -239,6 +239,10 @@ export type MigrationPoolClientHandle = {
   release: (error?: Error | boolean) => void;
 };
 
+export type MigrationPoolShutdownHandle = {
+  end: () => Promise<void>;
+};
+
 export function releaseMigrationPoolClientForShutdown(
   client: MigrationPoolClientHandle,
   migrationStatus: "fulfilled" | "rejected" | "timed-out",
@@ -248,6 +252,16 @@ export function releaseMigrationPoolClientForShutdown(
     return;
   }
   client.release(new Error("One-shot migration ended without verified completion."));
+}
+
+export async function closeMigrationPoolForShutdown(
+  pool: MigrationPoolShutdownHandle,
+  client: MigrationPoolClientHandle | undefined,
+  migrationStatus: "fulfilled" | "rejected" | "timed-out",
+) {
+  const closingPool = pool.end();
+  if (client) releaseMigrationPoolClientForShutdown(client, migrationStatus);
+  await closingPool;
 }
 
 type BoundedPromiseResult<T> =

@@ -1,0 +1,85 @@
+name: Wave 13A.2 PostgreSQL 18 timeout runtime
+
+on:
+  push:
+    branches:
+      - verify/karturt-wave13a2-pg18-20261014
+
+permissions:
+  contents: read
+
+jobs:
+  pg18-timeout-runtime:
+    name: Disposable PostgreSQL 18 migration timeout and process exit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: karturt_w13a2_bootstrap
+          POSTGRES_PASSWORD: wave13a2-disposable-bootstrap-only
+          POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+        ports:
+          - 5432
+        options: >-
+          --health-cmd "pg_isready -U karturt_w13a2_bootstrap -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_ENV: test
+    steps:
+      - name: Check out source without persisting a write token
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm ci
+      - name: Run guarded harness checks
+        run: npm run test:wave13a2-pg18-runtime:guard
+      - name: Verify PostgreSQL 18 timeout and child process shutdown
+        env:
+          PG18_SERVICE_ID: ${{ job.services.postgres.id }}
+          PG18_PORT: ${{ job.services.postgres.ports[5432] }}
+          PG18_BOOTSTRAP_USER: karturt_w13a2_bootstrap
+          PG18_BOOTSTRAP_PASSWORD: wave13a2-disposable-bootstrap-only
+          PG18_TEST_USER: karturt_w13a2_runner
+          PG18_TEST_PASSWORD: wave13a2-disposable-test-role-only
+        run: |
+          set -euo pipefail
+          unset DATABASE_URL MIGRATION_DATABASE_URL
+          for variable_name in $(compgen -e); do
+            case "$variable_name" in
+              NEON_*|VERCEL_*|SUPABASE_*|*_TOKEN|TOKEN|GH_TOKEN)
+                unset "$variable_name"
+                ;;
+            esac
+          done
+          printf '::add-mask::%s\n' "$PG18_BOOTSTRAP_PASSWORD"
+          printf '::add-mask::%s\n' "$PG18_TEST_PASSWORD"
+          env -i \
+            PATH="$PATH" \
+            HOME="$HOME" \
+            GITHUB_ACTIONS="$GITHUB_ACTIONS" \
+            GITHUB_REPOSITORY="$GITHUB_REPOSITORY" \
+            GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME" \
+            GITHUB_REF="$GITHUB_REF" \
+            GITHUB_RUN_ID="$GITHUB_RUN_ID" \
+            GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+            APP_ENV=test \
+            DATABASE_ENV=test \
+            PG18_SERVICE_ID="$PG18_SERVICE_ID" \
+            PG18_PORT="$PG18_PORT" \
+            PG18_BOOTSTRAP_USER="$PG18_BOOTSTRAP_USER" \
+            PG18_BOOTSTRAP_PASSWORD="$PG18_BOOTSTRAP_PASSWORD" \
+            PG18_TEST_DATABASE="karturt_w13a2_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}" \
+            PG18_TEST_USER="$PG18_TEST_USER" \
+            PG18_TEST_PASSWORD="$PG18_TEST_PASSWORD" \
+            npm run db:verify:pg18:timeout-runtime
