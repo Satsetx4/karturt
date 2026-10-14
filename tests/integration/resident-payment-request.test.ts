@@ -377,6 +377,48 @@ describe("resident payment request transactions", () => {
     expect(duesSummary(dues)).toEqual({ paid: 80000, pending: 40000, unpaid: 200000 });
   });
 
+  it("reconciles the owner D5 Rp25,000 annual case on 2026-10-12", async () => {
+    const businessDate = "2026-10-12";
+    const resident = await createResident(testDatabase.db, { dues: [
+      ...Array.from({ length: 8 }, (_, index) => ({
+        period: `2026-${String(index + 1).padStart(2, "0")}`,
+        status: "paid" as const,
+        amount: 25000,
+      })),
+      ...Array.from({ length: 4 }, (_, index) => ({
+        period: `2026-${String(index + 9).padStart(2, "0")}`,
+        amount: 25000,
+      })),
+    ] });
+
+    const dues = await getResidentMonthlyDues(testDatabase.db as never, resident.principal, businessDate);
+    const arrears = dues
+      .filter((due) => due.status === "unpaid" && due.periodTiming === "past")
+      .reduce((total, due) => total + due.outstanding, 0);
+    const dueNow = dues
+      .filter((due) => due.status === "unpaid" && due.periodTiming !== "future")
+      .reduce((total, due) => total + due.outstanding, 0);
+    const future = dues
+      .filter((due) => due.status === "unpaid" && due.periodTiming === "future")
+      .reduce((total, due) => total + due.outstanding, 0);
+    const annualOutstanding = dues.reduce((total, due) => total + due.outstanding, 0);
+
+    expect(dues.map((due) => [due.month, due.status, due.periodTiming, due.amount, due.activeReceived, due.outstanding])).toEqual([
+      ...Array.from({ length: 8 }, (_, index) => [index + 1, "paid", "past", 25000, 25000, 0]),
+      [9, "unpaid", "past", 25000, 0, 25000],
+      [10, "unpaid", "current", 25000, 0, 25000],
+      [11, "unpaid", "future", 25000, 0, 25000],
+      [12, "unpaid", "future", 25000, 0, 25000],
+    ]);
+    expect({ arrears, dueNow, future, annualOutstanding }).toEqual({
+      arrears: 25000,
+      dueNow: 50000,
+      future: 50000,
+      annualOutstanding: 100000,
+    });
+    expect(duesSummary(dues)).toEqual({ paid: 200000, pending: 0, unpaid: 50000 });
+  });
+
   it("rolls resident month timing from December 2026 into January 2027", async () => {
     const businessDate = "2027-01-01";
     const resident = await createResident(testDatabase.db, { dues: [

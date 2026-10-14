@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AppDatabase } from "@/db/client";
 import {
+  activeDueSettlements,
   appAccounts,
   auditEvents,
   billingYears,
@@ -51,7 +52,7 @@ describe("Treasurer direct cash payment", () => {
     await testDatabase?.close();
   });
 
-  async function createScenario(periods = ["2026-11", "2026-12", "2027-02"]) {
+  async function createScenario(periods = ["2026-11", "2026-12", "2027-02"], monthlyAmount = 40000) {
     const rtUnitId = await createRt(testDatabase.db);
     const household = await createHousehold(testDatabase.db, rtUnitId, { number: `R-${randomUUID().slice(0, 6)}` });
     const residentUser = await createAuthUser(testDatabase.db, "Resident Fixture");
@@ -129,7 +130,7 @@ describe("Treasurer direct cash payment", () => {
         rtUnitId,
         billingYearId: billingYear!.id,
         effectiveMonth: 1,
-        monthlyAmount: 40000,
+        monthlyAmount,
       });
       years.set(year, `${billingYear!.id}:${feeRate!.id}`);
     }
@@ -142,7 +143,7 @@ describe("Treasurer direct cash payment", () => {
         billingYearId: billingYearId!,
         feeRateId: feeRateId!,
         month: month!,
-        amount: 40000,
+        amount: monthlyAmount,
         dueDate: `${period}-10`,
         status: "unpaid" as const,
       };
@@ -219,6 +220,57 @@ describe("Treasurer direct cash payment", () => {
       expect(due.receipts![0]!.reference).toMatch(/^KRT-[A-F0-9]{12}$/);
       expect(new Date(due.receipts![0]!.verifiedAt).toString()).not.toBe("Invalid Date");
     }
+  });
+
+  it("records twelve separate Rp25,000 monthly cash payments and receipts totalling Rp300,000", async () => {
+    const scenario = await createScenario(
+      Array.from({ length: 12 }, (_, index) => `2026-${String(index + 1).padStart(2, "0")}`),
+      25000,
+    );
+    const keysByMonth = new Map<number, string>();
+    const results = [];
+    for (let month = 1; month <= 12; month += 1) {
+      const period = `2026-${String(month).padStart(2, "0")}`;
+      const idempotencyKey = randomUUID();
+      keysByMonth.set(month, idempotencyKey);
+      results.push(await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+        householdId: scenario.householdId,
+        period,
+        idempotencyKey,
+      }, "2026-10-12"));
+    }
+
+    const paymentRows = await testDatabase.db.select().from(payments)
+      .where(inArray(payments.cashIdempotencyKey, [...keysByMonth.values()]));
+    const paymentIds = paymentRows.map((payment) => payment.id);
+    const allocationRows = await testDatabase.db.select().from(paymentAllocations)
+      .where(inArray(paymentAllocations.paymentId, paymentIds));
+    const paymentsByKey = new Map(paymentRows.map((payment) => [payment.cashIdempotencyKey, payment]));
+    const paymentByDueId = new Map(allocationRows.map((allocation) => [allocation.monthlyDueId, allocation.paymentId]));
+    const dues = await getResidentMonthlyDues(database, scenario.residentPrincipal, "2026-10-12");
+
+    expect(results).toHaveLength(12);
+    expect(results.map((result) => [result.itemCount, result.totalAmount])).toEqual(Array.from({ length: 12 }, () => [1, 25000]));
+    expect(paymentRows).toHaveLength(12);
+    expect(paymentRows.every((payment) => payment.amount === 25000 && payment.method === "cash")).toBe(true);
+    expect(paymentRows.reduce((total, payment) => total + payment.amount, 0)).toBe(300000);
+    expect(allocationRows).toHaveLength(12);
+    expect(allocationRows.every((allocation) => allocation.amount === 25000)).toBe(true);
+    expect(allocationRows.reduce((total, allocation) => total + allocation.amount, 0)).toBe(300000);
+    expect(dues).toHaveLength(12);
+    for (const due of dues) {
+      const idempotencyKey = keysByMonth.get(due.month)!;
+      const payment = paymentsByKey.get(idempotencyKey)!;
+      expect(due).toMatchObject({ status: "paid", amount: 25000, activeReceived: 25000, outstanding: 0 });
+      expect(due.receipts).toHaveLength(1);
+      expect(due.receipts![0]).toMatchObject({
+        allocationAmount: 25000,
+        method: "cash",
+        reference: `KRT-${payment.id.replace(/-/g, "").slice(0, 12).toUpperCase()}`,
+      });
+      expect(paymentByDueId.get(scenario.dueIds[due.month - 1]!)).toBe(payment.id);
+    }
+    expect(duesSummary(dues)).toEqual({ paid: 300000, pending: 0, unpaid: 0 });
   });
 
   it("shows two active same-month allocations as scoped receipts and excludes reversed history", async () => {
@@ -382,7 +434,7 @@ describe("Treasurer direct cash payment", () => {
   });
 
   it("blocks pending claims without mutation, then records cash after rejection and cancellation without rewriting history", async () => {
-    const scenario = await createScenario(["2026-09", "2026-10", "2026-11", "2027-02"]);
+    const scenario = await createScenario(["2026-09", "2026-10", "2026-11", "2027-02"], 25000);
     const request = await createResidentPaymentRequest(database, scenario.residentPrincipal, {
       period: "2026-09",
       idempotencyKey: randomUUID(),
@@ -391,6 +443,12 @@ describe("Treasurer direct cash payment", () => {
       .where(eq(paymentRequests.requestCode, request.requestCode));
     const claimsBefore = await testDatabase.db.select().from(paymentRequestClaims)
       .where(eq(paymentRequestClaims.requestId, requestRow!.id));
+    const dueStatesBefore = await testDatabase.db.select({ id: monthlyDues.id, status: monthlyDues.status })
+      .from(monthlyDues).where(inArray(monthlyDues.id, scenario.dueIds));
+    const allocationHistoryBefore = await testDatabase.db.select().from(paymentAllocations)
+      .where(inArray(paymentAllocations.monthlyDueId, scenario.dueIds));
+    const activeSettlementsBefore = await testDatabase.db.select().from(activeDueSettlements)
+      .where(inArray(activeDueSettlements.monthlyDueId, scenario.dueIds));
     await expect(recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
       householdId: scenario.householdId,
       period: "2026-11",
@@ -400,16 +458,24 @@ describe("Treasurer direct cash payment", () => {
       .where(and(eq(payments.rtUnitId, scenario.rtUnitId), eq(payments.method, "cash")))).toHaveLength(0);
     expect(await testDatabase.db.select().from(paymentRequestClaims)
       .where(eq(paymentRequestClaims.requestId, requestRow!.id))).toEqual(claimsBefore);
+    expect(await testDatabase.db.select({ id: monthlyDues.id, status: monthlyDues.status })
+      .from(monthlyDues).where(inArray(monthlyDues.id, scenario.dueIds))).toEqual(dueStatesBefore);
+    expect(await testDatabase.db.select().from(paymentAllocations)
+      .where(inArray(paymentAllocations.monthlyDueId, scenario.dueIds))).toEqual(allocationHistoryBefore);
+    expect(await testDatabase.db.select().from(activeDueSettlements)
+      .where(inArray(activeDueSettlements.monthlyDueId, scenario.dueIds))).toEqual(activeSettlementsBefore);
     expect((await testDatabase.db.select().from(paymentRequests)
       .where(eq(paymentRequests.id, requestRow!.id)))[0]!.status).toBe("pending");
 
     await rejectTreasurerPaymentRequest(database, scenario.treasurerPrincipal, request.requestCode, "Pembayaran diterima tunai", "2026-10-12");
+    const settlementKey = randomUUID();
     const cash = await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
       householdId: scenario.householdId,
       period: "2026-11",
-      idempotencyKey: randomUUID(),
+      idempotencyKey: settlementKey,
     }, "2026-10-12");
     expect(cash.periods).toEqual(["2026-09", "2026-10", "2026-11"]);
+    expect(cash).toMatchObject({ itemCount: 3, totalAmount: 75000, status: "recorded" });
     expect((await testDatabase.db.select().from(paymentRequests)
       .where(eq(paymentRequests.id, requestRow!.id)))[0]!.status).toBe("rejected");
     expect(await testDatabase.db.select().from(payments)
@@ -420,6 +486,33 @@ describe("Treasurer direct cash payment", () => {
       eq(auditEvents.action, "payment_request.rejected"),
       eq(auditEvents.entityId, requestRow!.id),
     ))).toHaveLength(1);
+
+    const [settlementPayment] = await testDatabase.db.select().from(payments)
+      .where(eq(payments.cashIdempotencyKey, settlementKey));
+    const settlementAllocations = await testDatabase.db.select({
+      monthlyDueId: paymentAllocations.monthlyDueId,
+      paymentId: paymentAllocations.paymentId,
+      amount: paymentAllocations.amount,
+    }).from(paymentAllocations).where(eq(paymentAllocations.paymentId, settlementPayment!.id));
+    const settlementOwners = await testDatabase.db.select({
+      monthlyDueId: activeDueSettlements.monthlyDueId,
+      paymentId: activeDueSettlements.paymentId,
+      amount: activeDueSettlements.amount,
+    }).from(activeDueSettlements).where(eq(activeDueSettlements.paymentId, settlementPayment!.id));
+    const settlementDues = await testDatabase.db.select({ id: monthlyDues.id, status: monthlyDues.status })
+      .from(monthlyDues).where(inArray(monthlyDues.id, scenario.dueIds));
+    const expectedSettledDueIds = scenario.dueIds.slice(0, 3).sort();
+
+    expect(settlementPayment).toMatchObject({ amount: 75000, method: "cash", paymentRequestId: null });
+    expect(settlementAllocations).toHaveLength(3);
+    expect(settlementAllocations.map((allocation) => allocation.monthlyDueId).sort()).toEqual(expectedSettledDueIds);
+    expect(settlementAllocations.every((allocation) => allocation.amount === 25000 && allocation.paymentId === settlementPayment!.id)).toBe(true);
+    expect(settlementAllocations.reduce((total, allocation) => total + allocation.amount, 0)).toBe(75000);
+    expect(settlementOwners).toHaveLength(3);
+    expect(settlementOwners.map((owner) => owner.monthlyDueId).sort()).toEqual(expectedSettledDueIds);
+    expect(settlementOwners.every((owner) => owner.amount === 25000 && owner.paymentId === settlementPayment!.id)).toBe(true);
+    expect(settlementDues.filter((due) => due.status === "paid").map((due) => due.id).sort()).toEqual(expectedSettledDueIds);
+    expect(settlementDues.find((due) => due.id === scenario.dueIds[3])?.status).toBe("unpaid");
 
     const cancelledRequest = await createResidentPaymentRequest(database, scenario.residentPrincipal, {
       period: "2027-02",
