@@ -97,7 +97,7 @@ Statements 1–4 are the required transaction and identity prefix:
           AND pg_catalog.current_setting('server_version_num')::integer
                 BETWEEN 180000 AND 189999
          THEN 1
-         ELSE pg_catalog.current_setting('transaction_read_only')::integer
+         ELSE 0
        END AS wave126_guard;
     4. SELECT pg_catalog.current_database() AS database_name,
               current_user AS current_role,
@@ -106,7 +106,7 @@ Statements 1–4 are the required transaction and identity prefix:
               pg_catalog.current_setting('server_version_num') AS server_version_num,
               pg_catalog.current_setting('transaction_read_only') AS transaction_read_only;
 
-The guard must return exactly 1; statement 2 must return on; statement 4 must show the expected database and role identities, PostgreSQL major 18, and transaction read-only on. A different value, SQL error, omitted output, or result mismatch aborts the proposal. The ELSE cast intentionally errors on a mismatch rather than returning a false-looking success row.
+The guard must return exactly 1; statement 2 must return on; statement 4 must show the expected database and role identities, PostgreSQL major 18, and transaction read-only on. Any guard result other than exactly 1, SQL error, omitted output, or result mismatch fails the proposal and stops the inspection.
 
 Statements 5–26 are one fixed catalog inventory, using the exact ordered SELECT definitions documented in the Wave 12.4 Agent B report, with no dynamic SQL. The full approved array must be attached to a future authorization; this section records its fixed order:
 
