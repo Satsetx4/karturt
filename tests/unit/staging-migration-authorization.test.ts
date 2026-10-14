@@ -17,6 +17,7 @@ import {
   parseStagingMigrationInvocation,
   runStagingMigrationCommandOnce,
   type MigrationSafetyDependencies,
+  type StagingMigrationReviewContext,
 } from "../../src/db/migration-safety";
 
 const now = Date.parse("2026-10-14T05:00:00.000Z");
@@ -70,7 +71,13 @@ function makeDependencies(overrides: Partial<MigrationSafetyDependencies> = {}) 
   const consumeAuthorizationOnce = vi.fn(() => {
     events.push("consume");
   });
-  const confirmChallenge = vi.fn(async (challenge: string) => {
+  const confirmChallenge = vi.fn(async (challenge: string, review: StagingMigrationReviewContext) => {
+    expect(review).toEqual({
+      sourceSha,
+      targetManifestFingerprint: targetFingerprint,
+      targetManifest: { projectId: "synthetic-project", branchId: "synthetic-branch" },
+      migrationManifestFingerprint: migrationFingerprint,
+    });
     events.push("confirm");
     return challenge;
   });
