@@ -13,6 +13,7 @@ import {
   assertInitialDatabaseSnapshot,
   assertMigrationLedger,
   assertPostMigrationCatalog,
+  expectedPg18CatalogObjects,
   expectedPg18MigrationTags,
   type InitialDatabaseSnapshot,
   type MigrationLedgerExpectation,
@@ -419,6 +420,24 @@ async function main() {
 
     currentStage = "post-migration catalog count and named-object validation";
     const catalog = await readPostMigrationCatalog(pool);
+    const expectedCatalogObjects = expectedPg18CatalogObjects();
+    const missingCatalogObjects = {
+      constraints: expectedCatalogObjects.constraints.filter((name) => !catalog.constraints.includes(name)),
+      indexes: expectedCatalogObjects.indexes.filter((name) => !catalog.indexes.includes(name)),
+      triggers: expectedCatalogObjects.triggers.filter((name) => !catalog.triggers.includes(name)),
+      functions: expectedCatalogObjects.functions.filter((name) => !catalog.functions.includes(name)),
+      enums: expectedCatalogObjects.enums.filter((name) => !catalog.enums.includes(name)),
+    };
+    process.stdout.write(`${JSON.stringify({
+      event: "karturt.pg18_migration_rehearsal.catalog_snapshot",
+      publicTables: catalog.publicTableCount,
+      constraints: catalog.constraintCount,
+      indexes: catalog.indexCount,
+      triggers: catalog.triggerCount,
+      functions: catalog.functionCount,
+      enums: catalog.enumCount,
+      missingExpectedObjects: missingCatalogObjects,
+    })}\n`, "utf8");
     assertPostMigrationCatalog(catalog);
 
     await exerciseInjectedMigrationFailure(pool, target.runId, expectedLedger, catalog);
