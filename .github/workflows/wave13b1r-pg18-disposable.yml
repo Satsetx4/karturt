@@ -1,0 +1,39 @@
+name: Wave 13B.1R disposable PostgreSQL 18 SQL validation
+
+on:
+  push:
+    branches:
+      - test/w13b1r-pg18-disposable-20261014
+    paths:
+      - .github/workflows/wave13b1r-pg18-disposable.yml
+      - scripts/wave13b1r-pg18-disposable.mjs
+      - tests/fixtures/wave13b1r-fixed-reference.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wave13b1r-pg18-disposable
+  cancel-in-progress: true
+
+jobs:
+  exact-sql-pg18:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Check out this verification branch
+        uses: actions/checkout@v4
+      - name: Validate exact frozen SQL on disposable PostgreSQL 18
+        run: node scripts/wave13b1r-pg18-disposable.mjs
