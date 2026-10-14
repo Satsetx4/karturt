@@ -2,7 +2,7 @@
 
 Date: 2026-10-14
 
-Status: **DISPOSABLE PG18 VALIDATION PASS — DOCS PUBLICATION PENDING — NO NEON SQL OR D1v2 EXECUTION**
+Status: **DOCS PUBLICATION VERIFIED — DISPOSABLE PG18 VALIDATION PASS — NO NEON SQL OR D1v2 EXECUTION**
 
 ## Scope and immutable references
 
@@ -55,7 +55,30 @@ The packet names the exact fixed target tuple and requires a fresh non-waking id
 
 ## G5 — publication and final verification
 
-Publication is limited to six Markdown reports under `docs/wave13b-1r/2026-10-14/` on the docs-only branch. No PR, merge, main update, source edit, provider mutation, migration, Vercel deployment, or Neon action is in scope. Before push, verify the exact branch ancestry, changed paths, Vercel linkage/deployment state, and workflow triggers. After push, read back the exact remote docs SHA and file list, confirm source/main unchanged, inspect Actions status without treating absent runs as PASS, and recheck Vercel deployments. Record the actual results here before calling publication complete.
+Publication is limited to six Markdown reports under `docs/wave13b-1r/2026-10-14/` on docs-only branch `docs/wave13b-1r-preflight-remediation-20261014`. No PR, merge, main update, source edit, provider mutation, migration, Vercel deployment, or Neon action was performed.
+
+| Check | Result |
+|---|---|
+| Docs base and ancestry | Branch started from docs base `c0ea88c40cef4bba595992290477e9d74784f465`; it is an ancestor of the published branch. |
+| First publication commit | `57a16c241992ec18be6b56953f6a64bf6c548517`, pushed without force. |
+| Remote readback | `git fetch` and `git ls-remote` returned the same SHA; fetched tree matched local exactly. Base-to-branch diff contained exactly the six files listed below. |
+| Historical main | Remained `96c84588ae0c13f68a17cffd997a3e583fb7da82`. |
+| Accepted source branch | Remained `48b92abbe93fbd499448b6c885d3042cb49c2128`. Source guard was re-read as `stagingIsolationVerifiedEmpty=false`; pinned approval key remains `null`. |
+| Historical 29-query reference | Remained blob `78501ab327bdc7b7a9a06a0a0f66fe039fc8d148`; no old Wave 13B.0 report or approval was changed. |
+| GitHub Actions on docs branch | `gh run list` returned no runs. This is reported as **no run**, not as a pass. The docs-base workflow push filter does not match this branch; no PR was created. The separate PG18 validation branch and its run are recorded under G3 and in Agent C's report. |
+| Vercel linkage and deployments | Read-only Vercel readback found no project linked to `https://github.com/Satsetx4/karturt`; the separately identified project `karturt-review-staging-20261012` (`prj_Mv4rABJvDNAvSD78SVt5WbjFakEq`) had `latestDeployment=null` and zero listed deployments after publication. |
+| Other changes | No source files, provider settings, credentials, migration state, deployments, PRs, or main-branch content changed. |
+
+The six remote reports are:
+
+1. `WAVE13B_1R_COORDINATOR_REPORT.md`
+2. `WAVE13B_1R_AGENT_A_CONNECTOR_CONTRACT.md`
+3. `WAVE13B_1R_AGENT_B_PRIVILEGE_SQL.md`
+4. `WAVE13B_1R_AGENT_C_INDEPENDENT_VALIDATION.md`
+5. `WAVE13B_1R_FIXED_SQL_REFERENCE.md`
+6. `WAVE13B_1R_D1V2_OWNER_APPROVAL_PACKET.md`
+
+This G5 readback was written after the first publication commit; the coordinator report is then published as a small docs-only verification follow-up. The final branch-tip SHA is included in the execution summary accompanying this report.
 
 ## Current decision and stop boundary
 
