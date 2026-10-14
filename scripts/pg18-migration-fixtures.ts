@@ -46,6 +46,24 @@ type SyntheticTenant = {
 
 let currentStage = "run and PostgreSQL service identity preflight";
 
+function sanitizedPostgresFailure(error: unknown) {
+  const visited = new Set<object>();
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current && typeof current === "object" && !visited.has(current); depth += 1) {
+    visited.add(current);
+    const candidate = current as { code?: unknown; constraint?: unknown; cause?: unknown };
+    if (typeof candidate.code === "string" && /^[A-Z0-9]{5}$/.test(candidate.code)) {
+      const constraint = typeof candidate.constraint === "string"
+        && /^[a-z][a-z0-9_]{0,79}$/.test(candidate.constraint)
+        ? candidate.constraint
+        : undefined;
+      return { sqlstate: candidate.code, ...(constraint ? { constraint } : {}) };
+    }
+    current = candidate.cause;
+  }
+  return undefined;
+}
+
 function quoteIdentifier(identifier: string) {
   assert.match(identifier, /^[a-z0-9_]{1,63}$/, "A run-scoped PostgreSQL identifier must be lowercase and bounded.");
   return `"${identifier}"`;
@@ -547,7 +565,7 @@ async function runPhase9To12Fixtures(pool: Pool, journal: MigrationJournal, runI
     .sort((left, right) => left.monthly_due_id.localeCompare(right.monthly_due_id));
   assert.deepEqual(backfill.rows, expectedBackfill);
 
-  currentStage = "0011 negative legacy WAIVED preflight and clean retry";
+  currentStage = "0011 insert run-owned legacy WAIVED fixture";
   const legacyWaived = await pool.query<{ id: string }>(`
     INSERT INTO public.monthly_dues (
       rt_unit_id, household_id, billing_year_id, fee_rate_id, month, amount, due_date, status, waived_reason
@@ -555,9 +573,21 @@ async function runPhase9To12Fixtures(pool: Pool, journal: MigrationJournal, runI
     RETURNING id
   `, [tenant.rtUnitId, tenant.householdId, tenant.billingYearId, tenant.feeRateId]);
   const legacyWaivedId = legacyWaived.rows[0]!.id;
+  currentStage = "0011 expected legacy WAIVED preflight stop";
   await expectMigratorFailure(pool, journal, 11, runId, "23514", "phase10_legacy_waived_dues", 10);
+  currentStage = "0011 verify failed migration rollback";
   await assertNoTable(pool, "waiver_actions");
-  await pool.query("DELETE FROM public.monthly_dues WHERE id = $1", [legacyWaivedId]);
+  currentStage = "0011 remove run-owned legacy WAIVED fixture";
+  const removedLegacyRows = await pool.query<{ id: string }>(
+    "DELETE FROM public.monthly_dues WHERE id = $1 RETURNING id",
+    [legacyWaivedId],
+  );
+  assert.equal(removedLegacyRows.rows.length, 1, "The exact run-owned legacy WAIVED fixture must be removed before retry.");
+  const remainingLegacyWaived = await pool.query<{ count: string }>(
+    "SELECT count(*)::text AS count FROM public.monthly_dues WHERE status = 'waived'",
+  );
+  assert.equal(Number(remainingLegacyWaived.rows[0]?.count), 0, "The clean retry fixture database must contain no legacy WAIVED dues.");
+  currentStage = "0011 clean retry after removing the synthetic WAIVED fixture";
   await applyJournalThrough(pool, journal, 11, runId);
   await assertLedgerThrough(pool, journal, 11);
   const waiverTable = await pool.query<{ relation: string | null }>("SELECT to_regclass('public.waiver_actions') AS relation");
@@ -669,11 +699,12 @@ async function main() {
   }
 }
 
-void main().catch(() => {
+void main().catch((error: unknown) => {
   process.stderr.write(`${JSON.stringify({
     event: "karturt.pg18_migration_fixtures",
     outcome: "FAIL",
     stage: currentStage,
+    ...(sanitizedPostgresFailure(error) ? { postgres: sanitizedPostgresFailure(error) } : {}),
     details: "Database URLs, credentials, SQL text, synthetic row values, and driver errors are intentionally omitted.",
   })}\n`, "utf8");
   process.exitCode = 1;
