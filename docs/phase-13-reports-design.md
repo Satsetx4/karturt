@@ -48,13 +48,13 @@ Per-due checks fail closed with a dedicated ReportInvariantError when values are
 - PENDING request claims are operational display state only and contribute zero to received. A pending request attached to overdue unpaid amount remains arrears.
 - Payment state labels do not create receipts; only valid active allocations do.
 
-Counts: obligationCount includes real unpaid, paid, and waived dues; waivedCount is a subset; notDueCount is separate. overdueCount counts due rows with outstanding > 0 and dueDate before the supplied Jakarta business date.
+Counts: obligationCount includes real unpaid, paid, and waived dues; waivedCount is a subset; notDueCount is separate. overdueCount counts due rows with outstanding > 0 whose billing year-month is earlier than the supplied Jakarta business year-month.
 
 ## Period, arrears, and lifecycle semantics
 
 - Reports are grouped by billing year/month on monthly_dues, never by payment.created_at, verified_at, or request date.
 - Transfer/cash is split at allocation amount, grouped by monthly_due_id and payment method, excluding reversed payments.
-- Arrears means outstanding > 0 AND dueDate < Jakarta business date (strictly earlier). The database contract sets the due day to the 10th: a May due is not overdue on May 5 and is overdue on May 20.
+- Arrears means outstanding > 0 AND the due period's year-month is earlier than the Jakarta business year-month. A May due remains current and is not arrears on May 5 or May 20; it becomes arrears on June 1. Future periods are excluded from arrears.
 - A pending request can show the “Menunggu konfirmasi” badge on an arrears period but never reduces outstanding.
 - A reversed payment contributes zero to received, transfer, and cash.
 - Every due and arrears group is keyed by household_id. Never group debt by house_id, house number, resident name, or current household. Replacement keeps old history with the old household; a new household at the same physical house starts its own history.
@@ -77,11 +77,12 @@ Dedicated permission: report:read:rt.
 Response includes:
 
 - year and availableYears;
-- yearly amount and count totals;
+- asOf.businessDate and asOf.period in Asia/Jakarta, plus dueNowOutstanding and futureUnpaidOutstanding split at that year-month;
+- yearly amount and count totals, with yearly.outstanding retained as the annual accounting balance;
 - monthly entries Jan–Dec, including empty months as zero rows;
 - arrears.totalOutstanding, arrears.count (overdue due rows), arrears.householdCount, and arrears.households with period details.
 
-The normal UI uses these Indonesian labels: Target awal, Target efektif, Diterima, Transfer, Tunai, Dibebaskan, Belum diterima, Tidak ditagih, Tunggakan, Menunggu konfirmasi. WAIVED and NOT_DUE are visibly distinct. Currency uses integer Rupiah formatting. No raw status enums, SQL, or UUID text is rendered.
+The UI labels the annual ledger balance "Belum diterima · akuntansi tahunan" and presents its due-now and future-unpaid portions separately. Future outstanding months carry a "Belum jatuh tempo" badge and are excluded from arrears. WAIVED and NOT_DUE are visibly distinct. Currency uses integer Rupiah formatting. No raw status enums, SQL, or UUID text is rendered.
 
 Mobile flow: Chairman dashboard → Laporan → year selector → yearly summary → Jan–Dec monthly cards → arrears grouped by household. Use stacked cards/rows, not a mandatory horizontal table. Touch targets are at least 44 px. Preserve the app's clear back link, breadcrumb, and Home route. Validate 360×800, 390×844, 430×900, 768×1024, and 1440×900 with no horizontal overflow.
 
@@ -123,9 +124,11 @@ The revised Jan–May expectations are:
 
 Jan–May identity: 525,000 = 290,000 + 40,000 + 195,000.
 
-Arrears on 2026-05-20: H3-old Feb 40,000; H1 Mar 35,000; H3-new Apr 40,000; H1 May pending 40,000; H3-new May reversed 40,000. Total 195,000 across 5 overdue due rows and 3 household identities. The pending H1 request covers its unpaid March and May dues, so both periods may carry the operational pending badge; neither amount counts as received.
+Arrears on both 2026-05-05 and 2026-05-20: H3-old Feb 40,000; H1 Mar 35,000; H3-new Apr 40,000. Total 115,000 across 3 overdue due rows and 3 household identities. The unpaid May balances remain current-month dues through May; the pending H1 request does not reduce outstanding or count as received. In this Jan–Dec fixture, due-now outstanding through May is 195,000 (including the current May balance), future unpaid for Jun–Dec is 840,000, and annual accounting outstanding remains 1,035,000.
 
-Arrears on 2026-05-05: H3-old Feb 40,000; H1 Mar 35,000; H3-new Apr 40,000. Total 115,000 across 3 overdue due rows. May is not overdue before the 10th.
+An unpaid December 2026 due is current through 2026-12-31 and becomes arrears on 2027-01-01. Annual target, received, waived, and outstanding totals continue to include current and future dues; only the arrears cutoff uses the business year-month.
+
+For D5 on 2026-10-12, each of 12 months has a 25,000 target; Jan–Aug are paid and Sep–Dec are unpaid. Annual accounting is target 300,000, received 200,000, outstanding 100,000. September arrears are 25,000, October is current unpaid 25,000, and Nov–Dec are future unpaid 50,000. Therefore due-now outstanding through October is 50,000 and future-unpaid outstanding is 50,000. The split is calculated from selected-year month buckets using period ≤ as-of period versus period > as-of period.
 
 The manual dataset explicitly completes the calendar year as follows so yearly aggregation covers all 12 months: for Jun–Dec, H1, H2, and H3-new each have a 40,000 obligation; H3-old has a NOT_DUE row. There are no Jun–Dec adjustments, payments, or waivers. Each such month therefore adds target/effective/outstanding 120,000 and NOT_DUE 1. The resulting full-year totals are target 1,360,000; effective target 1,365,000; received 290,000 (transfer 120,000, cash 170,000); waived 40,000; outstanding 1,035,000; NOT_DUE 14. Identity: 1,365,000 = 290,000 + 40,000 + 1,035,000. June–December dues are not arrears on either May business date.
 
