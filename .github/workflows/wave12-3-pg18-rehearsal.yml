@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - codex/wave12-3-pg18-rehearsal-20261014
+      - codex/karturt-v1-staging-activation-20261015
       - verify/karturt-v1-rc-wave13b1s-20261015
       - verify/karturt-v1-rc-quality-wave13b1t-20261015
 

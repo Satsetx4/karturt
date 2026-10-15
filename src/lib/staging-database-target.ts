@@ -1,36 +1,98 @@
 import { createHash } from "node:crypto";
 
 /**
- * Reviewed source mapping for the Wave 12.6B staging resource.
- *
- * This mapping is not live provider attestation. It does not prove project or
- * branch ownership, grants, credential state, database contents, migration
- * approval, or runtime readiness.
+ * Candidate source mapping for the new Wave 13B.2 synthetic-only staging
+ * project. The root-lineage attestation below is a bounded reviewer summary
+ * of the new-project create contract; it is not provider-signed evidence and
+ * does not establish catalog emptiness. This object does not prove grants,
+ * credential state, database contents, migration approval, or runtime readiness.
  */
+export const STAGING_ROOT_LINEAGE_ATTESTATION = Object.freeze({
+  schemaVersion: 1,
+  method: "ROOT_BY_NEW_PROJECT_CREATE_CONTRACT",
+  scope: "project-root-lineage-only",
+  organizationId: "org-ancient-boat-57106549",
+  projectId: "broad-star-40451875",
+  projectCreatedAtUtc: "2026-10-15T11:04:56Z",
+  createRequest: {
+    method: "POST",
+    operation: "create-project",
+    sourceFieldsOmitted: ["parent_id", "parent_project_id", "source_project_id", "clone", "import", "restore"],
+    requestSha256: null,
+    requestSha256Status: "NOT_CAPTURED",
+  },
+  branch: {
+    id: "br-orange-recipe-azed9f78",
+    name: "main",
+    createdAtUtc: "2026-10-15T11:04:56Z",
+    isPrimary: true,
+    isDefault: true,
+    parentIdReadback: "OMITTED_NOT_RETURNED",
+    initSourceObserved: "parent-data",
+    initSourceInterpretation: "AMBIGUOUS_NOT_USED_AS_LINEAGE_PROOF",
+  },
+  providerContracts: [
+    { url: "https://neon.com/docs/manage/branches", sha256: null },
+    { url: "https://neon.com/docs/reference/api/projects/create-project", sha256: null },
+    { url: "https://neon.com/docs/reference/api/branches/get-project-branch", sha256: null },
+    { url: "https://neon.com/docs/reference/api/branches/create-project-branch", sha256: null },
+    { url: "https://neon.com/api_spec/release/v2.json", sha256: null },
+  ],
+  reviewer: {
+    agent: "f0_neon_lineage",
+    verdict: "PASS",
+    reviewedAtUtc: "2026-10-15T12:32:42Z",
+    summarySha256: "dc97064182562fb2b86d7bb1d7bee9ba0c7f5d175f943f44fb4501fb9a557530",
+    summarySha256Kind: "REVIEWER_SUMMARY_CHECKSUM_NOT_PROVIDER_SIGNATURE",
+    sourceReportCommit: "f8cf71c251b87b8c37d141dc2f0e40e650797462",
+    sourceReportPath: "docs/wave13b-2/2026-10-15/WAVE13B_2_OWNER_CORRECTION_EXECUTION.md",
+    verdictScope: "ROOT_LINEAGE_ONLY_CATALOG_UNKNOWN",
+  },
+  catalogState: "UNKNOWN",
+} as const);
+
 export const STAGING_MIGRATION_TARGET_MANIFEST = Object.freeze({
   organizationId: "org-ancient-boat-57106549",
-  projectId: "falling-bread-33359184",
-  projectName: "karturt-v1-staging-clean",
-  branchName: "staging",
-  branchId: "br-muddy-frost-azot13fb",
+  projectId: "broad-star-40451875",
+  projectName: "karturt-v1-synthetic-staging-20261015",
+  branchName: "main",
+  branchId: "br-orange-recipe-azed9f78",
+  lineageStatus: STAGING_ROOT_LINEAGE_ATTESTATION.method,
+  rootLineageAttestation: STAGING_ROOT_LINEAGE_ATTESTATION,
   region: "aws-ap-southeast-1",
-  databaseName: "karturt_staging",
-  databaseId: 702718,
-  roleName: "karturt_staging_owner",
-  endpointId: "ep-silent-butterfly-azrflu40",
-  directHostname: "ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech",
+  plan: "free_v3",
+  postgresMajor: 18,
+  computeCU: 0.25,
+  databaseName: "neondb",
+  databaseId: 708081,
+  roleName: "neondb_owner",
+  endpointId: "ep-mute-firefly-azjcru4h",
+  directHostname: "ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech",
+  passwordlessAccess: true,
+  passwordlessAccessMeaning: "NOT_YET_IMPLEMENTED_UNRELIED_UPON",
+  passwordlessAccessContractReference: "https://neon.com/api_spec/release/v2.json",
+  passwordlessConnectDocumentationReference: "https://neon.com/docs/connect/passwordless-connect",
   port: 5432,
 } as const);
 
-const legacyStagingTarget = {
-  projectId: "wild-art-99835126",
-  branchId: "br-hidden-cake-a1ge5xqp",
-  databaseId: 42079960,
-  endpointId: "ep-snowy-meadow-a10304d9",
-  hostname: "ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech",
-} as const;
+const protectedLegacyStagingTargets = [
+  {
+    projectId: "falling-bread-33359184",
+    branchId: "br-muddy-frost-azot13fb",
+    databaseId: 702718,
+    endpointId: "ep-silent-butterfly-azrflu40",
+    hostname: "ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech",
+  },
+  {
+    projectId: "wild-art-99835126",
+    branchId: "br-hidden-cake-a1ge5xqp",
+    databaseId: 42079960,
+    endpointId: "ep-snowy-meadow-a10304d9",
+    hostname: "ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech",
+  },
+] as const;
 
-// Do not change this to true based on the source mapping or catalog-scope evidence.
+// Do not change this to true based on root-lineage or source-mapping evidence.
 const stagingIsolationVerifiedEmpty = false;
 
 const localBootstrapTarget = {
@@ -47,7 +109,10 @@ const stagingQueryKeys = new Set([...standardQueryKeys, "endpoint"]);
 const sslModes = new Set(["require", "verify-full"]);
 
 function isProtectedStagingEndpoint(hostname: string) {
-  const endpointIds = [STAGING_MIGRATION_TARGET_MANIFEST.endpointId, legacyStagingTarget.endpointId];
+  const endpointIds = [
+    STAGING_MIGRATION_TARGET_MANIFEST.endpointId,
+    ...protectedLegacyStagingTargets.map((target) => target.endpointId),
+  ];
   const labels = hostname.toLowerCase().split(".");
   return endpointIds.some((endpointId) =>
     labels.some((label) => label === endpointId || label.startsWith(endpointId + "-pooler")),
@@ -136,6 +201,7 @@ function assertStagingTargetIdentity(databaseUrl: string) {
     databaseName !== STAGING_MIGRATION_TARGET_MANIFEST.databaseName ||
     parsed.username !== STAGING_MIGRATION_TARGET_MANIFEST.roleName ||
     !parsed.searchParams.has("sslmode") ||
+    parsed.searchParams.get("sslmode") !== "verify-full" ||
     (endpointParameter !== null && endpointParameter !== STAGING_MIGRATION_TARGET_MANIFEST.endpointId)
   ) {
     throw new Error(
@@ -202,13 +268,19 @@ export function assertDatabaseTargetForEnvironment(databaseUrl: string, database
       throw new Error("Staging Neon endpoints cannot be used unless APP_ENV and DATABASE_ENV both equal staging.");
     }
     if (parsed.hostname.toLowerCase() !== STAGING_MIGRATION_TARGET_MANIFEST.directHostname) {
+      const legacyTarget = protectedLegacyStagingTargets.find((target) =>
+        parsed.hostname.toLowerCase() === target.hostname ||
+        parsed.hostname.toLowerCase().split(".").some((label) =>
+          label === target.endpointId || label.startsWith(target.endpointId + "-pooler"),
+        ),
+      );
       throw new Error(
-        "The legacy staging Neon endpoint for project " +
-          legacyStagingTarget.projectId +
+        "The protected legacy staging Neon endpoint for project " +
+          (legacyTarget?.projectId ?? "unknown") +
           ", branch " +
-          legacyStagingTarget.branchId +
+          (legacyTarget?.branchId ?? "unknown") +
           ", database " +
-          legacyStagingTarget.databaseId +
+          (legacyTarget?.databaseId ?? "unknown") +
           " and all staging pooler endpoints are denied.",
       );
     }
