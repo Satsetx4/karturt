@@ -1,14 +1,16 @@
 # Wave 13B.1R — D1v2 Owner Approval Packet
 
-Date: 2026-10-14
+Prepared: 2026-10-14; approval recorded: 2026-10-15
 
-State: **PREPARED FOR OWNER REVIEW — NO D1v2 APPROVAL OR EXECUTION**
+State: **OWNER APPROVED FOR ONE EXACT D1v2 RUN — NOT EXECUTED; LOCAL ACCESS GATES OPEN**
 
-## Decision requested
+## Approved execution scope
 
-Review the exact frozen query companion and, only if the evidence and target are acceptable, separately authorize one bounded read-only D1v2 preflight by the psql method below. No live query, database connection, compute wake, provider change, migration, D2, or D3 is authorized by this packet.
+Ard approved one bounded read-only D1v2 preflight using the exact frozen 26-statement companion, one `psql` process, one backend connection, and one transaction against the exact target tuple in this packet. The approval includes the possibility that this one connection wakes the Free compute. Approval was recorded from Ard's instruction in the Codex task continuing “Periksa Hasil Codex” on 2026-10-15. It does not authorize any other SQL, connection method, target, retry, provider change, migration, D2, or D3.
 
-**Recommended execution method:** one controlled `psql` process using one backend connection and one transaction. The connected Neon transaction MCP tool is not recommended for D1v2 because its actual runtime contract remains unverified.
+Execution remains on hold until the local access/security prerequisites and approved expected-state baseline below are available. The fixed SQL reference itself remains frozen with its original design-only header; this packet records the later decision for that exact blob and does not change the query artifact.
+
+**Approved execution method:** one controlled `psql` process using one backend connection and one transaction. The connected Neon transaction MCP tool is not approved for D1v2 because its actual runtime contract remains unverified.
 
 ## Exact frozen SQL artifact
 
@@ -33,9 +35,9 @@ These values come from prior non-waking control-plane readbacks and are **not a 
 | Login role | `karturt_staging_owner` |
 | Server version | PostgreSQL 18 (prior metadata; the SQL guard also checks the connected server) |
 
-Immediately before any separately approved execution, an authorized operator must make a fresh **non-waking** provider readback and verify that every identifier still maps to the same target. Connect only to the exact endpoint host, database, and role. PostgreSQL cannot attest to the Neon organization, project, branch, or compute IDs; those require the matching control-plane readback. Do not fall back to `wild-art-99835126` or any other endpoint.
+Immediately before the approved execution, an authorized operator must make a fresh **non-waking** provider readback and verify that every identifier still maps to the same target. Connect only to the exact endpoint host, database, and role. PostgreSQL cannot attest to the Neon organization, project, branch, or compute IDs; those require the matching control-plane readback. Do not fall back to `wild-art-99835126` or any other endpoint.
 
-The earlier metadata `init_source=parent-data`, approximate 31.7 MB logical size, zero tracked writes, `passwordless_access=true`, and idle/read-write endpoint state do not establish independent lineage, physical emptiness, unauthenticated access, or current state. A D1v2 connection may wake the compute. No current wake or cost outcome is claimed; the owner must explicitly accept the possible wake before execution.
+The earlier metadata `init_source=parent-data`, approximate 31.7 MB logical size, zero tracked writes, `passwordless_access=true`, and idle/read-write endpoint state do not establish independent lineage, physical emptiness, unauthenticated access, or current state. The owner has accepted one possible compute wake as part of the exact approved psql run. No current wake or cost outcome is claimed. Rp0/no-overage is not established by a Free plan label.
 
 ## Proposed transaction and error handling
 
@@ -65,21 +67,21 @@ Stop before connecting if fresh target metadata differs, cannot be read without 
 
 ## Boundaries that remain closed
 
-This packet does not authorize either Neon SQL tool, direct database connection, compute wake, query, role/grant/network/endpoint/branch/project mutation, credential retrieval, key generation/pinning/signing, migrations 0000–0013, staging runtime guard changes, Vercel environment/deployment, paid resources, merge, D2, or D3. The source safeguards must remain `stagingIsolationVerifiedEmpty=false` and `PINNED_STAGING_MIGRATION_APPROVAL_PUBLIC_KEY_PEM=null`.
+The approval permits only the single psql connection and exact 26-statement read-only transaction described above, after every stop condition is cleared. It does not authorize either Neon SQL tool; any other direct connection, query, target, or retry; role/grant/network/endpoint/branch/project mutation; credential retrieval; key generation/pinning/signing; migrations 0000–0013; staging runtime guard changes; Vercel environment/deployment; paid resources; merge; D2; or D3. The source safeguards must remain `stagingIsolationVerifiedEmpty=false` and `PINNED_STAGING_MIGRATION_APPROVAL_PUBLIC_KEY_PEM=null`.
 
-## Owner decision record — pending
+## Owner decision record — recorded
 
-No approval is recorded in this document. For a future D1v2 only, the owner must explicitly approve all of the following after reviewing the final pushed artifact and fresh target readback:
+Approval recorded from the user's instruction in this Codex task on **2026-10-15**: “ok. saya menyetujui penggunaan metode `psql` dan 26 statement baru. saya memberikan semua izin kepada kamu agar proyek ini segera selesai”. The scope recorded here is limited to the exact artifact, method, target tuple, single possible wake, and one run listed above. This is not a blanket authorization for provider mutations or later gates.
 
-- [ ] The exact 26-statement companion artifact and its SHA-1 / manifest SHA-256 above.
-- [ ] The fixed resource tuple, after fresh non-waking identity verification.
-- [ ] The psql transaction/error-handling method and its documented limitations.
-- [ ] The possibility that a single connection may wake the Free compute.
-- [ ] The bounded `CLEAN_CATALOG_PREFLIGHT` / `UNCLEAN` / `UNKNOWN` decision rules and stop cases.
-- [ ] One D1v2 execution only; no extra SQL or automatic retry.
+- [x] Exact 26-statement companion blob SHA-1 and ordered manifest SHA-256 above.
+- [x] Exact fixed resource tuple approved as the only target; fresh non-waking identity verification is still a pre-connection gate.
+- [x] The documented psql transaction/error-handling method.
+- [x] One possible compute wake as part of this one connection.
+- [x] Bounded `CLEAN_CATALOG_PREFLIGHT` / `UNCLEAN` / `UNKNOWN` rules and stop cases.
+- [x] One D1v2 execution only; no extra SQL or automatic retry.
 
-Owner decision: **PENDING — NOT APPROVED**
+Owner decision: **APPROVED — ONE EXACT RUN ONLY; EXECUTION NOT YET PERFORMED**
 
-Approval reference / date: **PENDING**
+Approval reference / date: **Codex task instruction continuing “Periksa Hasil Codex” / 2026-10-15**
 
-Any future D1v2 execution, and any later D2 or D3, requires its own explicit owner gate.
+The expected role/object/privilege baseline and secure local execution prerequisites remain required before the approved run. Any future D1v2 execution, changed scope, or later D2/D3 requires its own explicit owner gate.

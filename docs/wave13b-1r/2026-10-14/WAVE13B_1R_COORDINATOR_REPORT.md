@@ -51,7 +51,7 @@ The harness suppresses psql result/error output and only emits fixed pass/fail d
 
 ## G4 — D1v2 owner packet
 
-The packet names the exact fixed target tuple and requires a fresh non-waking identity check immediately before any later execution. It records the frozen query artifact, alternative transaction method, possible compute wake, required result classes (`CLEAN_CATALOG_PREFLIGHT`, `UNCLEAN`, `UNKNOWN`), mandatory stop cases, and a pending owner sign-off. The historical target values are design references, not current verification. The old D1 authorization does not transfer. **No D1v2 approval is recorded.**
+As of this report's 2026-10-14 publication, the packet named the exact fixed target tuple and required a fresh non-waking identity check immediately before execution. It recorded the frozen query artifact, proposed transaction method, possible compute wake, required result classes (`CLEAN_CATALOG_PREFLIGHT`, `UNCLEAN`, `UNKNOWN`), mandatory stop cases, and pending owner sign-off. The historical target values were design references, not current verification. The old D1 authorization did not transfer. **No D1v2 approval had yet been recorded at that time.**
 
 ## G5 — publication and final verification
 
@@ -80,8 +80,14 @@ The six remote reports are:
 
 This G5 readback was written after the first publication commit; the coordinator report is then published as a small docs-only verification follow-up. The final branch-tip SHA is included in the execution summary accompanying this report.
 
-## Current decision and stop boundary
+## Decision and stop boundary at report publication (2026-10-14)
 
 Current content verdict: **D1V2 APPROVAL PACKET READY — ALTERNATIVE METHOD, OWNER REVIEW REQUIRED**. The revised fixed SQL has disposable PostgreSQL 18 validation; the actual connected Neon transaction contract remains unverified. Publication readback is pending, and the packet authorizes no action until a separate owner decision.
 
 This wave does not authorize any `mcp__Neon__run_sql_transaction`, `run_sql`, database connection, compute wake, SQL against either Neon staging target, role/grant/network/endpoint/branch/project mutation, credential retrieval, key generation/pinning/signing, migrations 0000–0013, staging runtime guard flip, Vercel environment/deployment, paid resource, merge, D1v2, D2, or D3. No other Neon project is a fallback.
+
+## Post-report owner approval addendum (2026-10-15)
+
+Ard subsequently approved one read-only D1v2 run using exactly the 26 frozen statements (blob SHA-1 `e011f0e843d42d53c7c4c76ba479854644137fc9`), the reviewed `psql` single-process/single-transaction method, and the exact target tuple in the [owner approval packet](WAVE13B_1R_D1V2_OWNER_APPROVAL_PACKET.md). The approval includes one possible endpoint wake as part of that run. It does not authorize additional SQL, another target or method, retries, provider mutations, migrations, or D2/D3.
+
+The approval is recorded; execution was **NOT EXECUTED — ACCESS/SAFETY BLOCKED**. At the attempt, the local PostgreSQL 18 `psql` client, trusted CA for `sslmode=verify-full`, owner-only local credential path, approved role/object/privilege baseline, and fresh non-waking target identity recheck were unavailable. No Neon SQL, database connection, endpoint wake, or provider mutation occurred. The 26-statement reference remains byte-for-byte frozen and is still not evidence of physical emptiness or independent staging lineage. The isolation guard remains `stagingIsolationVerifiedEmpty=false`; migrations, D2/D3, staging deployment, and production release remain closed.
