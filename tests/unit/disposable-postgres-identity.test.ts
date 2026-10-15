@@ -37,6 +37,22 @@ describe("disposable PostgreSQL concurrency identity", () => {
     expect(validateLaunchSafetyConcurrencyEnvironment(environment)).toBe("12345678_2");
   });
 
+  it("keeps the dedicated PostgreSQL 18 rehearsal initializer on its exact approved branch", () => {
+    const environment = validEnvironment({
+      GITHUB_ACTIONS: "true",
+      GITHUB_REPOSITORY: "Satsetx4/karturt",
+      GITHUB_EVENT_NAME: "push",
+      GITHUB_REF: "refs/heads/codex/wave12-3-pg18-rehearsal-20261014",
+      GITHUB_RUN_ID: "12345678",
+      GITHUB_RUN_ATTEMPT: "1",
+      PG18_SERVICE_ID: "b".repeat(64),
+      LAUNCH_SAFETY_POSTGRES_URL: `postgresql://${username}@127.0.0.1:49152/${databaseName}`,
+    });
+    expect(validateLaunchSafetyConcurrencyEnvironment(environment)).toBe("12345678_1");
+    expect(validateDisposablePostgresTarget(environment, { allowPasswordlessPg18: true }))
+      .toMatchObject({ databaseName, username, port: 49_152 });
+  });
+
   it.each([
     ["wrong repository", { GITHUB_REPOSITORY: "another/repository" }],
     ["non-push event", { GITHUB_EVENT_NAME: "workflow_dispatch" }],

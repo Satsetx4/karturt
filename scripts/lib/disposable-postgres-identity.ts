@@ -11,7 +11,10 @@ export type DisposablePostgresTarget = {
 const runIdPattern = /^[a-z0-9_]{3,24}$/;
 const identityTokenPattern = /^[a-f0-9]{64}$/;
 const launchSafetyConcurrencyRepository = "Satsetx4/karturt";
-const launchSafetyConcurrencyBranchRef = "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015";
+const launchSafetyConcurrencyBranchRefs = new Set([
+  "refs/heads/codex/wave12-3-pg18-rehearsal-20261014",
+  "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015",
+]);
 
 export function validateLaunchSafetyConcurrencyEnvironment(env: NodeJS.ProcessEnv): string {
   if (env.GITHUB_ACTIONS !== "true") {
@@ -20,8 +23,8 @@ export function validateLaunchSafetyConcurrencyEnvironment(env: NodeJS.ProcessEn
   if (env.GITHUB_REPOSITORY !== launchSafetyConcurrencyRepository) {
     throw new Error("PostgreSQL concurrency repository identity is not allowed.");
   }
-  if (env.GITHUB_EVENT_NAME !== "push" || env.GITHUB_REF !== launchSafetyConcurrencyBranchRef) {
-    throw new Error("PostgreSQL concurrency accepts only the exact release-candidate branch push.");
+  if (env.GITHUB_EVENT_NAME !== "push" || !launchSafetyConcurrencyBranchRefs.has(env.GITHUB_REF ?? "")) {
+    throw new Error("PostgreSQL concurrency accepts only an explicitly approved branch push.");
   }
   if (!env.GITHUB_RUN_ID || !env.GITHUB_RUN_ATTEMPT) {
     throw new Error("PostgreSQL concurrency run identity is missing.");
