@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "state": "TARGET_IDENTIFIED_LINEAGE_UNVERIFIED",
+  "provisionalReviewedRcSourceSha": "0b1e3f525039496200b2bb5f698d312ded5cb3e3",
+  "finalApprovalSourceSha": null,
+  "migrationManifestFingerprint": "e4a95a0a841872752cbcfa9b46107a99fdb469994280e25fc9f479a54b0312b4",
+  "provider": {
+    "plan": "Free",
+    "freeOnlyConfirmed": true,
+    "organizationId": "org-ancient-boat-57106549",
+    "projectId": "broad-star-40451875",
+    "projectName": "karturt-v1-synthetic-staging-20261015",
+    "region": "aws-ap-southeast-1",
+    "postgresMajor": 18,
+    "computeCU": 0.25,
+    "creationMode": "new-project-no-source-fields-reported",
+    "sourceProjectId": "UNVERIFIED",
+    "parentProjectId": "UNVERIFIED",
+    "branchId": "br-orange-recipe-azed9f78",
+    "branchName": "main",
+    "parentId": "UNVERIFIED",
+    "endpointId": "ep-mute-firefly-azjcru4h",
+    "directHostname": null,
+    "databaseId": null,
+    "databaseName": null,
+    "ownerRole": null,
+    "runtimeRole": null,
+    "migrationRole": null,
+    "createdAtUtc": null,
+    "evidenceReference": "sanitized provisioning result; independent readback pending",
+    "lineageReadbackEvidenceReference": null
+  },
+  "tls": {
+    "sslmode": "verify-full",
+    "channelBinding": "require",
+    "caBundleSource": "https://curl.se/ca/cacert.pem",
+    "caBundleSha256": null,
+    "caBundleObservedAtUtc": null
+  },
+  "readOnlyQueryApproval": {
+    "status": "NOT_SIGNED",
+    "ownerReference": null,
+    "sourceSha": null,
+    "expectedStateSha256": null,
+    "queryPacketSha256": "987570baee76c2affef4a3f68c2ae114b3007174004d070232908c82f513751e",
+    "ownerPublicKeyFingerprint": null,
+    "issuedAtUtc": null,
+    "expiresAtUtc": null
+  }
+}

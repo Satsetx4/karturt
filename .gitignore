@@ -40,3 +40,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local-only Wave 13B.2 target, approval, and credential files
+**/wave13b2-staging-target-manifest.local.json
+**/wave13b2-staging-expected-state.local.json
+**/wave13b2-read-only-query-approval.local.json
+**/wave13b2-owner-signing-public.pem
+**/wave13b2-migration-authorization.local.json
