@@ -194,9 +194,30 @@ function isChairmanReport(value: unknown, expectedYear: number): value is Chairm
     arrearsTotal += householdTotal;
     if (!Number.isSafeInteger(arrearsTotal)) return false;
   }
+  const arrearsByMonth = candidate.monthly.map(() => ({ count: 0, outstanding: 0 }));
+  for (const household of arrears.households) {
+    for (const period of household.periods) {
+      const month = arrearsByMonth[period.month - 1];
+      if (!month) return false;
+      month.count += 1;
+      month.outstanding += period.outstanding;
+      if (!Number.isSafeInteger(month.count) || !Number.isSafeInteger(month.outstanding)) return false;
+    }
+  }
+  for (const [index, month] of candidate.monthly.entries()) {
+    const monthlyArrears = arrearsByMonth[index];
+    if (!monthlyArrears) return false;
+    const monthPeriod = `${candidate.year}-${String(month.month).padStart(2, "0")}`;
+    if (monthPeriod < asOfPeriod) {
+      if (monthlyArrears.count !== month.overdueCount || monthlyArrears.outstanding !== month.outstanding) return false;
+    } else if (monthlyArrears.count !== 0 || month.overdueCount !== 0) {
+      return false;
+    }
+  }
   return arrearsTotal === arrears.totalOutstanding &&
     arrearsTotal <= candidate.dueNowOutstanding &&
-    arrearsCount === arrears.count;
+    arrearsCount === arrears.count &&
+    arrearsCount === candidate.yearly.overdueCount;
 }
 
 function safeErrorMessage(status: number): string {
@@ -438,6 +459,7 @@ export function ChairmanReports({
                     <header className="chairman-report-month-heading">
                       <h3>{monthNames[month.month - 1]}</h3>
                       <div className="chairman-report-badges">
+                        {month.obligationCount === 0 && month.notDueCount === 0 && <span className="chairman-report-badge is-no-data">Belum ada data tagihan</span>}
                         {month.notDueCount > 0 && <span className="chairman-report-badge is-not-due">Tidak ditagih · {integerFormat.format(month.notDueCount)}</span>}
                         {month.waivedCount > 0 && <span className="chairman-report-badge is-waived">Dibebaskan · {integerFormat.format(month.waivedCount)}</span>}
                         {month.overdueCount > 0 && <span className="chairman-report-badge is-overdue">Tunggakan · {integerFormat.format(month.overdueCount)}</span>}

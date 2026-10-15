@@ -53,6 +53,7 @@ Counts: obligationCount includes real unpaid, paid, and waived dues; waivedCount
 ## Period, arrears, and lifecycle semantics
 
 - Reports are grouped by billing year/month on monthly_dues, never by payment.created_at, verified_at, or request date.
+- A month with no real obligation and no `NOT_DUE` row is displayed as “Belum ada data tagihan”; zero totals must not imply that dues were generated.
 - Transfer/cash is split at allocation amount, grouped by monthly_due_id and payment method, excluding reversed payments.
 - Arrears means outstanding > 0 AND the due period's year-month is earlier than the Jakarta business year-month. A May due remains current and is not arrears on May 5 or May 20; it becomes arrears on June 1. Future periods are excluded from arrears.
 - A pending request can show the “Menunggu konfirmasi” badge on an arrears period but never reduces outstanding.

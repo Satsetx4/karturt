@@ -164,6 +164,7 @@ async function createYearDues(
     startsOn: string;
     endsOn?: string | null;
     feeRateId: string;
+    monthlyAmount?: number;
   },
 ) {
   const dues = buildAnnualDues({
@@ -173,7 +174,7 @@ async function createYearDues(
     year: YEAR,
     householdStartsOn: input.startsOn,
     householdEndsOn: input.endsOn,
-    feeRates: [{ id: input.feeRateId, effectiveMonth: 1, monthlyAmount: 40_000 }],
+    feeRates: [{ id: input.feeRateId, effectiveMonth: 1, monthlyAmount: input.monthlyAmount ?? 40_000 }],
   });
   await database.insert(monthlyDues).values(dues);
 }
@@ -343,31 +344,6 @@ const DIRECT_POSITION_SQL = `${DIRECT_COMPONENTS_SQL}
       WHERE date_trunc('month', due_date) > date_trunc('month', $3::date)
     ), 0)::int AS "futureUnpaidOutstanding"
   FROM calculated_dues
-`;
-
-const D5_POSITION_ORACLE_SQL = `
-  WITH d5_due_rows AS (
-    SELECT 2026::int AS year, period.month::int AS month,
-      25000::bigint AS target,
-      CASE WHEN period.month <= 8 THEN 25000::bigint ELSE 0::bigint END AS received
-    FROM generate_series(1, 12) AS period(month)
-    UNION ALL
-    SELECT 2027::int AS year, 1::int AS month, 25000::bigint AS target, 0::bigint AS received
-  ), selected_year AS (
-    SELECT year, month, sum(target)::bigint AS target,
-      sum(received)::bigint AS received,
-      (sum(target) - sum(received))::bigint AS outstanding
-    FROM d5_due_rows
-    WHERE year = $1::int
-    GROUP BY year, month
-  )
-  SELECT year, month, target::int AS target, received::int AS received, outstanding::int AS outstanding,
-    CASE WHEN make_date(year, month, 1) <= date_trunc('month', $2::date)::date
-      THEN outstanding ELSE 0 END::int AS "dueNowOutstanding",
-    CASE WHEN make_date(year, month, 1) > date_trunc('month', $2::date)::date
-      THEN outstanding ELSE 0 END::int AS "futureUnpaidOutstanding"
-  FROM selected_year
-  ORDER BY month
 `;
 
 const DIRECT_ARREARS_SQL = `${DIRECT_COMPONENTS_SQL}
@@ -738,34 +714,6 @@ describe("F13 PGlite manual reporting oracle", () => {
       dueNowOutstanding: number;
       futureUnpaidOutstanding: number;
     }>(DIRECT_POSITION_SQL, [rtUnitId, billingYear.id, NEW_YEAR_DATE]);
-    const d5MonthlyBuckets = await testDatabase.client.query<{
-      year: number;
-      month: number;
-      target: number;
-      received: number;
-      outstanding: number;
-      dueNowOutstanding: number;
-      futureUnpaidOutstanding: number;
-    }>(D5_POSITION_ORACLE_SQL, [2026, "2026-10-12"]);
-    const d5Position = d5MonthlyBuckets.rows.reduce((position, month) => {
-      const monthPeriod = `${month.year}-${String(month.month).padStart(2, "0")}`;
-      const dueNow = monthPeriod <= "2026-10";
-      expect(month.dueNowOutstanding).toBe(dueNow ? month.outstanding : 0);
-      expect(month.futureUnpaidOutstanding).toBe(dueNow ? 0 : month.outstanding);
-      position.target += month.target;
-      position.received += month.received;
-      position.annualOutstanding += month.outstanding;
-      if (dueNow) position.dueNowOutstanding += month.outstanding;
-      else position.futureUnpaidOutstanding += month.outstanding;
-      return position;
-    }, { target: 0, received: 0, annualOutstanding: 0, dueNowOutstanding: 0, futureUnpaidOutstanding: 0 });
-    const d5NextYearBuckets = await testDatabase.client.query<{
-      year: number;
-      month: number;
-      outstanding: number;
-      dueNowOutstanding: number;
-      futureUnpaidOutstanding: number;
-    }>(D5_POSITION_ORACLE_SQL, [2027, "2026-10-12"]);
     const sqlYearEndArrears = await testDatabase.client.query<{
       householdId: string;
       month: number;
@@ -790,23 +738,6 @@ describe("F13 PGlite manual reporting oracle", () => {
     expect(sqlMay05Position.rows[0]).toEqual(sqlMay20Position.rows[0]);
     expect(sqlYearEndPosition.rows[0]).toEqual({ dueNowOutstanding: 1_035_000, futureUnpaidOutstanding: 0 });
     expect(sqlNewYearPosition.rows[0]).toEqual(sqlYearEndPosition.rows[0]);
-    expect(d5MonthlyBuckets.rows).toHaveLength(12);
-    expect(d5Position).toEqual({
-      target: 300_000,
-      received: 200_000,
-      annualOutstanding: 100_000,
-      dueNowOutstanding: 50_000,
-      futureUnpaidOutstanding: 50_000,
-    });
-    expect(d5NextYearBuckets.rows).toEqual([{
-      year: 2027,
-      month: 1,
-      target: 25_000,
-      received: 0,
-      outstanding: 25_000,
-      dueNowOutstanding: 0,
-      futureUnpaidOutstanding: 25_000,
-    }]);
     expect(sqlYearEndArrears.rows.some((row) => row.month === 12)).toBe(false);
     expect(sqlNewYearArrears.rows.filter((row) => row.month === 12)).toHaveLength(3);
     expect(sqlYearEndArrears.rows.reduce((sum, row) => sum + row.outstanding, 0)).toBe(reportYearEnd.arrears.totalOutstanding);
@@ -919,5 +850,89 @@ describe("F13 PGlite manual reporting oracle", () => {
     `, [dueId(h3Old.householdId, 3)]);
     expect(h1AprilSql.rows[0]).toEqual({ status: "waived", amount: 40_000, waiverAmount: 40_000 });
     expect(h3OldMarchSql.rows[0]).toEqual({ status: "not_due", amount: 0 });
+  });
+
+  it("reconciles the D5 Oct 12 position split against the same seeded billing ledger", async () => {
+    const rtUnitId = await createRt(testDatabase.db);
+    const household = await createHousehold(testDatabase.db, rtUnitId, {
+      number: "D5-01",
+      startsOn: "2024-01-01",
+    });
+    const chairman = await createOfficialPrincipal(testDatabase.db, rtUnitId, "rt_chairman", household.personId);
+    const treasurer = await createOfficialPrincipal(testDatabase.db, rtUnitId, "treasurer", household.personId);
+    const [billingYear] = await testDatabase.db.insert(billingYears).values({
+      rtUnitId,
+      year: YEAR,
+      status: "open",
+    }).returning({ id: billingYears.id });
+    if (!billingYear) throw new Error("Could not create the D5 ledger billing year.");
+    const [feeRate] = await createFeeRateFixture(testDatabase.db, {
+      rtUnitId,
+      billingYearId: billingYear.id,
+      effectiveMonth: 1,
+      monthlyAmount: 25_000,
+    });
+    if (!feeRate) throw new Error("Could not create the D5 ledger tariff.");
+
+    await createYearDues(testDatabase.db, {
+      rtUnitId,
+      householdId: household.householdId,
+      billingYearId: billingYear.id,
+      startsOn: "2024-01-01",
+      feeRateId: feeRate.id,
+      monthlyAmount: 25_000,
+    });
+    const cash = await recordCash(database, testDatabase, treasurer, {
+      rtUnitId,
+      householdId: household.householdId,
+      period: "2026-08",
+    }, "2026-10-12");
+    expect(cash.result.totalAmount).toBe(200_000);
+    expect(cash.result.periods).toEqual([
+      "2026-01", "2026-02", "2026-03", "2026-04",
+      "2026-05", "2026-06", "2026-07", "2026-08",
+    ]);
+
+    const report = await getRtFinancialReport(database, chairman, { year: YEAR, businessDate: "2026-10-12" });
+    const sqlMonthly = await testDatabase.client.query<Record<string, number>>(
+      DIRECT_MONTHLY_SQL, [rtUnitId, billingYear.id, "2026-10-12"],
+    );
+    const sqlYearly = await testDatabase.client.query<Record<string, number>>(
+      DIRECT_YEARLY_SQL, [rtUnitId, billingYear.id, "2026-10-12"],
+    );
+    const sqlPosition = await testDatabase.client.query<{
+      dueNowOutstanding: number;
+      futureUnpaidOutstanding: number;
+    }>(DIRECT_POSITION_SQL, [rtUnitId, billingYear.id, "2026-10-12"]);
+    const sqlArrears = await testDatabase.client.query<{ month: number; outstanding: number }>(
+      DIRECT_ARREARS_SQL, [rtUnitId, billingYear.id, "2026-10-12"],
+    );
+
+    expect(report.monthly).toHaveLength(12);
+    expect(report.monthly.map(projection)).toEqual(sqlMonthly.rows);
+    expect(report.yearly).toEqual(sqlYearly.rows[0]);
+    expect({
+      dueNowOutstanding: report.dueNowOutstanding,
+      futureUnpaidOutstanding: report.futureUnpaidOutstanding,
+    }).toEqual(sqlPosition.rows[0]);
+    expect(report.yearly).toMatchObject({
+      target: 300_000,
+      received: 200_000,
+      outstanding: 100_000,
+      overdueCount: 1,
+    });
+    expect(report.dueNowOutstanding).toBe(50_000);
+    expect(report.futureUnpaidOutstanding).toBe(50_000);
+    expect(report.arrears).toMatchObject({ totalOutstanding: 25_000, count: 1, householdCount: 1 });
+    expect(sqlArrears.rows.map(({ month, outstanding }) => ({ month, outstanding }))).toEqual([
+      { month: 9, outstanding: 25_000 },
+    ]);
+    expect(report.monthly.slice(0, 8).every((month) => month.received === 25_000 && month.outstanding === 0)).toBe(true);
+    expect(report.monthly.slice(8).map(({ month, outstanding, overdueCount }) => ({ month, outstanding, overdueCount }))).toEqual([
+      { month: 9, outstanding: 25_000, overdueCount: 1 },
+      { month: 10, outstanding: 25_000, overdueCount: 0 },
+      { month: 11, outstanding: 25_000, overdueCount: 0 },
+      { month: 12, outstanding: 25_000, overdueCount: 0 },
+    ]);
   });
 });
