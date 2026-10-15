@@ -27,19 +27,27 @@ function rupiah(amount: number) {
     : "Jumlah tidak tersedia";
 }
 
+function isCanonicalDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = Date.parse(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === value;
+}
+
 function dateLabel(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "Tanggal tidak tersedia";
+  if (!isCanonicalDate(value)) return "Tanggal tidak tersedia";
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
-  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
-    return "Tanggal tidak tersedia";
-  }
   return new Intl.DateTimeFormat("id-ID", {
     day: "numeric",
     month: "long",
     year: "numeric",
     timeZone: "UTC",
   }).format(date);
+}
+
+function reportPeriodLabel(value: string) {
+  const [year, month] = value.split("-");
+  return `${monthNames[Number(month) - 1]} ${year}`;
 }
 
 function isSafeCount(value: unknown): value is number {
@@ -76,6 +84,11 @@ function isChairmanReport(value: unknown, expectedYear: number): value is Chairm
   const candidate = value as Partial<ChairmanReport>;
   if (
     candidate.year !== expectedYear ||
+    !candidate.asOf ||
+    !isCanonicalDate(candidate.asOf.businessDate) ||
+    candidate.asOf.period !== candidate.asOf.businessDate.slice(0, 7) ||
+    !isSafeCount(candidate.dueNowOutstanding) ||
+    !isSafeCount(candidate.futureUnpaidOutstanding) ||
     !Array.isArray(candidate.availableYears) ||
     !candidate.availableYears.every((year) => isSafeCount(year) && year >= 2000 && year <= 2200) ||
     !isReportAmounts(candidate.yearly) ||
@@ -89,6 +102,7 @@ function isChairmanReport(value: unknown, expectedYear: number): value is Chairm
   ) {
     return false;
   }
+  const asOfPeriod = candidate.asOf.period;
 
   const arrears = candidate.arrears;
   if (
@@ -117,7 +131,10 @@ function isChairmanReport(value: unknown, expectedYear: number): value is Chairm
       Boolean(period) &&
       isSafeCount(period.month) &&
       period.month >= 1 && period.month <= 12 &&
-      typeof period.dueDate === "string" &&
+      isCanonicalDate(period.dueDate) &&
+      period.dueDate.slice(0, 4) === String(candidate.year) &&
+      Number(period.dueDate.slice(5, 7)) === period.month &&
+      `${candidate.year}-${String(period.month).padStart(2, "0")}` < asOfPeriod &&
       isSafeCount(period.outstanding) &&
       typeof period.pending === "boolean"
     )
@@ -146,6 +163,24 @@ function isChairmanReport(value: unknown, expectedYear: number): value is Chairm
     if (total !== candidate.yearly[field]) return false;
   }
 
+  let dueNowFromMonths = 0;
+  let futureFromMonths = 0;
+  for (const month of candidate.monthly) {
+    const monthPeriod = `${candidate.year}-${String(month.month).padStart(2, "0")}`;
+    if (monthPeriod <= asOfPeriod) {
+      dueNowFromMonths += month.outstanding;
+      if (!Number.isSafeInteger(dueNowFromMonths)) return false;
+    } else {
+      futureFromMonths += month.outstanding;
+      if (!Number.isSafeInteger(futureFromMonths)) return false;
+    }
+  }
+  if (
+    dueNowFromMonths !== candidate.dueNowOutstanding ||
+    futureFromMonths !== candidate.futureUnpaidOutstanding ||
+    dueNowFromMonths + futureFromMonths !== candidate.yearly.outstanding
+  ) return false;
+
   let arrearsTotal = 0;
   let arrearsCount = 0;
   for (const household of arrears.households) {
@@ -159,7 +194,30 @@ function isChairmanReport(value: unknown, expectedYear: number): value is Chairm
     arrearsTotal += householdTotal;
     if (!Number.isSafeInteger(arrearsTotal)) return false;
   }
-  return arrearsTotal === arrears.totalOutstanding && arrearsCount === arrears.count;
+  const arrearsByMonth = candidate.monthly.map(() => ({ count: 0, outstanding: 0 }));
+  for (const household of arrears.households) {
+    for (const period of household.periods) {
+      const month = arrearsByMonth[period.month - 1];
+      if (!month) return false;
+      month.count += 1;
+      month.outstanding += period.outstanding;
+      if (!Number.isSafeInteger(month.count) || !Number.isSafeInteger(month.outstanding)) return false;
+    }
+  }
+  for (const [index, month] of candidate.monthly.entries()) {
+    const monthlyArrears = arrearsByMonth[index];
+    if (!monthlyArrears) return false;
+    const monthPeriod = `${candidate.year}-${String(month.month).padStart(2, "0")}`;
+    if (monthPeriod < asOfPeriod) {
+      if (monthlyArrears.count !== month.overdueCount || monthlyArrears.outstanding !== month.outstanding) return false;
+    } else if (monthlyArrears.count !== 0 || month.overdueCount !== 0) {
+      return false;
+    }
+  }
+  return arrearsTotal === arrears.totalOutstanding &&
+    arrearsTotal <= candidate.dueNowOutstanding &&
+    arrearsCount === arrears.count &&
+    arrearsCount === candidate.yearly.overdueCount;
 }
 
 function safeErrorMessage(status: number): string {
@@ -292,6 +350,7 @@ export function ChairmanReports({
   const years = [...new Set([selectedYear, ...availableYears])]
     .sort((left, right) => right - left);
   const hasYearData = Boolean(data && (data.yearly.obligationCount > 0 || data.yearly.notDueCount > 0));
+  const asOfPeriodLabel = data ? reportPeriodLabel(data.asOf.period) : "";
 
   return (
     <section className="chairman-reports-area" aria-labelledby="chairman-reports-title" aria-busy={loading}>
@@ -338,6 +397,23 @@ export function ChairmanReports({
             </div>
           )}
 
+          <section className="chairman-report-panel" aria-labelledby="chairman-report-position-title">
+            <div className="chairman-report-panel-heading">
+              <div>
+                <p className="eyebrow">POSISI PER {dateLabel(data.asOf.businessDate).toLocaleUpperCase("id-ID")}</p>
+                <h2 id="chairman-report-position-title">Kewajiban menurut periode</h2>
+              </div>
+            </div>
+            <dl className="chairman-report-metrics">
+              <Metric label={`Perlu dibayar sampai ${asOfPeriodLabel}`} amount={data.dueNowOutstanding} />
+              <Metric label={`Belum jatuh tempo setelah ${asOfPeriodLabel}`} amount={data.futureUnpaidOutstanding} />
+            </dl>
+            <p className="chairman-report-identity">
+              Jumlah tahunan yang belum diterima terbagi menjadi periode sampai bulan berjalan dan periode setelahnya.
+              <span>{rupiah(data.dueNowOutstanding)} + {rupiah(data.futureUnpaidOutstanding)} = {rupiah(data.yearly.outstanding)}</span>
+            </p>
+          </section>
+
           <section className="chairman-report-panel" aria-labelledby="chairman-report-summary-title">
             <div className="chairman-report-panel-heading">
               <div>
@@ -349,7 +425,7 @@ export function ChairmanReports({
               <Metric label="Target awal" amount={data.yearly.target} />
               <Metric label="Target efektif" amount={data.yearly.effectiveTarget} />
               <Metric label="Diterima" amount={data.yearly.received} />
-              <Metric label="Belum diterima" amount={data.yearly.outstanding} />
+              <Metric label="Belum diterima · akuntansi tahunan" amount={data.yearly.outstanding} />
               <Metric label="Transfer" amount={data.yearly.transferReceived} />
               <Metric label="Tunai" amount={data.yearly.cashReceived} />
               <Metric label="Dibebaskan" amount={data.yearly.waived} />
@@ -374,35 +450,43 @@ export function ChairmanReports({
               <span className="chairman-report-section-note">Januari–Desember {data.year}</span>
             </div>
             <div className="chairman-report-month-list">
-              {data.monthly.map((month) => (
-                <article className="chairman-report-month-card" key={`${data.year}-${month.month}`}>
-                  <header className="chairman-report-month-heading">
-                    <h3>{monthNames[month.month - 1]}</h3>
-                    <div className="chairman-report-badges">
-                      {month.notDueCount > 0 && <span className="chairman-report-badge is-not-due">Tidak ditagih · {integerFormat.format(month.notDueCount)}</span>}
-                      {month.waivedCount > 0 && <span className="chairman-report-badge is-waived">Dibebaskan · {integerFormat.format(month.waivedCount)}</span>}
-                      {month.overdueCount > 0 && <span className="chairman-report-badge is-overdue">Tunggakan · {integerFormat.format(month.overdueCount)}</span>}
-                    </div>
-                  </header>
-                  <dl className="chairman-report-metrics chairman-report-metrics--month">
-                    <Metric label="Target awal" amount={month.target} />
-                    <Metric label="Target efektif" amount={month.effectiveTarget} />
-                    <Metric label="Diterima" amount={month.received} />
-                    <Metric label="Transfer" amount={month.transferReceived} />
-                    <Metric label="Tunai" amount={month.cashReceived} />
-                    <Metric label="Dibebaskan" amount={month.waived} />
-                    <Metric label="Belum diterima" amount={month.outstanding} />
-                  </dl>
-                  <p className="chairman-report-identity">
-                    Transfer + tunai = diterima.
-                    <span>{rupiah(month.transferReceived)} + {rupiah(month.cashReceived)} = {rupiah(month.received)}</span>
-                  </p>
-                  <p className="chairman-report-identity">
-                    Diterima + dibebaskan + belum diterima = target efektif.
-                    <span>{rupiah(month.received)} + {rupiah(month.waived)} + {rupiah(month.outstanding)} = {rupiah(month.effectiveTarget)}</span>
-                  </p>
-                </article>
-              ))}
+              {data.monthly.map((month) => {
+                const monthPeriod = `${data.year}-${String(month.month).padStart(2, "0")}`;
+                const futurePeriod = monthPeriod > data.asOf.period;
+                const currentPeriod = monthPeriod === data.asOf.period;
+                return (
+                  <article className="chairman-report-month-card" key={`${data.year}-${month.month}`}>
+                    <header className="chairman-report-month-heading">
+                      <h3>{monthNames[month.month - 1]}</h3>
+                      <div className="chairman-report-badges">
+                        {month.obligationCount === 0 && month.notDueCount === 0 && <span className="chairman-report-badge is-no-data">Belum ada data tagihan</span>}
+                        {month.notDueCount > 0 && <span className="chairman-report-badge is-not-due">Tidak ditagih · {integerFormat.format(month.notDueCount)}</span>}
+                        {month.waivedCount > 0 && <span className="chairman-report-badge is-waived">Dibebaskan · {integerFormat.format(month.waivedCount)}</span>}
+                        {month.overdueCount > 0 && <span className="chairman-report-badge is-overdue">Tunggakan · {integerFormat.format(month.overdueCount)}</span>}
+                        {month.outstanding > 0 && currentPeriod && <span className="chairman-report-badge is-current">Bulan berjalan</span>}
+                        {month.outstanding > 0 && futurePeriod && <span className="chairman-report-badge is-future">Belum jatuh tempo</span>}
+                      </div>
+                    </header>
+                    <dl className="chairman-report-metrics chairman-report-metrics--month">
+                      <Metric label="Target awal" amount={month.target} />
+                      <Metric label="Target efektif" amount={month.effectiveTarget} />
+                      <Metric label="Diterima" amount={month.received} />
+                      <Metric label="Transfer" amount={month.transferReceived} />
+                      <Metric label="Tunai" amount={month.cashReceived} />
+                      <Metric label="Dibebaskan" amount={month.waived} />
+                      <Metric label="Sisa kewajiban" amount={month.outstanding} />
+                    </dl>
+                    <p className="chairman-report-identity">
+                      Transfer + tunai = diterima.
+                      <span>{rupiah(month.transferReceived)} + {rupiah(month.cashReceived)} = {rupiah(month.received)}</span>
+                    </p>
+                    <p className="chairman-report-identity">
+                      Diterima + dibebaskan + sisa kewajiban = target efektif.
+                      <span>{rupiah(month.received)} + {rupiah(month.waived)} + {rupiah(month.outstanding)} = {rupiah(month.effectiveTarget)}</span>
+                    </p>
+                  </article>
+                );
+              })}
             </div>
           </section>
 
