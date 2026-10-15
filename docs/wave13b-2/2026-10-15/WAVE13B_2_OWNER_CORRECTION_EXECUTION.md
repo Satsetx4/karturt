@@ -3,6 +3,8 @@
 Tanggal: 2026-10-15
 Status: **FREE PROJECT CREATED; OPERATOR KIT REVIEWED AND PUBLISHED; DATABASE ACCESS AND MIGRATION STOPPED**
 
+**Pembaruan berikutnya (15 Oktober 2026):** putusan lineage root telah diperbarui menjadi PASS terbatas berdasarkan kontrak pembuatan proyek baru dan review independen Agent A. `parent_id` tetap tidak dikembalikan; status katalog tetap UNKNOWN dan database access/migrasi tetap STOPPED. Lihat [rekaman eksekusi F0–F5 terbaru](WAVE13B_2_LONGHORIZON_F0_F5_EXECUTION.md) untuk gate dan aksi owner terkini.
+
 > Dokumen ini adalah catatan status terbaru dan menggantikan kesimpulan pra-provisioning di laporan, paket gerbang, dan bukti lineage sebelumnya pada direktori ini. Berkas lama dipertahankan sebagai snapshot historis; jangan jalankan ulang atau gunakan hasil gate pra-create tersebut untuk mengizinkan SQL.
 
 ## Keputusan dan ruang lingkup owner
