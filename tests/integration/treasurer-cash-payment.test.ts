@@ -222,54 +222,62 @@ describe("Treasurer direct cash payment", () => {
     }
   });
 
-  it("records twelve separate Rp25,000 monthly cash payments and receipts totalling Rp300,000", async () => {
+  it("allocates one December Rp300,000 cash payment across twelve Rp25,000 months and receipts", async () => {
     const scenario = await createScenario(
       Array.from({ length: 12 }, (_, index) => `2026-${String(index + 1).padStart(2, "0")}`),
       25000,
     );
-    const keysByMonth = new Map<number, string>();
-    const results = [];
-    for (let month = 1; month <= 12; month += 1) {
-      const period = `2026-${String(month).padStart(2, "0")}`;
-      const idempotencyKey = randomUUID();
-      keysByMonth.set(month, idempotencyKey);
-      results.push(await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
-        householdId: scenario.householdId,
-        period,
-        idempotencyKey,
-      }, "2026-10-12"));
-    }
+    const idempotencyKey = randomUUID();
+    const result = await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: scenario.householdId,
+      period: "2026-12",
+      idempotencyKey,
+    }, "2026-12-12");
 
     const paymentRows = await testDatabase.db.select().from(payments)
-      .where(inArray(payments.cashIdempotencyKey, [...keysByMonth.values()]));
-    const paymentIds = paymentRows.map((payment) => payment.id);
+      .where(and(eq(payments.rtUnitId, scenario.rtUnitId), eq(payments.method, "cash")));
+    const [payment] = paymentRows;
     const allocationRows = await testDatabase.db.select().from(paymentAllocations)
-      .where(inArray(paymentAllocations.paymentId, paymentIds));
-    const paymentsByKey = new Map(paymentRows.map((payment) => [payment.cashIdempotencyKey, payment]));
-    const paymentByDueId = new Map(allocationRows.map((allocation) => [allocation.monthlyDueId, allocation.paymentId]));
-    const dues = await getResidentMonthlyDues(database, scenario.residentPrincipal, "2026-10-12");
+      .where(eq(paymentAllocations.paymentId, payment!.id));
+    const settlementRows = await testDatabase.db.select().from(activeDueSettlements)
+      .where(eq(activeDueSettlements.paymentId, payment!.id));
+    const dues = await getResidentMonthlyDues(database, scenario.residentPrincipal, "2026-12-12");
+    const paymentReference = `KRT-${payment!.id.replace(/-/g, "").slice(0, 12).toUpperCase()}`;
 
-    expect(results).toHaveLength(12);
-    expect(results.map((result) => [result.itemCount, result.totalAmount])).toEqual(Array.from({ length: 12 }, () => [1, 25000]));
-    expect(paymentRows).toHaveLength(12);
-    expect(paymentRows.every((payment) => payment.amount === 25000 && payment.method === "cash")).toBe(true);
-    expect(paymentRows.reduce((total, payment) => total + payment.amount, 0)).toBe(300000);
+    expect(result).toEqual({
+      status: "recorded",
+      periods: Array.from({ length: 12 }, (_, index) => `2026-${String(index + 1).padStart(2, "0")}`),
+      itemCount: 12,
+      totalAmount: 300000,
+      replayed: false,
+    });
+    expect(paymentRows).toHaveLength(1);
+    expect(payment).toMatchObject({
+      cashIdempotencyKey: idempotencyKey,
+      amount: 300000,
+      method: "cash",
+      paymentRequestId: null,
+    });
     expect(allocationRows).toHaveLength(12);
-    expect(allocationRows.every((allocation) => allocation.amount === 25000)).toBe(true);
+    expect(allocationRows.map((allocation) => allocation.monthlyDueId).sort()).toEqual([...scenario.dueIds].sort());
+    expect(allocationRows.every((allocation) => allocation.amount === 25000 && allocation.paymentId === payment!.id)).toBe(true);
     expect(allocationRows.reduce((total, allocation) => total + allocation.amount, 0)).toBe(300000);
+    expect(settlementRows).toHaveLength(12);
+    expect(settlementRows.map((settlement) => settlement.monthlyDueId).sort()).toEqual([...scenario.dueIds].sort());
+    expect(settlementRows.every((settlement) => settlement.amount === 25000 && settlement.paymentId === payment!.id)).toBe(true);
     expect(dues).toHaveLength(12);
     for (const due of dues) {
-      const idempotencyKey = keysByMonth.get(due.month)!;
-      const payment = paymentsByKey.get(idempotencyKey)!;
       expect(due).toMatchObject({ status: "paid", amount: 25000, activeReceived: 25000, outstanding: 0 });
       expect(due.receipts).toHaveLength(1);
       expect(due.receipts![0]).toMatchObject({
         allocationAmount: 25000,
         method: "cash",
-        reference: `KRT-${payment.id.replace(/-/g, "").slice(0, 12).toUpperCase()}`,
+        reference: paymentReference,
       });
-      expect(paymentByDueId.get(scenario.dueIds[due.month - 1]!)).toBe(payment.id);
     }
+    expect(dues.flatMap((due) => due.receipts ?? [])).toHaveLength(12);
+    expect(new Set(dues.flatMap((due) => due.receipts ?? []).map((receipt) => receipt.reference)))
+      .toEqual(new Set([paymentReference]));
     expect(duesSummary(dues)).toEqual({ paid: 300000, pending: 0, unpaid: 0 });
   });
 
