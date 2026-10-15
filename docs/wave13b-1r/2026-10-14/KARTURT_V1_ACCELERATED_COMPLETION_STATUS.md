@@ -1,6 +1,6 @@
 # KartuRT V1 — Accelerated Completion Status
 
-Date: 2026-10-14
+Date: 2026-10-15
 
 Status: **IN PROGRESS — source work and offline evidence continue; staging and release are blocked by explicit gates.**
 
@@ -12,15 +12,16 @@ V1 is one operational RT. All 12 calendar months remain visible. Future unpaid m
 
 - PR #48, `fix/v1-post-demo-billing-20261012`, exact head `12539d83b8537d845015a2b0030d47162dae0203`, remains OPEN/DRAFT and stacked on OPEN/DRAFT PR #23. No merge occurred.
 - Exact-head GitHub Actions run `38225424975`: Gate A passed and the independent PostgreSQL concurrency job passed five race scenarios.
-- Local exact-head checks: lint passed with 0 errors and 2 existing warnings; typecheck passed; full suite passed: 67 files / 427 tests.
-- Reporting review found a policy mismatch: `src/lib/reports/aggregation.ts` treats an unpaid due as overdue when its day-10 due date has passed. The pinned D1/D5 owner policy defines arrears by Asia/Jakarta year-month: on 2026-10-12, September is arrears, October is current-month unpaid, November/December are future. A narrow fix with month-boundary and Dec→Jan regression coverage is underway on isolated branch `codex/v1-d5-report-arrears-20261014`, based on the exact PR #48 head. No new branch result is yet counted as PASS.
-- Remaining #49–#51/#53 review gaps include full D5 and December-to-January acceptance, same-month multiple active receipt reconciliation, a chronologically valid September-pending/November-cash conflict, and reports that reconcile future cash allocations. Treat these as missing evidence until separately covered and verified.
+- Report-fix PR #57 is OPEN/DRAFT on `codex/v1-d5-report-arrears-20261014`, based on the exact PR #48 head. Exact source SHA: `ddb9689b34ea3ee1373ee328952c279544758c15`. No merge occurred. GitHub Actions run `38671423539` is still in progress on that exact SHA; lint, typecheck, and unit-test steps have passed, with integration/migration tests running at this document update.
+- Local final-source checks: full suite passed **67 files / 436 tests**; production build and typecheck passed; lint passed with 0 errors and 2 existing warnings; `git diff --check` passed. Independent review passed.
+- The report fix uses Jakarta year-month arrears boundaries: on 2026-10-12, September is arrears, October is current-month unpaid, and November/December are future. It reconciles monthly, yearly, and household arrears counts/balances, visibly distinguishes months without generated dues, and compares the D5 report with direct SQL over the same seeded PGlite ledger.
+- Separate acceptance tests on PR #57 cover the D5 due-now/future/annual position, one-payment December cash advance, same-month receipt/reversal cases, and the September-pending/November-cash chronology. These are local test evidence while the exact-SHA CI run is still pending; no staging or provider evidence is implied.
 
 ## Release and staging gates
 
 | Gate | Current state | Evidence needed to advance |
 |---|---|---|
-| Source integration | PR #48 and #23 open/draft; no merge | Final exact candidate SHA, required CI/concurrency, independent code review, and separate merge decision after all release gates |
+| Source integration | PR #48/#23 and report-fix PR #57 open/draft; no merge | Finish exact-SHA Actions run `38671423539`, then a separate owner merge decision after release gates |
 | D1v2 Neon catalog preflight | **Not executed — access/safety blocked** | psql client, verified CA, owner-only local credential path, approved privilege/object baseline, and fresh non-waking target identity check |
 | Staging isolation | **Blocked** | Positive independent lineage and content evidence proving isolated empty/synthetic-only data; the current `parent-data` metadata, zero tracked writes, and bounded catalog result are insufficient |
 | Migration authorization | **Blocked** | Exact final source SHA and 15 migration hashes, owner key ceremony and verified public-key pin, plus one-time Ed25519 approval bound to exact target/source/migration within 15 minutes |
@@ -36,11 +37,11 @@ V1 is one operational RT. All 12 calendar months remain visible. Future unpaid m
 - Current-wave metadata matched the approved Neon org/project/branch/compute/database/role tuple without waking the endpoint. No SQL, credential read, wake, migration, or provider mutation occurred.
 - The only Vercel project returned by the connected readback was the unlinked staging project `karturt-review-staging-20261012`, SSO-protected, with zero deployments. This does not resolve the separate legacy main-to-production trigger risk.
 - No new project/resource, paid tier, purchase, deployment, merge, or production/data action was performed. Incremental spend: **Rp0**.
+- Vercel read-only deployment lookup for the PR branch returned zero deployments on `karturt-review-staging-20261012`; no Preview or production deployment was initiated.
 
 ## Next work
 
-1. Finish the isolated arrears correction, update independent SQL/unit/integration oracles, run focused tests, and obtain independent review.
-2. Improve the missing receipt and Treasurer conflict acceptance cases without touching database/provider state.
-3. Publish the exact D1v2 outcome and owner next-gate packet on the documentation branch; leave the fixed SQL companion unchanged.
-4. Continue offline code/security/release readiness while preserving `stagingIsolationVerifiedEmpty=false` and the unpinned migration public key.
-5. Stop before database SQL if the local psql/TLS/credential/baseline prerequisites remain unavailable. Never fall back to the old staging target or Neon MCP query tools.
+1. Wait for exact-SHA GitHub Actions run `38671423539`, record its final result, and keep PR #57 draft/unmerged pending a separate owner release decision.
+2. Make the exact local D1v2 prerequisites available if the owner still wants the approved one-run preflight; see the [next-gate packet](WAVE13B_1R_NEXT_GATE_PACKET.md). No secret should be shared in chat.
+3. Continue offline code/security/release readiness while preserving `stagingIsolationVerifiedEmpty=false` and the unpinned migration public key.
+4. Never fall back to the old staging target or Neon MCP SQL tools, and do not treat source tests or catalog output as migration or release approval.
