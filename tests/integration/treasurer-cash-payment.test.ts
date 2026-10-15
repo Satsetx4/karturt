@@ -232,7 +232,7 @@ describe("Treasurer direct cash payment", () => {
       householdId: scenario.householdId,
       period: "2026-12",
       idempotencyKey,
-    }, "2026-12-12");
+    }, "2026-10-12");
 
     const paymentRows = await testDatabase.db.select().from(payments)
       .where(and(eq(payments.rtUnitId, scenario.rtUnitId), eq(payments.method, "cash")));
@@ -241,7 +241,7 @@ describe("Treasurer direct cash payment", () => {
       .where(eq(paymentAllocations.paymentId, payment!.id));
     const settlementRows = await testDatabase.db.select().from(activeDueSettlements)
       .where(eq(activeDueSettlements.paymentId, payment!.id));
-    const dues = await getResidentMonthlyDues(database, scenario.residentPrincipal, "2026-12-12");
+    const dues = await getResidentMonthlyDues(database, scenario.residentPrincipal, "2026-10-12");
     const paymentReference = `KRT-${payment!.id.replace(/-/g, "").slice(0, 12).toUpperCase()}`;
 
     expect(result).toEqual({
@@ -274,10 +274,15 @@ describe("Treasurer direct cash payment", () => {
         method: "cash",
         reference: paymentReference,
       });
+      expect(new Date(due.receipts![0]!.verifiedAt).toISOString()).toBe(due.receipts![0]!.verifiedAt);
     }
-    expect(dues.flatMap((due) => due.receipts ?? [])).toHaveLength(12);
-    expect(new Set(dues.flatMap((due) => due.receipts ?? []).map((receipt) => receipt.reference)))
+    const receipts = dues.flatMap((due) => due.receipts ?? []);
+    expect(receipts).toHaveLength(12);
+    expect(new Set(receipts.map((receipt) => receipt.reference)))
       .toEqual(new Set([paymentReference]));
+    expect(new Set(receipts.map((receipt) => receipt.verifiedAt)).size).toBe(1);
+    expect(dues.filter((due) => due.month >= 11).map((due) => [due.month, due.periodTiming]))
+      .toEqual([[11, "future"], [12, "future"]]);
     expect(duesSummary(dues)).toEqual({ paid: 300000, pending: 0, unpaid: 0 });
   });
 
