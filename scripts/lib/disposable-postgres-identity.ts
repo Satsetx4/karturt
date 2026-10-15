@@ -14,6 +14,7 @@ const launchSafetyConcurrencyRepository = "Satsetx4/karturt";
 const launchSafetyConcurrencyBranchRefs = new Set([
   "refs/heads/codex/wave12-3-pg18-rehearsal-20261014",
   "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015",
+  "refs/heads/verify/karturt-v1-rc-quality-wave13b1t-20261015",
 ]);
 
 export function validateLaunchSafetyConcurrencyEnvironment(env: NodeJS.ProcessEnv): string {
@@ -117,6 +118,7 @@ export function validateDisposablePostgresTarget(
       && (
         env.GITHUB_REF === "refs/heads/codex/wave12-3-pg18-rehearsal-20261014"
         || env.GITHUB_REF === "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015"
+        || env.GITHUB_REF === "refs/heads/verify/karturt-v1-rc-quality-wave13b1t-20261015"
       )
       && Boolean(env.PG18_SERVICE_ID && /^[a-f0-9]{64}$/.test(env.PG18_SERVICE_ID))
     ))

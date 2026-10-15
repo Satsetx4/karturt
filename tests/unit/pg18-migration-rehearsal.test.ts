@@ -34,6 +34,7 @@ describe("PostgreSQL 18 rehearsal safety assertions", () => {
   it.each([
     "refs/heads/codex/wave12-3-pg18-rehearsal-20261014",
     "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015",
+    "refs/heads/verify/karturt-v1-rc-quality-wave13b1t-20261015",
   ])("accepts the repository's exact branch push context: %s", (branchRef) => {
     expect(validatePg18RehearsalEnvironment(validEnvironment(branchRef))).toBe(runId);
   });

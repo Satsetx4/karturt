@@ -2,11 +2,13 @@ import type { DisposablePostgresTarget } from "./disposable-postgres-identity";
 
 export const PG18_REHEARSAL_BRANCH = "codex/wave12-3-pg18-rehearsal-20261014";
 export const PG18_REHEARSAL_RC_BRANCH = "verify/karturt-v1-rc-wave13b1s-20261015";
+export const PG18_REHEARSAL_WAVE13B1T_BRANCH = "verify/karturt-v1-rc-quality-wave13b1t-20261015";
 export const PG18_REHEARSAL_REPOSITORY = "Satsetx4/karturt";
 
 const allowedPg18BranchRefs = new Set([
   `refs/heads/${PG18_REHEARSAL_BRANCH}`,
   `refs/heads/${PG18_REHEARSAL_RC_BRANCH}`,
+  `refs/heads/${PG18_REHEARSAL_WAVE13B1T_BRANCH}`,
 ]);
 
 const knownCatalogObjects = {

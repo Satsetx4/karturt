@@ -24,12 +24,15 @@ function validEnvironment(overrides: Partial<NodeJS.ProcessEnv> = {}): NodeJS.Pr
 }
 
 describe("disposable PostgreSQL concurrency identity", () => {
-  it("accepts the exact release-candidate PostgreSQL 17 service context without a PostgreSQL 18 container id", () => {
+  it.each([
+    "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015",
+    "refs/heads/verify/karturt-v1-rc-quality-wave13b1t-20261015",
+  ])("accepts the exact release-candidate PostgreSQL 17 service context without a PostgreSQL 18 container id: %s", (branchRef) => {
     const environment = validEnvironment({
       GITHUB_ACTIONS: "true",
       GITHUB_REPOSITORY: "Satsetx4/karturt",
       GITHUB_EVENT_NAME: "push",
-      GITHUB_REF: "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015",
+      GITHUB_REF: branchRef,
       GITHUB_RUN_ID: "12345678",
       GITHUB_RUN_ATTEMPT: "2",
     });
@@ -101,6 +104,7 @@ describe("disposable PostgreSQL concurrency identity", () => {
   it.each([
     "refs/heads/codex/wave12-3-pg18-rehearsal-20261014",
     "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015",
+    "refs/heads/verify/karturt-v1-rc-quality-wave13b1t-20261015",
   ])("allows passwordless access only for the exact isolated PostgreSQL 18 branch job: %s", (branchRef) => {
     const passwordlessUrl = `postgresql://${username}@127.0.0.1:49152/${databaseName}`;
     const pg18Environment = validEnvironment({
