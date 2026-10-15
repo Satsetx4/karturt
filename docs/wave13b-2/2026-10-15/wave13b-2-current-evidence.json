@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "evaluatedAt": "2026-10-15T09:06:00Z",
+  "targetScope": {
+    "organizationId": "org-ancient-boat-57106549",
+    "plan": "free",
+    "regionId": "aws-ap-southeast-1",
+    "postgresMajor": 18,
+    "plannedOperationCount": 1,
+    "sourceProjectId": null,
+    "syntheticDataOnly": true,
+    "existingStagingMutationAllowed": false,
+    "productionMutationAllowed": false
+  },
+  "checks": {
+    "organization_identity": {
+      "status": "PASS",
+      "observedAt": "2026-10-15T09:06:00Z",
+      "evidenceRef": "neon-control-plane-readback:org-ancient-boat-57106549"
+    },
+    "free_plan_allowances": {
+      "status": "PASS",
+      "observedAt": "2026-10-15T08:50:00Z",
+      "evidenceRef": "https://neon.com/docs/introduction/plans"
+    },
+    "project_slot_headroom": {
+      "status": "PASS",
+      "observedAt": "2026-10-15T09:06:00Z",
+      "evidenceRef": "neon-control-plane-readback:project-list-org-ancient-boat-57106549"
+    },
+    "account_storage_headroom": {
+      "status": "UNKNOWN",
+      "reason": "Current account-wide Postgres storage and remaining room under the Free 20 GB account cap are not established; returned project metadata is insufficient."
+    },
+    "current_usage_and_no_overage": {
+      "status": "UNKNOWN",
+      "reason": "Free-plan consumption history is unavailable through the official API; no current usage, billing-state, or no-overage evidence was read back."
+    },
+    "singapore_postgres18_availability": {
+      "status": "PASS",
+      "observedAt": "2026-10-15T09:06:00Z",
+      "evidenceRef": "neon-control-plane-readback:regions+https://api-docs.neon.tech/reference/createproject"
+    },
+    "fresh_root_create_only": {
+      "status": "PASS",
+      "observedAt": "2026-10-15T08:50:00Z",
+      "evidenceRef": "https://api-docs.neon.tech/reference/createproject"
+    },
+    "post_create_lineage_evidence_protocol": {
+      "status": "PASS",
+      "observedAt": "2026-10-15T08:50:00Z",
+      "evidenceRef": "https://api-docs.neon.tech/reference/listprojectbranches"
+    },
+    "synthetic_only_scope": {
+      "status": "PASS",
+      "observedAt": "2026-10-15T09:06:00Z",
+      "evidenceRef": "owner-decision:2026-10-15-synthetic-only"
+    },
+    "security_adequacy": {
+      "status": "UNKNOWN",
+      "reason": "Free lacks IP Allow, Private Networking, and protected branches; org MFA enforcement reports false; adequacy of the public-endpoint residual risk has not been resolved."
+    },
+    "owner_conditional_scope": {
+      "status": "PASS",
+      "observedAt": "2026-10-15T09:06:00Z",
+      "evidenceRef": "owner-decision:2026-10-15-conditional-fresh-free-project"
+    }
+  }
+}
