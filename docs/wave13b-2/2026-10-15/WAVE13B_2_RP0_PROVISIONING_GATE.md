@@ -1,5 +1,7 @@
 # Wave 13B.2 — Gerbang Provisioning Rp0
 
+> **Evaluator pra-provisioning historis, bukan gate aktif.** Owner membatalkan kebutuhan audit invoice/Rp0 akun sebagai penghalang dan menyetujui satu project Free; project baru sekarang sudah ada. Jangan gunakan evaluator ini untuk membuka SQL atau migrasi. Lihat [eksekusi koreksi owner terbaru](WAVE13B_2_OWNER_CORRECTION_EXECUTION.md). Kewajiban Free-only, target binding, bukti lineage, katalog, dan approval migrasi tetap berlaku.
+
 Tanggal: 2026-10-15
 Status gerbang: **UNKNOWN — FAIL CLOSED — NO PROVISIONING**
 

@@ -1,5 +1,7 @@
 # Wave 13B.2 — Next Gate Packet
 
+> **Snapshot pra-create, sudah superseded.** Jangan mengikuti instruksi untuk menunggu bukti invoice/Rp0 atau untuk membuat project: project Free baru sudah dibuat. Status dan langkah selanjutnya yang berlaku ada di [eksekusi koreksi owner terbaru](WAVE13B_2_OWNER_CORRECTION_EXECUTION.md). SQL/migrasi tetap dilarang selama lineage/katalog dan target-specific authorization belum lulus.
+
 Tanggal: 2026-10-15
 Status: **NOT_PROVISIONED_SAFETY_COST_BLOCKED; OWNER INPUT / EVIDENCE REQUIRED TO REOPEN G1**
 

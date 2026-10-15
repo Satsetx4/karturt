@@ -1,5 +1,7 @@
 # KartuRT V1 Wave 13B.2 — Coordinator Report
 
+> **Snapshot historis pra-koreksi owner.** Project baru telah dibuat setelah koreksi terbaru. Untuk status aktual, lihat [eksekusi koreksi owner terbaru](WAVE13B_2_OWNER_CORRECTION_EXECUTION.md). Bagian di bawah merekam keputusan saat itu dan tidak berlaku sebagai gate provisioning/SQL saat ini.
+
 Tanggal: 2026-10-15
 Status keseluruhan: **BLOCKED BEFORE PROVISIONING; NO DATABASE ACTION**
 

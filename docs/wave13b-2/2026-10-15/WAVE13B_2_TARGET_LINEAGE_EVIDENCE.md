@@ -1,5 +1,7 @@
 # Wave 13B.2 — Target Lineage Evidence
 
+> **Snapshot sebelum pembuatan project; sudah superseded.** Project `broad-star-40451875` telah dibuat. Bukti terbaru menyatakan request tidak memakai source/clone/import/restore, tetapi Neon tidak mengirim field `parent_id`; lineage root tetap UNVERIFIED dan katalog UNKNOWN. Lihat [eksekusi koreksi owner terbaru](WAVE13B_2_OWNER_CORRECTION_EXECUTION.md).
+
 Tanggal: 2026-10-15
 Verdict: **NOT_PROVISIONED_SAFETY_COST_BLOCKED; NO NEW TARGET CREATED; LINEAGE NOT ESTABLISHED**
 

@@ -1,5 +1,7 @@
 # Wave 13B.2 — Agent B Operator Readiness
 
+> **Packet ini membahas D1v2 pada target lama saja.** Untuk operator path project baru, gunakan [paket operator Free-only](../../codex/Wave-13B2-Free-Only-Staging-Operator-Packet-2026-10-15.md) dan [status koreksi owner terbaru](WAVE13B_2_OWNER_CORRECTION_EXECUTION.md). Approval D1v2 lama tidak berlaku ke project baru.
+
 Tanggal: 2026-10-15
 Status: **D1v2 NOT_EXECUTED_ACCESS_SAFETY_BLOCKED**
 

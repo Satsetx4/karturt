@@ -1,5 +1,7 @@
 # Wave 13B.2 — Agent C: Keamanan dan QA Independen
 
+> **Review pra-koreksi owner dan pra-create.** Provider/resource status di laporan ini bersifat historis. Gunakan [eksekusi koreksi owner terbaru](WAVE13B_2_OWNER_CORRECTION_EXECUTION.md) untuk status kini dan batas database.
+
 ## Cakupan dan keputusan
 
 **Keputusan:** `RC_CODE_VERIFIED_WITH_ACCEPTED_DEV_RISK` untuk source RC yang tidak berubah pada SHA `0b1e3f525039496200b2bb5f698d312ded5cb3e3`; satu advisory HIGH sementara masih terbuka dan diterima sampai 2026-11-14. Ini bukan hasil audit dependency yang bersih, persetujuan isolasi staging, atau persetujuan rilis production.

@@ -1,5 +1,7 @@
 # Wave 13B.2 — Agent A: Arsitektur Staging dan Kelayakan Rp0
 
+> **Analisis pra-koreksi owner dan pra-create.** Project baru telah dibuat berdasarkan instruksi terbaru; jangan pakai keputusan biaya/lineage di bawah sebagai status kini. Lihat [eksekusi koreksi owner terbaru](WAVE13B_2_OWNER_CORRECTION_EXECUTION.md).
+
 Tanggal: 2026-10-15 (UTC+7)
 
 ## Keputusan
