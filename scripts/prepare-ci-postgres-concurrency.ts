@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { appendFileSync } from "node:fs";
 import { Pool } from "pg";
-import { disposablePostgresMarker, validateDisposablePostgresTarget } from "./lib/disposable-postgres-identity";
-import { validatePg18RehearsalEnvironment } from "./lib/pg18-migration-rehearsal";
+import {
+  disposablePostgresMarker,
+  validateDisposablePostgresTarget,
+  validateLaunchSafetyConcurrencyEnvironment,
+} from "./lib/disposable-postgres-identity";
 
 async function main() {
   if (process.env.GITHUB_ACTIONS !== "true" || !process.env.GITHUB_RUN_ID || !process.env.GITHUB_RUN_ATTEMPT) {
@@ -13,9 +16,7 @@ async function main() {
   if (!githubEnvironmentFile) {
     throw new Error("The GitHub Actions environment file is unavailable; no database connection was opened.");
   }
-  validatePg18RehearsalEnvironment(process.env);
-
-  const runId = `${process.env.GITHUB_RUN_ID}_${process.env.GITHUB_RUN_ATTEMPT}`;
+  const runId = validateLaunchSafetyConcurrencyEnvironment(process.env);
   const identityToken = randomBytes(32).toString("hex");
   const target = validateDisposablePostgresTarget({
     ...process.env,

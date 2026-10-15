@@ -10,6 +10,40 @@ export type DisposablePostgresTarget = {
 
 const runIdPattern = /^[a-z0-9_]{3,24}$/;
 const identityTokenPattern = /^[a-f0-9]{64}$/;
+const launchSafetyConcurrencyRepository = "Satsetx4/karturt";
+const launchSafetyConcurrencyBranchRef = "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015";
+
+export function validateLaunchSafetyConcurrencyEnvironment(env: NodeJS.ProcessEnv): string {
+  if (env.GITHUB_ACTIONS !== "true") {
+    throw new Error("PostgreSQL concurrency initialization is limited to its isolated GitHub Actions service job.");
+  }
+  if (env.GITHUB_REPOSITORY !== launchSafetyConcurrencyRepository) {
+    throw new Error("PostgreSQL concurrency repository identity is not allowed.");
+  }
+  if (env.GITHUB_EVENT_NAME !== "push" || env.GITHUB_REF !== launchSafetyConcurrencyBranchRef) {
+    throw new Error("PostgreSQL concurrency accepts only the exact release-candidate branch push.");
+  }
+  if (!env.GITHUB_RUN_ID || !env.GITHUB_RUN_ATTEMPT) {
+    throw new Error("PostgreSQL concurrency run identity is missing.");
+  }
+  if (env.APP_ENV !== "test" || env.DATABASE_ENV !== "test") {
+    throw new Error("PostgreSQL concurrency requires APP_ENV=test and DATABASE_ENV=test.");
+  }
+  for (const forbiddenName of ["DATABASE_URL", "DATABASE_URL_UNPOOLED", "DIRECT_URL", "POSTGRES_URL"]) {
+    if (env[forbiddenName]) {
+      throw new Error("PostgreSQL concurrency rejects general application database connection variables.");
+    }
+  }
+  if (!env.LAUNCH_SAFETY_POSTGRES_URL) {
+    throw new Error("LAUNCH_SAFETY_POSTGRES_URL is required for PostgreSQL concurrency initialization.");
+  }
+
+  const runId = `${env.GITHUB_RUN_ID}_${env.GITHUB_RUN_ATTEMPT}`;
+  if (!runIdPattern.test(runId)) {
+    throw new Error("PostgreSQL concurrency run identity is invalid.");
+  }
+  return runId;
+}
 
 export function disposablePostgresNames(runId: string) {
   if (!runIdPattern.test(runId)) {

@@ -3,6 +3,7 @@ import {
   disposablePostgresMarker,
   disposablePostgresNames,
   validateDisposablePostgresTarget,
+  validateLaunchSafetyConcurrencyEnvironment,
 } from "../../scripts/lib/disposable-postgres-identity";
 
 const runId = "a1b2c3d4e5f6";
@@ -23,6 +24,39 @@ function validEnvironment(overrides: Partial<NodeJS.ProcessEnv> = {}): NodeJS.Pr
 }
 
 describe("disposable PostgreSQL concurrency identity", () => {
+  it("accepts the exact release-candidate PostgreSQL 17 service context without a PostgreSQL 18 container id", () => {
+    const environment = validEnvironment({
+      GITHUB_ACTIONS: "true",
+      GITHUB_REPOSITORY: "Satsetx4/karturt",
+      GITHUB_EVENT_NAME: "push",
+      GITHUB_REF: "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015",
+      GITHUB_RUN_ID: "12345678",
+      GITHUB_RUN_ATTEMPT: "2",
+    });
+    expect(environment.PG18_SERVICE_ID).toBeUndefined();
+    expect(validateLaunchSafetyConcurrencyEnvironment(environment)).toBe("12345678_2");
+  });
+
+  it.each([
+    ["wrong repository", { GITHUB_REPOSITORY: "another/repository" }],
+    ["non-push event", { GITHUB_EVENT_NAME: "workflow_dispatch" }],
+    ["wrong branch", { GITHUB_REF: "refs/heads/verify/karturt-v1-rc-other" }],
+    ["missing run identity", { GITHUB_RUN_ID: undefined }],
+    ["production mode", { APP_ENV: "production" }],
+    ["general database URL", { DATABASE_URL: "must-not-be-used" }],
+  ] as const)("fails closed for %s", (_label, overrides) => {
+    const environment = validEnvironment({
+      GITHUB_ACTIONS: "true",
+      GITHUB_REPOSITORY: "Satsetx4/karturt",
+      GITHUB_EVENT_NAME: "push",
+      GITHUB_REF: "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015",
+      GITHUB_RUN_ID: "12345678",
+      GITHUB_RUN_ATTEMPT: "1",
+      ...overrides,
+    });
+    expect(() => validateLaunchSafetyConcurrencyEnvironment(environment)).toThrow();
+  });
+
   it("derives a unique database, user, and marker from the current run", () => {
     expect(disposablePostgresNames(runId)).toEqual({
       databaseName: `karturt_concurrency_${runId}`,
