@@ -6,7 +6,7 @@ import { PINNED_STAGING_MIGRATION_APPROVAL_PUBLIC_KEY_PEM } from "../../src/db/m
 import { assertDatabaseTargetForEnvironment } from "../../src/lib/staging-database-target";
 
 const currentStagingTarget =
-  "postgresql://karturt_staging_owner:synthetic-password@ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech:5432/karturt_staging?sslmode=require";
+  "postgresql://neondb_owner:synthetic-password@ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=verify-full";
 const legacyStagingTarget =
   "postgresql://karturt_staging_owner:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech:5432/karturt_staging?sslmode=require";
 
