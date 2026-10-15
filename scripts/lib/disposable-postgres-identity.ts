@@ -77,7 +77,10 @@ export function validateDisposablePostgresTarget(
       && env.GITHUB_ACTIONS === "true"
       && env.GITHUB_REPOSITORY === "Satsetx4/karturt"
       && env.GITHUB_EVENT_NAME === "push"
-      && env.GITHUB_REF === "refs/heads/codex/wave12-3-pg18-rehearsal-20261014"
+      && (
+        env.GITHUB_REF === "refs/heads/codex/wave12-3-pg18-rehearsal-20261014"
+        || env.GITHUB_REF === "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015"
+      )
       && Boolean(env.PG18_SERVICE_ID && /^[a-f0-9]{64}$/.test(env.PG18_SERVICE_ID))
     ))
     && target.search.length === 0

@@ -1,7 +1,13 @@
 import type { DisposablePostgresTarget } from "./disposable-postgres-identity";
 
 export const PG18_REHEARSAL_BRANCH = "codex/wave12-3-pg18-rehearsal-20261014";
+export const PG18_REHEARSAL_RC_BRANCH = "verify/karturt-v1-rc-wave13b1s-20261015";
 export const PG18_REHEARSAL_REPOSITORY = "Satsetx4/karturt";
+
+const allowedPg18BranchRefs = new Set([
+  `refs/heads/${PG18_REHEARSAL_BRANCH}`,
+  `refs/heads/${PG18_REHEARSAL_RC_BRANCH}`,
+]);
 
 const knownCatalogObjects = {
   constraints: [
@@ -89,7 +95,7 @@ export function validatePg18RehearsalEnvironment(env: RehearsalEnvironment): str
   requireCondition(env.GITHUB_REPOSITORY === PG18_REHEARSAL_REPOSITORY, "PG18 rehearsal repository identity is not allowed.");
   requireCondition(env.GITHUB_EVENT_NAME === "push", "PG18 rehearsal accepts only the exact branch push event.");
   requireCondition(
-    env.GITHUB_REF === `refs/heads/${PG18_REHEARSAL_BRANCH}`,
+    allowedPg18BranchRefs.has(env.GITHUB_REF ?? ""),
     "PG18 rehearsal branch identity is not allowed.",
   );
   requireCondition(Boolean(env.GITHUB_RUN_ID && env.GITHUB_RUN_ATTEMPT), "PG18 rehearsal run identity is missing.");

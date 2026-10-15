@@ -14,13 +14,13 @@ const target = {
   identityMarker: disposablePostgresMarker(runId, identityToken),
 };
 
-function validEnvironment() {
+function validEnvironment(branchRef = "refs/heads/codex/wave12-3-pg18-rehearsal-20261014") {
   return {
     NODE_ENV: "test",
     GITHUB_ACTIONS: "true",
     GITHUB_REPOSITORY: "Satsetx4/karturt",
     GITHUB_EVENT_NAME: "push",
-    GITHUB_REF: "refs/heads/codex/wave12-3-pg18-rehearsal-20261014",
+    GITHUB_REF: branchRef,
     GITHUB_RUN_ID: "12345678",
     GITHUB_RUN_ATTEMPT: "1",
     APP_ENV: "test",
@@ -31,13 +31,17 @@ function validEnvironment() {
 }
 
 describe("PostgreSQL 18 rehearsal safety assertions", () => {
-  it("accepts only the repository's exact branch push context", () => {
-    expect(validatePg18RehearsalEnvironment(validEnvironment())).toBe(runId);
+  it.each([
+    "refs/heads/codex/wave12-3-pg18-rehearsal-20261014",
+    "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015",
+  ])("accepts the repository's exact branch push context: %s", (branchRef) => {
+    expect(validatePg18RehearsalEnvironment(validEnvironment(branchRef))).toBe(runId);
   });
 
   it.each([
     ["missing GitHub run identity", (env: NodeJS.ProcessEnv) => { delete env.GITHUB_RUN_ID; }],
     ["wrong branch", (env: NodeJS.ProcessEnv) => { env.GITHUB_REF = "refs/heads/main"; }],
+    ["unapproved sibling verify branch", (env: NodeJS.ProcessEnv) => { env.GITHUB_REF = "refs/heads/verify/karturt-v1-rc-other"; }],
     ["non-push event", (env: NodeJS.ProcessEnv) => { env.GITHUB_EVENT_NAME = "pull_request"; }],
     ["wrong repository", (env: NodeJS.ProcessEnv) => { env.GITHUB_REPOSITORY = "another/repository"; }],
     ["missing service container identity", (env: NodeJS.ProcessEnv) => { delete env.PG18_SERVICE_ID; }],

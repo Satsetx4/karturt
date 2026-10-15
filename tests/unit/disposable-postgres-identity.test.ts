@@ -48,19 +48,36 @@ describe("disposable PostgreSQL concurrency identity", () => {
     });
   });
 
-  it("allows passwordless access only for the exact isolated PostgreSQL 18 branch job", () => {
+  it.each([
+    "refs/heads/codex/wave12-3-pg18-rehearsal-20261014",
+    "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015",
+  ])("allows passwordless access only for the exact isolated PostgreSQL 18 branch job: %s", (branchRef) => {
     const passwordlessUrl = `postgresql://${username}@127.0.0.1:49152/${databaseName}`;
     const pg18Environment = validEnvironment({
       GITHUB_ACTIONS: "true",
       GITHUB_REPOSITORY: "Satsetx4/karturt",
       GITHUB_EVENT_NAME: "push",
-      GITHUB_REF: "refs/heads/codex/wave12-3-pg18-rehearsal-20261014",
+      GITHUB_REF: branchRef,
       PG18_SERVICE_ID: "b".repeat(64),
       LAUNCH_SAFETY_POSTGRES_URL: passwordlessUrl,
     });
     expect(validateDisposablePostgresTarget(pg18Environment, { allowPasswordlessPg18: true }))
       .toMatchObject({ databaseName, username, port: 49_152 });
     expect(() => validateDisposablePostgresTarget(pg18Environment))
+      .toThrow("exact loopback database and user derived from this disposable run");
+  });
+
+  it("rejects passwordless access for an unapproved sibling branch", () => {
+    const passwordlessUrl = `postgresql://${username}@127.0.0.1:49152/${databaseName}`;
+    const unapprovedBranch = validEnvironment({
+      GITHUB_ACTIONS: "true",
+      GITHUB_REPOSITORY: "Satsetx4/karturt",
+      GITHUB_EVENT_NAME: "push",
+      GITHUB_REF: "refs/heads/verify/karturt-v1-rc-other",
+      PG18_SERVICE_ID: "b".repeat(64),
+      LAUNCH_SAFETY_POSTGRES_URL: passwordlessUrl,
+    });
+    expect(() => validateDisposablePostgresTarget(unapprovedBranch, { allowPasswordlessPg18: true }))
       .toThrow("exact loopback database and user derived from this disposable run");
   });
 
