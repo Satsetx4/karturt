@@ -69,6 +69,8 @@ Persetujuan lama hanya melekat pada satu target lama dan satu metode. Karena sem
 
 ## Integrasi dan publikasi
 
-Dokumen wave disiapkan hanya pada branch `docs/wave13b-2-staging-isolation-rp0-20261015`, turunan baseline dokumentasi yang disetujui. Branch `main` tidak diubah; tidak dibuat pull request atau deployment. Bukti remote readback dan SHA commit publikasi akan dicatat setelah push branch dokumentasi.
+Dokumen wave disiapkan hanya pada branch `docs/wave13b-2-staging-isolation-rp0-20261015`, turunan baseline dokumentasi yang disetujui. Branch `main` tidak diubah; tidak dibuat pull request atau deployment. Commit konten awal berhasil dipush dengan SHA `4abae9f9ea9a5e4b4c4a3f800ac16ff557faf165`.
+
+Readback remote setelah push awal membuktikan branch dokumentasi menunjuk SHA tersebut dan `main` tetap `96c84588ae0c13f68a17cffd997a3e583fb7da82`. Tidak dibuat pull request atau deployment.
 
 Lihat [Agent A — arsitektur staging](WAVE13B_2_AGENT_A_STAGING_ARCHITECTURE.md), [Agent B — kesiapan operator](WAVE13B_2_AGENT_B_OPERATOR_READINESS.md), [Agent C — risiko dan QA](WAVE13B_2_AGENT_C_SECURITY_RISK_QA.md), [gerbang provisioning Rp0](WAVE13B_2_RP0_PROVISIONING_GATE.md), [penerimaan risiko dependency](WAVE13B_2_DEV_DEPENDENCY_RISK_ACCEPTANCE.md), [bukti lineage](WAVE13B_2_TARGET_LINEAGE_EVIDENCE.md), dan [paket gerbang berikutnya](WAVE13B_2_NEXT_GATE_PACKET.md). Evaluator/offline fixture/test disimpan bersama paket sebagai `wave13b-2-provisioning-gate.mjs`, `wave13b-2-current-evidence.json`, dan `wave13b-2-provisioning-gate.test.mjs`.
