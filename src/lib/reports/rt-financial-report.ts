@@ -36,6 +36,7 @@ export type {
   ReportDueInput,
   ReportTotals,
   RtFinancialReportResponse,
+  YearlyOutstandingTiming,
 } from "./aggregation";
 
 type ReportDatabase = Pick<AppDatabase, "select">;

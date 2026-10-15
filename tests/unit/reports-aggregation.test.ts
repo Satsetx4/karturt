@@ -115,7 +115,7 @@ describe("F13 report aggregation", () => {
       expect.objectContaining({ month: 2, target: 80_000, effectiveTarget: 90_000, received: 50_000, transferReceived: 0, cashReceived: 50_000, waived: 0, outstanding: 40_000, notDueCount: 2 }),
       expect.objectContaining({ month: 3, target: 120_000, effectiveTarget: 115_000, received: 80_000, transferReceived: 40_000, cashReceived: 40_000, waived: 0, outstanding: 35_000, notDueCount: 1 }),
       expect.objectContaining({ month: 4, target: 120_000, effectiveTarget: 120_000, received: 40_000, transferReceived: 0, cashReceived: 40_000, waived: 40_000, outstanding: 40_000, notDueCount: 1 }),
-      expect.objectContaining({ month: 5, target: 120_000, effectiveTarget: 120_000, received: 40_000, transferReceived: 0, cashReceived: 40_000, waived: 0, outstanding: 80_000, notDueCount: 1 }),
+      expect.objectContaining({ month: 5, target: 120_000, effectiveTarget: 120_000, received: 40_000, transferReceived: 0, cashReceived: 40_000, waived: 0, outstanding: 80_000, notDueCount: 1, overdueCount: 0 }),
     ]);
     expect(result.yearly).toEqual({
       target: 1_360_000,
@@ -131,6 +131,10 @@ describe("F13 report aggregation", () => {
       overdueCount: 3,
     });
     expect(result.yearlyOutstandingTiming).toEqual({
+      dueNowOutstanding: result.dueNowOutstanding,
+      futureUnpaidOutstanding: result.futureUnpaidOutstanding,
+    });
+    expect(result.yearlyOutstandingTiming).toEqual({
       dueNowOutstanding: 195_000,
       futureUnpaidOutstanding: 840_000,
     });
@@ -141,27 +145,122 @@ describe("F13 report aggregation", () => {
       expect.objectContaining({ houseNumber: "A-03", lifecycle: "active", totalOutstanding: 40_000, periods: [expect.objectContaining({ month: 4 })] }),
       expect.objectContaining({ houseNumber: "A-01", totalOutstanding: 35_000, periods: [expect.objectContaining({ month: 3, pending: true })] }),
     ]));
-    const beforeMayDueDate = aggregateRtFinancialReport(createManualOracleDues(), {
+    const earlyMay = aggregateRtFinancialReport(createManualOracleDues(), {
       year: YEAR,
       availableYears: [2026, 2025],
       businessDate: "2026-05-05",
     });
-    expect(beforeMayDueDate.arrears).toMatchObject({ totalOutstanding: 115_000, count: 3, householdCount: 3 });
+    expect(earlyMay.arrears).toEqual(result.arrears);
     expect(result.arrears.households.every((row) => !("householdId" in row) && !("rtUnitId" in row))).toBe(true);
     expect(result.monthly.slice(5).every((month) => month.outstanding === 120_000 && month.notDueCount === 1)).toBe(true);
   });
 
-  it("counts arrears by calendar month, not by the current month's due day", () => {
+  it("uses the Jakarta billing-month cutoff and keeps a pending request out of received", () => {
     const identity = household({ householdId: "pending", houseNumber: "A-04" });
-    const octoberDue = due(identity, 10, { hasPendingRequest: true });
-    expect(octoberDue.dueDate).toBe("2026-10-10");
-    const currentMonth = aggregateRtFinancialReport([octoberDue], { year: YEAR, availableYears: [YEAR], businessDate: "2026-10-12" });
-    const nextMonth = aggregateRtFinancialReport([octoberDue], { year: YEAR, availableYears: [YEAR], businessDate: "2026-11-01" });
+    const pendingDue = due(identity, 5, { hasPendingRequest: true });
+    const onDueDate = aggregateRtFinancialReport([pendingDue], { year: YEAR, availableYears: [YEAR], businessDate: "2026-05-10" });
+    const afterDueDate = aggregateRtFinancialReport([pendingDue], { year: YEAR, availableYears: [YEAR], businessDate: "2026-05-11" });
+    const nextMonth = aggregateRtFinancialReport([pendingDue], { year: YEAR, availableYears: [YEAR], businessDate: "2026-06-01" });
 
-    expect(currentMonth.monthly[9]).toMatchObject({ received: 0, outstanding: 40_000, overdueCount: 0 });
-    expect(currentMonth.arrears).toMatchObject({ count: 0, totalOutstanding: 0 });
-    expect(nextMonth.monthly[9]).toMatchObject({ received: 0, outstanding: 40_000, overdueCount: 1 });
-    expect(nextMonth.arrears.households[0]).toMatchObject({ pending: true, periods: [{ month: 10, pending: true }] });
+    for (const currentMonth of [onDueDate, afterDueDate]) {
+      expect(currentMonth.monthly[4]).toMatchObject({ received: 0, outstanding: 40_000, overdueCount: 0 });
+      expect(currentMonth.arrears).toMatchObject({ count: 0, totalOutstanding: 0 });
+    }
+    expect(nextMonth.monthly[4]).toMatchObject({ received: 0, outstanding: 40_000, overdueCount: 1 });
+    expect(nextMonth.arrears.households[0]).toMatchObject({ pending: true, periods: [{ pending: true }] });
+  });
+
+  it("matches the owner acceptance matrix for current, prior, and future months on 2026-10-12", () => {
+    const identity = household({ householdId: "d5", houseNumber: "D5" });
+    const dues = Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      return due(identity, month, {
+        originalAmount: 25_000,
+        status: month <= 8 ? "paid" : "unpaid",
+        activeReceived: month <= 8 ? 25_000 : 0,
+        transferReceived: month <= 8 ? 25_000 : 0,
+      });
+    });
+    const report = aggregateRtFinancialReport(dues, {
+      year: YEAR,
+      availableYears: [YEAR],
+      businessDate: "2026-10-12",
+    });
+
+    expect(report.asOf).toEqual({ businessDate: "2026-10-12", period: "2026-10" });
+    expect(report.dueNowOutstanding).toBe(50_000);
+    expect(report.futureUnpaidOutstanding).toBe(50_000);
+    expect(report.monthly[8]).toMatchObject({ month: 9, outstanding: 25_000, overdueCount: 1 });
+    expect(report.monthly[9]).toMatchObject({ month: 10, outstanding: 25_000, overdueCount: 0 });
+    expect(report.monthly[10]).toMatchObject({ month: 11, outstanding: 25_000, overdueCount: 0 });
+    expect(report.monthly[11]).toMatchObject({ month: 12, outstanding: 25_000, overdueCount: 0 });
+    expect(report.yearly).toMatchObject({ target: 300_000, received: 200_000, outstanding: 100_000, overdueCount: 1 });
+    expect(report.arrears).toMatchObject({ totalOutstanding: 25_000, count: 1, householdCount: 1 });
+    expect(report.arrears.households[0]?.periods).toEqual([
+      { month: 9, dueDate: "2026-09-10", outstanding: 25_000, pending: false },
+    ]);
+  });
+
+  it("moves December arrears only after the Jakarta year-month rolls into January", () => {
+    const identity = household({ householdId: "rollover", houseNumber: "A-07" });
+    const december = due(identity, 12);
+    const decemberReport = aggregateRtFinancialReport([december], {
+      year: YEAR,
+      availableYears: [YEAR],
+      businessDate: "2026-12-31",
+    });
+    const januaryReport = aggregateRtFinancialReport([december], {
+      year: YEAR,
+      availableYears: [YEAR],
+      businessDate: "2027-01-01",
+    });
+
+    expect(decemberReport.monthly[11]).toMatchObject({ outstanding: 40_000, overdueCount: 0 });
+    expect(decemberReport.dueNowOutstanding).toBe(40_000);
+    expect(decemberReport.futureUnpaidOutstanding).toBe(0);
+    expect(decemberReport.arrears).toMatchObject({ count: 0, totalOutstanding: 0 });
+    expect(januaryReport.monthly[11]).toMatchObject({ outstanding: 40_000, overdueCount: 1 });
+    expect(januaryReport.dueNowOutstanding).toBe(40_000);
+    expect(januaryReport.futureUnpaidOutstanding).toBe(0);
+    expect(januaryReport.arrears).toMatchObject({ count: 1, totalOutstanding: 40_000 });
+
+    const nextYearJanuary = due(identity, 1, {
+      year: 2027,
+      dueDate: "2027-01-10",
+      originalAmount: 25_000,
+    });
+    const beforeYearRollover = aggregateRtFinancialReport([nextYearJanuary], {
+      year: 2027,
+      availableYears: [2027, YEAR],
+      businessDate: "2026-12-31",
+    });
+    const afterYearRollover = aggregateRtFinancialReport([nextYearJanuary], {
+      year: 2027,
+      availableYears: [2027, YEAR],
+      businessDate: "2027-01-01",
+    });
+
+    expect(beforeYearRollover.dueNowOutstanding).toBe(0);
+    expect(beforeYearRollover.futureUnpaidOutstanding).toBe(25_000);
+    expect(afterYearRollover.dueNowOutstanding).toBe(25_000);
+    expect(afterYearRollover.futureUnpaidOutstanding).toBe(0);
+  });
+
+  it("splits a selected future billing year from the earlier Jakarta business period", () => {
+    const identity = household({ householdId: "next-year", houseNumber: "A-08" });
+    const january = due(identity, 1, { year: 2027, dueDate: "2027-01-10", originalAmount: 25_000 });
+    const report = aggregateRtFinancialReport([january], {
+      year: 2027,
+      availableYears: [2027, 2026],
+      businessDate: "2026-10-12",
+    });
+
+    expect(report.asOf).toEqual({ businessDate: "2026-10-12", period: "2026-10" });
+    expect(report.monthly[0]).toMatchObject({ month: 1, outstanding: 25_000, overdueCount: 0 });
+    expect(report.yearly.outstanding).toBe(25_000);
+    expect(report.dueNowOutstanding).toBe(0);
+    expect(report.futureUnpaidOutstanding).toBe(25_000);
+    expect(report.arrears).toMatchObject({ totalOutstanding: 0, count: 0 });
   });
 
   it("reconciles future-paid November while future-unpaid December stays outside arrears", () => {
@@ -192,6 +291,8 @@ describe("F13 report aggregation", () => {
       outstanding: 40_000,
       overdueCount: 0,
     });
+    expect(report.dueNowOutstanding).toBe(0);
+    expect(report.futureUnpaidOutstanding).toBe(40_000);
     expect(report.yearlyOutstandingTiming).toEqual({
       dueNowOutstanding: 0,
       futureUnpaidOutstanding: 40_000,

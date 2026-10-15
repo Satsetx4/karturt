@@ -7,6 +7,9 @@ import type { RtFinancialReportResponse } from "../../src/lib/reports/rt-financi
 const report = {
   year: 2026,
   availableYears: [2026],
+  asOf: { businessDate: "2026-10-12", period: "2026-10" },
+  dueNowOutstanding: 40_000,
+  futureUnpaidOutstanding: 80_000,
   yearly: {
     target: 480_000,
     effectiveTarget: 480_000,
