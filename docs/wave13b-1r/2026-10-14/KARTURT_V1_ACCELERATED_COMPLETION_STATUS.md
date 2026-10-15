@@ -12,7 +12,7 @@ V1 is one operational RT. All 12 calendar months remain visible. Future unpaid m
 
 - PR #48, `fix/v1-post-demo-billing-20261012`, exact head `12539d83b8537d845015a2b0030d47162dae0203`, remains OPEN/DRAFT and stacked on OPEN/DRAFT PR #23. No merge occurred.
 - Exact-head GitHub Actions run `38225424975`: Gate A passed and the independent PostgreSQL concurrency job passed five race scenarios.
-- Report-fix PR #57 is OPEN/DRAFT on `codex/v1-d5-report-arrears-20261014`, based on the exact PR #48 head. Exact source SHA: `ddb9689b34ea3ee1373ee328952c279544758c15`. No merge occurred. GitHub Actions run `38671423539` is still in progress on that exact SHA; lint, typecheck, and unit-test steps have passed, with integration/migration tests running at this document update.
+- Report-fix PR #57 is OPEN/DRAFT on `codex/v1-d5-report-arrears-20261014`, based on the exact PR #48 head. Exact source SHA: `ddb9689b34ea3ee1373ee328952c279544758c15`. No merge occurred. GitHub Actions Gate A run `38671423539` passed on that exact SHA, including lint, typecheck, unit/integration/security/full tests, migration/schema checks, and production build. The separate independent PostgreSQL concurrency job in the same run was **skipped** by its branch allowlist; do not treat other-SHA concurrency evidence as proof for this commit.
 - Local final-source checks: full suite passed **67 files / 436 tests**; production build and typecheck passed; lint passed with 0 errors and 2 existing warnings; `git diff --check` passed. Independent review passed.
 - The report fix uses Jakarta year-month arrears boundaries: on 2026-10-12, September is arrears, October is current-month unpaid, and November/December are future. It reconciles monthly, yearly, and household arrears counts/balances, visibly distinguishes months without generated dues, and compares the D5 report with direct SQL over the same seeded PGlite ledger.
 - Separate acceptance tests on PR #57 cover the D5 due-now/future/annual position, one-payment December cash advance, same-month receipt/reversal cases, and the September-pending/November-cash chronology. These are local test evidence while the exact-SHA CI run is still pending; no staging or provider evidence is implied.
@@ -21,7 +21,7 @@ V1 is one operational RT. All 12 calendar months remain visible. Future unpaid m
 
 | Gate | Current state | Evidence needed to advance |
 |---|---|---|
-| Source integration | PR #48/#23 and report-fix PR #57 open/draft; no merge | Finish exact-SHA Actions run `38671423539`, then a separate owner merge decision after release gates |
+| Source integration | PR #48/#23 and report-fix PR #57 open/draft; no merge; exact-SHA Gate A passed, PostgreSQL concurrency job skipped | Keep PR #57 unmerged pending separate owner decision; if concurrency proof is required, run it against this exact SHA |
 | D1v2 Neon catalog preflight | **Not executed — access/safety blocked** | psql client, verified CA, owner-only local credential path, approved privilege/object baseline, and fresh non-waking target identity check |
 | Staging isolation | **Blocked** | Positive independent lineage and content evidence proving isolated empty/synthetic-only data; the current `parent-data` metadata, zero tracked writes, and bounded catalog result are insufficient |
 | Migration authorization | **Blocked** | Exact final source SHA and 15 migration hashes, owner key ceremony and verified public-key pin, plus one-time Ed25519 approval bound to exact target/source/migration within 15 minutes |
@@ -41,7 +41,7 @@ V1 is one operational RT. All 12 calendar months remain visible. Future unpaid m
 
 ## Next work
 
-1. Wait for exact-SHA GitHub Actions run `38671423539`, record its final result, and keep PR #57 draft/unmerged pending a separate owner release decision.
+1. Keep PR #57 draft/unmerged pending a separate owner release decision. Gate A passed on the exact source SHA; the independent PostgreSQL concurrency job was skipped by the current branch filter.
 2. Make the exact local D1v2 prerequisites available if the owner still wants the approved one-run preflight; see the [next-gate packet](WAVE13B_1R_NEXT_GATE_PACKET.md). No secret should be shared in chat.
 3. Continue offline code/security/release readiness while preserving `stagingIsolationVerifiedEmpty=false` and the unpinned migration public key.
 4. Never fall back to the old staging target or Neon MCP SQL tools, and do not treat source tests or catalog output as migration or release approval.
