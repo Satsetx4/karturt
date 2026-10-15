@@ -104,7 +104,7 @@ function Test-SafeLocalPath {
     }
 }
 
-function Test-OwnerOnlyCredentialFile {
+function Test-OwnerOnlyLocalFile {
     param([string]$Path)
 
     $result = [ordered]@{
@@ -121,15 +121,7 @@ function Test-OwnerOnlyCredentialFile {
 
     $result.exists = $true
     try {
-        $stream = [System.IO.File]::Open(
-            $Path,
-            [System.IO.FileMode]::Open,
-            [System.IO.FileAccess]::Read,
-            [System.IO.FileShare]::ReadWrite
-        )
-        $stream.Dispose()
-        $result.readable = $true
-
+        # Use ACL metadata only. Do not open credential or baseline files.
         $currentSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
         $allowedSids = @($currentSid, 'S-1-5-18', 'S-1-5-32-544')
         $acl = Get-Acl -LiteralPath $Path
@@ -153,8 +145,9 @@ function Test-OwnerOnlyCredentialFile {
             }
         }
 
+        $result.readable = $currentUserCanRead
         $result.principalsRestricted = (-not $badRule) -and $currentUserCanRead
-        $result.secure = $result.exists -and $result.readable -and $result.ownerIsCurrentUser -and $result.principalsRestricted
+        $result.secure = $result.exists -and $result.ownerIsCurrentUser -and $result.principalsRestricted
     }
     catch {
         # Do not expose exception text: it can contain local paths or identities.
@@ -301,50 +294,36 @@ $psqlPassed = $psqlPresent -and $psqlFile.exists -and $psqlFile.readable -and $p
 Add-Check 'psql_executable_presence_permissions' $psqlPassed $(if ($psqlPassed) { 'Executable detected and readable; no broad write grant; not launched; version remains unverified.' } else { 'PostgreSQL client executable is missing, unreadable, or has an untrusted broad write grant.' })
 
 # libpq accepts PGSSLROOTCERT; otherwise its Windows default is %APPDATA%\postgresql\root.crt.
+$defaultPostgresDir = [Environment]::GetFolderPath([Environment+SpecialFolder]::ApplicationData)
+$defaultCaPath = if ([string]::IsNullOrWhiteSpace($defaultPostgresDir)) { $null } else { Join-Path $defaultPostgresDir 'postgresql\root.crt' }
 $caPath = [Environment]::GetEnvironmentVariable('PGSSLROOTCERT', 'Process')
 $caSource = 'libpq Windows default'
 if ([string]::IsNullOrWhiteSpace($caPath)) {
-    $caPath = Join-Path $env:APPDATA 'postgresql\root.crt'
+    $caPath = $defaultCaPath
 } else {
     $caSource = 'PGSSLROOTCERT override'
 }
 $ca = Test-CaFile -Path $caPath
 $caPassed = $ca.exists -and $ca.readable -and $ca.noBroadWriteGrant
-Add-Check 'trusted_ca_file_presence_permissions' $caPassed $(if ($caPassed) { "$caSource exists, is readable, and has no broad write grant; certificate trust and TLS handshake remain unverified." } else { "$caSource is missing, unreadable, or has an untrusted broad write grant." })
+Add-Check 'ca_file_path_access_permissions' $caPassed $(if ($caPassed) { "$caSource exists, is readable, and has no broad write grant; certificate identity, trust chain, validity, and TLS handshake remain unverified." } else { "$caSource is missing, unreadable, or has an untrusted broad write grant." })
 
 # Do not print or read the credential path or file contents.
 $credentialPath = [Environment]::GetEnvironmentVariable('PGPASSFILE', 'Process')
 $credentialSource = 'libpq Windows default'
 if ([string]::IsNullOrWhiteSpace($credentialPath)) {
-    $credentialPath = Join-Path $env:APPDATA 'postgresql\pgpass.conf'
+    $credentialPath = if ([string]::IsNullOrWhiteSpace($defaultPostgresDir)) { $null } else { Join-Path $defaultPostgresDir 'postgresql\pgpass.conf' }
 } else {
     $credentialSource = 'PGPASSFILE override'
 }
-$credential = Test-OwnerOnlyCredentialFile -Path $credentialPath
-Add-Check 'owner_only_pgpassfile' ([bool]$credential.secure) $(if ($credential.secure) { "$credentialSource exists; current user owns and can read it; ACL principals are restricted; contents were not read." } else { "$credentialSource is missing or its owner, read access, or ACL could not be verified." })
+$credential = Test-OwnerOnlyLocalFile -Path $credentialPath
+Add-Check 'owner_only_pgpassfile' ([bool]$credential.secure) $(if ($credential.secure) { "$credentialSource exists; ACL metadata identifies current-user ownership and read access with restricted principals; contents were not opened or read." } else { "$credentialSource is missing or its owner, read access, or ACL could not be verified." })
 
-# The baseline is sensitive and separately approved. This aid checks only file presence/readability,
-# never content or approval; a human must still verify its exact target binding and approval.
-$baselinePresent = $false
-$baselineReadable = $false
-if (Test-SafeLocalPath -Path $ApprovedBaselinePath -and (Test-Path -LiteralPath $ApprovedBaselinePath -PathType Leaf)) {
-    $baselinePresent = $true
-    try {
-        $stream = [System.IO.File]::Open(
-            $ApprovedBaselinePath,
-            [System.IO.FileMode]::Open,
-            [System.IO.FileAccess]::Read,
-            [System.IO.FileShare]::ReadWrite
-        )
-        $stream.Dispose()
-        $baselineReadable = $true
-    }
-    catch {
-        $baselineReadable = $false
-    }
-}
-Add-Check 'separate_baseline_file_presence' ($baselinePresent -and $baselineReadable) $(if ($baselinePresent -and $baselineReadable) { 'File is present and readable; content and owner approval were not inspected and require separate review.' } else { 'No readable baseline file was supplied through -ApprovedBaselinePath or KARTURT_D1V2_APPROVED_BASELINE_PATH.' })
-
+# The baseline is sensitive and separately approved. Check only path safety, presence, and
+# owner-only ACL metadata; never open the file or infer its contents, target binding, or approval.
+$baseline = Test-OwnerOnlyLocalFile -Path $ApprovedBaselinePath
+$baselinePresent = [bool]$baseline.exists
+$baselineReadable = [bool]$baseline.secure
+Add-Check 'separate_baseline_file_presence_acl' ($baselinePresent -and $baselineReadable) $(if ($baselinePresent -and $baselineReadable) { 'File path is safe and present; owner-only ACL metadata is acceptable; contents and owner approval were not inspected and require separate review.' } else { 'No safe, present, owner-only baseline file was supplied through -ApprovedBaselinePath or KARTURT_D1V2_APPROVED_BASELINE_PATH.' })
 # The required connection policy is printed as a fixed expectation only. This script does not
 # build a connection string or invoke a client. A later approved run must explicitly use verify-full.
 Add-Check 'tls_target_expectation' $true "Required later run: sslmode=verify-full; direct host=$ExpectedHost; project=$ExpectedProjectId; branch=$ExpectedBranchId; database_id=$ExpectedDatabaseId; role=$ExpectedRole. No connection attempted."
@@ -355,7 +334,12 @@ $summary = [ordered]@{
     result = $result
     mode = 'OFFLINE_ONLY_NO_DATABASE_CONNECTION_CAPABILITY'
     databaseConnectionAttempted = $false
+    networkAccessAttempted = $false
     psqlLaunched = $false
+    credentialFileOpened = $false
+    baselineFileOpened = $false
+    caTrustValidated = $false
+    tlsHandshakeVerified = $false
     credentialContentsRead = $false
     baselineContentsRead = $false
     sqlFileCreated = $false
