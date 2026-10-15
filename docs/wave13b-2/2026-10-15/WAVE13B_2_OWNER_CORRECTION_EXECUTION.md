@@ -35,9 +35,9 @@ Workstream ini tidak membuat client database connection, menjalankan SQL, atau m
 
 ## Batas paket Free dan layanan lain
 
-Neon mempublikasikan Free: 100 project, 1 GB Postgres storage/project (maksimum 20 GB lintas project), 100 CU-hours/project/bulan, compute sampai 2 CU, 10 branch/project, 5 GB public transfer/project/bulan, dan scale-to-zero setelah 5 menit idle. Pada batas compute 0.25 CU, allowance 100 CU-hours setara 400 jam compute aktif dalam sebulan. Batas project yang baru dibuat terukur cukup longgar untuk sampel sintetis kecil: kira-kira 97% dari batas storage project masih tersisa; endpoint idle setelah dibuat. Batas publik bukan bukti penggunaan akun lain atau invoice; total storage headroom akun tidak terekspos oleh metadata yang dibaca dalam review ini. Itu tidak menghalangi project create yang telah disetujui, tetapi workload harus tetap kecil dan dihentikan sebelum memerlukan limit di luar Free. Jangan ubah tier atau mengaktifkan overage.
+Neon mempublikasikan Free: 100 project, 1 GB Postgres storage/project (maksimum 20 GB lintas project), 100 CU-hours/project/bulan, compute sampai 2 CU, 10 branch/project, 5 GB public transfer/project/bulan, dan scale-to-zero setelah 5 menit idle. Pada batas compute 0.25 CU, allowance 100 CU-hours setara 400 jam compute aktif dalam sebulan. Batas project yang baru dibuat terukur cukup longgar untuk sampel sintetis kecil: kira-kira 97% dari batas storage project masih tersisa; endpoint idle setelah dibuat. Batas publik bukan bukti penggunaan akun lain atau invoice; total storage headroom akun tidak terekspos oleh metadata yang dibaca dalam review ini. Itu tidak menghalangi project create yang telah disetujui, tetapi workload harus tetap kecil dan dihentikan sebelum memerlukan limit di luar Free. Jangan ubah tier atau mengaktifkan overage. [Batas Neon Free saat ini](https://neon.com/docs/introduction/plans).
 
-Vercel staging project `karturt-review-staging-20261012` (`prj_Mv4rABJvDNAvSD78SVt5WbjFakEq`) tetap belum memiliki deployment. Plan untuk team pemilik proyek tidak terekspos oleh readback dan karena itu **UNVERIFIED**. Tidak ada deployment dibuat karena database belum dimigrasikan, katalog belum diverifikasi, dan plan Free belum dibuktikan. Tidak digunakan password protection atau fitur berbayar. Pertimbangkan Preview hanya setelah plan target terbukti Free/Hobby dan database prasyarat terpenuhi; jangan deploy ke production.
+Vercel staging project `karturt-review-staging-20261012` (`prj_Mv4rABJvDNAvSD78SVt5WbjFakEq`) tetap belum memiliki deployment. Plan untuk team pemilik proyek tidak terekspos oleh readback dan karena itu **UNVERIFIED**. Vercel mengumumkan pada 9 September 2026 bahwa Vercel Authentication untuk melindungi semua deployment, termasuk production, tersedia tanpa biaya di semua plan; password protection dan paid add-on tidak diperlukan untuk protected preview. Tidak ada deployment dibuat karena database belum dimigrasikan dan katalog belum diverifikasi. Setelah database prasyarat terpenuhi, pilihan Free adalah protected preview dengan Vercel Authentication; jangan deploy ke production.
 
 GitHub public-repository ruleset readback menunjukkan PR wajib, Gate A wajib, dan 0 required approvals. Ruleset ini berada dalam lingkup fitur repo publik Free; tidak ada paid protected-branch add-on yang digunakan. Branch `main` tetap pada `96c84588ae0c13f68a17cffd997a3e583fb7da82`. Belum ada perubahan aplikasi, jadi bukti CI RC yang ada tetap terikat hanya pada source SHA `0b1e3f525039496200b2bb5f698d312ded5cb3e3`.
 
@@ -85,9 +85,10 @@ Pekerjaan dijalankan pada worktree terpisah; checkout utama yang kotor tidak dis
 
 ### Rujukan resmi
 
-- [Neon Free plan limits](https://neon.com/blog/neon-free-plan-1-gb-per-project)
+- [Neon Free plan limits](https://neon.com/docs/introduction/plans)
 - [Neon endpoint management and autosuspend](https://neon.com/docs/manage/endpoints/)
 - [Neon API v2 specification](https://neon.com/api_spec/release/v2.json)
 - [PostgreSQL 18 TLS verification](https://www.postgresql.org/docs/18/libpq-ssl.html)
 - [Vercel Preview deployments](https://vercel.com/docs/deployments/environments)
+- [Vercel free authentication protection on all deployments](https://vercel.com/changelog/protect-production-deployments-for-free-on-every-plan)
 - [Vercel deployment protection availability](https://vercel.com/docs/deployment-protection/methods-to-protect-deployments)
