@@ -350,6 +350,8 @@ describe("Wave 13B.2 offline local preflight", () => {
       publicKeyPem: otherKey.publicKey.export({ type: "spki", format: "pem" }).toString(),
     }))).toThrow();
 
+    const wrongQueryDigest = createSignedApproval({ queryPacketSha256: "0".repeat(64) });
+    expect(() => assertQueryApprovalArtifact(wrongQueryDigest, approvalOptions())).toThrow();
     const tampered = structuredClone(valid);
     tampered.payload.projectId = "falling-bread-33359184";
     expect(() => assertQueryApprovalArtifact(tampered, approvalOptions())).toThrow();

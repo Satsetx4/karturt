@@ -18,7 +18,7 @@ export const WAVE13B2_LOCAL_PREFLIGHT_EXPECTED = Object.freeze({
   region: 'aws-ap-southeast-1',
   postgresMajor: 18,
   computeCU: 0.25,
-  queryPacketSha256: '987570baee76c2affef4a3f68c2ae114b3007174004d070232908c82f513751e',
+  queryPacketSha256: 'd7abf6b7592c53f9d480823d42c6d9ebbd9550fd4f5c276095a7e1892842c6fb',
   migrationManifestFingerprint: 'e4a95a0a841872752cbcfa9b46107a99fdb469994280e25fc9f479a54b0312b4',
   caBundleSource: 'https://curl.se/ca/cacert.pem',
   rootLineageAttestation: Object.freeze({

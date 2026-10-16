@@ -25,7 +25,7 @@ const EXPECTED = Object.freeze({
   region: 'aws-ap-southeast-1',
   postgresMajor: 18,
   computeCU: 0.25,
-  queryPacketSha256: '987570baee76c2affef4a3f68c2ae114b3007174004d070232908c82f513751e',
+  queryPacketSha256: PREFLIGHT_EXPECTED.queryPacketSha256,
   migrationManifestFingerprint: 'e4a95a0a841872752cbcfa9b46107a99fdb469994280e25fc9f479a54b0312b4',
   caBundleSource: 'https://curl.se/ca/cacert.pem',
   passwordlessAccessMeaning: 'NOT_YET_IMPLEMENTED_UNRELIED_UPON',

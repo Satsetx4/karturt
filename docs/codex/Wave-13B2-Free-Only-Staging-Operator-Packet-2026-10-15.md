@@ -34,7 +34,7 @@ This F0 result does not establish an empty catalog. Keep `stagingIsolationVerifi
 
 The operator-preparation branch descends from reviewed RC `0b1e3f525039496200b2bb5f698d312ded5cb3e3`, whose prior Gate A and disposable PG18 rehearsal passed. This branch changes the target guard and operator verifier, so those earlier checks do not attest the new source SHA. The final owner approval must bind the exact activation-branch source commit after Coordinator review and exact-SHA CI results. Do not use the old RC SHA as a substitute if source files differ. The protected `main` SHA remains outside this work; no merge is authorized.
 
-The migration snapshot remains the 14 existing migration SQL files plus `drizzle/meta/_journal.json`, fingerprint `e4a95a0a841872752cbcfa9b46107a99fdb469994280e25fc9f479a54b0312b4`. The original 15 Git blobs must remain byte-identical. The read-only catalog SQL packet is `docs/codex/wave13b2-read-only-catalog-preflight.sql`, SHA-256 `987570baee76c2affef4a3f68c2ae114b3007174004d070232908c82f513751e`.
+The migration snapshot remains the 14 existing migration SQL files plus `drizzle/meta/_journal.json`, fingerprint `e4a95a0a841872752cbcfa9b46107a99fdb469994280e25fc9f479a54b0312b4`. The original 15 Git blobs must remain byte-identical. The read-only catalog SQL packet is `docs/codex/wave13b2-read-only-catalog-preflight.sql`, SHA-256 `d7abf6b7592c53f9d480823d42c6d9ebbd9550fd4f5c276095a7e1892842c6fb`.
 
 ## Owner-local Windows setup
 
@@ -94,7 +94,7 @@ Only after the local preflight prints `LOCAL_OFFLINE_PREFLIGHT_PASS` with a vali
 $targetProjectId = 'broad-star-40451875'
 $targetBranchId = 'br-orange-recipe-azed9f78'
 $targetEndpointId = 'ep-mute-firefly-azjcru4h'
-$queryPacketSha256 = '987570baee76c2affef4a3f68c2ae114b3007174004d070232908c82f513751e'
+$queryPacketSha256 = 'd7abf6b7592c53f9d480823d42c6d9ebbd9550fd4f5c276095a7e1892842c6fb'
 $expectedDatabase = 'neondb'
 $expectedOwnerRole = 'neondb_owner'
 $queryPath = Join-Path $repoRoot 'docs/codex/wave13b2-read-only-catalog-preflight.sql'
