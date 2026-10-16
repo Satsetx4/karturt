@@ -1,5 +1,4 @@
 import { createHash, createPublicKey, verify } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import { lstatSync, readFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +7,9 @@ import {
   assertNoInventedLineageNulls,
   getRootLineageAttestationSha256,
   assertRootLineageAttestation,
+  assertOwnerSecretDirectoryBinding,
+  assertCleanExactSourceCommit,
+  configureGitExecutable,
   WAVE13B2_LOCAL_PREFLIGHT_EXPECTED as PREFLIGHT_EXPECTED,
 } from './preflight-wave13b2-local.mjs';
 
@@ -258,7 +260,7 @@ export function assertQueryApprovalArtifact(approval, options) {
 
 function parseArgs(argv) {
   const values = new Map();
-  const allowed = new Set(['--repo-root', '--secret-dir', '--application-source-sha', '--trusted-public-key-fingerprint']);
+  const allowed = new Set(['--repo-root', '--secret-dir', '--application-source-sha', '--trusted-public-key-fingerprint', '--git-path']);
   requireCondition(argv.length === allowed.size * 2);
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index];
@@ -283,21 +285,7 @@ function readJson(filePath) {
 }
 
 export function assertSourceCommit(repoRoot, applicationSourceSha) {
-  requireCondition(/^[a-f0-9]{40}$/.test(applicationSourceSha));
-  const resolved = execFileSync('git', ['rev-parse', '--verify', `${applicationSourceSha}^{commit}`], {
-    cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
-  }).trim();
-  requireCondition(resolved === applicationSourceSha);
-  const head = execFileSync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], {
-    cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
-  }).trim();
-  execFileSync('git', ['merge-base', '--is-ancestor', applicationSourceSha, head], { cwd: repoRoot, stdio: 'ignore' });
-  execFileSync('git', ['diff', '--quiet', applicationSourceSha, '--', 'src', 'drizzle'], { cwd: repoRoot, stdio: 'ignore' });
-  execFileSync('git', ['diff', '--cached', '--quiet', applicationSourceSha, '--', 'src', 'drizzle'], { cwd: repoRoot, stdio: 'ignore' });
-  const sourceStatus = execFileSync('git', ['status', '--porcelain', '--untracked-files=all', '--', 'src', 'drizzle'], {
-    cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
-  });
-  requireCondition(sourceStatus.length === 0);
+  return assertCleanExactSourceCommit(repoRoot, applicationSourceSha);
 }
 
 function main() {
@@ -306,9 +294,10 @@ function main() {
   const secretDir = resolve(args.get('--secret-dir'));
   const applicationSourceSha = args.get('--application-source-sha');
   const trustedPublicKeyFingerprint = args.get('--trusted-public-key-fingerprint');
+  configureGitExecutable(args.get('--git-path'));
   requireCondition(/^[a-f0-9]{64}$/.test(trustedPublicKeyFingerprint));
   requireCondition(typeof process.env.LOCALAPPDATA === 'string' && process.env.LOCALAPPDATA.length > 0);
-  requireCondition(secretDir.toLowerCase() === resolve(process.env.LOCALAPPDATA, 'KarturtStageOperator').toLowerCase());
+  assertOwnerSecretDirectoryBinding(secretDir, process.env.LOCALAPPDATA, applicationSourceSha);
   assertNoReparsePoints(repoRoot);
   assertNoReparsePoints(secretDir);
   assertSourceCommit(repoRoot, applicationSourceSha);

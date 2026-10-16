@@ -7,12 +7,15 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   assertBoundLibpqEnvironment,
   assertCandidateTargetBinding,
+  assertCleanExactSourceCommit,
   assertNoReparsePoints,
   assertNoInventedLineageNulls,
+  assertOwnerSecretDirectoryBinding,
   assertPostgres18Version,
   assertRootLineageAttestation,
   assertSha256Matches,
   assertWindowsAclCheckerResult,
+  assertWindowsExecutablePath,
   getRootLineageAttestationSha256,
   resolveWindowsPowerShellExecutable,
   WAVE13B2_LOCAL_PREFLIGHT_EXPECTED as EXPECTED,
@@ -28,6 +31,26 @@ import {
 const sourceSha = "a".repeat(40);
 const expectedStateSha256 = "b".repeat(64);
 const caBundleSha256 = createHash("sha256").update("trusted CA fixture").digest("hex");
+
+describe("Wave 13B.2 owner secret directory binding", () => {
+  it("accepts only the source-bound attempt directory under the owner root", () => {
+    const localAppData = join(tmpdir(), "karturt-local-appdata");
+    const operatorRoot = join(localAppData, "KarturtStageOperator");
+    expect(assertOwnerSecretDirectoryBinding(join(operatorRoot, "f2-attempt-" + sourceSha), localAppData, sourceSha)).toBe(true);
+    expect(() => assertOwnerSecretDirectoryBinding(operatorRoot, localAppData, sourceSha)).toThrow();
+    expect(() => assertOwnerSecretDirectoryBinding(join(operatorRoot, "f2-attempt-" + "b".repeat(40)), localAppData, sourceSha)).toThrow();
+    expect(() => assertOwnerSecretDirectoryBinding(join(operatorRoot, "other"), localAppData, sourceSha)).toThrow();
+  });
+
+  it("accepts an absolute regular executable only when its expected Windows name matches", () => {
+    const root = tempDirectory();
+    const psqlPath = join(root, "psql.exe");
+    writeFileSync(psqlPath, "synthetic executable fixture");
+    expect(assertWindowsExecutablePath(psqlPath, "psql.exe")).toBe(resolve(psqlPath));
+    expect(() => assertWindowsExecutablePath(psqlPath, "git.exe")).toThrow();
+    expect(() => assertWindowsExecutablePath("psql.exe", "psql.exe")).toThrow();
+  });
+});
 const fixedNow = Date.parse("2026-10-15T12:40:00.000Z");
 const temporaryDirectories: string[] = [];
 
@@ -215,6 +238,36 @@ function approvalOptions(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Wave 13B.2 offline local preflight", () => {
+  it("requires the approved source to be the exact clean checkout commit", () => {
+    const repoRoot = tempDirectory();
+    const git = (args: string[]) => execFileSync("git", args, {
+      cwd: repoRoot,
+      stdio: "ignore",
+    });
+    git(["init", "-b", "main"]);
+    git(["config", "user.name", "Codex Test"]);
+    git(["config", "user.email", "codex-test@example.invalid"]);
+    writeFileSync(join(repoRoot, "tracked.txt"), "base\n");
+    git(["add", "tracked.txt"]);
+    git(["commit", "-m", "base"]);
+    const ancestorSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
+    writeFileSync(join(repoRoot, "next.txt"), "next\n");
+    git(["add", "next.txt"]);
+    git(["commit", "-m", "candidate"]);
+    const candidateSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
+
+    expect(assertCleanExactSourceCommit(repoRoot, candidateSha)).toBe(candidateSha);
+    expect(() => assertSourceCommit(repoRoot, candidateSha)).not.toThrow();
+    expect(() => assertCleanExactSourceCommit(repoRoot, ancestorSha)).toThrow();
+    expect(() => assertSourceCommit(repoRoot, ancestorSha)).toThrow();
+
+    writeFileSync(join(repoRoot, "tracked.txt"), "modified\n");
+    expect(() => assertSourceCommit(repoRoot, candidateSha)).toThrow();
+    writeFileSync(join(repoRoot, "tracked.txt"), "base\n");
+    writeFileSync(join(repoRoot, "untracked.txt"), "untracked\n");
+    expect(() => assertSourceCommit(repoRoot, candidateSha)).toThrow();
+  });
+
   it("accepts only PostgreSQL 18 client and rejects missing or altered CA bytes", () => {
     expect(() => assertPostgres18Version("psql (PostgreSQL) 18.0")).not.toThrow();
     expect(() => assertPostgres18Version("psql (PostgreSQL) 17.6")).toThrow();

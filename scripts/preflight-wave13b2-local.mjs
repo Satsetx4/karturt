@@ -18,7 +18,7 @@ export const WAVE13B2_LOCAL_PREFLIGHT_EXPECTED = Object.freeze({
   region: 'aws-ap-southeast-1',
   postgresMajor: 18,
   computeCU: 0.25,
-  queryPacketSha256: 'd7abf6b7592c53f9d480823d42c6d9ebbd9550fd4f5c276095a7e1892842c6fb',
+  queryPacketSha256: 'dc3c798b01de7163e26fe3aad0c574e9f1e9c248ef2555bd61ab822e116e3689',
   migrationManifestFingerprint: 'e4a95a0a841872752cbcfa9b46107a99fdb469994280e25fc9f479a54b0312b4',
   caBundleSource: 'https://curl.se/ca/cacert.pem',
   rootLineageAttestation: Object.freeze({
@@ -100,12 +100,27 @@ function requireCondition(condition) {
   if (!condition) throw new Error('local preflight condition failed');
 }
 
+let gitExecutable = 'git';
+
+export function assertWindowsExecutablePath(executablePath, executableName) {
+  requireCondition(typeof executablePath === 'string' && isAbsolute(executablePath));
+  requireCondition(typeof executableName === 'string' && parse(executablePath).base.toLowerCase() === executableName.toLowerCase());
+  const stat = lstatSync(executablePath);
+  requireCondition(stat.isFile() && !stat.isSymbolicLink());
+  return resolve(executablePath);
+}
+
+export function configureGitExecutable(executablePath) {
+  gitExecutable = assertWindowsExecutablePath(executablePath, 'git.exe');
+  return gitExecutable;
+}
+
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
 function gitBuffer(repoRoot, args) {
-  return execFileSync('git', args, {
+  return execFileSync(gitExecutable, args, {
     cwd: repoRoot,
     encoding: 'buffer',
     stdio: ['ignore', 'pipe', 'ignore'],
@@ -113,7 +128,7 @@ function gitBuffer(repoRoot, args) {
 }
 
 function gitText(repoRoot, args) {
-  return execFileSync('git', args, {
+  return execFileSync(gitExecutable, args, {
     cwd: repoRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
@@ -130,6 +145,16 @@ export function assertPostgres18Version(versionOutput) {
 export function assertSha256Matches(bytes, expected) {
   requireCondition(/^[a-f0-9]{64}$/.test(expected));
   requireCondition(sha256(bytes) === expected);
+}
+
+export function assertOwnerSecretDirectoryBinding(secretDir, localAppData, applicationSourceSha) {
+  requireCondition(typeof localAppData === 'string' && localAppData.length > 0);
+  requireCondition(/^[a-f0-9]{40}$/.test(applicationSourceSha));
+  const operatorRoot = resolve(localAppData, 'KarturtStageOperator');
+  const allowedDirectory = resolve(operatorRoot, 'f2-attempt-' + applicationSourceSha);
+  const resolvedSecretDir = resolve(secretDir);
+  requireCondition(allowedDirectory.toLowerCase() === resolvedSecretDir.toLowerCase());
+  return true;
 }
 
 export function assertNoReparsePoints(path) {
@@ -255,23 +280,21 @@ export function assertWindowsAclCheckerResult(output) {
   requireCondition(typeof output === 'string' && output.trim() === 'PASS');
 }
 
-export function assertSourceAndMigrationSnapshot(repoRoot, applicationSourceSha) {
+export function assertCleanExactSourceCommit(repoRoot, applicationSourceSha) {
   requireCondition(/^[a-f0-9]{40}$/.test(applicationSourceSha));
   const actualRoot = resolve(gitText(repoRoot, ['rev-parse', '--show-toplevel']));
   requireCondition(actualRoot.toLowerCase() === resolve(repoRoot).toLowerCase());
   const headSha = gitText(repoRoot, ['rev-parse', '--verify', 'HEAD^{commit}']);
   const resolvedSource = gitText(repoRoot, ['rev-parse', '--verify', applicationSourceSha + '^{commit}']);
   requireCondition(resolvedSource === applicationSourceSha);
-  execFileSync('git', ['merge-base', '--is-ancestor', applicationSourceSha, headSha], {
-    cwd: repoRoot,
-    stdio: 'ignore',
-  });
+  requireCondition(headSha === applicationSourceSha);
   const status = gitText(repoRoot, ['status', '--porcelain=v1', '--untracked-files=all']);
   requireCondition(status.length === 0);
-  execFileSync('git', ['diff', '--quiet', applicationSourceSha, headSha, '--', 'src', 'drizzle'], {
-    cwd: repoRoot,
-    stdio: 'ignore',
-  });
+  return headSha;
+}
+
+export function assertSourceAndMigrationSnapshot(repoRoot, applicationSourceSha) {
+  const headSha = assertCleanExactSourceCommit(repoRoot, applicationSourceSha);
 
   const manifestSource = gitBuffer(repoRoot, ['show', applicationSourceSha + ':src/db/migration-manifest.ts']).toString('utf8');
   const manifestEntries = parseMigrationManifest(manifestSource);
@@ -301,7 +324,7 @@ function assertRegularNonEmptyFile(path) {
 }
 
 function getRequiredArgs(argv) {
-  const allowed = new Set(['--repo-root', '--secret-dir', '--application-source-sha', '--trusted-public-key-fingerprint']);
+  const allowed = new Set(['--repo-root', '--secret-dir', '--application-source-sha', '--trusted-public-key-fingerprint', '--git-path', '--psql-path']);
   requireCondition(argv.length === allowed.size * 2);
   const args = new Map();
   for (let index = 0; index < argv.length; index += 2) {
@@ -338,7 +361,7 @@ function runWindowsAclCheck(scriptPath, path, requireProtected) {
   assertWindowsAclCheckerResult(output);
 }
 
-function runApprovalVerifier(repoRoot, secretDir, applicationSourceSha, trustedFingerprint) {
+function runApprovalVerifier(repoRoot, secretDir, applicationSourceSha, trustedFingerprint, gitPath) {
   const verifierPath = join(repoRoot, 'scripts', 'verify-wave13b2-query-approval.mjs');
   const output = execFileSync(process.execPath, [
     verifierPath,
@@ -346,6 +369,7 @@ function runApprovalVerifier(repoRoot, secretDir, applicationSourceSha, trustedF
     '--secret-dir', secretDir,
     '--application-source-sha', applicationSourceSha,
     '--trusted-public-key-fingerprint', trustedFingerprint,
+    '--git-path', gitPath,
   ], {
     cwd: repoRoot,
     encoding: 'utf8',
@@ -363,19 +387,27 @@ function main() {
   const secretDir = resolve(args.get('--secret-dir'));
   const applicationSourceSha = args.get('--application-source-sha');
   const trustedFingerprint = args.get('--trusted-public-key-fingerprint');
+  const gitPath = configureGitExecutable(args.get('--git-path'));
+  const psqlPath = assertWindowsExecutablePath(args.get('--psql-path'), 'psql.exe');
   requireCondition(/^[a-f0-9]{40}$/.test(applicationSourceSha));
   requireCondition(/^[a-f0-9]{64}$/.test(trustedFingerprint));
-  const expectedSecretDir = resolve(process.env.LOCALAPPDATA, 'KarturtStageOperator');
-  requireCondition(secretDir.toLowerCase() === expectedSecretDir.toLowerCase());
+  assertOwnerSecretDirectoryBinding(secretDir, process.env.LOCALAPPDATA, applicationSourceSha);
   assertBoundLibpqEnvironment(process.env, secretDir);
 
+  const operatorRoot = resolve(process.env.LOCALAPPDATA, 'KarturtStageOperator');
   assertNoReparsePoints(repoRoot);
+  assertNoReparsePoints(operatorRoot);
   assertNoReparsePoints(secretDir);
   const sourceSnapshot = assertSourceAndMigrationSnapshot(repoRoot, applicationSourceSha);
-  const psqlVersion = execFileSync('psql', ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  const psqlVersion = execFileSync(psqlPath, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
   assertPostgres18Version(psqlVersion);
 
   const localPaths = Object.fromEntries(LOCAL_FILES.map((name) => [name, assertRegularNonEmptyFile(join(secretDir, name))]));
+  const aclChecker = assertRegularNonEmptyFile(join(repoRoot, 'scripts', 'check-wave13b2-secret-acl.ps1'));
+  runWindowsAclCheck(aclChecker, operatorRoot, true);
+  runWindowsAclCheck(aclChecker, secretDir, true);
+  for (const localPath of Object.values(localPaths)) runWindowsAclCheck(aclChecker, localPath, false);
+
   const targetManifest = JSON.parse(readFileSync(localPaths['wave13b2-staging-target-manifest.local.json'], 'utf8'));
   assertCandidateTargetBinding(targetManifest, applicationSourceSha);
 
@@ -387,11 +419,7 @@ function main() {
     targetManifest.tls.caBundleSha256,
   );
 
-  const aclChecker = assertRegularNonEmptyFile(join(repoRoot, 'scripts', 'check-wave13b2-secret-acl.ps1'));
-  runWindowsAclCheck(aclChecker, secretDir, true);
-  for (const localPath of Object.values(localPaths)) runWindowsAclCheck(aclChecker, localPath, false);
-
-  runApprovalVerifier(repoRoot, secretDir, applicationSourceSha, trustedFingerprint);
+  runApprovalVerifier(repoRoot, secretDir, applicationSourceSha, trustedFingerprint, gitPath);
   process.stdout.write(
     `LOCAL_OFFLINE_PREFLIGHT_PASS source=${sourceSnapshot.applicationSourceSha} migrations=${sourceSnapshot.migrationBlobCount} query=${WAVE13B2_LOCAL_PREFLIGHT_EXPECTED.queryPacketSha256}\n`,
   );
