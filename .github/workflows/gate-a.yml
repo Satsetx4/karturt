@@ -10,6 +10,7 @@ on:
       - "verify/krt-07-combined-2026-10-11"
       - "verify/karturt-v1-rc-quality-wave13b1t-20261015"
       - "codex/karturt-v1-staging-activation-20261015"
+      - "codex/karturt-wave13b2-f2-fail-closed-20261017"
       - "feat/phase-4-resident-card"
       - "fix/phase-4-1-resident-card-cleanup"
       - "feat/phase-4-5-audit-core-readiness"
@@ -96,7 +97,7 @@ jobs:
         run: npm run build
 
   wave13b2-query-integrity-windows:
-    if: github.ref == 'refs/heads/codex/karturt-v1-staging-activation-20261015' || github.head_ref == 'codex/karturt-v1-staging-activation-20261015'
+    if: github.ref == 'refs/heads/codex/karturt-v1-staging-activation-20261015' || github.head_ref == 'codex/karturt-v1-staging-activation-20261015' || github.ref == 'refs/heads/codex/karturt-wave13b2-f2-fail-closed-20261017' || github.head_ref == 'codex/karturt-wave13b2-f2-fail-closed-20261017'
     name: Wave 13B.2 query hash and Windows LF checkout
     runs-on: windows-latest
     timeout-minutes: 5
