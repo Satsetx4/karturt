@@ -1,48 +1,57 @@
 \set ON_ERROR_STOP on
 \if :{?owner_signed_query_approval_verified}
 \else
-\echo 'STOP: owner-signed target-specific read-only query approval has not been verified.'
-\quit 3
+\echo F2_FAIL OWNER_APPROVAL_VERIFICATION_REQUIRED
+\echo F2_STOP QUERY_NOT_STARTED
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP OWNER_APPROVAL_VERIFICATION_REQUIRED'; END $f2_stop$;
 \endif
 \if :owner_signed_query_approval_verified
 \else
-\echo 'STOP: owner-signed query approval is not confirmed.'
-\quit 3
+\echo F2_FAIL OWNER_APPROVAL_NOT_CONFIRMED
+\echo F2_STOP QUERY_NOT_STARTED
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP OWNER_APPROVAL_NOT_CONFIRMED'; END $f2_stop$;
 \endif
 \if :{?target_project_id}
 \else
-\echo 'STOP: exact project ID is missing.'
-\quit 3
+\echo F2_FAIL TARGET_PROJECT_ID_MISSING
+\echo F2_STOP QUERY_NOT_STARTED
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP TARGET_PROJECT_ID_MISSING'; END $f2_stop$;
 \endif
 \if :{?target_branch_id}
 \else
-\echo 'STOP: exact branch ID is missing.'
-\quit 3
+\echo F2_FAIL TARGET_BRANCH_ID_MISSING
+\echo F2_STOP QUERY_NOT_STARTED
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP TARGET_BRANCH_ID_MISSING'; END $f2_stop$;
 \endif
 \if :{?target_endpoint_id}
 \else
-\echo 'STOP: exact endpoint ID is missing.'
-\quit 3
+\echo F2_FAIL TARGET_ENDPOINT_ID_MISSING
+\echo F2_STOP QUERY_NOT_STARTED
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP TARGET_ENDPOINT_ID_MISSING'; END $f2_stop$;
 \endif
 \if :{?approved_source_sha}
 \else
-\echo 'STOP: final source SHA is missing.'
-\quit 3
+\echo F2_FAIL APPROVED_SOURCE_SHA_MISSING
+\echo F2_STOP QUERY_NOT_STARTED
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP APPROVED_SOURCE_SHA_MISSING'; END $f2_stop$;
 \endif
 \if :{?query_packet_sha256}
 \else
-\echo 'STOP: fixed packet hash is missing.'
-\quit 3
+\echo F2_FAIL QUERY_PACKET_SHA256_MISSING
+\echo F2_STOP QUERY_NOT_STARTED
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP QUERY_PACKET_SHA256_MISSING'; END $f2_stop$;
 \endif
 \if :{?expected_database}
 \else
-\echo 'STOP: expected database name is missing.'
-\quit 3
+\echo F2_FAIL EXPECTED_DATABASE_MISSING
+\echo F2_STOP QUERY_NOT_STARTED
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP EXPECTED_DATABASE_MISSING'; END $f2_stop$;
 \endif
 \if :{?expected_owner_role}
 \else
-\echo 'STOP: expected owner role is missing.'
-\quit 3
+\echo F2_FAIL EXPECTED_OWNER_ROLE_MISSING
+\echo F2_STOP QUERY_NOT_STARTED
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP EXPECTED_OWNER_ROLE_MISSING'; END $f2_stop$;
 \endif
 
 BEGIN READ ONLY;
@@ -144,7 +153,7 @@ FROM f2_connection_checks
 \endif
 \if :f2_connection_gate_failed
 \echo 'F2_STOP CONNECTION_GUARD_FAILED CATALOG_QUERIES_SKIPPED'
-\quit 3
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP CONNECTION_GUARD_FAILED'; END $f2_stop$;
 \endif
 
 SELECT
@@ -191,6 +200,7 @@ SELECT
 FROM pg_catalog.pg_roles AS r
 WHERE r.rolname = current_user;
 
+\echo F2_CATALOG_READ MEMBERSHIP_LIMIT_COUNT
 SELECT
   count(*) AS f2_membership_count,
   count(*) <= 100 AS f2_membership_output_allowed
@@ -204,9 +214,10 @@ WHERE member_role.rolname = current_user
 \else
 \echo F2_FAIL ROLE_MEMBERSHIP_OUTPUT_LIMIT_EXCEEDED
 \echo F2_STOP CATALOG_QUERIES_SKIPPED
-\quit 3
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP ROLE_MEMBERSHIP_OUTPUT_LIMIT_EXCEEDED'; END $f2_stop$;
 \endif
 
+\echo F2_CATALOG_READ ROLE_MEMBERSHIP_INVENTORY
 SELECT
   parent_role.rolname AS membership_role,
   membership.admin_option
@@ -219,6 +230,7 @@ WHERE member_role.rolname = current_user
 ORDER BY parent_role.rolname
 LIMIT 100;
 
+\echo F2_CATALOG_READ SCHEMA_DIAGNOSTIC_COUNT
 SELECT
   count(*) AS non_system_schema_count,
   count(*) FILTER (WHERE n.nspname <> 'public') AS non_public_schema_count
@@ -226,6 +238,7 @@ FROM pg_catalog.pg_namespace AS n
 WHERE n.nspname !~ '^pg_'
   AND n.nspname <> 'information_schema';
 
+\echo F2_CATALOG_READ SCHEMA_LIMIT_COUNT
 SELECT
   count(*) AS f2_schema_count,
   count(*) <= 200 AS f2_schema_output_allowed
@@ -238,9 +251,10 @@ WHERE n.nspname !~ '^pg_'
 \else
 \echo F2_FAIL SCHEMA_OUTPUT_LIMIT_EXCEEDED
 \echo F2_STOP CATALOG_QUERIES_SKIPPED
-\quit 3
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP SCHEMA_OUTPUT_LIMIT_EXCEEDED'; END $f2_stop$;
 \endif
 
+\echo F2_CATALOG_READ SCHEMA_INVENTORY
 SELECT
   n.nspname AS schema_name,
   pg_catalog.pg_get_userbyid(n.nspowner) AS schema_owner,
@@ -251,6 +265,7 @@ WHERE n.nspname !~ '^pg_'
 ORDER BY n.nspname
 LIMIT 200;
 
+\echo F2_CATALOG_READ RELATION_DIAGNOSTIC_COUNT
 SELECT
   count(*) AS non_system_relation_count,
   count(*) FILTER (WHERE c.relname = '__drizzle_migrations') AS drizzle_journal_relation_count,
@@ -262,6 +277,7 @@ WHERE n.nspname !~ '^pg_'
   AND n.nspname <> 'information_schema'
   AND c.relkind IN ('r', 'p', 'f', 'v', 'm', 'S');
 
+\echo F2_CATALOG_READ RELATION_LIMIT_COUNT
 SELECT
   count(*) AS f2_relation_count,
   count(*) <= 200 AS f2_relation_output_allowed
@@ -277,9 +293,10 @@ WHERE n.nspname !~ '^pg_'
 \else
 \echo F2_FAIL RELATION_OUTPUT_LIMIT_EXCEEDED
 \echo F2_STOP CATALOG_QUERIES_SKIPPED
-\quit 3
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP RELATION_OUTPUT_LIMIT_EXCEEDED'; END $f2_stop$;
 \endif
 
+\echo F2_CATALOG_READ RELATION_INVENTORY
 SELECT
   n.nspname AS schema_name,
   c.relname AS relation_name,
@@ -304,6 +321,7 @@ WHERE n.nspname !~ '^pg_'
 ORDER BY n.nspname, c.relname
 LIMIT 200;
 
+\echo F2_CATALOG_READ TYPE_DIAGNOSTIC_COUNT
 SELECT
   count(*) AS non_system_type_object_count
 FROM pg_catalog.pg_type AS t
@@ -312,6 +330,7 @@ JOIN pg_catalog.pg_namespace AS n
 WHERE n.nspname !~ '^pg_'
   AND n.nspname <> 'information_schema';
 
+\echo F2_CATALOG_READ TYPE_LIMIT_COUNT
 SELECT
   count(*) AS f2_type_count,
   count(*) <= 200 AS f2_type_output_allowed
@@ -326,9 +345,10 @@ WHERE n.nspname !~ '^pg_'
 \else
 \echo F2_FAIL TYPE_OUTPUT_LIMIT_EXCEEDED
 \echo F2_STOP CATALOG_QUERIES_SKIPPED
-\quit 3
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP TYPE_OUTPUT_LIMIT_EXCEEDED'; END $f2_stop$;
 \endif
 
+\echo F2_CATALOG_READ STANDALONE_APPLICATION_TYPE_COUNT
 SELECT
   count(*) AS f2_standalone_application_type_count,
   count(*) = 0 AS f2_empty_baseline_types_allowed
@@ -361,9 +381,10 @@ WHERE n.nspname !~ '^pg_'
 \else
 \echo F2_FAIL UNEXPECTED_STANDALONE_APPLICATION_TYPES
 \echo F2_STOP CATALOG_QUERIES_SKIPPED
-\quit 3
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP UNEXPECTED_STANDALONE_APPLICATION_TYPES'; END $f2_stop$;
 \endif
 
+\echo F2_CATALOG_READ STANDALONE_APPLICATION_TYPE_INVENTORY
 SELECT
   n.nspname AS schema_name,
   t.typname AS type_name,
@@ -412,6 +433,7 @@ WHERE n.nspname !~ '^pg_'
 ORDER BY n.nspname, t.typname
 LIMIT 200;
 
+\echo F2_CATALOG_READ ROUTINE_DIAGNOSTIC_COUNT
 SELECT
   count(*) AS non_system_routine_count
 FROM pg_catalog.pg_proc AS p
@@ -420,6 +442,7 @@ JOIN pg_catalog.pg_namespace AS n
 WHERE n.nspname !~ '^pg_'
   AND n.nspname <> 'information_schema';
 
+\echo F2_CATALOG_READ ROUTINE_LIMIT_COUNT
 SELECT
   count(*) AS f2_routine_count,
   count(*) <= 200 AS f2_routine_output_allowed
@@ -434,9 +457,10 @@ WHERE n.nspname !~ '^pg_'
 \else
 \echo F2_FAIL ROUTINE_OUTPUT_LIMIT_EXCEEDED
 \echo F2_STOP CATALOG_QUERIES_SKIPPED
-\quit 3
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP ROUTINE_OUTPUT_LIMIT_EXCEEDED'; END $f2_stop$;
 \endif
 
+\echo F2_CATALOG_READ ROUTINE_INVENTORY
 SELECT
   n.nspname AS schema_name,
   p.proname AS routine_name,
@@ -451,6 +475,7 @@ WHERE n.nspname !~ '^pg_'
 ORDER BY n.nspname, p.proname
 LIMIT 200;
 
+\echo F2_CATALOG_READ EXTENSION_LIMIT_COUNT
 SELECT
   count(*) AS f2_extension_count,
   count(*) <= 100 AS f2_extension_output_allowed
@@ -461,9 +486,10 @@ FROM pg_catalog.pg_extension
 \else
 \echo F2_FAIL EXTENSION_OUTPUT_LIMIT_EXCEEDED
 \echo F2_STOP CATALOG_QUERIES_SKIPPED
-\quit 3
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP EXTENSION_OUTPUT_LIMIT_EXCEEDED'; END $f2_stop$;
 \endif
 
+\echo F2_CATALOG_READ EXTENSION_INVENTORY
 SELECT
   e.extname AS extension_name,
   e.extversion AS extension_version,
@@ -475,6 +501,7 @@ JOIN pg_catalog.pg_namespace AS n
 ORDER BY e.extname
 LIMIT 100;
 
+\echo F2_CATALOG_READ DEFAULT_ACL_LIMIT_COUNT
 SELECT
   count(*) AS f2_default_acl_count,
   count(*) <= 100 AS f2_default_acl_output_allowed
@@ -485,9 +512,10 @@ FROM pg_catalog.pg_default_acl
 \else
 \echo F2_FAIL DEFAULT_ACL_OUTPUT_LIMIT_EXCEEDED
 \echo F2_STOP CATALOG_QUERIES_SKIPPED
-\quit 3
+DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP DEFAULT_ACL_OUTPUT_LIMIT_EXCEEDED'; END $f2_stop$;
 \endif
 
+\echo F2_CATALOG_READ DEFAULT_ACL_INVENTORY
 SELECT
   pg_catalog.pg_get_userbyid(d.defaclrole) AS grantor_role,
   n.nspname AS schema_name,
@@ -500,4 +528,4 @@ ORDER BY grantor_role, schema_name, object_type
 LIMIT 100;
 
 COMMIT;
-\echo 'Catalog metadata read complete in one read-only transaction; no application rows selected.'
+\echo F2_DONE PASS source=:approved_source_sha query=:query_packet_sha256

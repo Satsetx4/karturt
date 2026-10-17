@@ -56,6 +56,8 @@ export const QUERY_APPROVAL_PAYLOAD_KEYS = Object.freeze([
   'expiresAtUtc',
 ]);
 
+export const WAVE13B2_MINIMUM_QUERY_APPROVAL_REMAINING_MS = 120_000;
+
 function requireCondition(condition) {
   if (!condition) throw new Error('approval precondition failed');
 }
@@ -244,7 +246,10 @@ export function assertQueryApprovalArtifact(approval, options) {
   const issuedAt = Date.parse(payload.issuedAtUtc);
   const expiresAt = Date.parse(payload.expiresAtUtc);
   requireCondition(expiresAt > issuedAt && expiresAt - issuedAt <= 15 * 60 * 1000);
-  requireCondition(issuedAt <= nowMs + 30 * 1000 && expiresAt > nowMs);
+  requireCondition(
+    issuedAt <= nowMs + 30 * 1000 &&
+      expiresAt > nowMs + WAVE13B2_MINIMUM_QUERY_APPROVAL_REMAINING_MS,
+  );
 
   const publicKey = createPublicKey(publicKeyPem);
   requireCondition(publicKey.asymmetricKeyType === 'ed25519');

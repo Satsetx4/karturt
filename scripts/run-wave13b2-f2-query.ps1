@@ -7,6 +7,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+Import-Module (Join-Path $PSScriptRoot 'lib/wave13b2-f2-runner.psm1') -Force
+
 function Require-Condition([bool]$Condition, [string]$Message) {
   if (-not $Condition) { throw $Message }
 }
@@ -35,6 +37,24 @@ function Get-StreamSha256Hex([IO.Stream]$Stream) {
   } finally {
     $sha256.Dispose()
   }
+}
+
+function Read-OwnerRunConfirmation([string]$SourceSha, [string]$QuerySha256) {
+  Require-Condition ($Host.Name -eq 'ConsoleHost' -and -not [Console]::IsInputRedirected) 'Owner confirmation requires a direct interactive PowerShell console; automated and redirected invocation is blocked.'
+  $requiredText = 'RUN WAVE13B2 F2 ' + $SourceSha.Substring(0, 12) + ' ' + $QuerySha256.Substring(0, 12)
+  Write-Host ('Owner approval is bound to source ' + $SourceSha + ' and query ' + $QuerySha256 + '.')
+  Write-Host ('Type exactly: ' + $requiredText)
+  $typed = [Text.StringBuilder]::new()
+  while ($true) {
+    $key = [Console]::ReadKey($true)
+    if ($key.Key -eq [ConsoleKey]::Enter) { break }
+    if ($key.Key -eq [ConsoleKey]::Backspace) {
+      if ($typed.Length -gt 0) { [void]$typed.Remove($typed.Length - 1, 1) }
+      continue
+    }
+    if (-not [char]::IsControl($key.KeyChar)) { [void]$typed.Append($key.KeyChar) }
+  }
+  Require-Condition ([string]::Equals($typed.ToString(), $requiredText, [StringComparison]::Ordinal)) 'Owner confirmation did not match this source and query; no SQL was run.'
 }
 
 function Invoke-OfflinePreflight {
@@ -75,7 +95,7 @@ foreach ($name in $conflictingEnvironmentNames) {
 
 $boundEnvironmentNames = @(
   'PGHOST', 'PGPORT', 'PGDATABASE', 'PGUSER', 'PGSSLMODE',
-  'PGCHANNELBINDING', 'PGPASSFILE', 'PGSSLROOTCERT'
+  'PGCHANNELBINDING', 'PGPASSFILE', 'PGSSLROOTCERT', 'PGCONNECT_TIMEOUT'
 )
 $previousEnvironment = @{}
 foreach ($name in $boundEnvironmentNames) {
@@ -91,18 +111,22 @@ $environmentValues = @{
   PGCHANNELBINDING = 'require'
   PGPASSFILE = (Join-Path $secretDir 'pgpass.conf')
   PGSSLROOTCERT = (Join-Path $secretDir 'cacert.pem')
+  PGCONNECT_TIMEOUT = '10'
 }
 
-$queryPacketSha256 = 'dc3c798b01de7163e26fe3aad0c574e9f1e9c248ef2555bd61ab822e116e3689'
+$queryPacketSha256 = 'bd4a9c725268dc80e3eab10d28da585da3399e6f75db676c29e9e014c5127c49'
 $queryPath = Join-Path $repoRoot 'docs/codex/wave13b2-read-only-catalog-preflight.sql'
 $querySnapshotPath = Join-Path $secretDir ('wave13b2-read-only-catalog-preflight-' + $queryPacketSha256 + '.sql')
+$auditPath = Join-Path $secretDir ('wave13b2-f2-audit-' + $applicationSourceSha + '-' + $queryPacketSha256 + '.local.txt')
 $queryLock = $null
 $preflightPath = Join-Path $repoRoot 'scripts/preflight-wave13b2-local.mjs'
 $aclCheckerPath = Join-Path $repoRoot 'scripts/check-wave13b2-secret-acl.ps1'
-$psqlExitCode = 1
+$psqlExitCode = -1
 $attemptStartedAt = [DateTime]::UtcNow.ToString('o')
 $markerCreated = $false
 $markerFinalized = $false
+$runResult = $null
+$classification = $null
 $previousNativeErrorPreference = $null
 $hasNativeErrorPreference = $false
 
@@ -134,8 +158,9 @@ try {
   $lockedQueryHash = Get-StreamSha256Hex -Stream $queryLock
   Require-Condition ($lockedQueryHash -eq $queryPacketSha256) 'The locked query snapshot does not match the approved query hash; no SQL was run.'
   $queryLock.Position = 0
+  Require-Condition (-not (Test-Path -LiteralPath $auditPath)) 'Sanitized audit evidence already exists for this source and query; preserve it and stop.'
 
-  Invoke-OfflinePreflight
+  Read-OwnerRunConfirmation -SourceSha $applicationSourceSha -QuerySha256 $queryPacketSha256
 
   $markerText = @(
     'status=STARTED'
@@ -155,6 +180,10 @@ try {
     $markerStream.Dispose()
   }
   $markerCreated = $true
+
+  $queryLock.Position = 0
+  $lockedQueryHash = Get-StreamSha256Hex -Stream $queryLock
+  Require-Condition ($lockedQueryHash -eq $queryPacketSha256) 'The locked query snapshot changed before the connection; no SQL was run.'
 
   $preference = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
   if ($null -ne $preference) {
@@ -177,15 +206,56 @@ try {
     '-v', 'expected_owner_role=neondb_owner',
     '-f', $querySnapshotPath
   )
-  & $psqlExecutable @psqlArgs
-  $psqlExitCode = $LASTEXITCODE
-  $finalStatus = if ($psqlExitCode -eq 0) { 'COMPLETED' } else { 'FAILED' }
-  [IO.File]::AppendAllText($attemptMarkerPath, ('status=' + $finalStatus + "`n" + 'finishedAtUtc=' + [DateTime]::UtcNow.ToString('o') + "`n" + 'psqlExitCode=' + $psqlExitCode + "`n"), [Text.UTF8Encoding]::new($false))
+  Invoke-OfflinePreflight
+
+  $runResult = Invoke-Wave13B2F2Psql -PsqlExecutable $psqlExecutable -ArgumentList $psqlArgs
+  $psqlExitCode = $runResult.ExitCode
+  $classification = Get-Wave13B2F2RunClassification `
+    -ExitCode $runResult.ExitCode `
+    -OutputLines $runResult.OutputLines `
+    -ExpectedSourceSha $applicationSourceSha `
+    -ExpectedQuerySha256 $queryPacketSha256
+  $auditSha256 = Write-Wave13B2F2AuditEvidence -Path $auditPath -Content (New-Wave13B2F2AuditContent `
+    -SourceSha $applicationSourceSha `
+    -QuerySha256 $queryPacketSha256 `
+    -RunResult $runResult `
+    -Classification $classification)
+  $auditAclOutput = @(& $aclCheckerPath -Path $auditPath)
+  Require-Condition (($auditAclOutput -join '').Trim() -eq 'PASS') 'The sanitized audit evidence ACL check failed; the attempt is FAILED.'
+  Add-Wave13B2F2AttemptResult `
+    -MarkerPath $attemptMarkerPath `
+    -RunResult $runResult `
+    -Classification $classification `
+    -AuditFileName ([IO.Path]::GetFileName($auditPath)) `
+    -AuditSha256 $auditSha256
   $markerFinalized = $true
-  Require-Condition ($psqlExitCode -eq 0) 'The read-only query failed; preserve the new attempt marker and stop.'
+  Write-Host ('F2 runner status=' + $classification.Status + ' psqlExitCode=' + $psqlExitCode)
+  foreach ($failureCode in @($classification.FailureCodes | Where-Object { $_ -match '^[A-Z0-9_]+$' -and $_ -notlike 'F2_PSQL_EXIT_CODE_*' -and $_ -ne 'F2_DONE_MARKER_MISSING_OR_INVALID' -and $_ -ne 'F2_STOP_MARKER_PRESENT' })) {
+    Write-Host ('F2_FAIL ' + $failureCode)
+  }
+  Write-Host ('Sanitized audit evidence: ' + [IO.Path]::GetFileName($auditPath) + ' sha256=' + $auditSha256)
+  Require-Condition ($classification.Status -eq 'COMPLETED') 'The read-only query did not satisfy the exact completion contract; preserve the attempt marker and stop.'
 } catch {
   if ($markerCreated -and -not $markerFinalized) {
-    [IO.File]::AppendAllText($attemptMarkerPath, ('status=FAILED' + "`n" + 'finishedAtUtc=' + [DateTime]::UtcNow.ToString('o') + "`n" + 'psqlExitCode=' + $psqlExitCode + "`n"), [Text.UTF8Encoding]::new($false))
+    if ($null -eq $runResult) {
+      $runResult = [pscustomobject]@{ ExitCode = -1; OutputLines = [string[]]@('F2_FAIL F2_RUNNER_ABORTED_BEFORE_PSQL') }
+    }
+    if ($null -eq $classification) {
+      $classification = Get-Wave13B2F2RunClassification `
+        -ExitCode -1 `
+        -OutputLines ([string[]]@('F2_FAIL F2_RUNNER_ABORTED_BEFORE_PSQL')) `
+        -ExpectedSourceSha $applicationSourceSha `
+        -ExpectedQuerySha256 $queryPacketSha256
+    } else {
+      $classification.Status = 'FAILED'
+      $classification.FailureCodes = [string[]]@($classification.FailureCodes + 'F2_RUNNER_ABORTED' | Select-Object -Unique)
+    }
+    Add-Wave13B2F2AttemptResult `
+      -MarkerPath $attemptMarkerPath `
+      -RunResult $runResult `
+      -Classification $classification `
+      -AuditFileName $(if (Test-Path -LiteralPath $auditPath) { [IO.Path]::GetFileName($auditPath) } else { 'unavailable' }) `
+      -AuditSha256 $(if (Test-Path -LiteralPath $auditPath) { Get-Wave13B2F2QuerySha256 -Bytes ([IO.File]::ReadAllBytes($auditPath)) } else { 'unavailable' })
     $markerFinalized = $true
   }
   throw

@@ -26,6 +26,7 @@ import {
   assertSourceCommit,
   assertTargetManifestBinding,
   QUERY_APPROVAL_PAYLOAD_KEYS,
+  WAVE13B2_MINIMUM_QUERY_APPROVAL_REMAINING_MS,
 } from "../../scripts/verify-wave13b2-query-approval.mjs";
 
 const sourceSha = "a".repeat(40);
@@ -285,12 +286,14 @@ describe("Wave 13B.2 offline local preflight", () => {
       PGUSER: EXPECTED.ownerRole,
       PGSSLMODE: "verify-full",
       PGCHANNELBINDING: "require",
+      PGCONNECT_TIMEOUT: "10",
       PGPASSFILE: join(secretDir, "pgpass.conf"),
       PGSSLROOTCERT: join(secretDir, "cacert.pem"),
     };
     expect(() => assertBoundLibpqEnvironment(base, secretDir)).not.toThrow();
     expect(() => assertBoundLibpqEnvironment({ ...base, PGHOST: "ep-mute-firefly-azjcru4h.pg.neon.tech" }, secretDir)).toThrow();
     expect(() => assertBoundLibpqEnvironment({ ...base, PGSSLMODE: "require" }, secretDir)).toThrow();
+    expect(() => assertBoundLibpqEnvironment({ ...base, PGCONNECT_TIMEOUT: "0" }, secretDir)).toThrow();
     expect(() => assertBoundLibpqEnvironment({ ...base, PGPASSFILE: undefined }, secretDir)).toThrow();
     expect(() => assertBoundLibpqEnvironment({ ...base, PGSSLROOTCERT: undefined }, secretDir)).toThrow();
     expect(() => assertBoundLibpqEnvironment({ ...base, PGPASSWORD: "never-allowed" }, secretDir)).toThrow();
@@ -395,6 +398,11 @@ describe("Wave 13B.2 offline local preflight", () => {
       expiresAtUtc: "2026-10-15T12:35:00.000Z",
     });
     expect(() => assertQueryApprovalArtifact(expired, approvalOptions())).toThrow();
+
+    const nearExpiry = createSignedApproval({
+      expiresAtUtc: new Date(fixedNow + WAVE13B2_MINIMUM_QUERY_APPROVAL_REMAINING_MS).toISOString(),
+    });
+    expect(() => assertQueryApprovalArtifact(nearExpiry, approvalOptions())).toThrow();
 
     const otherKey = generateKeyPairSync("ed25519");
     const badSignature = createSignedApproval({}, otherKey.privateKey);

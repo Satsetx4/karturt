@@ -18,7 +18,7 @@ export const WAVE13B2_LOCAL_PREFLIGHT_EXPECTED = Object.freeze({
   region: 'aws-ap-southeast-1',
   postgresMajor: 18,
   computeCU: 0.25,
-  queryPacketSha256: 'dc3c798b01de7163e26fe3aad0c574e9f1e9c248ef2555bd61ab822e116e3689',
+  queryPacketSha256: 'bd4a9c725268dc80e3eab10d28da585da3399e6f75db676c29e9e014c5127c49',
   migrationManifestFingerprint: 'e4a95a0a841872752cbcfa9b46107a99fdb469994280e25fc9f479a54b0312b4',
   caBundleSource: 'https://curl.se/ca/cacert.pem',
   rootLineageAttestation: Object.freeze({
@@ -269,6 +269,7 @@ export function assertBoundLibpqEnvironment(environment, secretDir) {
   requireCondition(environment.PGUSER === expected.ownerRole);
   requireCondition(environment.PGSSLMODE === 'verify-full');
   requireCondition(environment.PGCHANNELBINDING === 'require');
+  requireCondition(environment.PGCONNECT_TIMEOUT === '10');
   requireCondition(typeof environment.PGPASSFILE === 'string');
   requireCondition(resolve(environment.PGPASSFILE).toLowerCase() === resolve(passfilePath).toLowerCase());
   requireCondition(typeof environment.PGSSLROOTCERT === 'string');

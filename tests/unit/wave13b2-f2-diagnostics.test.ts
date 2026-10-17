@@ -21,6 +21,10 @@ const preflightText = readFileSync(
   resolve(process.cwd(), "scripts/preflight-wave13b2-local.mjs"),
   "utf8",
 );
+const runnerModuleText = readFileSync(
+  resolve(process.cwd(), "scripts/lib/wave13b2-f2-runner.psm1"),
+  "utf8",
+);
 
 describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
   it("accepts the checked-in query diagnostic contract", () => {
@@ -72,13 +76,14 @@ describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
 
     const stop = "F2_STOP CONNECTION_GUARD_FAILED CATALOG_QUERIES_SKIPPED";
     const stopPosition = queryText.indexOf(stop);
-    const quitPosition = queryText.indexOf("\\quit 3", stopPosition);
-    const movedQuit = queryText.slice(0, quitPosition) +
-      queryText.slice(quitPosition + "\\quit 3\n".length);
-    const catalogPosition = movedQuit.indexOf("SELECT\n  current_database() AS observed_database_name");
-    const lateGate = movedQuit.slice(0, catalogPosition) +
-      "\\quit 3\n" +
-      movedQuit.slice(catalogPosition);
+    const raise = "DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP CONNECTION_GUARD_FAILED'; END $f2_stop$;\n";
+    const raisePosition = queryText.indexOf(raise, stopPosition);
+    const movedRaise = queryText.slice(0, raisePosition) +
+      queryText.slice(raisePosition + raise.length);
+    const catalogPosition = movedRaise.indexOf("SELECT\n  current_database() AS observed_database_name");
+    const lateGate = movedRaise.slice(0, catalogPosition) +
+      raise +
+      movedRaise.slice(catalogPosition);
     expect(() => assertWave13B2F2DiagnosticContract(lateGate)).toThrow();
   });
 
@@ -111,11 +116,12 @@ describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
 
   it("requires every catalog failure to stop before its next inventory query", () => {
     const gate = WAVE13B2_F2_OUTPUT_GATES[0];
-    const quit = "\\quit 3\n";
-    const quitPosition = queryText.indexOf(quit, queryText.indexOf("F2_FAIL " + gate.failCode));
-    const nextReadPosition = queryText.indexOf(gate.nextSqlMarker, quitPosition);
-    const movedQuit = queryText.slice(0, quitPosition) + queryText.slice(quitPosition + quit.length);
-    const lateGate = movedQuit.slice(0, nextReadPosition) + quit + movedQuit.slice(nextReadPosition);
+    const raise = "DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP " + gate.failCode + "'; END $f2_stop$;\n";
+    const failPosition = queryText.indexOf("F2_FAIL " + gate.failCode);
+    const raisePosition = queryText.indexOf(raise, failPosition);
+    const nextReadPosition = queryText.indexOf(gate.nextCatalogReadMarker, raisePosition);
+    const movedRaise = queryText.slice(0, raisePosition) + queryText.slice(raisePosition + raise.length);
+    const lateGate = movedRaise.slice(0, nextReadPosition) + raise + movedRaise.slice(nextReadPosition);
     expect(() => assertWave13B2F2DiagnosticContract(lateGate)).toThrow();
   });
 
@@ -130,7 +136,8 @@ describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
     const lockPosition = runnerText.indexOf("$queryLock = [IO.File]::Open");
     const hashPosition = runnerText.indexOf("$lockedQueryHash = Get-StreamSha256Hex -Stream $queryLock");
     const hashGuardPosition = runnerText.indexOf("Require-Condition ($lockedQueryHash -eq $queryPacketSha256)");
-    const psqlPosition = runnerText.indexOf("& $psqlExecutable @psqlArgs");
+    const psqlPosition = runnerText.indexOf("$runResult = Invoke-Wave13B2F2Psql");
+    const finalPreflightPosition = runnerText.lastIndexOf("Invoke-OfflinePreflight");
 
     expect(runnerText).toContain("[IO.FileMode]::CreateNew");
     expect(runnerText).toContain("[IO.FileShare]::Read");
@@ -139,7 +146,9 @@ describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
     expect(lockPosition).toBeGreaterThan(-1);
     expect(hashPosition).toBeGreaterThan(lockPosition);
     expect(hashGuardPosition).toBeGreaterThan(hashPosition);
+    expect(finalPreflightPosition).toBeGreaterThan(hashGuardPosition);
     expect(psqlPosition).toBeGreaterThan(hashGuardPosition);
+    expect(psqlPosition).toBeGreaterThan(finalPreflightPosition);
   });
 
   it("resolves and invokes absolute node and psql applications", () => {
@@ -147,12 +156,37 @@ describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
     expect(runnerText).toContain("Resolve-ApplicationPath 'node.exe'");
     expect(runnerText).toContain("Resolve-ApplicationPath 'psql.exe'");
     expect(nodePosition).toBeGreaterThan(-1);
-    expect(runnerText).toContain("& $psqlExecutable @psqlArgs");
+    expect(runnerText).toContain("Invoke-Wave13B2F2Psql -PsqlExecutable $psqlExecutable -ArgumentList $psqlArgs");
+    expect(runnerModuleText).toContain("$startInfo.RedirectStandardOutput = $true");
+    expect(runnerModuleText).toContain("$startInfo.RedirectStandardError = $true");
+    expect(runnerModuleText).toContain("$process.WaitForExit()");
+    expect(runnerModuleText).toContain("$exitCode = [int]$process.ExitCode");
     expect(runnerText).toContain("--psql-path $psqlExecutable");
     expect(runnerText).toContain("--git-path $gitExecutable");
     expect(runnerText).not.toMatch(/&\s+node(?:\.exe)?\s/);
     expect(runnerText).not.toMatch(/&\s+psql(?:\.exe)?\s/);
     expect(preflightText).toContain("execFileSync(psqlPath, ['--version']");
     expect(preflightText).toContain("execFileSync(gitExecutable, args");
+  });
+
+  it("requires a direct owner confirmation and classifies psql output with exit plus exact completion markers", () => {
+    expect(runnerText).toContain("[Console]::IsInputRedirected");
+    expect(runnerText).toContain("[Console]::ReadKey($true)");
+    expect(runnerText).toContain("$Host.Name -eq 'ConsoleHost'");
+    expect(runnerText).toContain("RUN WAVE13B2 F2 ");
+    expect(runnerText).not.toMatch(/\[switch\]\s*\$Confirm|F2_CONFIRMATION\s*=/i);
+    const confirmationPosition = runnerText.indexOf("Read-OwnerRunConfirmation -SourceSha");
+    const markerPosition = runnerText.indexOf("$markerStream = [IO.File]::Open");
+    const finalPreflightPosition = runnerText.lastIndexOf("Invoke-OfflinePreflight");
+    const psqlPosition = runnerText.indexOf("$runResult = Invoke-Wave13B2F2Psql");
+    expect(confirmationPosition).toBeGreaterThan(-1);
+    expect(markerPosition).toBeGreaterThan(confirmationPosition);
+    expect(finalPreflightPosition).toBeGreaterThan(markerPosition);
+    expect(psqlPosition).toBeGreaterThan(finalPreflightPosition);
+    expect(runnerText.slice(finalPreflightPosition + "Invoke-OfflinePreflight".length, psqlPosition).trim()).toBe("");
+    expect(runnerModuleText).toContain("$allPsqlExitLinesSuccessful -and $doneMatches");
+    expect(runnerModuleText).toContain("$failureCodes.Count -eq 0 -and $stopCount -eq 0");
+    expect(runnerModuleText).toContain("capturedOutputSha256=");
+    expect(runnerModuleText).toContain("capturedOutputSuppressedLineCount=");
   });
 });

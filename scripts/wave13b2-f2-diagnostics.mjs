@@ -23,7 +23,8 @@ export const WAVE13B2_F2_OUTPUT_GATES = Object.freeze([
     limit: 100,
     checkLine: '\\echo F2_CHECK ROLE_MEMBERSHIP_OUTPUT_LIMIT count=:f2_membership_count limit=100',
     failCode: 'ROLE_MEMBERSHIP_OUTPUT_LIMIT_EXCEEDED',
-    nextSqlMarker: 'SELECT\n  parent_role.rolname AS membership_role',
+    readMarker: 'F2_CATALOG_READ MEMBERSHIP_LIMIT_COUNT',
+    nextCatalogReadMarker: 'F2_CATALOG_READ ROLE_MEMBERSHIP_INVENTORY',
   }),
   Object.freeze({
     id: 'schema',
@@ -32,7 +33,8 @@ export const WAVE13B2_F2_OUTPUT_GATES = Object.freeze([
     limit: 200,
     checkLine: '\\echo F2_CHECK SCHEMA_OUTPUT_LIMIT count=:f2_schema_count limit=200',
     failCode: 'SCHEMA_OUTPUT_LIMIT_EXCEEDED',
-    nextSqlMarker: 'SELECT\n  n.nspname AS schema_name,\n  pg_catalog.pg_get_userbyid(n.nspowner)',
+    readMarker: 'F2_CATALOG_READ SCHEMA_LIMIT_COUNT',
+    nextCatalogReadMarker: 'F2_CATALOG_READ SCHEMA_INVENTORY',
   }),
   Object.freeze({
     id: 'relation',
@@ -41,7 +43,8 @@ export const WAVE13B2_F2_OUTPUT_GATES = Object.freeze([
     limit: 200,
     checkLine: '\\echo F2_CHECK RELATION_OUTPUT_LIMIT count=:f2_relation_count limit=200',
     failCode: 'RELATION_OUTPUT_LIMIT_EXCEEDED',
-    nextSqlMarker: 'SELECT\n  n.nspname AS schema_name,\n  c.relname AS relation_name',
+    readMarker: 'F2_CATALOG_READ RELATION_LIMIT_COUNT',
+    nextCatalogReadMarker: 'F2_CATALOG_READ RELATION_INVENTORY',
   }),
   Object.freeze({
     id: 'type',
@@ -50,7 +53,8 @@ export const WAVE13B2_F2_OUTPUT_GATES = Object.freeze([
     limit: 200,
     checkLine: '\\echo F2_CHECK TYPE_OUTPUT_LIMIT count=:f2_type_count limit=200',
     failCode: 'TYPE_OUTPUT_LIMIT_EXCEEDED',
-    nextSqlMarker: 'SELECT\n  count(*) AS f2_standalone_application_type_count',
+    readMarker: 'F2_CATALOG_READ TYPE_LIMIT_COUNT',
+    nextCatalogReadMarker: 'F2_CATALOG_READ STANDALONE_APPLICATION_TYPE_COUNT',
   }),
   Object.freeze({
     id: 'standaloneTypes',
@@ -59,7 +63,8 @@ export const WAVE13B2_F2_OUTPUT_GATES = Object.freeze([
     limit: 0,
     checkLine: '\\echo F2_CHECK EMPTY_BASELINE_STANDALONE_TYPES count=:f2_standalone_application_type_count expected=0',
     failCode: 'UNEXPECTED_STANDALONE_APPLICATION_TYPES',
-    nextSqlMarker: 'SELECT\n  n.nspname AS schema_name,\n  t.typname AS type_name',
+    readMarker: 'F2_CATALOG_READ STANDALONE_APPLICATION_TYPE_COUNT',
+    nextCatalogReadMarker: 'F2_CATALOG_READ STANDALONE_APPLICATION_TYPE_INVENTORY',
   }),
   Object.freeze({
     id: 'routine',
@@ -68,7 +73,8 @@ export const WAVE13B2_F2_OUTPUT_GATES = Object.freeze([
     limit: 200,
     checkLine: '\\echo F2_CHECK ROUTINE_OUTPUT_LIMIT count=:f2_routine_count limit=200',
     failCode: 'ROUTINE_OUTPUT_LIMIT_EXCEEDED',
-    nextSqlMarker: 'SELECT\n  n.nspname AS schema_name,\n  p.proname AS routine_name',
+    readMarker: 'F2_CATALOG_READ ROUTINE_LIMIT_COUNT',
+    nextCatalogReadMarker: 'F2_CATALOG_READ ROUTINE_INVENTORY',
   }),
   Object.freeze({
     id: 'extension',
@@ -77,7 +83,8 @@ export const WAVE13B2_F2_OUTPUT_GATES = Object.freeze([
     limit: 100,
     checkLine: '\\echo F2_CHECK EXTENSION_OUTPUT_LIMIT count=:f2_extension_count limit=100',
     failCode: 'EXTENSION_OUTPUT_LIMIT_EXCEEDED',
-    nextSqlMarker: 'SELECT\n  e.extname AS extension_name',
+    readMarker: 'F2_CATALOG_READ EXTENSION_LIMIT_COUNT',
+    nextCatalogReadMarker: 'F2_CATALOG_READ EXTENSION_INVENTORY',
   }),
   Object.freeze({
     id: 'defaultAcl',
@@ -86,7 +93,8 @@ export const WAVE13B2_F2_OUTPUT_GATES = Object.freeze([
     limit: 100,
     checkLine: '\\echo F2_CHECK DEFAULT_ACL_OUTPUT_LIMIT count=:f2_default_acl_count limit=100',
     failCode: 'DEFAULT_ACL_OUTPUT_LIMIT_EXCEEDED',
-    nextSqlMarker: 'SELECT\n  pg_catalog.pg_get_userbyid(d.defaclrole)',
+    readMarker: 'F2_CATALOG_READ DEFAULT_ACL_LIMIT_COUNT',
+    nextCatalogReadMarker: 'F2_CATALOG_READ DEFAULT_ACL_INVENTORY',
   }),
 ]);
 
@@ -107,14 +115,16 @@ export function getWave13B2F2OutputFailureCode(gateId, observedCount) {
 export function assertWave13B2F2DiagnosticContract(queryText) {
   requireCondition(typeof queryText === 'string', 'F2 query text is required');
   requireCondition(!/SELECT\s+1\s*\/\s*CASE\s+WHEN/i.test(queryText), 'division sentinels are forbidden in F2 gates');
+  requireCondition(/^\\set ON_ERROR_STOP on\s*$/m.test(queryText), 'psql must stop with a nonzero exit when the query raises');
+  requireCondition(!/^\\quit(?:\s|$)/m.test(queryText), 'F2 query must not use psql quit commands as failure guards');
 
   const connectionStart = queryText.indexOf('WITH f2_connection_checks AS');
   const connectionStop = queryText.indexOf("F2_STOP CONNECTION_GUARD_FAILED CATALOG_QUERIES_SKIPPED");
-  const connectionQuit = queryText.indexOf('\\quit 3', connectionStop);
+  const connectionRaise = queryText.indexOf("DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP CONNECTION_GUARD_FAILED'; END $f2_stop$;", connectionStop);
   const firstCatalogRead = queryText.indexOf('SELECT\n  current_database() AS observed_database_name');
-  requireCondition(connectionStart >= 0 && connectionStop > connectionStart && connectionQuit > connectionStop, 'connection guard must report and stop on failure');
-  requireCondition(firstCatalogRead > connectionQuit, 'catalog inspection must follow the connection guard');
-  requireCondition(/F2_STOP CONNECTION_GUARD_FAILED CATALOG_QUERIES_SKIPPED'?\r?\n\\quit 3\r?\n\\endif/.test(queryText.slice(connectionStop, firstCatalogRead)), 'connection failure branch must quit immediately');
+  requireCondition(connectionStart >= 0 && connectionStop > connectionStart && connectionRaise > connectionStop, 'connection guard must report and stop on failure');
+  requireCondition(firstCatalogRead > connectionRaise, 'catalog inspection must follow the connection guard');
+  requireCondition(/F2_STOP CONNECTION_GUARD_FAILED CATALOG_QUERIES_SKIPPED'?\r?\nDO \$f2_stop\$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP CONNECTION_GUARD_FAILED'; END \$f2_stop\$;\r?\n\\endif/.test(queryText.slice(connectionStop, firstCatalogRead)), 'connection failure branch must raise immediately');
 
   const normalizeSql = (value) => value.replace(/\s+/g, ' ').trim();
   const publicSelectStart = queryText.indexOf('SELECT\n  target_project_id_matches AS', connectionStart);
@@ -148,6 +158,7 @@ export function assertWave13B2F2DiagnosticContract(queryText) {
   requireCondition(!/PGPASSWORD|PGPASSFILE|PGSSLROOTCERT|PGHOST|postgres(?:ql)?:\/\//i.test(connectionDiagnostics), 'connection diagnostics must not expose credentials or connection strings');
 
   for (const gate of WAVE13B2_F2_OUTPUT_GATES) {
+    const readMarkerPosition = queryText.indexOf(gate.readMarker);
     const aliasPosition = queryText.indexOf('AS ' + gate.flag);
     const checkPosition = queryText.indexOf(gate.checkLine);
     const countPosition = queryText.indexOf('count(*) AS ' + gate.countVariable);
@@ -157,14 +168,15 @@ export function assertWave13B2F2DiagnosticContract(queryText) {
     const allowedPosition = queryText.indexOf(allowedExpression, countPosition);
     const failPosition = queryText.indexOf('F2_FAIL ' + gate.failCode);
     const stopPosition = queryText.indexOf('F2_STOP CATALOG_QUERIES_SKIPPED', failPosition);
-    const quitPosition = queryText.indexOf('\\quit 3', failPosition);
-    const nextReadPosition = queryText.indexOf(gate.nextSqlMarker, failPosition);
-    requireCondition(aliasPosition >= 0 && countPosition >= 0 && allowedPosition > countPosition, 'missing output-gate count expression: ' + gate.id);
+    const raisePosition = queryText.indexOf("DO $f2_stop$ BEGIN RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'F2_STOP " + gate.failCode + "'; END $f2_stop$;", failPosition);
+    const nextReadPosition = queryText.indexOf(gate.nextCatalogReadMarker, failPosition);
+    requireCondition(readMarkerPosition >= 0 && readMarkerPosition < countPosition, 'missing catalog read marker for output gate: ' + gate.id);
+    requireCondition(aliasPosition >= 0 && countPosition > readMarkerPosition && allowedPosition > countPosition, 'missing output-gate count expression: ' + gate.id);
     requireCondition(checkPosition > allowedPosition, 'missing or reordered output-gate count diagnostic: ' + gate.id);
-    requireCondition(failPosition > checkPosition && stopPosition > failPosition && quitPosition > stopPosition, 'missing output-gate stop: ' + gate.failCode);
+    requireCondition(failPosition > checkPosition && stopPosition > failPosition && raisePosition > stopPosition, 'missing output-gate stop: ' + gate.failCode);
     const outputFailureBlock = queryText.slice(failPosition, nextReadPosition);
-    requireCondition(new RegExp('F2_FAIL ' + gate.failCode + '\\r?\\n\\\\echo F2_STOP CATALOG_QUERIES_SKIPPED\\r?\\n\\\\quit 3\\r?\\n\\\\endif').test(outputFailureBlock), 'output failure branch must quit immediately: ' + gate.id);
-    requireCondition(nextReadPosition > quitPosition, 'output-gate failure must stop before the next catalog query: ' + gate.id);
+    requireCondition(new RegExp('F2_FAIL ' + gate.failCode + '\\r?\\n\\\\echo F2_STOP CATALOG_QUERIES_SKIPPED\\r?\\nDO \\$f2_stop\\$ BEGIN RAISE EXCEPTION USING ERRCODE = \'P0001\', MESSAGE = \'F2_STOP ' + gate.failCode + '\'; END \\$f2_stop\\$;\\r?\\n\\\\endif').test(outputFailureBlock), 'output failure branch must raise immediately: ' + gate.id);
+    requireCondition(nextReadPosition > raisePosition, 'output-gate failure must stop before the next catalog read: ' + gate.id);
   }
 
   return true;
