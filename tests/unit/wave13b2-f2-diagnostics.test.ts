@@ -40,6 +40,9 @@ describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
 
     const first = WAVE13B2_F2_CONNECTION_CHECKS[0];
     const last = WAVE13B2_F2_CONNECTION_CHECKS.at(-1);
+    if (first === undefined || last === undefined) {
+      throw new Error("connection checks must not be empty");
+    }
     expect(getWave13B2F2ConnectionFailureCodes({
       ...passing,
       [last.flag]: false,
