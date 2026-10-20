@@ -10,6 +10,7 @@ const packetPath = resolve(
 );
 const workflowPath = resolve(repoRoot, '.github/workflows/gate-a.yml');
 const reviewScriptPath = resolve(repoRoot, 'scripts/review-wave13b2-f2-evidence.mjs');
+const ownerReviewWriterPath = resolve(repoRoot, 'scripts/write-wave13b2-f2-owner-review.ps1');
 const packet = readFileSync(packetPath, 'utf8');
 const workflow = readFileSync(workflowPath, 'utf8');
 
@@ -48,6 +49,7 @@ if (missingPacketContracts.length > 0) {
 const workflowMustNotContain = [
   'run-wave13b2-f2-query.ps1',
   'review-wave13b2-f2-evidence.mjs',
+  'write-wave13b2-f2-owner-review.ps1',
   'PGPASSFILE',
   'PGSSLROOTCERT',
   'neondb_owner',
@@ -71,8 +73,12 @@ if (!workflow.includes('node scripts/verify-wave13b2-query-integrity.mjs')) {
 if (!existsSync(reviewScriptPath)) {
   throw new Error('The documented offline owner-review utility must exist in the reviewed source tree.');
 }
+if (!existsSync(ownerReviewWriterPath)) {
+  throw new Error('The protected owner-review receipt writer must exist in the reviewed source tree.');
+}
 
 const reviewScript = readFileSync(reviewScriptPath, 'utf8');
+const ownerReviewWriter = readFileSync(ownerReviewWriterPath, 'utf8');
 const requiredReviewScriptTokens = [
   '--evidence',
   '--audit',
@@ -82,7 +88,6 @@ const requiredReviewScriptTokens = [
   'MATCH',
   'MISMATCH',
   'REVIEW WAVE13B2 F2 ',
-  'New-Wave13B2F2OwnerOnlyBoundFile',
   'wave13b2-f2-owner-review-',
   'schemaVersion',
   'recordType',
@@ -102,6 +107,7 @@ const requiredReviewScriptTokens = [
   'mismatchedFields',
   'reviewedAtUtc',
   'confirmationPhrase',
+  'psqlExitCode',
 ];
 const missingReviewScriptTokens = requiredReviewScriptTokens.filter(
   (token) => !reviewScript.includes(token),
@@ -113,18 +119,50 @@ if (missingReviewScriptTokens.length > 0) {
   );
 }
 
-const forbiddenReviewScriptTokens = [
-  'psql',
-  'neon',
-  'neondb_owner',
-  'pgpassfile',
-  'privatekey',
-  'https://',
-  'fetch(',
+const requiredOwnerReviewWriterTokens = [
+  'Import-Module',
+  'New-Wave13B2F2OwnerOnlyBoundFile',
+  '-Path $Path',
+  '-Bytes $contentBytes',
+  '-SourceSha $SourceSha',
+  '-QuerySha256 $QuerySha256',
+  '$result.Verified',
+  '$result.FailureCodes.Count',
 ];
-const unsafeReviewScriptTokens = forbiddenReviewScriptTokens.filter((token) =>
-  reviewScript.toLowerCase().includes(token),
+const missingOwnerReviewWriterTokens = requiredOwnerReviewWriterTokens.filter(
+  (token) => !ownerReviewWriter.includes(token),
 );
+
+if (missingOwnerReviewWriterTokens.length > 0) {
+  throw new Error(
+    `The owner-review receipt writer must use the protected, source/query-bound create-only helper: ${missingOwnerReviewWriterTokens.join(', ')}`,
+  );
+}
+
+const executionCalls = [...reviewScript.matchAll(/\bexecFileSync\s*\(/g)];
+const directExecutionCalls = [...reviewScript.matchAll(/\bexecFileSync\s*\(\s*(["'])(.*?)\1/g)];
+if (
+  executionCalls.length !== 2 ||
+  directExecutionCalls.length !== executionCalls.length ||
+  directExecutionCalls.some((match) => match[2] !== 'pwsh')
+) {
+  throw new Error('The offline owner-review utility may invoke only its local PowerShell ACL and receipt helpers.');
+}
+
+const forbiddenReviewScriptPatterns = [
+  /\b(?:spawn|spawnSync|exec|execFile)\s*\(/i,
+  /\b(?:execFileSync|spawnSync|spawn|execFile|exec)\s*\(\s*(["'`])psql(?:\.exe)?\1/i,
+  /\b(?:PGHOST|PGDATABASE|PGUSER|PGPASSFILE|PGSSLROOTCERT)\b/i,
+  /\.neon\.tech\b/i,
+  /\bneondb_owner\b/i,
+  /\bfetch\s*\(/i,
+  /from\s+["']node:(?:http|https|net|tls)["']/i,
+  /\bhttps?:\/\//i,
+  /privatekey/i,
+];
+const unsafeReviewScriptTokens = forbiddenReviewScriptPatterns
+  .filter((pattern) => pattern.test(reviewScript))
+  .map((pattern) => pattern.source);
 
 if (unsafeReviewScriptTokens.length > 0) {
   throw new Error(
