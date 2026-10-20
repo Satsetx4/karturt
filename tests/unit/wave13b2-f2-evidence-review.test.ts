@@ -36,8 +36,6 @@ type ReviewResult = {
   [key: string]: unknown;
 };
 
-type MutableReviewInput = ReviewInput;
-
 type ReviewerModule = {
   evaluateWave13B2F2Evidence: (input: ReviewInput) => ReviewResult;
   parseWave13B2F2Evidence: (text: string) => {
@@ -310,24 +308,6 @@ function makeFixture(options: {
     attemptMarkerFileName,
     expectedStateFileName,
   };
-}
-
-function replaceAuditField(fixture: MutableReviewInput, field: string, value: string | null): void {
-  const auditLines = fixture.auditBytes.toString("utf8").split(/\r?\n/);
-  const index = auditLines.findIndex((line) => line.startsWith(`${field}=`));
-  if (value === null) {
-    if (index >= 0) auditLines.splice(index, 1);
-  } else if (index >= 0) {
-    auditLines[index] = `${field}=${value}`;
-  } else {
-    auditLines.unshift(`${field}=${value}`);
-  }
-  fixture.auditBytes = Buffer.from(`${auditLines.filter((line, lineIndex) => line || lineIndex < auditLines.length - 1).join("\n")}\n`, "utf8");
-  const markerText = fixture.attemptMarkerBytes.toString("utf8").replace(
-    /^auditSha256=.*$/m,
-    `auditSha256=${sha256(fixture.auditBytes)}`,
-  );
-  fixture.attemptMarkerBytes = Buffer.from(markerText, "utf8");
 }
 
 describe("Wave 13B.2 F2 owner evidence review", () => {
