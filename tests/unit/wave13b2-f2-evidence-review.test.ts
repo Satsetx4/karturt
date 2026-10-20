@@ -244,9 +244,12 @@ function makeFixture(options: {
     sourceSha: SOURCE_SHA,
     queryPacketSha256: QUERY_SHA256,
     outputFormat: "csv",
+    psqlStarted: "true",
     psqlExitCode: "0",
     status: "COMPLETED",
     failureCodes: "",
+    expectedStateSha256: sha256(expectedStateBytes),
+    expectedStateBytes: String(expectedStateBytes.length),
     evidenceVerified: "true",
     evidenceFile: evidenceFileName,
     evidenceBytes: String(evidenceBytes.length),
@@ -262,12 +265,13 @@ function makeFixture(options: {
     "",
   ].join("\n");
   const auditBytes = Buffer.from(auditText, "utf8");
-  const approvalDigest = "a".repeat(64);
   const attemptMarkerText = [
     "status=STARTED",
     `sourceSha=${SOURCE_SHA}`,
     `queryPacketSha256=${QUERY_SHA256}`,
-    `signedApprovalDigest=${approvalDigest}`,
+    `expectedStateFile=${expectedStateFileName}`,
+    `expectedStateBytes=${expectedStateBytes.length}`,
+    `expectedStateSha256=${sha256(expectedStateBytes)}`,
     "status=COMPLETED",
     "psqlExitCode=0",
     "failureCodes=",
@@ -386,5 +390,28 @@ describe("Wave 13B.2 F2 owner evidence review", () => {
 
     expect(reviewer.evaluateWave13B2F2Evidence(duplicateAudit).failureCodes).toContain("F2_AUDIT_DUPLICATE_FIELD");
     expect(reviewer.evaluateWave13B2F2Evidence(wrongName).failureCodes).toContain("F2_EVIDENCE_FILENAME_MISMATCH");
+  });
+
+  it("does not accept completed evidence when psql did not start", async () => {
+    const reviewer = await reviewerModulePromise;
+    const result = reviewer.evaluateWave13B2F2Evidence(makeFixture({
+      auditOverrides: { psqlStarted: "false" },
+    }));
+
+    expect(result.status).toBe("FAILED");
+    expect(result.failureCodes).toContain("F2_PSQL_NOT_STARTED");
+  });
+
+  it("rejects expected-state bytes that differ from the signed-preflight pin recorded in audit and marker", async () => {
+    const reviewer = await reviewerModulePromise;
+    const fixture = makeFixture();
+    const majorValueIndex =
+      fixture.expectedStateBytes.indexOf(Buffer.from('"postgresMajor":18')) +
+      Buffer.byteLength('"postgresMajor":1');
+    fixture.expectedStateBytes[majorValueIndex] ^= 1;
+    const result = reviewer.evaluateWave13B2F2Evidence(fixture);
+
+    expect(result.status).toBe("FAILED");
+    expect(result.failureCodes).toContain("F2_EXPECTED_STATE_SHA256_MISMATCH");
   });
 });

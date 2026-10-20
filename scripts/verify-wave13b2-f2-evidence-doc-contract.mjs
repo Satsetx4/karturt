@@ -150,7 +150,7 @@ if (
 }
 
 const forbiddenReviewScriptPatterns = [
-  /\b(?:spawn|spawnSync|exec|execFile)\s*\(/i,
+  /(?:^|[^\w$.])(?:spawn|spawnSync|exec|execFile)\s*\(/im,
   /\b(?:execFileSync|spawnSync|spawn|execFile|exec)\s*\(\s*(["'`])psql(?:\.exe)?\1/i,
   /\b(?:PGHOST|PGDATABASE|PGUSER|PGPASSFILE|PGSSLROOTCERT)\b/i,
   /\.neon\.tech\b/i,

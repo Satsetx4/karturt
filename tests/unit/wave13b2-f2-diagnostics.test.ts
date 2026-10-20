@@ -195,7 +195,10 @@ describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
     expect(runnerModuleText).toMatch(/ExitCode\s+-eq\s+0|ExitCode\s+-ne\s+0/);
     expect(runnerModuleText).toMatch(/doneMatches|doneCount|exactDone/);
     expect(runnerModuleText).toMatch(/failureCodes\.Count\s+-eq\s+0/);
-    expect(runnerModuleText).toMatch(/stopCount\s+-eq\s+0/);
+    expect(runnerModuleText).toMatch(
+      /markerFailuresPresent\s*=\s*\$allFailMarkers\.Count\s+-gt\s+0\s+-or\s+\$stopCount\s+-gt\s+0/,
+    );
+    expect(runnerModuleText).toMatch(/-not\s+\$markerFailuresPresent/);
     expect(runnerModuleText).toMatch(/EvidenceVerified\s+-and|\$EvidenceVerified/);
     expect(runnerText).toContain("wave13b2-f2-catalog-evidence-");
     expect(runnerText).toContain("$applicationSourceSha");
