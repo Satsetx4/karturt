@@ -744,14 +744,8 @@ function Invoke-Wave13B2F2Psql(
   }
   $evidenceWriter = $created.Stream
 
-  try {
-    $evidenceReadLock = [IO.File]::Open([IO.Path]::GetFullPath($EvidencePath), [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
-  } catch {
-    $failureCodes.Add('F2_EVIDENCE_VERIFY_FAILED')
-  }
   if ($failureCodes.Count -gt 0) {
     $evidenceWriter.Dispose()
-    if ($null -ne $evidenceReadLock) { $evidenceReadLock.Dispose() }
     return [pscustomobject]@{
       ExitCode = -1; PsqlStarted = $false; ProcessId = -1; CaptureComplete = $false
       ControlMarkers = [string[]]@(); StderrMarkers = [string[]]@(); DiagnosticLines = [string[]]@()
@@ -819,7 +813,6 @@ function Invoke-Wave13B2F2Psql(
   } finally {
     if ($null -ne $evidenceWriter) {
       try { $evidenceWriter.Flush($true) } catch { }
-      try { $evidenceWriter.Dispose() } catch { }
     }
     try { if ($processStarted -and $process.HasExited) { $exitCode = [int]$process.ExitCode } } catch { }
   }
@@ -842,26 +835,36 @@ function Invoke-Wave13B2F2Psql(
     finally { $stdoutHash.Dispose() }
   }
 
-  if ($null -ne $evidenceReadLock) {
-    $evidence = Get-Wave13B2F2OwnerEvidenceVerification `
-      -Path $EvidencePath `
-      -AclCheckerPath $AclCheckerPath `
-      -ExpectedSourceSha $ExpectedSourceSha `
-      -ExpectedQuerySha256 $ExpectedQuerySha256 `
-      -ExpectedLength $stdoutBytes `
-      -ExpectedSha256 $stdoutSha256 `
-      -ReadLock $evidenceReadLock
-    $evidenceReadLock = $evidence.ReadLock
-    foreach ($code in $evidence.FailureCodes) { $failureCodes.Add($code) }
-    if (-not $captureComplete) { $failureCodes.Add('F2_EVIDENCE_CAPTURE_INCOMPLETE') }
-    $evidenceCaptureFailed = @($failureCodes | Where-Object { $_ -match '^F2_EVIDENCE_' -or $_ -eq 'F2_PSQL_CAPTURE_FAILED' -or $_ -eq 'F2_PSQL_INTERRUPTED' -or $_ -eq 'F2_PSQL_TIMEOUT' -or $_ -eq 'F2_PSQL_STDERR_MARKER_SCAN_INCOMPLETE' }).Count -gt 0
-    $evidenceVerified = $evidence.Verified -and $captureComplete -and -not $evidenceCaptureFailed
-    $stdoutBytes = $evidence.ByteLength
-    if ($evidence.Verified) { $stdoutSha256 = $evidence.Sha256 }
-    $parsed = Get-Wave13B2F2CsvControlMarkers -Stream $evidenceReadLock
-    $controlMarkers = $parsed.ControlMarkers
-    foreach ($code in $parsed.FailureCodes) { $failureCodes.Add($code) }
-    if ($parsed.FailureCodes.Count -gt 0) { $evidenceVerified = $false }
+  if ($null -ne $evidenceWriter) {
+    $evidenceReadLock = $evidenceWriter
+    try {
+      $evidence = Get-Wave13B2F2OwnerEvidenceVerification `
+        -Path $EvidencePath `
+        -AclCheckerPath $AclCheckerPath `
+        -ExpectedSourceSha $ExpectedSourceSha `
+        -ExpectedQuerySha256 $ExpectedQuerySha256 `
+        -ExpectedLength $stdoutBytes `
+        -ExpectedSha256 $stdoutSha256 `
+        -ReadLock $evidenceReadLock
+      $evidenceReadLock = $evidence.ReadLock
+      foreach ($code in $evidence.FailureCodes) { $failureCodes.Add($code) }
+      if (-not $captureComplete) { $failureCodes.Add('F2_EVIDENCE_CAPTURE_INCOMPLETE') }
+      $evidenceCaptureFailed = @($failureCodes | Where-Object { $_ -match '^F2_EVIDENCE_' -or $_ -eq 'F2_PSQL_CAPTURE_FAILED' -or $_ -eq 'F2_PSQL_INTERRUPTED' -or $_ -eq 'F2_PSQL_TIMEOUT' -or $_ -eq 'F2_PSQL_STDERR_MARKER_SCAN_INCOMPLETE' }).Count -gt 0
+      $evidenceVerified = $evidence.Verified -and $captureComplete -and -not $evidenceCaptureFailed
+      $stdoutBytes = $evidence.ByteLength
+      if ($evidence.Verified) { $stdoutSha256 = $evidence.Sha256 }
+      $parsed = Get-Wave13B2F2CsvControlMarkers -Stream $evidenceReadLock
+      $controlMarkers = $parsed.ControlMarkers
+      foreach ($code in $parsed.FailureCodes) { $failureCodes.Add($code) }
+      if ($parsed.FailureCodes.Count -gt 0) { $evidenceVerified = $false }
+    } catch {
+      $failureCodes.Add('F2_EVIDENCE_VERIFY_FAILED')
+      $evidenceVerified = $false
+    } finally {
+      try { $evidenceWriter.Dispose() } catch { }
+      $evidenceWriter = $null
+      $evidenceReadLock = $null
+    }
   } else {
     $failureCodes.Add('F2_EVIDENCE_MISSING')
   }
