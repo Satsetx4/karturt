@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WAVE13B2_LOCAL_PREFLIGHT_EXPECTED as PREFLIGHT_EXPECTED, assertSha256Matches } from './preflight-wave13b2-local.mjs';
+import { assertWave13B2F2DiagnosticContract } from './wave13b2-f2-diagnostics.mjs';
 
 export const WAVE13B2_QUERY_PACKET_PATH = 'docs/codex/wave13b2-read-only-catalog-preflight.sql';
 const DEFAULT_REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -36,6 +37,7 @@ export function assertWave13B2QueryIntegrity(repoRoot = DEFAULT_REPO_ROOT) {
   assertWave13B2QueryDigest(gitBlob, expected);
   assertWave13B2QueryDigest(workingTreeBytes, expected);
   requireCondition(gitBlob.equals(workingTreeBytes), 'query checkout bytes differ from the raw Git blob');
+  assertWave13B2F2DiagnosticContract(workingTreeBytes.toString('utf8'));
   requireCondition(!workingTreeBytes.includes(0x0d), 'query checkout contains CR bytes; expected LF-only bytes');
 
   const attributes = execFileSync('git', ['check-attr', 'text', 'eol', '--', WAVE13B2_QUERY_PACKET_PATH], {
@@ -53,7 +55,9 @@ export function assertWave13B2QueryIntegrity(repoRoot = DEFAULT_REPO_ROOT) {
   const packet = readFileSync(join(repoRoot, 'docs/codex/Wave-13B2-Free-Only-Staging-Operator-Packet-2026-10-15.md'), 'utf8');
   const tick = String.fromCharCode(96);
   requireCondition(packet.includes('SHA-256 ' + tick + expected + tick), 'operator packet prose digest pin disagrees');
-  requireCondition(packet.includes('$queryPacketSha256 = ' + String.fromCharCode(39) + expected + String.fromCharCode(39)), 'operator command digest pin disagrees');
+  const runner = readFileSync(join(repoRoot, 'scripts/run-wave13b2-f2-query.ps1'), 'utf8');
+  requireCondition(runner.includes('$queryPacketSha256 = ' + String.fromCharCode(39) + expected + String.fromCharCode(39)), 'query runner digest pin disagrees');
+  requireCondition(packet.includes("scripts/run-wave13b2-f2-query.ps1')"), 'operator packet must invoke the source-bound query runner');
   const approvalVerifier = readFileSync(join(repoRoot, 'scripts/verify-wave13b2-query-approval.mjs'), 'utf8');
   requireCondition(approvalVerifier.includes('queryPacketSha256: PREFLIGHT_EXPECTED.queryPacketSha256'), 'approval verifier must share the audited preflight digest pin');
 

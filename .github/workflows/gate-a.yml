@@ -10,6 +10,7 @@ on:
       - "verify/krt-07-combined-2026-10-11"
       - "verify/karturt-v1-rc-quality-wave13b1t-20261015"
       - "codex/karturt-v1-staging-activation-20261015"
+      - "codex/karturt-wave13b2-f2-fail-closed-20261017"
       - "feat/phase-4-resident-card"
       - "fix/phase-4-1-resident-card-cleanup"
       - "feat/phase-4-5-audit-core-readiness"
@@ -96,7 +97,7 @@ jobs:
         run: npm run build
 
   wave13b2-query-integrity-windows:
-    if: github.ref == 'refs/heads/codex/karturt-v1-staging-activation-20261015' || github.head_ref == 'codex/karturt-v1-staging-activation-20261015'
+    if: github.ref == 'refs/heads/codex/karturt-v1-staging-activation-20261015' || github.head_ref == 'codex/karturt-v1-staging-activation-20261015' || github.ref == 'refs/heads/codex/karturt-wave13b2-f2-fail-closed-20261017' || github.head_ref == 'codex/karturt-wave13b2-f2-fail-closed-20261017'
     name: Wave 13B.2 query hash and Windows LF checkout
     runs-on: windows-latest
     timeout-minutes: 5
@@ -111,6 +112,9 @@ jobs:
         run: |
           if ((git config --get core.autocrlf) -ne 'true') { throw 'Windows autocrlf is not enabled for this checkout.' }
           node scripts/verify-wave13b2-query-integrity.mjs
+      - name: Verify F2 owner-evidence documentation and offline CI boundary
+        shell: pwsh
+        run: node scripts/verify-wave13b2-f2-evidence-doc-contract.mjs
   launch-safety-postgres-concurrency:
     if: github.ref == 'refs/heads/verify/krt-07-combined-2026-10-11' || github.head_ref == 'verify/krt-07-combined-2026-10-11' || github.ref == 'refs/heads/feat/launch-safety-single-rt' || github.head_ref == 'feat/launch-safety-single-rt' || github.ref == 'refs/heads/fix/launch-safety-security-closure' || github.head_ref == 'fix/launch-safety-security-closure' || github.ref == 'refs/heads/feat/delivery-readiness-single-rt' || github.head_ref == 'feat/delivery-readiness-single-rt' || github.ref == 'refs/heads/fix/v1-post-demo-billing-20261012' || github.head_ref == 'fix/v1-post-demo-billing-20261012' || github.ref == 'refs/heads/codex/karturt-v1-wave2-candidate-20261012' || github.head_ref == 'codex/karturt-v1-wave2-candidate-20261012' || github.ref == 'refs/heads/verify/karturt-v1-rc-wave13b1s-20261015' || github.head_ref == 'verify/karturt-v1-rc-wave13b1s-20261015' || github.ref == 'refs/heads/verify/karturt-v1-rc-quality-wave13b1t-20261015' || github.head_ref == 'verify/karturt-v1-rc-quality-wave13b1t-20261015' || github.ref == 'refs/heads/codex/karturt-v1-staging-activation-20261015' || github.head_ref == 'codex/karturt-v1-staging-activation-20261015'
     name: Launch Safety independent PostgreSQL concurrency

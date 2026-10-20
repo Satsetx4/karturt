@@ -1,6 +1,6 @@
 # Wave 13B.2 Free-only staging operator packet
 
-Status: source/operator preparation only. F0 root-lineage review is PASS within its stated scope. Catalog state remains UNKNOWN. No database query, credential handling, role creation, migration, runtime enablement, or deployment has been performed by this lane. This packet does not authorize a connection by itself.
+Status: F0 root-lineage review is PASS within its stated scope. Catalog state remains UNKNOWN. The owner reports that the original F2 query (SHA-256 `d7abf6b7592c53f9d480823d42c6d9ebbd9550fd4f5c276095a7e1892842c6fb`) was attempted after a signed approval and `LOCAL_OFFLINE_PREFLIGHT_PASS`; PostgreSQL 18.6 returned `ERROR: division by zero` at SQL line 69 and the wrapper reported `F2 QUERY FAILED - DO NOT RERUN`. The failed predicate and catalog contents are unknown because the original guard stopped before returning diagnostics or catalog results. This Codex lane has not inspected the owner-local approval, key, credentials, or attempt marker, and has not connected to a database or run SQL. This packet does not authorize another attempt.
 
 ## Exact staging target
 
@@ -16,7 +16,7 @@ Status: source/operator preparation only. F0 root-lineage review is PASS within 
 | Database | ID `708081`, name `neondb` | Provider readback |
 | Read-only inspection role | `neondb_owner` | Existing owner role; only for approved catalog inspection |
 | Passwordless access metadata | `passwordless_access=true` | Raw observation; Neon API spec says feature is not yet implemented, so it is not relied upon |
-| Catalog | UNKNOWN | No SQL has been run |
+| Catalog | UNKNOWN | Owner-reported F2 failure at line 69; no catalog inventory returned |
 
 The operator must use the exact direct hostname, database, role, a locally stored `PGPASSFILE`, `PGSSLROOTCERT`, `PGSSLMODE=verify-full`, and `PGCHANNELBINDING=require`. The Neon OpenAPI `EndpointCreateRequest`/`EndpointUpdateRequest` describes `passwordless_access` as not yet implemented, so the raw `true` is recorded as `NOT_YET_IMPLEMENTED_UNRELIED_UPON`. The separate [browser passwordless flow](https://neon.com/docs/connect/passwordless-connect) uses `pg.neon.tech`; do not use it, a pooler, Neon MCP `run_sql`, or another SQL proxy as an operator substitute.
 
@@ -32,33 +32,123 @@ This F0 result does not establish an empty catalog. Keep `stagingIsolationVerifi
 
 ## Source and immutable migration binding
 
-The operator-preparation branch descends from reviewed RC `0b1e3f525039496200b2bb5f698d312ded5cb3e3`, whose prior Gate A and disposable PG18 rehearsal passed. This branch changes the target guard and operator verifier, so those earlier checks do not attest the new source SHA. The final owner approval must bind the exact activation-branch source commit after Coordinator review and exact-SHA CI results. Do not use the old RC SHA as a substitute if source files differ. The protected `main` SHA remains outside this work; no merge is authorized.
+The candidate branch descends from activation commit `8abfd871cef2b95aae09079f6fb8e9fea85f5d03`. It changes the target guard and operator verifier, so earlier Gate A or rehearsal results do not attest the revised source SHA. The final owner approval must bind the exact reviewed candidate commit after review and exact-SHA CI results. Do not use the old RC SHA or activation SHA as a substitute. The protected `main` SHA remains outside this work; no merge is authorized.
 
-The migration snapshot remains the 14 existing migration SQL files plus `drizzle/meta/_journal.json`, fingerprint `e4a95a0a841872752cbcfa9b46107a99fdb469994280e25fc9f479a54b0312b4`. The original 15 Git blobs must remain byte-identical. The read-only catalog SQL packet is `docs/codex/wave13b2-read-only-catalog-preflight.sql`, SHA-256 `d7abf6b7592c53f9d480823d42c6d9ebbd9550fd4f5c276095a7e1892842c6fb`.
+The migration snapshot remains the 14 existing migration SQL files plus `drizzle/meta/_journal.json`, fingerprint `e4a95a0a841872752cbcfa9b46107a99fdb469994280e25fc9f479a54b0312b4`. The original 15 Git blobs must remain byte-identical. The revised read-only catalog SQL packet is `docs/codex/wave13b2-read-only-catalog-preflight.sql`, SHA-256 `bd4a9c725268dc80e3eab10d28da585da3399e6f75db676c29e9e014c5127c49`.
 
 ## Owner-local Windows setup
 
-The last workstation check found no `psql` command. Before any future SQL, install the official PostgreSQL 18 command-line client from [PostgreSQL's Windows download page](https://www.postgresql.org/download/windows/) and confirm `psql --version` reports 18.x. Do not use a different major version, Neon MCP, or an embedded client.
+Before any future SQL, use the official PostgreSQL 18 command-line client from [PostgreSQL's Windows download page](https://www.postgresql.org/download/windows/) and confirm `psql --version` reports 18.x. Do not use a different major version, Neon MCP, or an embedded client.
 
-Create an owner-local directory outside the repository. Use only the current Windows user and SYSTEM, with inherited permissions disabled on the directory:
+The prior owner-local approval and `wave13b2-f2-query-attempt.local.txt` are evidence for the failed attempt. Preserve both byte-for-byte in their current location. Do not reuse the approval, clear or replace the marker, or move either into Git. The standard owner directory is outside the repository. If it already exists, leave it intact and verify its ACL; do not recreate or overwrite it. A newly named source-bound attempt directory will hold any future approval artifacts.
+
+For a first-time setup only, create the standard owner-local directory outside the repository. Use only the current Windows user and SYSTEM, with inherited permissions disabled on the directory:
 
 ```powershell
+$repoRoot = 'D:\!AGY\karturt-f2-fail-closed-20261017'
 $secretDir = Join-Path $env:LOCALAPPDATA 'KarturtStageOperator'
 if (Test-Path -LiteralPath $secretDir) { throw 'Directory already exists; inspect and secure it manually without overwriting its ACL.' }
 New-Item -ItemType Directory -Path $secretDir | Out-Null
 $operatorIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 icacls.exe $secretDir /inheritance:r /grant:r "$($operatorIdentity):(OI)(CI)(F)" 'SYSTEM:(OI)(CI)(F)'
+if ($LASTEXITCODE -ne 0) { throw 'Owner directory ACL setup failed; do not place credentials in it.' }
+$aclResult = & (Join-Path $repoRoot 'scripts/check-wave13b2-secret-acl.ps1') -Path $secretDir -RequireProtected
+if ($aclResult -ne 'PASS') { throw 'Owner directory ACL check failed; do not place credentials in it.' }
+```
+
+If the standard owner directory already exists, verify it before using any local credential file:
+
+```powershell
+$repoRoot = 'D:\!AGY\karturt-f2-fail-closed-20261017'
+$secretRoot = Join-Path $env:LOCALAPPDATA 'KarturtStageOperator'
+$aclResult = & (Join-Path $repoRoot 'scripts/check-wave13b2-secret-acl.ps1') -Path $secretRoot -RequireProtected
+if ($aclResult -ne 'PASS') { throw 'Owner directory ACL check failed; stop without reading or copying credentials.' }
 ```
 
 Download the curl/Mozilla CA bundle from [curl's CA extract page](https://curl.se/caextract.html) into `cacert.pem`. Record its SHA-256 and retrieval time in the owner-local target manifest. The preflight hashes the actual bytes and requires the manifest hash to match.
 
-Privately set or rotate the Neon owner password through the provider, then type it directly into `pgpass.conf` in the owner-local directory. Keep exactly one entry for the exact direct host, port 5432, database `neondb`, and role `neondb_owner`. Never place the password in a command, environment variable, source file, transcript, screenshot, or chat. Do not sync the directory to cloud storage. PostgreSQL's [password-file reference](https://www.postgresql.org/docs/current/libpq-pgpass.html) documents escaping of special characters. The helper checks the directory and each local file for reparse points and requires current-user/SYSTEM-only ACLs; the directory ACL must be protected from inheritance.
+Use the existing owner password stored in `pgpass.conf`; this renewal does not require a password change. Keep exactly one entry for the exact direct host, port 5432, database `neondb`, and role `neondb_owner`. Never place the password in a command, environment variable, source file, transcript, screenshot, or chat. Do not sync the directory to cloud storage. If the existing password is unavailable or rejected, stop and handle credential recovery through a separate owner-controlled process. PostgreSQL's [password-file reference](https://www.postgresql.org/docs/current/libpq-pgpass.html) documents escaping of special characters. The helper checks the directory and each local file for reparse points and requires current-user/SYSTEM-only ACLs; the directory ACL must be protected from inheritance.
 
-Copy the two JSON templates from this repository to the corresponding `.local.json` files in the owner-only directory. Complete them only with the final reviewed source SHA, actual CA digest/time, exact target values, and the approved key record. The expected-state template intentionally leaves every catalog observation null. Do not create or hold an owner private key in this repository or agent environment.
+After the final candidate source SHA is known, create a new directory named `f2-attempt-<final-source-SHA>` under the standard owner directory. The verifier accepts only this source-bound subdirectory. Protect it with inherited permissions disabled and current-user/SYSTEM-only full control. Copy the existing public signing key and `pgpass.conf` into it locally; refresh the CA bundle into this new directory and record its digest/time. Do not change the originals or copy the prior approval. Copy the current repository's target-manifest and expected-state templates into the new directory using their required `.local.json` names. Refresh target/plan readback and TLS evidence, bind the new source SHA and query digest, and leave every catalog observation null. Create a new detached approval using the existing owner-controlled signing key and its established trust record. Keep the old signed approval and old attempt marker unchanged. Do not create or hold an owner private key in this repository or agent environment.
+
+Example PowerShell setup for that new attempt directory (run only after the final source SHA is known):
+
+```powershell
+$repoRoot = 'D:\!AGY\karturt-f2-fail-closed-20261017'
+$secretRoot = Join-Path $env:LOCALAPPDATA 'KarturtStageOperator'
+$aclResult = & (Join-Path $repoRoot 'scripts/check-wave13b2-secret-acl.ps1') -Path $secretRoot -RequireProtected
+if ($aclResult -ne 'PASS') { throw 'Owner directory ACL check failed; do not create or copy attempt files.' }
+$applicationSourceSha = '<40-character reviewed candidate source SHA>'
+$secretDir = Join-Path $secretRoot ('f2-attempt-' + $applicationSourceSha)
+if (Test-Path -LiteralPath $secretDir) { throw 'Attempt directory already exists; preserve and inspect it without overwriting.' }
+New-Item -ItemType Directory -Path $secretDir | Out-Null
+$operatorIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+icacls.exe $secretDir /inheritance:r /grant:r "$($operatorIdentity):(OI)(CI)(F)" 'SYSTEM:(OI)(CI)(F)'
+if ($LASTEXITCODE -ne 0) { throw 'Attempt directory ACL setup failed; do not copy local files.' }
+$aclResult = & (Join-Path $repoRoot 'scripts/check-wave13b2-secret-acl.ps1') -Path $secretDir -RequireProtected
+if ($aclResult -ne 'PASS') { throw 'Attempt directory ACL check failed; do not copy local files.' }
+$sourcePgpass = Join-Path $secretRoot 'pgpass.conf'
+if (-not (Test-Path -LiteralPath $sourcePgpass -PathType Leaf)) { throw 'Existing owner pgpass.conf is missing; stop without copying credentials.' }
+$aclResult = & (Join-Path $repoRoot 'scripts/check-wave13b2-secret-acl.ps1') -Path $sourcePgpass
+if ($aclResult -ne 'PASS') { throw 'Existing owner pgpass.conf ACL check failed; stop without reading or copying credentials.' }
+Copy-Item -LiteralPath (Join-Path $secretRoot 'wave13b2-owner-signing-public.pem') -Destination $secretDir
+Copy-Item -LiteralPath $sourcePgpass -Destination $secretDir
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/codex/wave13b2-staging-target-manifest.template.json') -Destination (Join-Path $secretDir 'wave13b2-staging-target-manifest.local.json')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/codex/wave13b2-staging-expected-state.template.json') -Destination (Join-Path $secretDir 'wave13b2-staging-expected-state.local.json')
+```
+
+Download the refreshed CA bundle directly into `$secretDir` as `cacert.pem`. Do not copy or overwrite `wave13b2-read-only-query-approval.local.json`; the new detached approval is created separately after the new manifest and expected-state hashes are final. The `--secret-dir` verifier path is bound to `f2-attempt-<application-source-SHA>` so it cannot silently fall back to the original directory.
 
 ## F2 owner-signed read-only catalog approval
 
-No F2 query-signing key is currently confirmed or pinned. Before any SQL, Ard must independently review the exact owner-local target and expected-state files, select an Ed25519 key already controlled by Ard or establish a public trust anchor through an owner-controlled, separately reviewed local procedure, and verify its fingerprint against that trust record. Only Ard signs the F2 query approval locally; this task does not generate, retrieve, or store a private key. Bind the signature to the ordered payload implemented by `scripts/verify-wave13b2-query-approval.mjs`: organization/project/branch/endpoint, the root-attestation SHA-256 `e5e2793cb2323f4c00bcb0ad83fcced2dc9ca5a9a68a8489014c6f469046780b`, exact direct host/database/role, final reviewed source SHA, expected-state file SHA-256, fixed query SHA-256, CA SHA-256, trusted public-key fingerprint, and issue/expiry timestamps no more than 15 minutes apart. `parentId` is represented only as `OMITTED_NOT_RETURNED` inside the attestation; never sign a fabricated null. Store only the public PEM, detached approval JSON, target manifest, expected state, CA, and password file in the owner-only directory. The verifier rejects altered JSON, wrong source or target, missing/wrong CA, untrusted keys, bad signatures, expired approval, changed migration blobs, and symlinks/reparse points.
+The owner reports that the original F2 query had a signed approval. This task did not read or validate that artifact. It is bound to the old source/query and cannot authorize the revised query. Preserve it as failed-attempt evidence. Before a future attempt, the owner must review the revised SQL, current exact target and Free plan, refreshed expected state, the final source SHA, and exact-SHA CI. Use the already owner-controlled Ed25519 key and its existing trust record; do not generate, retrieve, rotate, or replace a key for this task. Bind a fresh signature to the ordered payload implemented by `scripts/verify-wave13b2-query-approval.mjs`: organization/project/branch/endpoint, the root-attestation SHA-256 `e5e2793cb2323f4c00bcb0ad83fcced2dc9ca5a9a68a8489014c6f469046780b`, exact direct host/database/role, final reviewed source SHA, expected-state file SHA-256, revised query SHA-256, CA SHA-256, trusted public-key fingerprint, and issue/expiry timestamps no more than 15 minutes apart. `parentId` is represented only as `OMITTED_NOT_RETURNED` inside the attestation; never sign a fabricated null. Store the new public PEM, detached approval JSON, target manifest, expected state, CA, and password file only in the source-bound owner-only attempt directory. The verifier rejects altered JSON, wrong source or target, missing/wrong CA, untrusted keys, bad signatures, expired approval, changed migration blobs, and symlinks/reparse points.
+
+## Failed-attempt handoff and renewal gate
+
+The old line-69 error is the planned division-by-zero sentinel firing because at least one connection predicate was false. PostgreSQL reports the expression location, not the failed predicate. The available report does not identify which target ID, database, role, server-major, read-only, TLS, or SHA-format check failed. Treat every one of those values as UNKNOWN until the owner refreshes and verifies it. No catalog query result was returned.
+
+The revised query prints every connection check in a fixed order using stable `F2_CHECK` / `F2_FAIL` codes. Each failing branch prints its specific `F2_FAIL`, emits an `F2_STOP` marker, and raises a PostgreSQL exception immediately; `ON_ERROR_STOP` makes psql exit nonzero before later catalog inventory reads. Each catalog output ceiling reports a count and uses the same stop path before the next inventory query. These codes diagnose only a future run; they cannot retroactively explain the prior attempt.
+
+### F2 full-evidence retention and owner review (2026-10-20)
+
+For a separately authorized future query run, the runner must retain the complete catalog-result stdout byte-for-byte in `wave13b2-f2-catalog-evidence-<sourceSHA>-<querySHA>.local.txt` inside the source-bound owner directory `f2-attempt-<source-SHA>`. This file is owner-local evidence; never print its contents to the terminal, CI, a pull request, or chat. Before psql starts, the runner must create this destination with `[IO.FileMode]::CreateNew` and verify that the source-bound path has no reparse point and a protected ACL limited to the current Windows user and SYSTEM. After psql exits, it must flush and independently verify the evidence file's path, ACL, byte length, and SHA-256 before any result can be classified as `COMPLETED`.
+
+The sanitized audit is a separate owner-local file. It may contain the exact source and query SHA-256 values, psql exit code, failure codes, allowlisted F2 markers, evidence filename, evidence byte length and SHA-256, evidence-verification result, and stderr byte length and SHA-256. It must not contain catalog rows or other raw output. The append-only attempt marker must refer to that audit and its digest. If the evidence file is missing, already exists, tampered, truncated, stored through a reparse point, has an ACL mismatch, or fails post-run verification, classification is `FAILED`; preserve the attempt marker and stop. A SQL error, interrupted psql process, or any other nonzero exit also fails closed, even if a completion marker was emitted.
+
+`COMPLETED` is valid only when all of these are true together: psql exits 0; there is exactly one `F2_DONE PASS` line matching the pinned source and query SHA-256; no `F2_FAIL` or `F2_STOP` marker exists; and the complete stdout evidence file is present, owner-protected, and verified for path, ACL, length, and SHA-256. `F2_DONE` by itself proves neither that the catalog is empty nor that it matches the owner's expected state.
+
+After a future runner result is `COMPLETED`, the owner must perform an offline comparison of the verified evidence file against the owner-reviewed `wave13b2-staging-expected-state.local.json` bound by its SHA-256 in the fresh approval. Only after the existing detached approval signature verifies may offline preflight expose the expected-state SHA-256 and exact byte count as sanitized pins (`expectedStateSha256` and `expectedStateBytes`); failed signature verification exposes neither pin, and the JSON body is never printed. The source-bound attempt marker and sanitized audit capture those same pins. The utility reads only these local files, recomputes the expected-state SHA-256 and byte count, and rejects any byte difference from the captured pins, even if the changed JSON parses to equivalent values. It also verifies the source/query-bound evidence, audit, and expected-state hashes plus ACL/reparse policy, then compares the expected catalog fields without printing raw evidence. It must not invoke psql, connect to Neon, or update the expected-state file from observed output.
+
+Run the comparison from the reviewed checkout after the query runner has completed successfully. Use the exact evidence and audit files created in the protected source-bound attempt directory:
+
+```powershell
+$queryPacketSha256 = 'bd4a9c725268dc80e3eab10d28da585da3399e6f75db676c29e9e014c5127c49'
+$evidencePath = Join-Path $secretDir ('wave13b2-f2-catalog-evidence-' + $applicationSourceSha + '-' + $queryPacketSha256 + '.local.txt')
+$auditPath = Join-Path $secretDir ('wave13b2-f2-audit-' + $applicationSourceSha + '-' + $queryPacketSha256 + '.local.txt')
+$expectedStatePath = Join-Path $secretDir 'wave13b2-staging-expected-state.local.json'
+& $nodeExecutable (Join-Path $repoRoot 'scripts/review-wave13b2-f2-evidence.mjs') `
+  --evidence $evidencePath `
+  --audit $auditPath `
+  --expected-state $expectedStatePath `
+  --record-owner-review
+if ($LASTEXITCODE -ne 0) { throw 'Offline comparison or owner review failed; leave F2 blocked.' }
+```
+
+`--record-owner-review` requires an interactive owner confirmation using the exact phrase `REVIEW WAVE13B2 F2 <source12> <query12> <MATCH|MISMATCH>`, where `source12` and `query12` are the first 12 lowercase hexadecimal characters of the verified source and query SHAs. It creates `wave13b2-f2-owner-review-<sourceSHA>-<querySHA>.local.json` with create-only semantics inside the protected attempt directory. The owner-authored receipt is interactive, non-signature, hash-bound, and retained owner-local; it is bound to the evidence, audit, and expected-state files. Its fixed fields are `schemaVersion`, `recordType`, `sourceSha`, `querySha256`, `evidenceFile`, `evidenceSha256`, `evidenceBytes`, `auditFile`, `auditSha256`, `auditBytes`, `expectedStateFile`, `expectedStateSha256`, `expectedStateBytes`, `comparisonStatus`, `matchedFields`, `mismatchedFields`, `reviewedAtUtc`, and `confirmationPhrase`. If a receipt already exists, preserve it and stop; never replace it. The receipt contains no raw catalog output, credentials, or key material. A mismatch, missing expected-state section, unrecognized output, or incomplete evidence leaves the catalog state `UNKNOWN` and F2 blocked; incomplete or invalid inputs produce no review receipt. Even a matching receipt is only evidence for the exact catalog categories and predicates covered by the reviewed expected state and query; it does not prove physical database emptiness, authorize a migration, or unlock F3. Never claim an empty catalog from `F2_DONE` alone.
+
+The local regression command is `npm run test:wave13b2-f2-pg18`. It uses a fresh UUID temporary cluster, a test-only loopback TLS certificate, and the exact checked-in query bytes. It verifies only local mechanism behavior, including the passing `F2_DONE` path, fail-closed query guards, the legacy `\quit 3` exit-zero case, query-tamper denial before psql, and evidence/audit retention behavior present in the tested source. This is local synthetic evidence only. It does not validate the live staging target, owner approval, provider state, offline owner comparison, or catalog contents.
+
+Before another attempt, the owner must make these separate decisions:
+
+1. Preserve the old signed approval and `wave13b2-f2-query-attempt.local.txt` unchanged. Retain them as evidence; do not reuse either for a new query attempt.
+2. Refresh provider readback for the exact project, branch, endpoint, database, role, PostgreSQL major, TLS requirements, and Free plan. The existing provider readback is dated 2026-10-15 and is not current target proof.
+3. Review the revised query and final source commit. Confirm the exact same SHA has successful required CI, including the Windows raw-blob/LF checkout job.
+4. Create the new owner-only `f2-attempt-<final-source-SHA>` directory and new manifest/expected-state files without replacing the old artifacts. Sign a new approval for the revised query digest and exact source/target state, using the existing key and trust anchor.
+5. Run the offline preflight again. The signed approval must have at least 120 seconds remaining at verification; the runner repeats this check after explicit owner confirmation, immediately before starting psql. `LOCAL_OFFLINE_PREFLIGHT_PASS` proves local bindings only and makes no database connection.
+6. Make a separate owner decision before executing exactly one revised read-only query through `scripts/run-wave13b2-f2-query.ps1`. The runner requires the exact source/query-bound phrase in an interactive PowerShell `ConsoleHost` and rejects redirected or non-console invocation; it has no switch or environment variable to bypass the prompt. The runner copies the hash-verified query into the protected owner-only attempt folder, verifies its hash and ACL, holds a read lock while `psql` consumes that snapshot, writes a source-bound marker with create-only semantics, and refuses to run again if that marker already exists.
+7. If the run completes, verify the audit digest and evidence file's recorded length/SHA locally, then perform the reviewed offline expected-state comparison using the confirmed utility. Retain its interactive, non-signature owner receipt in the same protected attempt directory. Do not copy raw evidence or the receipt into Git, CI, a pull request, or chat. Until the receipt records a complete match, catalog state remains `UNKNOWN`; a successful query is not an emptiness verdict.
+
+Any failed preflight, failed query, unexpected output, truncation, timeout, target mismatch, missing/tampered/unverified evidence file, ACL mismatch, or reparse-point detection means stop. Do not retry under the old approval or marker, and do not delete or replace prior evidence. F2 remains blocked and catalog state remains UNKNOWN until the owner verifies complete evidence, completes the offline comparison, and records the owner review receipt. No F3 migration or role action is authorized.
 
 Set these local, non-secret libpq variables in the same PowerShell session before the offline preflight:
 
@@ -73,54 +163,44 @@ $env:PGPASSFILE = Join-Path $secretDir 'pgpass.conf'
 $env:PGSSLROOTCERT = Join-Path $secretDir 'cacert.pem'
 ```
 
-Run the offline preflight from the activation worktree with the exact final source SHA and the fingerprint read from the owner-controlled key record:
+Run the offline preflight from the reviewed candidate checkout at the exact approved source SHA and with the fingerprint read from the owner-controlled key record:
 
 ```powershell
-$repoRoot = 'D:\!AGY\_worktrees\karturt-free13b2-agent-b-20261015'
-$applicationSourceSha = '<40-character reviewed activation source SHA>'
+$repoRoot = 'D:\!AGY\karturt-f2-fail-closed-20261017'
+$applicationSourceSha = '<40-character reviewed candidate source SHA>'
 $trustedFingerprint = '<64-character SHA-256 from Ard owner key record>'
-node (Join-Path $repoRoot 'scripts/preflight-wave13b2-local.mjs') `
+$nodeExecutable = (Get-Command -Name node.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+$gitExecutable = (Get-Command -Name git.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+$psqlExecutable = (Get-Command -Name psql.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+$secretRoot = Join-Path $env:LOCALAPPDATA 'KarturtStageOperator'
+$secretDir = Join-Path $secretRoot ('f2-attempt-' + $applicationSourceSha)
+& $nodeExecutable (Join-Path $repoRoot 'scripts/preflight-wave13b2-local.mjs') `
   --repo-root $repoRoot `
   --secret-dir $secretDir `
   --application-source-sha $applicationSourceSha `
-  --trusted-public-key-fingerprint $trustedFingerprint
+  --trusted-public-key-fingerprint $trustedFingerprint `
+  --git-path $gitExecutable `
+  --psql-path $psqlExecutable
 ```
 
-This preflight is offline: it checks local Git/source/migration hashes, target and expected-state JSON, query/CA bytes, key/signature/time window, PostgreSQL 18 client version, environment bindings, ACLs, and reparse points. It does not connect or execute SQL. If it prints `BLOCKED`, stop and preserve the sanitized failure state; do not try a different client, endpoint, TLS mode, or SQL tool.
+This preflight is offline: it checks local Git/source/migration hashes, target and expected-state JSON, query/CA bytes, key/signature/time window, PostgreSQL 18 client version, environment bindings, ACLs, and reparse points. It prints the expected-state SHA-256 and exact byte count only after successful verification of the existing signed approval; those sanitized values are the pins recorded by the source-bound attempt marker and audit. A `BLOCKED` result exposes no expected-state pins. It does not connect or execute SQL. If it prints `BLOCKED`, stop and preserve the sanitized failure state; do not try a different client, endpoint, TLS mode, or SQL tool.
 
-Only after the local preflight prints `LOCAL_OFFLINE_PREFLIGHT_PASS` with a valid target-specific signature may the owner run this fixed query exactly once. Use the same PowerShell session and exact final source SHA that passed the preflight:
+Only after reviewing a fresh `LOCAL_OFFLINE_PREFLIGHT_PASS`, the final CI results, and the exact target-specific signature may the owner separately decide to execute one query. Run the source-bound wrapper below. It repeats the offline preflight immediately before connection, resets the process connection settings to the pinned host/database/role/TLS values, supplies those values explicitly to `psql`, and creates a new attempt marker with create-only semantics. It refuses to overwrite a marker for the same source SHA. The runner is provided for a future owner-authorized attempt; this task does not invoke it.
 
 ```powershell
-$targetProjectId = 'broad-star-40451875'
-$targetBranchId = 'br-orange-recipe-azed9f78'
-$targetEndpointId = 'ep-mute-firefly-azjcru4h'
-$queryPacketSha256 = 'd7abf6b7592c53f9d480823d42c6d9ebbd9550fd4f5c276095a7e1892842c6fb'
-$expectedDatabase = 'neondb'
-$expectedOwnerRole = 'neondb_owner'
-$queryPath = Join-Path $repoRoot 'docs/codex/wave13b2-read-only-catalog-preflight.sql'
-$psqlArgs = @(
-  '-X', '-w', '-P', 'pager=off', '-v', 'ON_ERROR_STOP=1',
-  '-v', 'owner_signed_query_approval_verified=on',
-  '-v', "target_project_id=$targetProjectId",
-  '-v', "target_branch_id=$targetBranchId",
-  '-v', "target_endpoint_id=$targetEndpointId",
-  '-v', "approved_source_sha=$applicationSourceSha",
-  '-v', "query_packet_sha256=$queryPacketSha256",
-  '-v', "expected_database=$expectedDatabase",
-  '-v', "expected_owner_role=$expectedOwnerRole",
-  '-f', $queryPath
-)
-& psql @psqlArgs
-if ($LASTEXITCODE -ne 0) { throw 'Read-only catalog query failed; stop and preserve the sanitized failure state.' }
+$repoRoot = 'D:\!AGY\karturt-f2-fail-closed-20261017'
+$trustedFingerprint = '<64-character SHA-256 from Ard owner key record>'
+& (Join-Path $repoRoot 'scripts/run-wave13b2-f2-query.ps1') `
+  -TrustedPublicKeyFingerprint $trustedFingerprint
 ```
 
-The query opens `BEGIN READ ONLY`, uses bounded timeouts, validates the server/database/role/TLS state, and reads only catalog metadata. Do not rerun after any failure or use a fallback. Compare sanitized results with the expected-state baseline; unexpected objects, truncation, timeout, target mismatch, or TLS failure means stop. Even a clean catalog result does not authorize migrations by itself.
+The runner creates `wave13b2-f2-query-attempt-<source-SHA>.local.txt` inside the new source-bound owner directory and records the attempt status, timestamps, source/query hashes, expected-state SHA-256 and byte-count pins, target IDs, and `psql` exit code. It never replaces the prior `wave13b2-f2-query-attempt.local.txt`. The revised query opens `BEGIN READ ONLY`, uses bounded timeouts, reports each server/database/role/TLS/target check separately, and reads only catalog metadata after those checks pass. The runner's complete stdout and separate sanitized audit record the expected-state pins and follow the F2 evidence-retention contract above. Do not run it again after any failure or use a fallback. A `COMPLETED` status still requires the owner's separate offline expected-state comparison and review receipt; it is not an emptiness verdict and does not authorize migrations by itself.
 
 ## Current gate decisions
 
 - F0 root lineage: PASS, limited to the new-project create contract.
-- F1 operator preparation: source and local offline preflight prepared; final exact-SHA review/CI is still required.
-- F2 catalog: BLOCKED until owner-local credentials and genuine target-specific signed approval are supplied and verifier returns PASS; no SQL has been run.
+- F1 operator preparation: revised diagnostics and source-bound renewal procedure prepared; exact-SHA review/CI is required before owner renewal.
+- F2 catalog: BLOCKED after an owner-reported failed attempt; failing predicate and catalog state are UNKNOWN. The prior approval and marker are spent for that attempt and must be preserved. The new evidence-handling contract and offline owner-review path are documentation/source work only; no future live attempt, raw evidence file, comparison receipt, or catalog verdict exists from this work. A future attempt requires refreshed target evidence, a new exact-source/query approval, offline preflight PASS, and a separate owner decision; any `COMPLETED` runner result then requires the separate offline expected-state comparison and owner receipt.
 - F3 migration/runtime role: BLOCKED independently of F2; `PINNED_STAGING_MIGRATION_APPROVAL_PUBLIC_KEY_PEM` remains null, no migration authorization artifact exists, no roles were created, and runtime isolation remains false. F2 query approval does not authorize migrations.
 - F4 Vercel preview: NOT STARTED; only Free features are permitted, and this lane does not authorize deployment.
 - F5 acceptance: NOT COMPLETE; no preview/mobile/E2E acceptance is claimed.

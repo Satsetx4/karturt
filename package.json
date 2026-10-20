@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
+    "test:wave13b2-f2-pg18": "pwsh -NoProfile -File scripts/test-wave13b2-f2-psql-guard.ps1",
     "test:integration": "vitest run tests/integration",
     "test:constraints": "vitest run tests/constraints",
     "test:authorization": "vitest run tests/authorization",
