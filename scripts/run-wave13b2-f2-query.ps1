@@ -67,8 +67,12 @@ function Invoke-OfflinePreflight {
     --psql-path $psqlExecutable)
   $preflightExitCode = $LASTEXITCODE
   $preflightText = ($preflightOutput -join "`n").Trim()
-  if ($preflightText) { Write-Output $preflightText }
-  Require-Condition ($preflightExitCode -eq 0 -and $preflightText -match ('^LOCAL_OFFLINE_PREFLIGHT_PASS source=' + $applicationSourceSha + ' .* query=' + $queryPacketSha256 + '$')) 'Offline preflight did not pass for the exact source and query; no SQL was run.'
+  if ($preflightText) { Write-Host $preflightText }
+  Require-Condition ($preflightExitCode -eq 0) 'Offline preflight did not pass for the exact source and query; no SQL was run.'
+  return ConvertFrom-Wave13B2F2PreflightOutput `
+    -Text $preflightText `
+    -ExpectedSourceSha $applicationSourceSha `
+    -ExpectedQuerySha256 $queryPacketSha256
 }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -128,6 +132,8 @@ $markerCreated = $false
 $markerFinalized = $false
 $runResult = $null
 $classification = $null
+$initialPreflight = $null
+$finalPreflight = $null
 $previousNativeErrorPreference = $null
 $hasNativeErrorPreference = $false
 
@@ -136,7 +142,7 @@ try {
     Set-Item -Path ('Env:' + $name) -Value $environmentValues[$name]
   }
 
-  Invoke-OfflinePreflight
+  $initialPreflight = Invoke-OfflinePreflight
 
   $queryBytes = [IO.File]::ReadAllBytes($queryPath)
   $sourceQueryHash = Get-Sha256Hex -Bytes $queryBytes
@@ -169,6 +175,9 @@ try {
     'startedAtUtc=' + $attemptStartedAt
     'sourceSha=' + $applicationSourceSha
     'queryPacketSha256=' + $queryPacketSha256
+    'expectedStateFile=' + $initialPreflight.ExpectedStateFile
+    'expectedStateSha256=' + $initialPreflight.ExpectedStateSha256
+    'expectedStateBytes=' + $initialPreflight.ExpectedStateBytes
     'targetProjectId=broad-star-40451875'
     'targetBranchId=br-orange-recipe-azed9f78'
     'targetEndpointId=ep-mute-firefly-azjcru4h'
@@ -208,7 +217,8 @@ try {
     '-v', 'expected_owner_role=neondb_owner',
     '-f', $querySnapshotPath
   )
-  Invoke-OfflinePreflight
+  $finalPreflight = Invoke-OfflinePreflight
+  [void](Assert-Wave13B2F2PreflightMetadataMatch -Initial $initialPreflight -Final $finalPreflight)
 
   $runResult = Invoke-Wave13B2F2Psql `
     -PsqlExecutable $psqlExecutable `
@@ -217,6 +227,8 @@ try {
     -AclCheckerPath $aclCheckerPath `
     -ExpectedSourceSha $applicationSourceSha `
     -ExpectedQuerySha256 $queryPacketSha256
+  $runResult | Add-Member -MemberType NoteProperty -Name ExpectedStateSha256 -Value $initialPreflight.ExpectedStateSha256 -Force
+  $runResult | Add-Member -MemberType NoteProperty -Name ExpectedStateBytes -Value $initialPreflight.ExpectedStateBytes -Force
   $psqlExitCode = $runResult.ExitCode
   $classification = Get-Wave13B2F2RunClassification `
     -ExitCode $runResult.ExitCode `
@@ -249,6 +261,17 @@ try {
   Require-Condition ($classification.Status -eq 'COMPLETED') 'The read-only query did not satisfy the exact completion contract; preserve the attempt marker and stop.'
 } catch {
   if ($markerCreated -and -not $markerFinalized) {
+    $abortCode = 'F2_RUNNER_ABORTED_BEFORE_PSQL'
+    if ($_.Exception.Message -ceq 'F2_EXPECTED_STATE_PREFLIGHT_INVALID' -or
+      $_.Exception.Message -ceq 'F2_EXPECTED_STATE_PREFLIGHT_MISMATCH') {
+      $abortCode = $_.Exception.Message
+    }
+    $expectedStateSha256 = 'unavailable'
+    $expectedStateBytes = -1L
+    if ($null -ne $initialPreflight) {
+      $expectedStateSha256 = $initialPreflight.ExpectedStateSha256
+      $expectedStateBytes = $initialPreflight.ExpectedStateBytes
+    }
     if ($null -eq $runResult) {
       $runResult = [pscustomobject]@{
         ExitCode = -1
@@ -258,7 +281,7 @@ try {
         ControlMarkers = [string[]]@()
         StderrMarkers = [string[]]@()
         DiagnosticLines = [string[]]@()
-        FailureCodes = [string[]]@('F2_RUNNER_ABORTED_BEFORE_PSQL')
+        FailureCodes = [string[]]@($abortCode)
         EvidenceVerified = $false
         EvidenceBytes = -1L
         EvidenceSha256 = 'unavailable'
@@ -266,7 +289,12 @@ try {
         StderrBytes = 0L
         StderrSha256 = 'unavailable'
         OutputFormat = 'csv'
+        ExpectedStateSha256 = $expectedStateSha256
+        ExpectedStateBytes = $expectedStateBytes
       }
+    } elseif ($null -eq $runResult.PSObject.Properties['ExpectedStateSha256']) {
+      $runResult | Add-Member -MemberType NoteProperty -Name ExpectedStateSha256 -Value $expectedStateSha256 -Force
+      $runResult | Add-Member -MemberType NoteProperty -Name ExpectedStateBytes -Value $expectedStateBytes -Force
     }
     if ($null -eq $classification) {
       $classification = Get-Wave13B2F2RunClassification `
@@ -276,17 +304,29 @@ try {
         -ExpectedSourceSha $applicationSourceSha `
         -ExpectedQuerySha256 $queryPacketSha256 `
         -EvidenceVerified $false `
-        -FailureCodes ([string[]]@('F2_RUNNER_ABORTED_BEFORE_PSQL'))
+        -FailureCodes ([string[]]@($abortCode))
     } else {
       $classification.Status = 'FAILED'
       $classification.FailureCodes = [string[]]@($classification.FailureCodes + 'F2_RUNNER_ABORTED' | Select-Object -Unique)
+    }
+    if (-not (Test-Path -LiteralPath $auditPath)) {
+      try {
+        $catchAuditContent = New-Wave13B2F2AuditContent `
+          -SourceSha $applicationSourceSha `
+          -QuerySha256 $queryPacketSha256 `
+          -RunResult $runResult `
+          -Classification $classification
+        $catchAuditSha256 = Write-Wave13B2F2AuditEvidence -Path $auditPath -Content $catchAuditContent -AclCheckerPath $aclCheckerPath
+      } catch { $catchAuditSha256 = 'unavailable' }
+    } else {
+      $catchAuditSha256 = 'unavailable'
     }
     Add-Wave13B2F2AttemptResult `
       -MarkerPath $attemptMarkerPath `
       -RunResult $runResult `
       -Classification $classification `
       -AuditFileName $(if (Test-Path -LiteralPath $auditPath) { [IO.Path]::GetFileName($auditPath) } else { 'unavailable' }) `
-      -AuditSha256 $(if (Test-Path -LiteralPath $auditPath) { Get-Wave13B2F2QuerySha256 -Bytes ([IO.File]::ReadAllBytes($auditPath)) } else { 'unavailable' })
+      -AuditSha256 $(if ($catchAuditSha256 -ne 'unavailable') { $catchAuditSha256 } elseif (Test-Path -LiteralPath $auditPath) { Get-Wave13B2F2QuerySha256 -Bytes ([IO.File]::ReadAllBytes($auditPath)) } else { 'unavailable' })
     $markerFinalized = $true
   }
   throw

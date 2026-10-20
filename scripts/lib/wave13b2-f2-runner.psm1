@@ -141,13 +141,65 @@ foreach ($code in @(
   'F2_RECEIPT_REPARSE_DETECTED', 'F2_RECEIPT_ACL_MISMATCH', 'F2_RECEIPT_CREATE_FAILED',
   'F2_RECEIPT_WRITE_FAILED', 'F2_RECEIPT_LENGTH_MISMATCH', 'F2_RECEIPT_HASH_MISMATCH',
   'F2_RECEIPT_POST_VERIFY_FAILED', 'F2_RECEIPT_VERIFY_FAILED', 'F2_RUNNER_ABORTED_BEFORE_PSQL',
-  'F2_RUNNER_ABORTED'
+  'F2_RUNNER_ABORTED', 'F2_EXPECTED_STATE_PREFLIGHT_INVALID', 'F2_EXPECTED_STATE_PREFLIGHT_MISMATCH'
 )) { [void]$script:Wave13B2F2RunnerFailureCodes.Add($code) }
 
 function Test-Wave13B2F2AllowedFailureCode([string]$Code) {
   return $script:Wave13B2F2RunnerFailureCodes.Contains($Code) -or
     $script:Wave13B2F2SqlFailureCodes.Contains($Code) -or
     $Code -cmatch '^F2_PSQL_EXIT_CODE_[0-9]{1,10}$'
+}
+
+function ConvertFrom-Wave13B2F2PreflightOutput(
+  [string]$Text,
+  [string]$ExpectedSourceSha,
+  [string]$ExpectedQuerySha256
+) {
+  if ($ExpectedSourceSha -notmatch '^[a-f0-9]{40}$' -or $ExpectedQuerySha256 -notmatch '^[a-f0-9]{64}$') {
+    throw 'F2_EXPECTED_STATE_PREFLIGHT_INVALID'
+  }
+  $pattern = '^LOCAL_OFFLINE_PREFLIGHT_PASS source=' + [regex]::Escape($ExpectedSourceSha) +
+    ' migrations=(?<migrations>0|[1-9][0-9]{0,7}) expectedStateSha256=(?<sha256>[a-f0-9]{64}) expectedStateBytes=(?<bytes>[1-9][0-9]{0,17}) query=' +
+    [regex]::Escape($ExpectedQuerySha256) + '$'
+  $match = [regex]::Match($Text, $pattern, [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+  if (-not $match.Success) { throw 'F2_EXPECTED_STATE_PREFLIGHT_INVALID' }
+  try {
+    $migrationBlobCount = [int]::Parse($match.Groups['migrations'].Value, [Globalization.CultureInfo]::InvariantCulture)
+    $expectedStateBytes = [long]::Parse($match.Groups['bytes'].Value, [Globalization.CultureInfo]::InvariantCulture)
+  } catch {
+    throw 'F2_EXPECTED_STATE_PREFLIGHT_INVALID'
+  }
+  if ($expectedStateBytes -le 0) { throw 'F2_EXPECTED_STATE_PREFLIGHT_INVALID' }
+  return [pscustomobject]@{
+    SourceSha = $ExpectedSourceSha
+    QuerySha256 = $ExpectedQuerySha256
+    MigrationBlobCount = $migrationBlobCount
+    ExpectedStateFile = 'wave13b2-staging-expected-state.local.json'
+    ExpectedStateSha256 = $match.Groups['sha256'].Value
+    ExpectedStateBytes = $expectedStateBytes
+  }
+}
+
+function Assert-Wave13B2F2PreflightMetadataMatch(
+  [pscustomobject]$Initial,
+  [pscustomobject]$Final
+) {
+  if ($null -eq $Initial -or $null -eq $Final) { throw 'F2_EXPECTED_STATE_PREFLIGHT_INVALID' }
+  $propertyNames = @('SourceSha', 'QuerySha256', 'MigrationBlobCount', 'ExpectedStateFile', 'ExpectedStateSha256', 'ExpectedStateBytes')
+  foreach ($name in $propertyNames) {
+    if ($null -eq $Initial.PSObject.Properties[$name] -or $null -eq $Final.PSObject.Properties[$name]) {
+      throw 'F2_EXPECTED_STATE_PREFLIGHT_INVALID'
+    }
+  }
+  if ($Initial.ExpectedStateSha256 -notmatch '^[a-f0-9]{64}$' -or $Final.ExpectedStateSha256 -notmatch '^[a-f0-9]{64}$' -or
+    $Initial.ExpectedStateBytes -isnot [long] -or $Final.ExpectedStateBytes -isnot [long] -or
+    $Initial.ExpectedStateBytes -le 0 -or $Final.ExpectedStateBytes -le 0) {
+    throw 'F2_EXPECTED_STATE_PREFLIGHT_INVALID'
+  }
+  foreach ($name in $propertyNames) {
+    if ([string]$Initial.$name -cne [string]$Final.$name) { throw 'F2_EXPECTED_STATE_PREFLIGHT_MISMATCH' }
+  }
+  return $true
 }
 
 function Get-Wave13B2F2QuerySha256([byte[]]$Bytes) {
@@ -938,6 +990,23 @@ function Get-Wave13B2F2RunClassification(
   }
 }
 
+function Get-Wave13B2F2SanitizedExpectedStateMetadata([pscustomobject]$RunResult) {
+  $fileName = 'wave13b2-staging-expected-state.local.json'
+  $sha256Hex = 'unavailable'
+  $byteLength = -1L
+  if ($null -ne $RunResult.PSObject.Properties['ExpectedStateSha256']) {
+    $candidateSha256 = [string]$RunResult.ExpectedStateSha256
+    if ($candidateSha256 -cmatch '^[a-f0-9]{64}$') { $sha256Hex = $candidateSha256 }
+  }
+  if ($null -ne $RunResult.PSObject.Properties['ExpectedStateBytes']) {
+    $candidateBytes = [string]$RunResult.ExpectedStateBytes
+    if ($candidateBytes -cmatch '^[1-9][0-9]{0,17}$') {
+      try { $byteLength = [long]::Parse($candidateBytes, [Globalization.CultureInfo]::InvariantCulture) } catch { $byteLength = -1L }
+    }
+  }
+  return [pscustomobject]@{ FileName = $fileName; Sha256 = $sha256Hex; ByteLength = $byteLength }
+}
+
 function New-Wave13B2F2AuditContent(
   [string]$SourceSha,
   [string]$QuerySha256,
@@ -946,10 +1015,14 @@ function New-Wave13B2F2AuditContent(
 ) {
   $diagnostics = @(Get-Wave13B2F2SafeDiagnosticLines -Lines ([string[]]$RunResult.DiagnosticLines) -IncludeCompletion)
   $safeFailureCodes = @($Classification.FailureCodes | Where-Object { Test-Wave13B2F2AllowedFailureCode -Code ([string]$_) } | Select-Object -Unique)
+  $expectedState = Get-Wave13B2F2SanitizedExpectedStateMetadata -RunResult $RunResult
   $header = @(
     'F2_AUDIT_FORMAT=2'
     'sourceSha=' + $SourceSha
     'queryPacketSha256=' + $QuerySha256
+    'expectedStateFile=' + $expectedState.FileName
+    'expectedStateSha256=' + $expectedState.Sha256
+    'expectedStateBytes=' + $expectedState.ByteLength
     'outputFormat=csv'
     'psqlStarted=' + ([bool]$RunResult.PsqlStarted).ToString().ToLowerInvariant()
     'psqlExitCode=' + $RunResult.ExitCode
@@ -1018,12 +1091,16 @@ function Add-Wave13B2F2AttemptResult(
 ) {
   $failureCodes = @($Classification.FailureCodes | Where-Object { Test-Wave13B2F2AllowedFailureCode -Code ([string]$_) })
   $evidenceFile = if ([string]::IsNullOrWhiteSpace([string]$RunResult.EvidencePath)) { 'unavailable' } else { [IO.Path]::GetFileName([string]$RunResult.EvidencePath) }
+  $expectedState = Get-Wave13B2F2SanitizedExpectedStateMetadata -RunResult $RunResult
   $lines = @(
     'status=' + $Classification.Status
     'finishedAtUtc=' + [DateTime]::UtcNow.ToString('o')
     'psqlExitCode=' + $RunResult.ExitCode
     'failureCodes=' + ($failureCodes -join ',')
     'outputFormat=csv'
+    'expectedStateFile=' + $expectedState.FileName
+    'expectedStateSha256=' + $expectedState.Sha256
+    'expectedStateBytes=' + $expectedState.ByteLength
     'evidenceFile=' + $evidenceFile
     'evidenceBytes=' + $RunResult.EvidenceBytes
     'evidenceSha256=' + $RunResult.EvidenceSha256
@@ -1037,7 +1114,9 @@ function Add-Wave13B2F2AttemptResult(
 
 Export-ModuleMember -Function @(
   'Add-Wave13B2F2AttemptResult',
+  'Assert-Wave13B2F2PreflightMetadataMatch',
   'Assert-Wave13B2F2QueryDigest',
+  'ConvertFrom-Wave13B2F2PreflightOutput',
   'Get-Wave13B2F2CsvControlMarkers',
   'Get-Wave13B2F2OwnerEvidenceVerification',
   'Get-Wave13B2F2QuerySha256',

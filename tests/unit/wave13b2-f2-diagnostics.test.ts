@@ -156,6 +156,8 @@ describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
     expect(runnerText).toContain("Resolve-ApplicationPath 'node.exe'");
     expect(runnerText).toContain("Resolve-ApplicationPath 'psql.exe'");
     expect(nodePosition).toBeGreaterThan(-1);
+    expect(runnerText).toMatch(/\$runResult = Invoke-Wave13B2F2Psql `\s+-PsqlExecutable \$psqlExecutable `\s+-ArgumentList \$psqlArgs/);
+    expect(runnerText).toContain("'-P', 'format=csv', '-P', 'footer=off'");
     expect(runnerText).toMatch(/Invoke-Wave13B2F2Psql[\s\S]*?-EvidencePath\s+\$evidencePath[\s\S]*?-AclCheckerPath\s+\$aclCheckerPath/);
     expect(runnerModuleText).toContain("$startInfo.RedirectStandardOutput = $true");
     expect(runnerModuleText).toContain("$startInfo.RedirectStandardError = $true");
@@ -189,22 +191,18 @@ describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
     expect(markerPosition).toBeGreaterThan(confirmationPosition);
     expect(finalPreflightPosition).toBeGreaterThan(markerPosition);
     expect(psqlPosition).toBeGreaterThan(finalPreflightPosition);
-    expect(runnerText.slice(finalPreflightPosition + "Invoke-OfflinePreflight".length, psqlPosition).trim()).toBe("");
-    expect(runnerModuleText).toContain("$EvidenceVerified");
-    expect(runnerModuleText).toContain("$FailureCodes");
-    expect(runnerModuleText).toMatch(/ExitCode\s+-eq\s+0|ExitCode\s+-ne\s+0/);
-    expect(runnerModuleText).toMatch(/doneMatches|doneCount|exactDone/);
-    expect(runnerModuleText).toMatch(/failureCodes\.Count\s+-eq\s+0/);
-    expect(runnerModuleText).toMatch(
-      /markerFailuresPresent\s*=\s*\$allFailMarkers\.Count\s+-gt\s+0\s+-or\s+\$stopCount\s+-gt\s+0/,
-    );
-    expect(runnerModuleText).toMatch(/-not\s+\$markerFailuresPresent/);
-    expect(runnerModuleText).toMatch(/EvidenceVerified\s+-and|\$EvidenceVerified/);
-    expect(runnerText).toContain("wave13b2-f2-catalog-evidence-");
-    expect(runnerText).toContain("$applicationSourceSha");
-    expect(runnerText).toContain("$queryPacketSha256");
-    expect(runnerText).toMatch(/Test-Path\s+-LiteralPath\s+\$attemptMarkerPath/);
+    expect(runnerText.slice(finalPreflightPosition + "Invoke-OfflinePreflight".length, psqlPosition))
+      .toContain("Assert-Wave13B2F2PreflightMetadataMatch -Initial $initialPreflight -Final $finalPreflight");
+    expect(runnerText).toContain("expectedStateFile=' + $initialPreflight.ExpectedStateFile");
+    expect(runnerText).toContain("expectedStateSha256=' + $initialPreflight.ExpectedStateSha256");
+    expect(runnerText).toContain("expectedStateBytes=' + $initialPreflight.ExpectedStateBytes");
     expect(runnerText).toContain("[IO.FileMode]::CreateNew");
     expect(runnerText).toContain("Add-Wave13B2F2AttemptResult");
+    expect(runnerModuleText).toContain("$completed = $ExitCode -eq 0 -and $EvidenceVerified -and $doneMatches");
+    expect(runnerModuleText).toContain("$failureCodesOut.Count -eq 0");
+    expect(runnerModuleText).toMatch(/markerFailuresPresent\s*=\s*\$allFailMarkers\.Count\s+-gt\s+0\s+-or\s+\$stopCount\s+-gt\s+0/);
+    expect(runnerModuleText).toContain("evidenceSha256=' + $RunResult.EvidenceSha256");
+    expect(runnerModuleText).toContain("expectedStateSha256=' + $expectedState.Sha256");
+    expect(runnerModuleText).toContain("CopyAsync($process.StandardOutput.BaseStream, $evidenceWriter, $stdoutHash)");
   });
 });

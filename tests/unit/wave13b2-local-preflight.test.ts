@@ -17,6 +17,7 @@ import {
   assertWindowsAclCheckerResult,
   assertWindowsExecutablePath,
   getRootLineageAttestationSha256,
+  parseApprovalVerifierResult,
   resolveWindowsPowerShellExecutable,
   WAVE13B2_LOCAL_PREFLIGHT_EXPECTED as EXPECTED,
 } from "../../scripts/preflight-wave13b2-local.mjs";
@@ -50,6 +51,26 @@ describe("Wave 13B.2 owner secret directory binding", () => {
     expect(assertWindowsExecutablePath(psqlPath, "psql.exe")).toBe(resolve(psqlPath));
     expect(() => assertWindowsExecutablePath(psqlPath, "git.exe")).toThrow();
     expect(() => assertWindowsExecutablePath("psql.exe", "psql.exe")).toThrow();
+  });
+});
+
+describe("Wave 13B.2 signed expected-state result pin", () => {
+  it("accepts only the sanitized hash and positive byte count emitted after signature verification", () => {
+    expect(parseApprovalVerifierResult(`PASS expectedStateSha256=${expectedStateSha256} expectedStateBytes=481`)).toEqual({
+      expectedStateSha256,
+      expectedStateBytes: 481,
+    });
+  });
+
+  it.each([
+    "",
+    "PASS",
+    `PASS expectedStateSha256=${"B".repeat(64)} expectedStateBytes=481`,
+    `PASS expectedStateSha256=${expectedStateSha256} expectedStateBytes=0`,
+    `PASS expectedStateSha256=${expectedStateSha256} expectedStateBytes=481 trailing=ignored`,
+    `PASS expectedStateSha256=${expectedStateSha256} expectedStateBytes=9007199254740992`,
+  ])("rejects missing or malformed expected-state metadata: %s", (output) => {
+    expect(() => parseApprovalVerifierResult(output)).toThrow();
   });
 });
 const fixedNow = Date.parse("2026-10-15T12:40:00.000Z");

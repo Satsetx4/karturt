@@ -327,18 +327,19 @@ function main() {
   const queryBytes = readFileSync(queryPath);
   const expectedStateBytes = readFileSync(expectedStatePath);
   const caBundleBytes = readFileSync(caBundlePath);
+  const expectedStateSha256 = sha256(expectedStateBytes);
   requireCondition(sha256(queryBytes) === EXPECTED.queryPacketSha256);
-  requireCondition(sha256(expectedStateBytes) === targetManifest.readOnlyQueryApproval.expectedStateSha256);
+  requireCondition(expectedStateSha256 === targetManifest.readOnlyQueryApproval.expectedStateSha256);
   requireCondition(sha256(caBundleBytes) === targetManifest.tls.caBundleSha256);
   requireCondition(targetManifest.readOnlyQueryApproval.ownerPublicKeyFingerprint === trustedPublicKeyFingerprint);
   assertQueryApprovalArtifact(approval, {
     applicationSourceSha,
-    expectedStateSha256: sha256(expectedStateBytes),
+    expectedStateSha256,
     caBundleSha256: sha256(caBundleBytes),
     ownerPublicKeyFingerprint: trustedPublicKeyFingerprint,
     publicKeyPem,
   });
-  process.stdout.write('PASS\n');
+  process.stdout.write(`PASS expectedStateSha256=${expectedStateSha256} expectedStateBytes=${expectedStateBytes.length}\n`);
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));

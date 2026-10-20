@@ -281,6 +281,15 @@ export function assertWindowsAclCheckerResult(output) {
   requireCondition(typeof output === 'string' && output.trim() === 'PASS');
 }
 
+export function parseApprovalVerifierResult(output) {
+  requireCondition(typeof output === 'string');
+  const match = /^PASS expectedStateSha256=([a-f0-9]{64}) expectedStateBytes=([1-9][0-9]*)$/.exec(output.trim());
+  requireCondition(match !== null);
+  const expectedStateBytes = Number(match[2]);
+  requireCondition(Number.isSafeInteger(expectedStateBytes) && expectedStateBytes > 0);
+  return Object.freeze({ expectedStateSha256: match[1], expectedStateBytes });
+}
+
 export function assertCleanExactSourceCommit(repoRoot, applicationSourceSha) {
   requireCondition(/^[a-f0-9]{40}$/.test(applicationSourceSha));
   const actualRoot = resolve(gitText(repoRoot, ['rev-parse', '--show-toplevel']));
@@ -376,7 +385,7 @@ function runApprovalVerifier(repoRoot, secretDir, applicationSourceSha, trustedF
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
   });
-  requireCondition(output.trim() === 'PASS');
+  return parseApprovalVerifierResult(output);
 }
 
 function main() {
@@ -420,9 +429,9 @@ function main() {
     targetManifest.tls.caBundleSha256,
   );
 
-  runApprovalVerifier(repoRoot, secretDir, applicationSourceSha, trustedFingerprint, gitPath);
+  const verifiedExpectedState = runApprovalVerifier(repoRoot, secretDir, applicationSourceSha, trustedFingerprint, gitPath);
   process.stdout.write(
-    `LOCAL_OFFLINE_PREFLIGHT_PASS source=${sourceSnapshot.applicationSourceSha} migrations=${sourceSnapshot.migrationBlobCount} query=${WAVE13B2_LOCAL_PREFLIGHT_EXPECTED.queryPacketSha256}\n`,
+    `LOCAL_OFFLINE_PREFLIGHT_PASS source=${sourceSnapshot.applicationSourceSha} migrations=${sourceSnapshot.migrationBlobCount} expectedStateSha256=${verifiedExpectedState.expectedStateSha256} expectedStateBytes=${verifiedExpectedState.expectedStateBytes} query=${WAVE13B2_LOCAL_PREFLIGHT_EXPECTED.queryPacketSha256}\n`,
   );
 }
 
