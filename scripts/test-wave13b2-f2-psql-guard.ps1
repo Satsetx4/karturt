@@ -1,15 +1,73 @@
 [CmdletBinding()]
 param(
-  [string]$PostgresBin = 'C:\Program Files\PostgreSQL\18\bin'
+  [string]$PostgresBin = 'C:\Program Files\PostgreSQL\18\bin',
+  [string]$RunnerModulePath = (Join-Path $PSScriptRoot 'lib/wave13b2-f2-runner.psm1')
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-Import-Module (Join-Path $PSScriptRoot 'lib/wave13b2-f2-runner.psm1') -Force
+Import-Module $RunnerModulePath -Force
 
 function Require-TestCondition([bool]$Condition, [string]$Message) {
   if (-not $Condition) { throw $Message }
+}
+
+function Get-TestSha256Hex([byte[]]$Bytes) {
+  $sha256 = [Security.Cryptography.SHA256]::Create()
+  try {
+    return [BitConverter]::ToString($sha256.ComputeHash($Bytes)).Replace('-', '').ToLowerInvariant()
+  } finally {
+    $sha256.Dispose()
+  }
+}
+
+function Get-TestSourceSha([string]$Name, [string]$BaseSourceSha) {
+  $material = [Text.UTF8Encoding]::new($false).GetBytes($BaseSourceSha + ':' + $Name)
+  return (Get-TestSha256Hex -Bytes $material).Substring(0, 40)
+}
+
+function Set-TestOwnerOnlyDirectory([string]$Path) {
+  [void][IO.Directory]::CreateDirectory($Path)
+  $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $systemSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+  $directorySecurity = [Security.AccessControl.DirectorySecurity]::new()
+  $directorySecurity.SetOwner($currentSid)
+  $directorySecurity.SetAccessRuleProtection($true, $false)
+  foreach ($sid in @($currentSid, $systemSid)) {
+    $rule = [Security.AccessControl.FileSystemAccessRule]::new(
+      $sid,
+      [Security.AccessControl.FileSystemRights]::FullControl,
+      [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit,
+      [Security.AccessControl.PropagationFlags]::None,
+      [Security.AccessControl.AccessControlType]::Allow
+    )
+    [void]$directorySecurity.AddAccessRule($rule)
+  }
+  Set-Acl -LiteralPath $Path -AclObject $directorySecurity
+}
+
+function Set-TestOwnerOnlyFile([string]$Path) {
+  $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $systemSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+  $fileSecurity = [Security.AccessControl.FileSecurity]::new()
+  $fileSecurity.SetOwner($currentSid)
+  $fileSecurity.SetAccessRuleProtection($true, $false)
+  foreach ($sid in @($currentSid, $systemSid)) {
+    [void]$fileSecurity.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new(
+      $sid,
+      [Security.AccessControl.FileSystemRights]::FullControl,
+      [Security.AccessControl.AccessControlType]::Allow
+    ))
+  }
+  Set-Acl -LiteralPath $Path -AclObject $fileSecurity
+}
+
+function Get-TestAttemptDirectory([string]$BasePath, [string]$SourceSha) {
+  $path = Join-Path $BasePath ('f2-attempt-' + $SourceSha)
+  [void][IO.Directory]::CreateDirectory($path)
+  Set-TestOwnerOnlyDirectory -Path $path
+  return $path
 }
 
 function Invoke-CheckedProcess([string]$Executable, [string[]]$ArgumentList, [string]$Label) {
@@ -104,6 +162,28 @@ function Assert-TestMarkerStatus([string]$Path, [string]$ExpectedStatus, [string
   Require-TestCondition ($status -ceq $ExpectedStatus) ($Label + ' marker status was ' + $status + '; expected ' + $ExpectedStatus + '.')
 }
 
+function Assert-TestF2Classification(
+  [string]$Label,
+  [int]$ExitCode,
+  [string[]]$DiagnosticLines,
+  [string]$ExpectedSourceSha,
+  [string]$ExpectedQuerySha,
+  [bool]$EvidenceVerified,
+  [string[]]$FailureCodes,
+  [string]$ExpectedStatus
+) {
+  $classification = Get-Wave13B2F2RunClassification `
+    -ExitCode $ExitCode `
+    -ControlMarkers $DiagnosticLines `
+    -StderrMarkers @() `
+    -ExpectedSourceSha $ExpectedSourceSha `
+    -ExpectedQuerySha256 $ExpectedQuerySha `
+    -EvidenceVerified $EvidenceVerified `
+    -FailureCodes $FailureCodes
+  Require-TestCondition ($classification.Status -ceq $ExpectedStatus) ($Label + ' status was ' + $classification.Status + '; expected ' + $ExpectedStatus + '.')
+  return $classification
+}
+
 function Invoke-TestPsqlCase(
   [string]$Name,
   [string]$HostAddress,
@@ -115,36 +195,66 @@ function Invoke-TestPsqlCase(
   [string]$ExpectedSourceSha,
   [string]$ExpectedQuerySha,
   [string]$TestRoot,
-  [string]$PsqlPath
+  [string]$EvidenceRoot,
+  [string]$AclCheckerPath,
+  [string]$PsqlPath,
+  [int]$TimeoutSeconds = 0
 ) {
-  $markerPath = Join-Path $TestRoot ($Name + '.attempt.local.txt')
-  $auditPath = Join-Path $TestRoot ($Name + '.audit.local.txt')
-  [IO.File]::WriteAllText($markerPath, "status=STARTED`n", [Text.UTF8Encoding]::new($false))
+  $caseSourceSha = Get-TestSourceSha -Name $Name -BaseSourceSha $ExpectedSourceSha
+  $inputBytes = [IO.File]::ReadAllBytes($InputFile)
+  $caseQuerySha = Get-TestSha256Hex -Bytes $inputBytes
+  $attemptRoot = Get-TestAttemptDirectory -BasePath $EvidenceRoot -SourceSha $caseSourceSha
+  $markerPath = Join-Path $attemptRoot ('wave13b2-f2-query-attempt-' + $caseSourceSha + '.local.txt')
+  $auditPath = Join-Path $attemptRoot ('wave13b2-f2-audit-' + $caseSourceSha + '-' + $caseQuerySha + '.local.txt')
+  $evidenceFileName = 'wave13b2-f2-catalog-evidence-' + $caseSourceSha + '-' + $caseQuerySha + '.local.txt'
+  $evidencePath = Join-Path $attemptRoot $evidenceFileName
+  $markerStream = [IO.File]::Open($markerPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+  try {
+    $approvalDigest = Get-TestSha256Hex -Bytes ([Text.UTF8Encoding]::new($false).GetBytes('synthetic-approval:' + $caseSourceSha + ':' + $caseQuerySha))
+    $markerBytes = [Text.UTF8Encoding]::new($false).GetBytes("status=STARTED`nsourceSha=$caseSourceSha`nqueryPacketSha256=$caseQuerySha`nsignedApprovalDigest=$approvalDigest`n")
+    $markerStream.Write($markerBytes, 0, $markerBytes.Length)
+    $markerStream.Flush($true)
+  } finally {
+    $markerStream.Dispose()
+  }
+  Set-TestOwnerOnlyFile -Path $markerPath
   $arguments = @(
-    '-X', '-w', '-P', 'pager=off', '-v', 'ON_ERROR_STOP=1',
+    '-X', '-w', '-P', 'pager=off', '-P', 'format=csv', '-P', 'footer=off', '-v', 'ON_ERROR_STOP=1',
     '-h', $HostAddress, '-p', [string]$Port, '-d', 'neondb', '-U', 'neondb_owner',
     '-v', 'owner_signed_query_approval_verified=on',
     '-v', 'target_project_id=broad-star-40451875',
     '-v', ('target_branch_id=' + $TargetBranchId),
     '-v', 'target_endpoint_id=ep-mute-firefly-azjcru4h',
-    '-v', ('approved_source_sha=' + $ExpectedSourceSha),
-    '-v', ('query_packet_sha256=' + $ExpectedQuerySha),
+    '-v', ('approved_source_sha=' + $caseSourceSha),
+    '-v', ('query_packet_sha256=' + $caseQuerySha),
     '-v', 'expected_database=neondb',
     '-v', 'expected_owner_role=neondb_owner',
     '-f', $InputFile
   )
-  $runResult = Invoke-Wave13B2F2Psql -PsqlExecutable $PsqlPath -ArgumentList $arguments
+  $invokeArguments = @{
+    PsqlExecutable = $PsqlPath
+    ArgumentList = $arguments
+    EvidencePath = $evidencePath
+    AclCheckerPath = $AclCheckerPath
+    ExpectedSourceSha = $caseSourceSha
+    ExpectedQuerySha256 = $caseQuerySha
+  }
+  if ($TimeoutSeconds -gt 0) { $invokeArguments.TimeoutSeconds = $TimeoutSeconds }
+  $runResult = Invoke-Wave13B2F2Psql @invokeArguments
   $classification = Get-Wave13B2F2RunClassification `
     -ExitCode $runResult.ExitCode `
-    -OutputLines $runResult.OutputLines `
-    -ExpectedSourceSha $ExpectedSourceSha `
-    -ExpectedQuerySha256 $ExpectedQuerySha
+    -ControlMarkers $runResult.ControlMarkers `
+    -StderrMarkers $runResult.StderrMarkers `
+    -ExpectedSourceSha $caseSourceSha `
+    -ExpectedQuerySha256 $caseQuerySha `
+    -EvidenceVerified $runResult.EvidenceVerified `
+    -FailureCodes $runResult.FailureCodes
   $auditContent = New-Wave13B2F2AuditContent `
-    -SourceSha $ExpectedSourceSha `
-    -QuerySha256 $ExpectedQuerySha `
+    -SourceSha $caseSourceSha `
+    -QuerySha256 $caseQuerySha `
     -RunResult $runResult `
     -Classification $classification
-  $auditSha = Write-Wave13B2F2AuditEvidence -Path $auditPath -Content $auditContent
+  $auditSha = Write-Wave13B2F2AuditEvidence -Path $auditPath -Content $auditContent -AclCheckerPath $AclCheckerPath
   Add-Wave13B2F2AttemptResult `
     -MarkerPath $markerPath `
     -RunResult $runResult `
@@ -152,20 +262,36 @@ function Invoke-TestPsqlCase(
     -AuditFileName ([IO.Path]::GetFileName($auditPath)) `
     -AuditSha256 $auditSha
 
-  Assert-TestMarkerStatus -Path $markerPath -ExpectedStatus $ExpectedStatus -Label $Name
-  Require-TestCondition ($classification.Status -ceq $ExpectedStatus) ($Name + ' classification did not match its expected result.')
+  $safeFailureCodes = @($classification.FailureCodes | ForEach-Object { [string]$_ } | Sort-Object -Unique) -join ','
+  $safeMarkerKinds = @($runResult.ControlMarkers + $runResult.StderrMarkers | ForEach-Object {
+    if ([string]$_ -match '^(F2_DONE|F2_FAIL|F2_STOP|F2_CHECK|F2_CATALOG_READ)\b') { $Matches[1] }
+  } | Sort-Object -Unique) -join ','
+  $safeSummary = 'status=' + $classification.Status + ' exit=' + $runResult.ExitCode + ' started=' + $runResult.PsqlStarted + ' evidenceVerified=' + $runResult.EvidenceVerified + ' evidenceBytes=' + $runResult.EvidenceBytes + ' failureCodes=' + $safeFailureCodes + ' markerKinds=' + $safeMarkerKinds
+  Assert-TestMarkerStatus -Path $markerPath -ExpectedStatus $ExpectedStatus -Label ($Name + ' ' + $safeSummary)
+  Require-TestCondition ($classification.Status -ceq $ExpectedStatus) ($Name + ' classification did not match its expected result: ' + $safeSummary)
   if ($ExpectedFailureCode) {
-    Require-TestCondition ($classification.FailureCodes -contains $ExpectedFailureCode) ($Name + ' lost the specific F2_FAIL code.')
-    Require-TestCondition ([IO.File]::ReadAllText($auditPath).Contains('F2_FAIL ' + $ExpectedFailureCode)) ($Name + ' audit evidence lost the specific F2_FAIL code.')
+    Require-TestCondition (@($classification.FailureCodes | Where-Object { $_ -match [regex]::Escape($ExpectedFailureCode) }).Count -gt 0) ($Name + ' lost its expected failure code.')
+    Require-TestCondition ([IO.File]::ReadAllText($auditPath).Contains($ExpectedFailureCode)) ($Name + ' audit evidence lost the failure code.')
   }
+  Require-TestCondition ($runResult.PsqlStarted -or $Name -eq 'tampered-query-denial') ($Name + ' unexpectedly skipped its psql path.')
+  Require-TestCondition ([IO.File]::ReadAllText($markerPath).Contains('sourceSha=' + $caseSourceSha)) ($Name + ' marker lost its source pin.')
+  Require-TestCondition ([IO.File]::ReadAllText($markerPath).Contains('queryPacketSha256=' + $caseQuerySha)) ($Name + ' marker lost its query pin.')
   return [pscustomobject]@{
     Name = $Name
     ExitCode = $runResult.ExitCode
     Status = $classification.Status
     FailureCodes = [string[]]$classification.FailureCodes
-    OutputLines = [string[]]$runResult.OutputLines
+    DiagnosticLines = [string[]]$runResult.DiagnosticLines
+    SourceSha = $caseSourceSha
+    QuerySha256 = $caseQuerySha
     AuditPath = $auditPath
     MarkerPath = $markerPath
+    EvidencePath = $evidencePath
+    EvidenceBytes = $runResult.EvidenceBytes
+    EvidenceSha256 = $runResult.EvidenceSha256
+    EvidenceVerified = $runResult.EvidenceVerified
+    RunResult = $runResult
+    Classification = $classification
   }
 }
 
@@ -185,6 +311,8 @@ $queryBytes = [IO.File]::ReadAllBytes($queryPath)
 $querySha = Get-Wave13B2F2QuerySha256 -Bytes $queryBytes
 $sourceSha = 'a' * 40
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('karturt-wave13b2-f2-pg18-' + [guid]::NewGuid().ToString('N'))
+$evidenceRoot = Join-Path $testRoot 'owner-evidence'
+$aclCheckerPath = Join-Path $PSScriptRoot 'check-wave13b2-secret-acl.ps1'
 $testRootCreated = $false
 $serverStarted = $false
 $dataDir = Join-Path $testRoot 'data'
@@ -193,6 +321,8 @@ $testEnvironment = [System.Collections.Generic.Dictionary[string, string]]::new(
 
 try {
   [void][IO.Directory]::CreateDirectory($testRoot)
+  Set-TestOwnerOnlyDirectory -Path $testRoot
+  Set-TestOwnerOnlyDirectory -Path $evidenceRoot
   $testRootCreated = $true
   $tempRootResolved = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
   $testRootResolved = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $testRoot).Path)
@@ -251,7 +381,20 @@ try {
   Write-TestStage 'create-isolated-test-database'
   [void](Invoke-CheckedProcess -Executable $psqlPath -ArgumentList $adminArguments -Label 'isolated test database setup')
 
+  $catalogCanaryBase = 'f2_owner_evidence_canary_' + [guid]::NewGuid().ToString('N')
+  $catalogCanaryDone = 'F2_DONE PASS source=' + ('b' * 40) + ' query=' + ('c' * 64)
+  $catalogCanaryFail = 'F2_FAIL SYNTHETIC_CSV_FIELD'
+  $catalogCanaryStop = 'F2_STOP SYNTHETIC_CSV_FIELD'
+  $catalogCanary = $catalogCanaryBase + "`n" + $catalogCanaryDone + "`n" + $catalogCanaryFail + "`n" + $catalogCanaryStop
+  $quotedCatalogCanary = '"' + $catalogCanary.Replace('"', '""') + '"'
+  $adminArguments = @('-X', '-w', '-h', '127.0.0.1', '-p', [string]$port, '-U', 'neondb_owner', '-d', 'neondb', '-v', 'ON_ERROR_STOP=1', '-c', ('CREATE SCHEMA ' + $quotedCatalogCanary))
+  Write-TestStage 'create-synthetic-catalog-canary'
+  [void](Invoke-CheckedProcess -Executable $psqlPath -ArgumentList $adminArguments -Label 'synthetic catalog fixture setup')
+
   Write-TestStage 'passing-connection-and-catalog-guards'
+  $terminalTranscriptPath = Join-Path $testRoot 'passing-run.terminal.txt'
+  Start-Transcript -LiteralPath $terminalTranscriptPath -Force | Out-Null
+  try {
   $pass = Invoke-TestPsqlCase `
     -Name 'passing-guard' `
     -HostAddress '127.0.0.1' `
@@ -260,12 +403,47 @@ try {
     -ExpectedStatus 'COMPLETED' `
     -ExpectedFailureCode '' `
     -ExpectedSourceSha $sourceSha `
-    -ExpectedQuerySha $querySha `
     -TestRoot $testRoot `
+    -EvidenceRoot $evidenceRoot `
+    -AclCheckerPath $aclCheckerPath `
     -PsqlPath $psqlPath
   Require-TestCondition ($pass.ExitCode -eq 0) 'The passing guard path did not exit zero.'
-  Require-TestCondition ($pass.OutputLines -contains ('F2_DONE PASS source=' + $sourceSha + ' query=' + $querySha)) 'The passing guard path did not reach its exact F2_DONE marker.'
-  Require-TestCondition ($pass.OutputLines -contains 'F2_CHECK TLS_ACTIVE PASS') 'The passing guard path did not verify local TLS.'
+  Require-TestCondition ($pass.DiagnosticLines -contains ('F2_DONE PASS source=' + $pass.SourceSha + ' query=' + $pass.QuerySha256)) 'The passing guard path did not reach its exact F2_DONE marker.'
+  Require-TestCondition ($pass.DiagnosticLines -contains 'F2_CHECK TLS_ACTIVE PASS') 'The passing guard path did not verify local TLS.'
+  Require-TestCondition ($pass.DiagnosticLines -notcontains $catalogCanaryDone -and $pass.DiagnosticLines -notcontains $catalogCanaryFail -and $pass.DiagnosticLines -notcontains $catalogCanaryStop) 'A control-like string inside a quoted CSV catalog field was treated as a control marker.'
+  } finally {
+    Stop-Transcript | Out-Null
+  }
+
+  $passEvidence = [IO.File]::ReadAllBytes($pass.EvidencePath)
+  $passEvidenceText = [Text.Encoding]::UTF8.GetString($passEvidence)
+  $passAuditText = [IO.File]::ReadAllText($pass.AuditPath)
+  $terminalText = [IO.File]::ReadAllText($terminalTranscriptPath)
+  $passEvidenceSha256 = Get-TestSha256Hex -Bytes $passEvidence
+  Require-TestCondition ($pass.EvidenceVerified -and $pass.RunResult.EvidenceVerified) 'The full catalog evidence was not verified after psql completed.'
+  Require-TestCondition ($pass.EvidenceBytes -eq $passEvidence.LongLength) 'The owner evidence length does not match the complete saved file.'
+  Require-TestCondition ($pass.EvidenceSha256 -ceq $passEvidenceSha256) 'The owner evidence digest does not match the complete saved file.'
+  Require-TestCondition ($passEvidenceText.Contains($catalogCanary)) 'The full synthetic catalog output is missing from the owner evidence file.'
+  Require-TestCondition ($passEvidenceText.Contains($catalogCanaryDone) -and $passEvidenceText.Contains($catalogCanaryFail) -and $passEvidenceText.Contains($catalogCanaryStop)) 'The quoted multiline CSV marker canaries are missing from the owner evidence file.'
+  Require-TestCondition ($passEvidenceText.Contains('F2_DONE PASS source=' + $pass.SourceSha + ' query=' + $pass.QuerySha256)) 'The complete owner evidence file is missing the exact F2_DONE line.'
+  Require-TestCondition ($pass.EvidencePath.Contains($pass.SourceSha) -and $pass.EvidencePath.Contains($pass.QuerySha256)) 'The owner evidence filename is not bound to the source and query hashes.'
+  Require-TestCondition ((@(& $aclCheckerPath -Path $pass.EvidencePath -RequireProtected) -join '').Trim() -eq 'PASS') 'The owner evidence file did not retain its protected ACL.'
+  Require-TestCondition ($passAuditText.Contains('evidenceSha256=' + $passEvidenceSha256)) 'The sanitized audit is missing the raw evidence SHA-256.'
+  Require-TestCondition (-not $passAuditText.Contains($catalogCanary)) 'The sanitized audit retained raw catalog output.'
+  Require-TestCondition (-not $passAuditText.Contains($catalogCanaryFail) -and -not $passAuditText.Contains($catalogCanaryStop)) 'The sanitized audit retained control-like raw catalog field content.'
+  Require-TestCondition (-not $terminalText.Contains($catalogCanary)) 'Raw catalog output reached the terminal transcript.'
+  Require-TestCondition ('OutputLines' -notin $pass.RunResult.PSObject.Properties.Name) 'The runner result exposed a raw output-lines property.'
+
+  $exactDoneLine = 'F2_DONE PASS source=' + $pass.SourceSha + ' query=' + $pass.QuerySha256
+  [void](Assert-TestF2Classification -Label 'exact-done-exit-zero-evidence-verified' -ExitCode 0 -DiagnosticLines @($exactDoneLine) -ExpectedSourceSha $pass.SourceSha -ExpectedQuerySha $pass.QuerySha256 -EvidenceVerified $true -FailureCodes @() -ExpectedStatus 'COMPLETED')
+  [void](Assert-TestF2Classification -Label 'nonzero-exit' -ExitCode 3 -DiagnosticLines @($exactDoneLine) -ExpectedSourceSha $pass.SourceSha -ExpectedQuerySha $pass.QuerySha256 -EvidenceVerified $true -FailureCodes @() -ExpectedStatus 'FAILED')
+  [void](Assert-TestF2Classification -Label 'missing-done' -ExitCode 0 -DiagnosticLines @('F2_CHECK TLS_ACTIVE PASS') -ExpectedSourceSha $pass.SourceSha -ExpectedQuerySha $pass.QuerySha256 -EvidenceVerified $true -FailureCodes @() -ExpectedStatus 'FAILED')
+  [void](Assert-TestF2Classification -Label 'wrong-source-done' -ExitCode 0 -DiagnosticLines @('F2_DONE PASS source=' + ('b' * 40) + ' query=' + $pass.QuerySha256) -ExpectedSourceSha $pass.SourceSha -ExpectedQuerySha $pass.QuerySha256 -EvidenceVerified $true -FailureCodes @() -ExpectedStatus 'FAILED')
+  [void](Assert-TestF2Classification -Label 'wrong-query-done' -ExitCode 0 -DiagnosticLines @('F2_DONE PASS source=' + $pass.SourceSha + ' query=' + ('c' * 64)) -ExpectedSourceSha $pass.SourceSha -ExpectedQuerySha $pass.QuerySha256 -EvidenceVerified $true -FailureCodes @() -ExpectedStatus 'FAILED')
+  [void](Assert-TestF2Classification -Label 'duplicate-done' -ExitCode 0 -DiagnosticLines @($exactDoneLine, $exactDoneLine) -ExpectedSourceSha $pass.SourceSha -ExpectedQuerySha $pass.QuerySha256 -EvidenceVerified $true -FailureCodes @() -ExpectedStatus 'FAILED')
+  [void](Assert-TestF2Classification -Label 'fail-with-done' -ExitCode 0 -DiagnosticLines @('F2_FAIL SYNTHETIC_GUARD_FAILURE', $exactDoneLine) -ExpectedSourceSha $pass.SourceSha -ExpectedQuerySha $pass.QuerySha256 -EvidenceVerified $true -FailureCodes @('SYNTHETIC_GUARD_FAILURE') -ExpectedStatus 'FAILED')
+  [void](Assert-TestF2Classification -Label 'stop-with-done' -ExitCode 0 -DiagnosticLines @('F2_STOP SYNTHETIC_GUARD_FAILURE', $exactDoneLine) -ExpectedSourceSha $pass.SourceSha -ExpectedQuerySha $pass.QuerySha256 -EvidenceVerified $true -FailureCodes @() -ExpectedStatus 'FAILED')
+  [void](Assert-TestF2Classification -Label 'unverified-evidence-with-done' -ExitCode 0 -DiagnosticLines @($exactDoneLine) -ExpectedSourceSha $pass.SourceSha -ExpectedQuerySha $pass.QuerySha256 -EvidenceVerified $false -FailureCodes @('F2_EVIDENCE_MISSING') -ExpectedStatus 'FAILED')
 
   Write-TestStage 'failing-connection-guard'
   $connectionFailure = Invoke-TestPsqlCase `
@@ -277,13 +455,14 @@ try {
     -ExpectedStatus 'FAILED' `
     -ExpectedFailureCode 'TARGET_BRANCH_ID_MISMATCH' `
     -ExpectedSourceSha $sourceSha `
-    -ExpectedQuerySha $querySha `
     -TestRoot $testRoot `
+    -EvidenceRoot $evidenceRoot `
+    -AclCheckerPath $aclCheckerPath `
     -PsqlPath $psqlPath
   Require-TestCondition ($connectionFailure.ExitCode -ne 0) 'The failing connection guard returned psql exit zero.'
-  Require-TestCondition ($connectionFailure.OutputLines -contains 'F2_STOP CONNECTION_GUARD_FAILED CATALOG_QUERIES_SKIPPED') 'The connection guard did not report its stop marker.'
-  Require-TestCondition (@($connectionFailure.OutputLines | Where-Object { $_ -match '^F2_CATALOG_READ ' }).Count -eq 0) 'A connection guard failure reached a catalog read.'
-  Require-TestCondition ($connectionFailure.OutputLines -contains 'F2_FAIL TARGET_BRANCH_ID_MISMATCH') 'The connection guard did not report its target branch failure.'
+  Require-TestCondition ($connectionFailure.DiagnosticLines -contains 'F2_STOP CONNECTION_GUARD_FAILED CATALOG_QUERIES_SKIPPED') 'The connection guard did not report its stop marker.'
+  Require-TestCondition (@($connectionFailure.DiagnosticLines | Where-Object { $_ -match '^F2_CATALOG_READ ' }).Count -eq 0) 'A connection guard failure reached a catalog read.'
+  Require-TestCondition ($connectionFailure.DiagnosticLines -contains 'F2_FAIL TARGET_BRANCH_ID_MISMATCH') 'The connection guard did not report its target branch failure.'
 
   $schemaSetupPath = Join-Path $testRoot 'create-over-limit-schemas.sql'
   $schemaSetup = @'
@@ -309,13 +488,14 @@ $f2_setup$;
     -ExpectedStatus 'FAILED' `
     -ExpectedFailureCode 'SCHEMA_OUTPUT_LIMIT_EXCEEDED' `
     -ExpectedSourceSha $sourceSha `
-    -ExpectedQuerySha $querySha `
     -TestRoot $testRoot `
+    -EvidenceRoot $evidenceRoot `
+    -AclCheckerPath $aclCheckerPath `
     -PsqlPath $psqlPath
   Require-TestCondition ($schemaFailure.ExitCode -ne 0) 'The failing output guard returned psql exit zero.'
-  Require-TestCondition ($schemaFailure.OutputLines -contains 'F2_CATALOG_READ SCHEMA_LIMIT_COUNT') 'The failing schema guard did not show its count read marker.'
-  Require-TestCondition ($schemaFailure.OutputLines -contains 'F2_FAIL SCHEMA_OUTPUT_LIMIT_EXCEEDED') 'The failing schema guard lost its specific failure code.'
-  Require-TestCondition (@($schemaFailure.OutputLines | Where-Object { $_ -match '^F2_CATALOG_READ SCHEMA_INVENTORY$|^F2_CATALOG_READ (RELATION|TYPE|ROUTINE|EXTENSION|DEFAULT_ACL)_' }).Count -eq 0) 'A catalog read continued after the schema output guard failed.'
+  Require-TestCondition ($schemaFailure.DiagnosticLines -contains 'F2_CATALOG_READ SCHEMA_LIMIT_COUNT') 'The failing schema guard did not show its count read marker.'
+  Require-TestCondition ($schemaFailure.DiagnosticLines -contains 'F2_FAIL SCHEMA_OUTPUT_LIMIT_EXCEEDED') 'The failing schema guard lost its specific failure code.'
+  Require-TestCondition (@($schemaFailure.DiagnosticLines | Where-Object { $_ -match '^F2_CATALOG_READ SCHEMA_INVENTORY$|^F2_CATALOG_READ (RELATION|TYPE|ROUTINE|EXTENSION|DEFAULT_ACL)_' }).Count -eq 0) 'A catalog read continued after the schema output guard failed.'
 
   $unusedHostPort = Get-TestLoopbackPort -Address ([Net.IPAddress]::Parse('127.0.0.2'))
   Write-TestStage 'terminal-connection-failure'
@@ -327,8 +507,9 @@ $f2_setup$;
     -ExpectedStatus 'FAILED' `
     -ExpectedFailureCode '' `
     -ExpectedSourceSha $sourceSha `
-    -ExpectedQuerySha $querySha `
     -TestRoot $testRoot `
+    -EvidenceRoot $evidenceRoot `
+    -AclCheckerPath $aclCheckerPath `
     -PsqlPath $psqlPath
   Require-TestCondition ($terminalFailure.ExitCode -ne 0) 'The terminal connection failure unexpectedly returned psql exit zero.'
 
@@ -350,14 +531,217 @@ $f2_setup$;
     -ExpectedStatus 'FAILED' `
     -ExpectedFailureCode '' `
     -ExpectedSourceSha $sourceSha `
-    -ExpectedQuerySha $querySha `
     -TestRoot $testRoot `
+    -EvidenceRoot $evidenceRoot `
+    -AclCheckerPath $aclCheckerPath `
     -PsqlPath $psqlPath
   Require-TestCondition ($legacy.ExitCode -eq 0) 'The legacy \quit 3 test no longer demonstrates psql exit zero.'
-  Require-TestCondition ($legacy.OutputLines -notcontains 'F2_CATALOG_READ MUST_NOT_RUN') 'psql did not stop at the legacy quit command.'
+  Require-TestCondition ($legacy.DiagnosticLines -notcontains 'F2_CATALOG_READ MUST_NOT_RUN') 'psql did not stop at the legacy quit command.'
   Require-TestCondition ($legacy.Status -ceq 'FAILED') 'The runner misclassified the legacy exit-zero stop as successful.'
 
-  Write-TestStage 'query-tamper-denial'
+  Write-TestStage 'missing-evidence-fails-closed'
+  $missingSourceSha = 'd' * 40
+  $missingQuerySha = 'e' * 64
+  $missingDone = 'F2_DONE PASS source=' + $missingSourceSha + ' query=' + $missingQuerySha
+  $missingAttemptRoot = Get-TestAttemptDirectory -BasePath $evidenceRoot -SourceSha $missingSourceSha
+  $missingPath = Join-Path $missingAttemptRoot ('wave13b2-f2-catalog-evidence-' + $missingSourceSha + '-' + $missingQuerySha + '.local.txt')
+  $missingVerification = Get-Wave13B2F2OwnerEvidenceVerification `
+    -Path $missingPath `
+    -AclCheckerPath $aclCheckerPath `
+    -ExpectedSourceSha $missingSourceSha `
+    -ExpectedQuerySha256 $missingQuerySha `
+    -ExpectedLength 1 `
+    -ExpectedSha256 ('0' * 64)
+  Require-TestCondition (-not $missingVerification.Verified) 'A missing owner evidence file passed verification.'
+  Require-TestCondition (@($missingVerification.FailureCodes | Where-Object { $_ -match 'MISSING' }).Count -gt 0) 'A missing evidence file did not report a specific failure code.'
+  [void](Assert-TestF2Classification -Label 'missing-evidence-with-exact-done' -ExitCode 0 -DiagnosticLines @($missingDone) -ExpectedSourceSha $missingSourceSha -ExpectedQuerySha $missingQuerySha -EvidenceVerified $missingVerification.Verified -FailureCodes $missingVerification.FailureCodes -ExpectedStatus 'FAILED')
+
+  $syntheticSourceSha = 'f' * 40
+  $syntheticQuerySha = '1' * 64
+  $syntheticDone = 'F2_DONE PASS source=' + $syntheticSourceSha + ' query=' + $syntheticQuerySha
+  $syntheticEvidenceBytes = [Text.UTF8Encoding]::new($false).GetBytes("synthetic_catalog_row=owner_only`n$syntheticDone`n")
+  $syntheticEvidenceSha = Get-TestSha256Hex -Bytes $syntheticEvidenceBytes
+  $syntheticAttemptRoot = Get-TestAttemptDirectory -BasePath $evidenceRoot -SourceSha $syntheticSourceSha
+  $syntheticEvidencePath = Join-Path $syntheticAttemptRoot ('wave13b2-f2-catalog-evidence-' + $syntheticSourceSha + '-' + $syntheticQuerySha + '.local.txt')
+  $syntheticEvidenceStream = New-Wave13B2F2OwnerEvidenceFile -Path $syntheticEvidencePath -AclCheckerPath $aclCheckerPath -ExpectedSourceSha $syntheticSourceSha -ExpectedQuerySha256 $syntheticQuerySha
+  try {
+    $syntheticEvidenceStream.Write($syntheticEvidenceBytes, 0, $syntheticEvidenceBytes.Length)
+    $syntheticEvidenceStream.Flush($true)
+  } finally {
+    $syntheticEvidenceStream.Dispose()
+  }
+
+  Write-TestStage 'evidence-create-only'
+  $evidenceBeforeDuplicateCreate = Get-TestSha256Hex -Bytes ([IO.File]::ReadAllBytes($syntheticEvidencePath))
+  $duplicateEvidenceCreateDenied = $false
+  try {
+    $duplicateEvidence = New-Wave13B2F2OwnerEvidenceFile -Path $syntheticEvidencePath -AclCheckerPath $aclCheckerPath -ExpectedSourceSha $syntheticSourceSha -ExpectedQuerySha256 $syntheticQuerySha
+    $duplicateEvidence.Dispose()
+  } catch {
+    $duplicateEvidenceCreateDenied = $true
+  }
+  Require-TestCondition $duplicateEvidenceCreateDenied 'Owner evidence creation overwrote or reopened an existing source/query-bound file.'
+  Require-TestCondition ((Get-TestSha256Hex -Bytes ([IO.File]::ReadAllBytes($syntheticEvidencePath))) -ceq $evidenceBeforeDuplicateCreate) 'A rejected create-only evidence attempt changed prior evidence bytes.'
+
+  Write-TestStage 'tampered-evidence-fails-closed'
+  $initialSyntheticVerification = Get-Wave13B2F2OwnerEvidenceVerification `
+    -Path $syntheticEvidencePath `
+    -AclCheckerPath $aclCheckerPath `
+    -ExpectedSourceSha $syntheticSourceSha `
+    -ExpectedQuerySha256 $syntheticQuerySha `
+    -ExpectedLength $syntheticEvidenceBytes.LongLength `
+    -ExpectedSha256 $syntheticEvidenceSha
+  Require-TestCondition $initialSyntheticVerification.Verified 'The intact synthetic owner evidence did not verify.'
+  $tamperedEvidenceBytes = [IO.File]::ReadAllBytes($syntheticEvidencePath)
+  $tamperedEvidenceBytes[0] = [byte]([int]$tamperedEvidenceBytes[0] -bxor 1)
+  [IO.File]::WriteAllBytes($syntheticEvidencePath, $tamperedEvidenceBytes)
+  $tamperedVerification = Get-Wave13B2F2OwnerEvidenceVerification `
+    -Path $syntheticEvidencePath `
+    -AclCheckerPath $aclCheckerPath `
+    -ExpectedSourceSha $syntheticSourceSha `
+    -ExpectedQuerySha256 $syntheticQuerySha `
+    -ExpectedLength $syntheticEvidenceBytes.LongLength `
+    -ExpectedSha256 $syntheticEvidenceSha
+  Require-TestCondition (-not $tamperedVerification.Verified) 'Tampered evidence passed SHA-256 verification.'
+  Require-TestCondition (@($tamperedVerification.FailureCodes | Where-Object { $_ -match 'HASH_MISMATCH' }).Count -gt 0) 'Tampered evidence did not report a digest mismatch.'
+  [void](Assert-TestF2Classification -Label 'tampered-evidence-with-exact-done' -ExitCode 0 -DiagnosticLines @($syntheticDone) -ExpectedSourceSha $syntheticSourceSha -ExpectedQuerySha $syntheticQuerySha -EvidenceVerified $tamperedVerification.Verified -FailureCodes $tamperedVerification.FailureCodes -ExpectedStatus 'FAILED')
+
+  Write-TestStage 'acl-mismatch-fails-closed'
+  $aclSourceSha = '2' * 40
+  $aclQuerySha = '3' * 64
+  $aclDone = 'F2_DONE PASS source=' + $aclSourceSha + ' query=' + $aclQuerySha
+  $aclAttemptRoot = Get-TestAttemptDirectory -BasePath $evidenceRoot -SourceSha $aclSourceSha
+  $aclEvidencePath = Join-Path $aclAttemptRoot ('wave13b2-f2-catalog-evidence-' + $aclSourceSha + '-' + $aclQuerySha + '.local.txt')
+  $aclEvidenceStream = New-Wave13B2F2OwnerEvidenceFile -Path $aclEvidencePath -AclCheckerPath $aclCheckerPath -ExpectedSourceSha $aclSourceSha -ExpectedQuerySha256 $aclQuerySha
+  try {
+    $aclEvidenceStream.Write($syntheticEvidenceBytes, 0, $syntheticEvidenceBytes.Length)
+    $aclEvidenceStream.Flush($true)
+  } finally {
+    $aclEvidenceStream.Dispose()
+  }
+  $unprotectedAcl = Get-Acl -LiteralPath $aclEvidencePath
+  $unprotectedAcl.SetAccessRuleProtection($false, $true)
+  Set-Acl -LiteralPath $aclEvidencePath -AclObject $unprotectedAcl
+  $aclVerification = Get-Wave13B2F2OwnerEvidenceVerification `
+    -Path $aclEvidencePath `
+    -AclCheckerPath $aclCheckerPath `
+    -ExpectedSourceSha $aclSourceSha `
+    -ExpectedQuerySha256 $aclQuerySha `
+    -ExpectedLength $syntheticEvidenceBytes.LongLength `
+    -ExpectedSha256 $syntheticEvidenceSha
+  Require-TestCondition (-not $aclVerification.Verified) 'An evidence file with inherited ACLs passed verification.'
+  Require-TestCondition (@($aclVerification.FailureCodes | Where-Object { $_ -match 'ACL_MISMATCH' }).Count -gt 0) 'The ACL mismatch did not produce a bounded failure code.'
+  [void](Assert-TestF2Classification -Label 'acl-mismatch-with-exact-done' -ExitCode 0 -DiagnosticLines @($aclDone) -ExpectedSourceSha $aclSourceSha -ExpectedQuerySha $aclQuerySha -EvidenceVerified $aclVerification.Verified -FailureCodes $aclVerification.FailureCodes -ExpectedStatus 'FAILED')
+
+  Write-TestStage 'truncated-evidence-fails-closed'
+  $truncatedSourceSha = '4' * 40
+  $truncatedQuerySha = '5' * 64
+  $truncatedDone = 'F2_DONE PASS source=' + $truncatedSourceSha + ' query=' + $truncatedQuerySha
+  $truncatedEvidenceBytes = [Text.UTF8Encoding]::new($false).GetBytes("synthetic_catalog_row=complete-before-truncation`n$truncatedDone`n")
+  $truncatedEvidenceSha = Get-TestSha256Hex -Bytes $truncatedEvidenceBytes
+  $truncatedAttemptRoot = Get-TestAttemptDirectory -BasePath $evidenceRoot -SourceSha $truncatedSourceSha
+  $truncatedEvidencePath = Join-Path $truncatedAttemptRoot ('wave13b2-f2-catalog-evidence-' + $truncatedSourceSha + '-' + $truncatedQuerySha + '.local.txt')
+  $truncatedEvidenceStream = New-Wave13B2F2OwnerEvidenceFile -Path $truncatedEvidencePath -AclCheckerPath $aclCheckerPath -ExpectedSourceSha $truncatedSourceSha -ExpectedQuerySha256 $truncatedQuerySha
+  try {
+    $truncatedEvidenceStream.Write($truncatedEvidenceBytes, 0, $truncatedEvidenceBytes.Length)
+    $truncatedEvidenceStream.Flush($true)
+  } finally {
+    $truncatedEvidenceStream.Dispose()
+  }
+  $truncateStream = [IO.File]::Open($truncatedEvidencePath, [IO.FileMode]::Open, [IO.FileAccess]::Write, [IO.FileShare]::None)
+  try {
+    $truncateStream.SetLength($truncatedEvidenceBytes.LongLength - 1)
+    $truncateStream.Flush($true)
+  } finally {
+    $truncateStream.Dispose()
+  }
+  $truncatedVerification = Get-Wave13B2F2OwnerEvidenceVerification `
+    -Path $truncatedEvidencePath `
+    -AclCheckerPath $aclCheckerPath `
+    -ExpectedSourceSha $truncatedSourceSha `
+    -ExpectedQuerySha256 $truncatedQuerySha `
+    -ExpectedLength $truncatedEvidenceBytes.LongLength `
+    -ExpectedSha256 $truncatedEvidenceSha
+  Require-TestCondition (-not $truncatedVerification.Verified) 'A truncated evidence file passed verification.'
+  Require-TestCondition (@($truncatedVerification.FailureCodes | Where-Object { $_ -match 'LENGTH_MISMATCH|HASH_MISMATCH' }).Count -gt 0) 'Truncated evidence did not report a length or digest mismatch.'
+  [void](Assert-TestF2Classification -Label 'truncated-evidence-with-exact-done' -ExitCode 0 -DiagnosticLines @($truncatedDone) -ExpectedSourceSha $truncatedSourceSha -ExpectedQuerySha $truncatedQuerySha -EvidenceVerified $truncatedVerification.Verified -FailureCodes $truncatedVerification.FailureCodes -ExpectedStatus 'FAILED')
+
+  Write-TestStage 'sql-error-fails-closed'
+  $sqlErrorPath = Join-Path $testRoot 'synthetic-sql-error.sql'
+  $sqlErrorScript = @(
+    '\set ON_ERROR_STOP on'
+    '\echo F2_FAIL SYNTHETIC_SQL_ERROR'
+    'SELECT 1 / 0;'
+    '\echo F2_DONE PASS source=:approved_source_sha query=:query_packet_sha256'
+    ''
+  ) -join "`n"
+  [IO.File]::WriteAllText($sqlErrorPath, $sqlErrorScript, [Text.UTF8Encoding]::new($false))
+  $sqlError = Invoke-TestPsqlCase `
+    -Name 'synthetic-sql-error' `
+    -HostAddress '127.0.0.1' `
+    -Port $port `
+    -InputFile $sqlErrorPath `
+    -ExpectedStatus 'FAILED' `
+    -ExpectedFailureCode 'SYNTHETIC_SQL_ERROR' `
+    -ExpectedSourceSha $sourceSha `
+    -TestRoot $testRoot `
+    -EvidenceRoot $evidenceRoot `
+    -AclCheckerPath $aclCheckerPath `
+    -PsqlPath $psqlPath
+  Require-TestCondition ($sqlError.ExitCode -ne 0) 'The synthetic SQL error returned exit zero.'
+  Require-TestCondition ($sqlError.DiagnosticLines -notcontains ('F2_DONE PASS source=' + $sqlError.SourceSha + ' query=' + $sqlError.QuerySha256)) 'psql reported F2_DONE after stopping on the synthetic SQL error.'
+
+  Write-TestStage 'interrupted-query-times-out-fail-closed'
+  $interruptedSqlPath = Join-Path $testRoot 'synthetic-interrupted-query.sql'
+  $interruptedSql = @(
+    '\set ON_ERROR_STOP on'
+    '\echo F2_CATALOG_READ SYNTHETIC_LONG_QUERY'
+    'SELECT pg_sleep(60);'
+    '\echo F2_DONE PASS source=:approved_source_sha query=:query_packet_sha256'
+    ''
+  ) -join "`n"
+  [IO.File]::WriteAllText($interruptedSqlPath, $interruptedSql, [Text.UTF8Encoding]::new($false))
+  $interrupted = Invoke-TestPsqlCase `
+    -Name 'synthetic-query-interruption' `
+    -HostAddress '127.0.0.1' `
+    -Port $port `
+    -InputFile $interruptedSqlPath `
+    -ExpectedStatus 'FAILED' `
+    -ExpectedFailureCode 'TIMEOUT' `
+    -ExpectedSourceSha $sourceSha `
+    -TestRoot $testRoot `
+    -EvidenceRoot $evidenceRoot `
+    -AclCheckerPath $aclCheckerPath `
+    -PsqlPath $psqlPath `
+    -TimeoutSeconds 2
+  Require-TestCondition ($interrupted.RunResult.PsqlStarted) 'The interruption case did not start psql.'
+  Require-TestCondition ($interrupted.RunResult.PSObject.Properties.Name -contains 'ProcessId') 'The runner did not report the bounded test process identifier.'
+  Require-TestCondition ($interrupted.DiagnosticLines -notcontains ('F2_DONE PASS source=' + $interrupted.SourceSha + ' query=' + $interrupted.QuerySha256)) 'The interrupted query unexpectedly reached F2_DONE.'
+
+  Write-TestStage 'attempt-marker-create-only-and-preserved'
+  $markerPath = Join-Path $syntheticAttemptRoot ('wave13b2-f2-query-attempt-' + $syntheticSourceSha + '.local.txt')
+  $markerPrefix = "status=STARTED`nsignedApprovalDigest=" + ('a' * 64) + "`nsourceSha=$syntheticSourceSha`n"
+  $markerBytes = [Text.UTF8Encoding]::new($false).GetBytes($markerPrefix)
+  $ownerMarker = [IO.File]::Open($markerPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+  try {
+    $ownerMarker.Write($markerBytes, 0, $markerBytes.Length)
+    $ownerMarker.Flush($true)
+  } finally {
+    $ownerMarker.Dispose()
+  }
+  Set-TestOwnerOnlyFile -Path $markerPath
+  $markerBefore = Get-TestSha256Hex -Bytes ([IO.File]::ReadAllBytes($markerPath))
+  $duplicateMarkerDenied = $false
+  try {
+    $duplicateMarker = [IO.File]::Open($markerPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    $duplicateMarker.Dispose()
+  } catch {
+    $duplicateMarkerDenied = $true
+  }
+  Require-TestCondition $duplicateMarkerDenied 'An existing source attempt marker was reopened with CreateNew.'
+  Require-TestCondition ((Get-TestSha256Hex -Bytes ([IO.File]::ReadAllBytes($markerPath))) -ceq $markerBefore) 'A duplicate attempt changed the existing owner marker or approval digest.'
+
+  Write-TestStage 'tampered-query-denial'
   $tamperedBytes = [byte[]]$queryBytes.Clone()
   $tamperedBytes[0] = [byte]([int]$tamperedBytes[0] -bxor 1)
   $tamperDenied = $false
@@ -370,31 +754,14 @@ $f2_setup$;
   }
   Require-TestCondition $tamperDenied 'Tampered query bytes were not rejected before psql.'
   Require-TestCondition (-not (Test-Path -LiteralPath $tamperStartSentinel)) 'The tampered-query path reached the psql start sentinel.'
-  $tamperRun = [pscustomobject]@{ ExitCode = -1; OutputLines = [string[]]@('F2_FAIL QUERY_SOURCE_DIGEST_MISMATCH') }
-  $tamperClassification = Get-Wave13B2F2RunClassification -ExitCode -1 -OutputLines $tamperRun.OutputLines -ExpectedSourceSha $sourceSha -ExpectedQuerySha256 $querySha
-  $tamperMarkerPath = Join-Path $testRoot 'tampered-query.attempt.local.txt'
-  [IO.File]::WriteAllText($tamperMarkerPath, "status=STARTED`n", [Text.UTF8Encoding]::new($false))
+  $tamperClassification = Assert-TestF2Classification -Label 'tampered-query-denial' -ExitCode -1 -DiagnosticLines @('F2_FAIL QUERY_SOURCE_DIGEST_MISMATCH') -ExpectedSourceSha $sourceSha -ExpectedQuerySha $querySha -EvidenceVerified $false -FailureCodes @('QUERY_SOURCE_DIGEST_MISMATCH', 'F2_EVIDENCE_MISSING') -ExpectedStatus 'FAILED'
+  $tamperAttemptRoot = Get-TestAttemptDirectory -BasePath $evidenceRoot -SourceSha $sourceSha
+  $tamperMarkerPath = Join-Path $tamperAttemptRoot ('wave13b2-f2-query-attempt-' + $sourceSha + '.local.txt')
+  [IO.File]::WriteAllText($tamperMarkerPath, "status=STARTED`nsourceSha=$sourceSha`nqueryPacketSha256=$querySha`nsignedApprovalDigest=$(('b' * 64))`n", [Text.UTF8Encoding]::new($false))
+  Set-TestOwnerOnlyFile -Path $tamperMarkerPath
+  $tamperRun = [pscustomobject]@{ ExitCode = -1; PsqlStarted = $false; EvidencePath = ''; DiagnosticLines = [string[]]@('F2_FAIL QUERY_SOURCE_DIGEST_MISMATCH'); FailureCodes = [string[]]@('QUERY_SOURCE_DIGEST_MISMATCH', 'F2_EVIDENCE_MISSING'); EvidenceVerified = $false; EvidenceBytes = 0; EvidenceSha256 = $null; StderrBytes = 0; StderrSha256 = ('0' * 64) }
   Add-Wave13B2F2AttemptResult -MarkerPath $tamperMarkerPath -RunResult $tamperRun -Classification $tamperClassification -AuditFileName 'unavailable' -AuditSha256 'unavailable'
   Assert-TestMarkerStatus -Path $tamperMarkerPath -ExpectedStatus 'FAILED' -Label 'tampered-query'
-
-  Write-TestStage 'sanitized-audit-evidence'
-  $syntheticOutput = [string[]]@(
-    'F2_FAIL SCHEMA_OUTPUT_LIMIT_EXCEEDED',
-    'F2_STOP CATALOG_QUERIES_SKIPPED',
-    'F2_CATALOG_READ SCHEMA_LIMIT_COUNT',
-    'F2_CHECK SCHEMA_OUTPUT_LIMIT count=202 limit=200',
-    'schema_name=private_test_schema',
-    'password=synthetic-secret-never-persist',
-    'ERROR: F2_STOP SCHEMA_OUTPUT_LIMIT_EXCEEDED'
-  )
-  $syntheticRun = [pscustomobject]@{ ExitCode = 3; OutputLines = $syntheticOutput }
-  $syntheticClassification = Get-Wave13B2F2RunClassification -ExitCode 3 -OutputLines $syntheticOutput -ExpectedSourceSha $sourceSha -ExpectedQuerySha256 $querySha
-  $syntheticAudit = New-Wave13B2F2AuditContent -SourceSha $sourceSha -QuerySha256 $querySha -RunResult $syntheticRun -Classification $syntheticClassification
-  Require-TestCondition ($syntheticAudit.Contains('F2_FAIL SCHEMA_OUTPUT_LIMIT_EXCEEDED')) 'Sanitized evidence lost the specific F2_FAIL code.'
-  Require-TestCondition ($syntheticAudit.Contains('F2_CHECK SCHEMA_OUTPUT_LIMIT count=202 limit=200')) 'Sanitized evidence lost a safe F2_CHECK marker.'
-  Require-TestCondition (-not $syntheticAudit.Contains('private_test_schema')) 'Sanitized evidence retained catalog result data.'
-  Require-TestCondition (-not $syntheticAudit.Contains('synthetic-secret-never-persist')) 'Sanitized evidence retained a secret-like value.'
-  Require-TestCondition ($syntheticAudit.Contains('capturedOutputSuppressedLineCount=2')) 'Sanitized evidence did not account for suppressed output lines.'
 
   Write-Output 'WAVE13B2_F2_PG18_REGRESSION_PASS'
   Write-Output ('querySha256=' + $querySha)
@@ -403,8 +770,12 @@ $f2_setup$;
   Write-Output ('schemaOutputGuard=FAILED psqlExitCode=' + $schemaFailure.ExitCode + ' failure=SCHEMA_OUTPUT_LIMIT_EXCEEDED laterInventoryReads=0')
   Write-Output ('terminalConnection=FAILED psqlExitCode=' + $terminalFailure.ExitCode)
   Write-Output ('legacyQuit3=FAILED psqlExitCode=' + $legacy.ExitCode + ' laterCatalogReads=0')
-  Write-Output 'tamper=FAILED psqlStarted=false'
-  Write-Output 'auditSanitization=PASS F2_FAIL=retained catalogRows=omitted secretLikeValues=omitted'
+  Write-Output ('ownerEvidence=VERIFIED bytes=' + $pass.EvidenceBytes + ' sha256=' + $pass.EvidenceSha256 + ' terminalRawOutput=ABSENT')
+  Write-Output 'evidenceFailures=missing,tampered,acl-mismatch,truncated all=FAILED'
+  Write-Output ('sqlError=FAILED exit=' + $sqlError.ExitCode + ' interruption=FAILED timeoutSeconds=2')
+  Write-Output 'classifier=exact-F2_DONE+exit-zero+verified-evidence+no-FAIL-or-STOP enforced'
+  Write-Output 'attemptMarker=create-only existing-signature-digest-preserved'
+  Write-Output 'queryTamper=FAILED psqlStarted=false'
 } finally {
   if ($serverStarted) {
     [void](& $pgCtlPath -D $dataDir -m fast -w -t 30 stop 2>&1)

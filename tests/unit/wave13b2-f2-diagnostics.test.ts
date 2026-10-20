@@ -156,11 +156,17 @@ describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
     expect(runnerText).toContain("Resolve-ApplicationPath 'node.exe'");
     expect(runnerText).toContain("Resolve-ApplicationPath 'psql.exe'");
     expect(nodePosition).toBeGreaterThan(-1);
-    expect(runnerText).toContain("Invoke-Wave13B2F2Psql -PsqlExecutable $psqlExecutable -ArgumentList $psqlArgs");
+    expect(runnerText).toMatch(/Invoke-Wave13B2F2Psql[\s\S]*?-EvidencePath\s+\$evidencePath[\s\S]*?-AclCheckerPath\s+\$aclCheckerPath/);
     expect(runnerModuleText).toContain("$startInfo.RedirectStandardOutput = $true");
     expect(runnerModuleText).toContain("$startInfo.RedirectStandardError = $true");
     expect(runnerModuleText).toContain("$process.WaitForExit()");
     expect(runnerModuleText).toContain("$exitCode = [int]$process.ExitCode");
+    expect(runnerModuleText).toContain("New-Wave13B2F2OwnerEvidenceFile");
+    expect(runnerModuleText).toContain("Get-Wave13B2F2OwnerEvidenceVerification");
+    expect(runnerModuleText).toMatch(/StandardOutput\.BaseStream/);
+    expect(runnerModuleText).not.toMatch(/OutputLines|StandardOutput\.ReadToEnd/);
+    expect(runnerModuleText).toMatch(/F2_EVIDENCE_(?:MISSING|ACL_MISMATCH|LENGTH_MISMATCH|HASH_MISMATCH)/);
+    expect(runnerModuleText).toContain("evidenceSha256=");
     expect(runnerText).toContain("--psql-path $psqlExecutable");
     expect(runnerText).toContain("--git-path $gitExecutable");
     expect(runnerText).not.toMatch(/&\s+node(?:\.exe)?\s/);
@@ -169,7 +175,7 @@ describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
     expect(preflightText).toContain("execFileSync(gitExecutable, args");
   });
 
-  it("requires a direct owner confirmation and classifies psql output with exit plus exact completion markers", () => {
+  it("requires a direct owner confirmation and classifies only exact completion with verified evidence", () => {
     expect(runnerText).toContain("[Console]::IsInputRedirected");
     expect(runnerText).toContain("[Console]::ReadKey($true)");
     expect(runnerText).toContain("$Host.Name -eq 'ConsoleHost'");
@@ -184,9 +190,18 @@ describe("Wave 13B.2 F2 fail-closed diagnostics", () => {
     expect(finalPreflightPosition).toBeGreaterThan(markerPosition);
     expect(psqlPosition).toBeGreaterThan(finalPreflightPosition);
     expect(runnerText.slice(finalPreflightPosition + "Invoke-OfflinePreflight".length, psqlPosition).trim()).toBe("");
-    expect(runnerModuleText).toContain("$allPsqlExitLinesSuccessful -and $doneMatches");
-    expect(runnerModuleText).toContain("$failureCodes.Count -eq 0 -and $stopCount -eq 0");
-    expect(runnerModuleText).toContain("capturedOutputSha256=");
-    expect(runnerModuleText).toContain("capturedOutputSuppressedLineCount=");
+    expect(runnerModuleText).toContain("$EvidenceVerified");
+    expect(runnerModuleText).toContain("$FailureCodes");
+    expect(runnerModuleText).toMatch(/ExitCode\s+-eq\s+0|ExitCode\s+-ne\s+0/);
+    expect(runnerModuleText).toMatch(/doneMatches|doneCount|exactDone/);
+    expect(runnerModuleText).toMatch(/failureCodes\.Count\s+-eq\s+0/);
+    expect(runnerModuleText).toMatch(/stopCount\s+-eq\s+0/);
+    expect(runnerModuleText).toMatch(/EvidenceVerified\s+-and|\$EvidenceVerified/);
+    expect(runnerText).toContain("wave13b2-f2-catalog-evidence-");
+    expect(runnerText).toContain("$applicationSourceSha");
+    expect(runnerText).toContain("$queryPacketSha256");
+    expect(runnerText).toMatch(/Test-Path\s+-LiteralPath\s+\$attemptMarkerPath/);
+    expect(runnerText).toContain("[IO.FileMode]::CreateNew");
+    expect(runnerText).toContain("Add-Wave13B2F2AttemptResult");
   });
 });
