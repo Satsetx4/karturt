@@ -36,6 +36,8 @@ type ReviewResult = {
   [key: string]: unknown;
 };
 
+type MutableReviewInput = ReviewInput;
+
 type ReviewerModule = {
   evaluateWave13B2F2Evidence: (input: ReviewInput) => ReviewResult;
   parseWave13B2F2Evidence: (text: string) => {
@@ -225,6 +227,9 @@ function makeFixture(options: {
   evidenceText?: string;
   expectedState?: Record<string, unknown>;
   auditOverrides?: Record<string, string>;
+  auditOmissions?: string[];
+  attemptMarkerOverrides?: Record<string, string>;
+  attemptMarkerOmissions?: string[];
   evidenceFileName?: string;
   auditFileName?: string;
   expectedStateFileName?: string;
@@ -232,6 +237,7 @@ function makeFixture(options: {
   const evidenceBytes = Buffer.from(options.evidenceText ?? makeEvidenceText(), "utf8");
   const expectedState = options.expectedState ?? makeExpectedState();
   const expectedStateBytes = Buffer.from(JSON.stringify(expectedState), "utf8");
+  const expectedStateSha256 = sha256(expectedStateBytes);
   const evidenceFileName = options.evidenceFileName ?? EVIDENCE_FILE;
   const auditFileName = options.auditFileName ?? AUDIT_FILE;
   const attemptMarkerFileName = ATTEMPT_MARKER_FILE;
@@ -243,13 +249,14 @@ function makeFixture(options: {
     F2_AUDIT_FORMAT: "2",
     sourceSha: SOURCE_SHA,
     queryPacketSha256: QUERY_SHA256,
+    expectedStateFile: expectedStateFileName,
+    expectedStateSha256,
+    expectedStateBytes: String(expectedStateBytes.length),
     outputFormat: "csv",
     psqlStarted: "true",
     psqlExitCode: "0",
     status: "COMPLETED",
     failureCodes: "",
-    expectedStateSha256: sha256(expectedStateBytes),
-    expectedStateBytes: String(expectedStateBytes.length),
     evidenceVerified: "true",
     evidenceFile: evidenceFileName,
     evidenceBytes: String(evidenceBytes.length),
@@ -257,6 +264,7 @@ function makeFixture(options: {
     sanitizedMarkerCount: String(evidenceMarkers.length),
     ...options.auditOverrides,
   };
+  for (const field of options.auditOmissions ?? []) delete auditFields[field];
   const auditText = [
     ...Object.entries(auditFields).map(([key, value]) => `${key}=${value}`),
     "sanitizedMarkersBegin",
@@ -265,13 +273,13 @@ function makeFixture(options: {
     "",
   ].join("\n");
   const auditBytes = Buffer.from(auditText, "utf8");
-  const attemptMarkerText = [
+  const attemptMarkerFields = [
     "status=STARTED",
     `sourceSha=${SOURCE_SHA}`,
     `queryPacketSha256=${QUERY_SHA256}`,
     `expectedStateFile=${expectedStateFileName}`,
+    `expectedStateSha256=${expectedStateSha256}`,
     `expectedStateBytes=${expectedStateBytes.length}`,
-    `expectedStateSha256=${sha256(expectedStateBytes)}`,
     "status=COMPLETED",
     "psqlExitCode=0",
     "failureCodes=",
@@ -282,8 +290,16 @@ function makeFixture(options: {
     "evidenceVerified=true",
     `auditFile=${auditFileName}`,
     `auditSha256=${sha256(auditBytes)}`,
-    "",
-  ].join("\n");
+  ];
+  for (const field of options.attemptMarkerOmissions ?? []) {
+    const index = attemptMarkerFields.findIndex((line) => line.startsWith(`${field}=`));
+    if (index >= 0) attemptMarkerFields.splice(index, 1);
+  }
+  for (const [field, value] of Object.entries(options.attemptMarkerOverrides ?? {})) {
+    const index = attemptMarkerFields.findIndex((line) => line.startsWith(`${field}=`));
+    if (index >= 0) attemptMarkerFields[index] = `${field}=${value}`;
+  }
+  const attemptMarkerText = `${attemptMarkerFields.join("\n")}\n`;
   return {
     evidenceBytes,
     auditBytes,
@@ -294,6 +310,24 @@ function makeFixture(options: {
     attemptMarkerFileName,
     expectedStateFileName,
   };
+}
+
+function replaceAuditField(fixture: MutableReviewInput, field: string, value: string | null): void {
+  const auditLines = fixture.auditBytes.toString("utf8").split(/\r?\n/);
+  const index = auditLines.findIndex((line) => line.startsWith(`${field}=`));
+  if (value === null) {
+    if (index >= 0) auditLines.splice(index, 1);
+  } else if (index >= 0) {
+    auditLines[index] = `${field}=${value}`;
+  } else {
+    auditLines.unshift(`${field}=${value}`);
+  }
+  fixture.auditBytes = Buffer.from(`${auditLines.filter((line, lineIndex) => line || lineIndex < auditLines.length - 1).join("\n")}\n`, "utf8");
+  const markerText = fixture.attemptMarkerBytes.toString("utf8").replace(
+    /^auditSha256=.*$/m,
+    `auditSha256=${sha256(fixture.auditBytes)}`,
+  );
+  fixture.attemptMarkerBytes = Buffer.from(markerText, "utf8");
 }
 
 describe("Wave 13B.2 F2 owner evidence review", () => {
@@ -309,6 +343,51 @@ describe("Wave 13B.2 F2 owner evidence review", () => {
     expect(result.failureCodes).toEqual([]);
     expect(result.mismatchedFields).toEqual([]);
     expect(result.matchedFields).toHaveLength(6);
+    expect(result.expectedStateSha256).toBe(sha256(fixture.expectedStateBytes));
+    expect(result.expectedStateBytes).toBe(fixture.expectedStateBytes.length);
+    const startedMarker = fixture.attemptMarkerBytes.toString("utf8").split("status=COMPLETED")[0];
+    expect(startedMarker).toContain(`expectedStateSha256=${sha256(fixture.expectedStateBytes)}`);
+    expect(startedMarker).toContain(`expectedStateBytes=${fixture.expectedStateBytes.length}`);
+  });
+
+  it.each([
+    ["missing expected-state SHA", { auditOmissions: ["expectedStateSha256"] }, "F2_AUDIT_REQUIRED_FIELD_MISSING"],
+    ["missing expected-state byte count", { auditOmissions: ["expectedStateBytes"] }, "F2_AUDIT_REQUIRED_FIELD_MISSING"],
+    ["malformed expected-state SHA", { auditOverrides: { expectedStateSha256: "NOT_A_SHA256" } }, "F2_EXPECTED_STATE_SHA256_MISMATCH"],
+    ["mismatched expected-state SHA", { auditOverrides: { expectedStateSha256: "0".repeat(64) } }, "F2_EXPECTED_STATE_SHA256_MISMATCH"],
+    ["malformed expected-state byte count", { auditOverrides: { expectedStateBytes: "not-a-number" } }, "F2_EXPECTED_STATE_BYTE_LENGTH_MISMATCH"],
+    ["mismatched expected-state byte count", { auditOverrides: { expectedStateBytes: "1" } }, "F2_EXPECTED_STATE_BYTE_LENGTH_MISMATCH"],
+  ])("fails closed for %s in the sanitized audit", async (_caseName, options, failureCode) => {
+    const reviewer = await reviewerModulePromise;
+    const fixture = makeFixture(options);
+    const result = reviewer.evaluateWave13B2F2Evidence(fixture);
+
+    expect(result.status).toBe("FAILED");
+    expect(result.failureCodes).toContain(failureCode);
+  });
+
+  it("rejects expected-state bytes changed after the audit pin was recorded", async () => {
+    const reviewer = await reviewerModulePromise;
+    const fixture = makeFixture();
+    fixture.expectedStateBytes = Buffer.from(JSON.stringify(makeExpectedState({ catalogExpected: { tlsVerified: false } })), "utf8");
+    const result = reviewer.evaluateWave13B2F2Evidence(fixture);
+
+    expect(result.status).toBe("FAILED");
+    expect(result.failureCodes).toContain("F2_EXPECTED_STATE_SHA256_MISMATCH");
+  });
+
+  it.each([
+    ["missing expected-state SHA", { attemptMarkerOmissions: ["expectedStateSha256"] }, "F2_ATTEMPT_MARKER_FIELD_MISSING"],
+    ["missing expected-state byte count", { attemptMarkerOmissions: ["expectedStateBytes"] }, "F2_ATTEMPT_MARKER_FIELD_MISSING"],
+    ["mismatched expected-state SHA", { attemptMarkerOverrides: { expectedStateSha256: "0".repeat(64) } }, "F2_ATTEMPT_MARKER_EVIDENCE_MISMATCH"],
+    ["mismatched expected-state byte count", { attemptMarkerOverrides: { expectedStateBytes: "1" } }, "F2_ATTEMPT_MARKER_EVIDENCE_MISMATCH"],
+  ])("fails closed for %s in the attempt marker", async (_caseName, options, failureCode) => {
+    const reviewer = await reviewerModulePromise;
+    const fixture = makeFixture(options);
+    const result = reviewer.evaluateWave13B2F2Evidence(fixture);
+
+    expect(result.status).toBe("FAILED");
+    expect(result.failureCodes).toContain(failureCode);
   });
 
   it.each([

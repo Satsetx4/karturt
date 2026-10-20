@@ -329,6 +329,45 @@ try {
   Require-TestCondition ($testRootResolved.StartsWith($tempRootResolved + '\', [StringComparison]::OrdinalIgnoreCase)) 'The test temp root resolved outside the Windows temporary directory.'
   Write-Host ('[PG18] tempRoot=' + $testRootResolved)
 
+  Write-TestStage 'expected-state-preflight-pin-validation'
+  $preflightSourceSha = '6' * 40
+  $preflightQuerySha = '7' * 64
+  $expectedStateSha = '8' * 64
+  $expectedStateBytes = 123
+  $validPreflightText = 'LOCAL_OFFLINE_PREFLIGHT_PASS source=' + $preflightSourceSha + ' migrations=0 expectedStateSha256=' + $expectedStateSha + ' expectedStateBytes=' + $expectedStateBytes + ' query=' + $preflightQuerySha
+  $initialPreflight = ConvertFrom-Wave13B2F2PreflightOutput -Text $validPreflightText -ExpectedSourceSha $preflightSourceSha -ExpectedQuerySha256 $preflightQuerySha
+  Require-TestCondition ($initialPreflight.ExpectedStateSha256 -ceq $expectedStateSha -and $initialPreflight.ExpectedStateBytes -eq [long]$expectedStateBytes) 'Valid expected-state preflight metadata did not parse.'
+  Require-TestCondition ($initialPreflight.ExpectedStateFile -ceq 'wave13b2-staging-expected-state.local.json') 'Preflight did not bind the expected-state filename.'
+  Require-TestCondition (Assert-Wave13B2F2PreflightMetadataMatch -Initial $initialPreflight -Final $initialPreflight) 'Matching expected-state preflight records were rejected.'
+  $invalidPreflightTexts = @(
+    $validPreflightText.Replace(' expectedStateSha256=' + $expectedStateSha + ' expectedStateBytes=' + $expectedStateBytes, '')
+    $validPreflightText.Replace($expectedStateSha, ('A' * 64))
+    $validPreflightText.Replace('expectedStateBytes=' + $expectedStateBytes, 'expectedStateBytes=0')
+  )
+  foreach ($invalidPreflightText in $invalidPreflightTexts) {
+    $invalidPreflightRejected = $false
+    try {
+      [void](ConvertFrom-Wave13B2F2PreflightOutput -Text $invalidPreflightText -ExpectedSourceSha $preflightSourceSha -ExpectedQuerySha256 $preflightQuerySha)
+    } catch {
+      $invalidPreflightRejected = $_.Exception.Message -ceq 'F2_EXPECTED_STATE_PREFLIGHT_INVALID'
+    }
+    Require-TestCondition $invalidPreflightRejected 'Missing or malformed expected-state preflight metadata was accepted.'
+  }
+  foreach ($mismatchedPreflightText in @(
+    $validPreflightText.Replace($expectedStateSha, ('9' * 64))
+    $validPreflightText.Replace('expectedStateBytes=' + $expectedStateBytes, 'expectedStateBytes=124')
+  )) {
+    $finalPreflight = ConvertFrom-Wave13B2F2PreflightOutput -Text $mismatchedPreflightText -ExpectedSourceSha $preflightSourceSha -ExpectedQuerySha256 $preflightQuerySha
+    $preflightMismatchRejected = $false
+    try {
+      [void](Assert-Wave13B2F2PreflightMetadataMatch -Initial $initialPreflight -Final $finalPreflight)
+    } catch {
+      $preflightMismatchRejected = $_.Exception.Message -ceq 'F2_EXPECTED_STATE_PREFLIGHT_MISMATCH'
+    }
+    Require-TestCondition $preflightMismatchRejected 'Changed expected-state preflight metadata passed the initial/final comparison.'
+  }
+  Write-Host 'expectedStatePreflight=PASS missing=REJECTED malformed=REJECTED mismatchedSha=REJECTED mismatchedBytes=REJECTED'
+
   foreach ($entry in [Environment]::GetEnvironmentVariables('Process').GetEnumerator()) {
     if ([string]$entry.Key -match '^PG') {
       $testEnvironment[[string]$entry.Key] = [string]$entry.Value
@@ -381,16 +420,6 @@ try {
   Write-TestStage 'create-isolated-test-database'
   [void](Invoke-CheckedProcess -Executable $psqlPath -ArgumentList $adminArguments -Label 'isolated test database setup')
 
-  $catalogCanaryBase = 'f2_owner_evidence_canary_' + [guid]::NewGuid().ToString('N')
-  $catalogCanaryDone = 'F2_DONE PASS source=' + ('b' * 40) + ' query=' + ('c' * 64)
-  $catalogCanaryFail = 'F2_FAIL SYNTHETIC_CSV_FIELD'
-  $catalogCanaryStop = 'F2_STOP SYNTHETIC_CSV_FIELD'
-  $catalogCanary = $catalogCanaryBase + "`n" + $catalogCanaryDone + "`n" + $catalogCanaryFail + "`n" + $catalogCanaryStop
-  $quotedCatalogCanary = '"' + $catalogCanary.Replace('"', '""') + '"'
-  $adminArguments = @('-X', '-w', '-h', '127.0.0.1', '-p', [string]$port, '-U', 'neondb_owner', '-d', 'neondb', '-v', 'ON_ERROR_STOP=1', '-c', ('CREATE SCHEMA ' + $quotedCatalogCanary))
-  Write-TestStage 'create-synthetic-catalog-canary'
-  [void](Invoke-CheckedProcess -Executable $psqlPath -ArgumentList $adminArguments -Label 'synthetic catalog fixture setup')
-
   Write-TestStage 'passing-connection-and-catalog-guards'
   $terminalTranscriptPath = Join-Path $testRoot 'passing-run.terminal.txt'
   Start-Transcript -LiteralPath $terminalTranscriptPath -Force | Out-Null
@@ -410,7 +439,6 @@ try {
   Require-TestCondition ($pass.ExitCode -eq 0) 'The passing guard path did not exit zero.'
   Require-TestCondition ($pass.DiagnosticLines -contains ('F2_DONE PASS source=' + $pass.SourceSha + ' query=' + $pass.QuerySha256)) 'The passing guard path did not reach its exact F2_DONE marker.'
   Require-TestCondition ($pass.DiagnosticLines -contains 'F2_CHECK TLS_ACTIVE PASS') 'The passing guard path did not verify local TLS.'
-  Require-TestCondition ($pass.DiagnosticLines -notcontains $catalogCanaryDone -and $pass.DiagnosticLines -notcontains $catalogCanaryFail -and $pass.DiagnosticLines -notcontains $catalogCanaryStop) 'A control-like string inside a quoted CSV catalog field was treated as a control marker.'
   } finally {
     Stop-Transcript | Out-Null
   }
@@ -423,16 +451,64 @@ try {
   Require-TestCondition ($pass.EvidenceVerified -and $pass.RunResult.EvidenceVerified) 'The full catalog evidence was not verified after psql completed.'
   Require-TestCondition ($pass.EvidenceBytes -eq $passEvidence.LongLength) 'The owner evidence length does not match the complete saved file.'
   Require-TestCondition ($pass.EvidenceSha256 -ceq $passEvidenceSha256) 'The owner evidence digest does not match the complete saved file.'
-  Require-TestCondition ($passEvidenceText.Contains($catalogCanary)) 'The full synthetic catalog output is missing from the owner evidence file.'
-  Require-TestCondition ($passEvidenceText.Contains($catalogCanaryDone) -and $passEvidenceText.Contains($catalogCanaryFail) -and $passEvidenceText.Contains($catalogCanaryStop)) 'The quoted multiline CSV marker canaries are missing from the owner evidence file.'
+  Require-TestCondition ($passEvidenceText.Contains('observed_database_name,expected_database_name,database_name_matches,observed_role') -and $passEvidenceText.Contains('F2_CATALOG_READ SCHEMA_INVENTORY') -and $passEvidenceText.Contains('schema_name,schema_owner,explicit_acl') -and $passEvidenceText.Contains('F2_CATALOG_READ DEFAULT_ACL_INVENTORY')) 'The complete catalog evidence is missing expected preamble or catalog sections.'
   Require-TestCondition ($passEvidenceText.Contains('F2_DONE PASS source=' + $pass.SourceSha + ' query=' + $pass.QuerySha256)) 'The complete owner evidence file is missing the exact F2_DONE line.'
   Require-TestCondition ($pass.EvidencePath.Contains($pass.SourceSha) -and $pass.EvidencePath.Contains($pass.QuerySha256)) 'The owner evidence filename is not bound to the source and query hashes.'
   Require-TestCondition ((@(& $aclCheckerPath -Path $pass.EvidencePath -RequireProtected) -join '').Trim() -eq 'PASS') 'The owner evidence file did not retain its protected ACL.'
   Require-TestCondition ($passAuditText.Contains('evidenceSha256=' + $passEvidenceSha256)) 'The sanitized audit is missing the raw evidence SHA-256.'
-  Require-TestCondition (-not $passAuditText.Contains($catalogCanary)) 'The sanitized audit retained raw catalog output.'
-  Require-TestCondition (-not $passAuditText.Contains($catalogCanaryFail) -and -not $passAuditText.Contains($catalogCanaryStop)) 'The sanitized audit retained control-like raw catalog field content.'
-  Require-TestCondition (-not $terminalText.Contains($catalogCanary)) 'Raw catalog output reached the terminal transcript.'
+  Require-TestCondition (-not $passAuditText.Contains('observed_database_name,expected_database_name,database_name_matches,observed_role') -and -not $passAuditText.Contains('schema_name,schema_owner,explicit_acl')) 'The sanitized audit retained raw catalog CSV headers.'
+  Require-TestCondition (-not $terminalText.Contains('observed_database_name,expected_database_name,database_name_matches,observed_role') -and -not $terminalText.Contains('schema_name,schema_owner,explicit_acl')) 'Raw catalog output reached the terminal transcript.'
   Require-TestCondition ('OutputLines' -notin $pass.RunResult.PSObject.Properties.Name) 'The runner result exposed a raw output-lines property.'
+
+  Write-TestStage 'quoted-csv-control-like-field-is-not-a-marker'
+  $catalogCanaryBase = 'synthetic_catalog_field_' + [guid]::NewGuid().ToString('N')
+  $catalogCanaryDone = 'F2_DONE PASS source=' + ('b' * 40) + ' query=' + ('c' * 64)
+  $catalogCanaryFail = 'F2_FAIL SYNTHETIC_CSV_FIELD'
+  $catalogCanaryStop = 'F2_STOP SYNTHETIC_CSV_FIELD'
+  $catalogCanary = $catalogCanaryBase + "`n" + $catalogCanaryDone + "`n" + $catalogCanaryFail + "`n" + $catalogCanaryStop
+  $canarySqlPath = Join-Path $testRoot 'synthetic-multiline-csv-canary.sql'
+  $canarySql = @(
+    '\set ON_ERROR_STOP on'
+    'SELECT $f2_canary$'
+    $catalogCanary
+    '$f2_canary$ AS synthetic_catalog_field;'
+    '\echo F2_DONE PASS source=:approved_source_sha query=:query_packet_sha256'
+    ''
+  ) -join "`n"
+  [IO.File]::WriteAllText($canarySqlPath, $canarySql, [Text.UTF8Encoding]::new($false))
+  $canaryTranscriptPath = Join-Path $testRoot 'csv-canary.terminal.txt'
+  Start-Transcript -LiteralPath $canaryTranscriptPath -Force | Out-Null
+  try {
+    $canaryRun = Invoke-TestPsqlCase `
+      -Name 'quoted-csv-control-like-field' `
+      -HostAddress '127.0.0.1' `
+      -Port $port `
+      -InputFile $canarySqlPath `
+      -ExpectedStatus 'COMPLETED' `
+      -ExpectedFailureCode '' `
+      -ExpectedSourceSha $sourceSha `
+      -TestRoot $testRoot `
+      -EvidenceRoot $evidenceRoot `
+      -AclCheckerPath $aclCheckerPath `
+      -PsqlPath $psqlPath
+  } finally {
+    Stop-Transcript | Out-Null
+  }
+  $canaryEvidenceText = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($canaryRun.EvidencePath))
+  $canaryAuditText = [IO.File]::ReadAllText($canaryRun.AuditPath)
+  $canaryTerminalText = [IO.File]::ReadAllText($canaryTranscriptPath)
+  $canaryNormalizedEvidenceText = $canaryEvidenceText.Replace("`r`n", "`n")
+  $canaryContainsBase = $canaryNormalizedEvidenceText.Contains($catalogCanaryBase)
+  $canaryContainsDone = $canaryNormalizedEvidenceText.Contains($catalogCanaryDone)
+  $canaryContainsFail = $canaryNormalizedEvidenceText.Contains($catalogCanaryFail)
+  $canaryContainsStop = $canaryNormalizedEvidenceText.Contains($catalogCanaryStop)
+  $canaryControlMarkers = @($canaryRun.RunResult.ControlMarkers)
+  Require-TestCondition ($canaryRun.EvidenceVerified) 'The quoted multiline CSV evidence did not verify.'
+  Require-TestCondition ($canaryContainsBase -and $canaryContainsDone -and $canaryContainsFail -and $canaryContainsStop) ('The full multiline CSV canary field is missing from owner evidence: base=' + $canaryContainsBase + ' done=' + $canaryContainsDone + ' fail=' + $canaryContainsFail + ' stop=' + $canaryContainsStop + ' bytes=' + $canaryRun.EvidenceBytes + ' markers=' + $canaryControlMarkers.Count)
+  Require-TestCondition ($canaryControlMarkers.Count -eq 1 -and $canaryControlMarkers[0] -ceq ('F2_DONE PASS source=' + $canaryRun.SourceSha + ' query=' + $canaryRun.QuerySha256)) 'Quoted multiline CSV content was counted as a control marker.'
+  Require-TestCondition ($canaryControlMarkers -notcontains $catalogCanaryDone -and $canaryControlMarkers -notcontains $catalogCanaryFail -and $canaryControlMarkers -notcontains $catalogCanaryStop) 'A control-like string inside a quoted CSV field was treated as a control marker.'
+  Require-TestCondition (-not $canaryAuditText.Contains($catalogCanary) -and -not $canaryAuditText.Contains($catalogCanaryFail) -and -not $canaryAuditText.Contains($catalogCanaryStop)) 'The sanitized audit retained control-like raw CSV field content.'
+  Require-TestCondition (-not $canaryTerminalText.Contains($catalogCanary) -and -not $canaryTerminalText.Contains($catalogCanaryFail) -and -not $canaryTerminalText.Contains($catalogCanaryStop)) 'Raw CSV field content reached the terminal transcript.'
 
   $exactDoneLine = 'F2_DONE PASS source=' + $pass.SourceSha + ' query=' + $pass.QuerySha256
   [void](Assert-TestF2Classification -Label 'exact-done-exit-zero-evidence-verified' -ExitCode 0 -DiagnosticLines @($exactDoneLine) -ExpectedSourceSha $pass.SourceSha -ExpectedQuerySha $pass.QuerySha256 -EvidenceVerified $true -FailureCodes @() -ExpectedStatus 'COMPLETED')
@@ -460,7 +536,7 @@ try {
     -AclCheckerPath $aclCheckerPath `
     -PsqlPath $psqlPath
   Require-TestCondition ($connectionFailure.ExitCode -ne 0) 'The failing connection guard returned psql exit zero.'
-  Require-TestCondition ($connectionFailure.DiagnosticLines -contains 'F2_STOP CONNECTION_GUARD_FAILED CATALOG_QUERIES_SKIPPED') 'The connection guard did not report its stop marker.'
+  Require-TestCondition ($connectionFailure.DiagnosticLines -contains 'F2_STOP CONNECTION_GUARD_FAILED') 'The connection guard did not report its sanitized stop marker.'
   Require-TestCondition (@($connectionFailure.DiagnosticLines | Where-Object { $_ -match '^F2_CATALOG_READ ' }).Count -eq 0) 'A connection guard failure reached a catalog read.'
   Require-TestCondition ($connectionFailure.DiagnosticLines -contains 'F2_FAIL TARGET_BRANCH_ID_MISMATCH') 'The connection guard did not report its target branch failure.'
 
@@ -563,23 +639,20 @@ $f2_setup$;
   $syntheticEvidenceSha = Get-TestSha256Hex -Bytes $syntheticEvidenceBytes
   $syntheticAttemptRoot = Get-TestAttemptDirectory -BasePath $evidenceRoot -SourceSha $syntheticSourceSha
   $syntheticEvidencePath = Join-Path $syntheticAttemptRoot ('wave13b2-f2-catalog-evidence-' + $syntheticSourceSha + '-' + $syntheticQuerySha + '.local.txt')
-  $syntheticEvidenceStream = New-Wave13B2F2OwnerEvidenceFile -Path $syntheticEvidencePath -AclCheckerPath $aclCheckerPath -ExpectedSourceSha $syntheticSourceSha -ExpectedQuerySha256 $syntheticQuerySha
+  $syntheticEvidenceCreate = New-Wave13B2F2OwnerEvidenceFile -Path $syntheticEvidencePath -AclCheckerPath $aclCheckerPath -ExpectedSourceSha $syntheticSourceSha -ExpectedQuerySha256 $syntheticQuerySha
+  Require-TestCondition ($null -ne $syntheticEvidenceCreate.Stream) ('Could not create synthetic owner evidence: ' + ($syntheticEvidenceCreate.FailureCodes -join ','))
   try {
-    $syntheticEvidenceStream.Write($syntheticEvidenceBytes, 0, $syntheticEvidenceBytes.Length)
-    $syntheticEvidenceStream.Flush($true)
+    $syntheticEvidenceCreate.Stream.Write($syntheticEvidenceBytes, 0, $syntheticEvidenceBytes.Length)
+    $syntheticEvidenceCreate.Stream.Flush($true)
   } finally {
-    $syntheticEvidenceStream.Dispose()
+    $syntheticEvidenceCreate.Stream.Dispose()
   }
 
   Write-TestStage 'evidence-create-only'
   $evidenceBeforeDuplicateCreate = Get-TestSha256Hex -Bytes ([IO.File]::ReadAllBytes($syntheticEvidencePath))
-  $duplicateEvidenceCreateDenied = $false
-  try {
-    $duplicateEvidence = New-Wave13B2F2OwnerEvidenceFile -Path $syntheticEvidencePath -AclCheckerPath $aclCheckerPath -ExpectedSourceSha $syntheticSourceSha -ExpectedQuerySha256 $syntheticQuerySha
-    $duplicateEvidence.Dispose()
-  } catch {
-    $duplicateEvidenceCreateDenied = $true
-  }
+  $duplicateEvidence = New-Wave13B2F2OwnerEvidenceFile -Path $syntheticEvidencePath -AclCheckerPath $aclCheckerPath -ExpectedSourceSha $syntheticSourceSha -ExpectedQuerySha256 $syntheticQuerySha
+  $duplicateEvidenceCreateDenied = $null -eq $duplicateEvidence.Stream -and @($duplicateEvidence.FailureCodes | Where-Object { $_ -match 'CREATE_FAILED' }).Count -gt 0
+  if ($null -ne $duplicateEvidence.Stream) { $duplicateEvidence.Stream.Dispose() }
   Require-TestCondition $duplicateEvidenceCreateDenied 'Owner evidence creation overwrote or reopened an existing source/query-bound file.'
   Require-TestCondition ((Get-TestSha256Hex -Bytes ([IO.File]::ReadAllBytes($syntheticEvidencePath))) -ceq $evidenceBeforeDuplicateCreate) 'A rejected create-only evidence attempt changed prior evidence bytes.'
 
@@ -591,7 +664,11 @@ $f2_setup$;
     -ExpectedQuerySha256 $syntheticQuerySha `
     -ExpectedLength $syntheticEvidenceBytes.LongLength `
     -ExpectedSha256 $syntheticEvidenceSha
-  Require-TestCondition $initialSyntheticVerification.Verified 'The intact synthetic owner evidence did not verify.'
+  try {
+    Require-TestCondition $initialSyntheticVerification.Verified 'The intact synthetic owner evidence did not verify.'
+  } finally {
+    if ($null -ne $initialSyntheticVerification.ReadLock) { $initialSyntheticVerification.ReadLock.Dispose() }
+  }
   $tamperedEvidenceBytes = [IO.File]::ReadAllBytes($syntheticEvidencePath)
   $tamperedEvidenceBytes[0] = [byte]([int]$tamperedEvidenceBytes[0] -bxor 1)
   [IO.File]::WriteAllBytes($syntheticEvidencePath, $tamperedEvidenceBytes)
@@ -602,9 +679,13 @@ $f2_setup$;
     -ExpectedQuerySha256 $syntheticQuerySha `
     -ExpectedLength $syntheticEvidenceBytes.LongLength `
     -ExpectedSha256 $syntheticEvidenceSha
-  Require-TestCondition (-not $tamperedVerification.Verified) 'Tampered evidence passed SHA-256 verification.'
-  Require-TestCondition (@($tamperedVerification.FailureCodes | Where-Object { $_ -match 'HASH_MISMATCH' }).Count -gt 0) 'Tampered evidence did not report a digest mismatch.'
-  [void](Assert-TestF2Classification -Label 'tampered-evidence-with-exact-done' -ExitCode 0 -DiagnosticLines @($syntheticDone) -ExpectedSourceSha $syntheticSourceSha -ExpectedQuerySha $syntheticQuerySha -EvidenceVerified $tamperedVerification.Verified -FailureCodes $tamperedVerification.FailureCodes -ExpectedStatus 'FAILED')
+  try {
+    Require-TestCondition (-not $tamperedVerification.Verified) 'Tampered evidence passed SHA-256 verification.'
+    Require-TestCondition (@($tamperedVerification.FailureCodes | Where-Object { $_ -match 'HASH_MISMATCH' }).Count -gt 0) 'Tampered evidence did not report a digest mismatch.'
+    [void](Assert-TestF2Classification -Label 'tampered-evidence-with-exact-done' -ExitCode 0 -DiagnosticLines @($syntheticDone) -ExpectedSourceSha $syntheticSourceSha -ExpectedQuerySha $syntheticQuerySha -EvidenceVerified $tamperedVerification.Verified -FailureCodes $tamperedVerification.FailureCodes -ExpectedStatus 'FAILED')
+  } finally {
+    if ($null -ne $tamperedVerification.ReadLock) { $tamperedVerification.ReadLock.Dispose() }
+  }
 
   Write-TestStage 'acl-mismatch-fails-closed'
   $aclSourceSha = '2' * 40
@@ -612,16 +693,8 @@ $f2_setup$;
   $aclDone = 'F2_DONE PASS source=' + $aclSourceSha + ' query=' + $aclQuerySha
   $aclAttemptRoot = Get-TestAttemptDirectory -BasePath $evidenceRoot -SourceSha $aclSourceSha
   $aclEvidencePath = Join-Path $aclAttemptRoot ('wave13b2-f2-catalog-evidence-' + $aclSourceSha + '-' + $aclQuerySha + '.local.txt')
-  $aclEvidenceStream = New-Wave13B2F2OwnerEvidenceFile -Path $aclEvidencePath -AclCheckerPath $aclCheckerPath -ExpectedSourceSha $aclSourceSha -ExpectedQuerySha256 $aclQuerySha
-  try {
-    $aclEvidenceStream.Write($syntheticEvidenceBytes, 0, $syntheticEvidenceBytes.Length)
-    $aclEvidenceStream.Flush($true)
-  } finally {
-    $aclEvidenceStream.Dispose()
-  }
-  $unprotectedAcl = Get-Acl -LiteralPath $aclEvidencePath
-  $unprotectedAcl.SetAccessRuleProtection($false, $true)
-  Set-Acl -LiteralPath $aclEvidencePath -AclObject $unprotectedAcl
+  [IO.File]::WriteAllBytes($aclEvidencePath, $syntheticEvidenceBytes)
+  Require-TestCondition (-not (Get-Acl -LiteralPath $aclEvidencePath).AreAccessRulesProtected) 'The inherited-ACL mismatch fixture is unexpectedly protected.'
   $aclVerification = Get-Wave13B2F2OwnerEvidenceVerification `
     -Path $aclEvidencePath `
     -AclCheckerPath $aclCheckerPath `
@@ -641,12 +714,13 @@ $f2_setup$;
   $truncatedEvidenceSha = Get-TestSha256Hex -Bytes $truncatedEvidenceBytes
   $truncatedAttemptRoot = Get-TestAttemptDirectory -BasePath $evidenceRoot -SourceSha $truncatedSourceSha
   $truncatedEvidencePath = Join-Path $truncatedAttemptRoot ('wave13b2-f2-catalog-evidence-' + $truncatedSourceSha + '-' + $truncatedQuerySha + '.local.txt')
-  $truncatedEvidenceStream = New-Wave13B2F2OwnerEvidenceFile -Path $truncatedEvidencePath -AclCheckerPath $aclCheckerPath -ExpectedSourceSha $truncatedSourceSha -ExpectedQuerySha256 $truncatedQuerySha
+  $truncatedEvidenceCreate = New-Wave13B2F2OwnerEvidenceFile -Path $truncatedEvidencePath -AclCheckerPath $aclCheckerPath -ExpectedSourceSha $truncatedSourceSha -ExpectedQuerySha256 $truncatedQuerySha
+  Require-TestCondition ($null -ne $truncatedEvidenceCreate.Stream) ('Could not create truncated test evidence: ' + ($truncatedEvidenceCreate.FailureCodes -join ','))
   try {
-    $truncatedEvidenceStream.Write($truncatedEvidenceBytes, 0, $truncatedEvidenceBytes.Length)
-    $truncatedEvidenceStream.Flush($true)
+    $truncatedEvidenceCreate.Stream.Write($truncatedEvidenceBytes, 0, $truncatedEvidenceBytes.Length)
+    $truncatedEvidenceCreate.Stream.Flush($true)
   } finally {
-    $truncatedEvidenceStream.Dispose()
+    $truncatedEvidenceCreate.Stream.Dispose()
   }
   $truncateStream = [IO.File]::Open($truncatedEvidencePath, [IO.FileMode]::Open, [IO.FileAccess]::Write, [IO.FileShare]::None)
   try {
@@ -662,15 +736,18 @@ $f2_setup$;
     -ExpectedQuerySha256 $truncatedQuerySha `
     -ExpectedLength $truncatedEvidenceBytes.LongLength `
     -ExpectedSha256 $truncatedEvidenceSha
-  Require-TestCondition (-not $truncatedVerification.Verified) 'A truncated evidence file passed verification.'
-  Require-TestCondition (@($truncatedVerification.FailureCodes | Where-Object { $_ -match 'LENGTH_MISMATCH|HASH_MISMATCH' }).Count -gt 0) 'Truncated evidence did not report a length or digest mismatch.'
-  [void](Assert-TestF2Classification -Label 'truncated-evidence-with-exact-done' -ExitCode 0 -DiagnosticLines @($truncatedDone) -ExpectedSourceSha $truncatedSourceSha -ExpectedQuerySha $truncatedQuerySha -EvidenceVerified $truncatedVerification.Verified -FailureCodes $truncatedVerification.FailureCodes -ExpectedStatus 'FAILED')
+  try {
+    Require-TestCondition (-not $truncatedVerification.Verified) 'A truncated evidence file passed verification.'
+    Require-TestCondition (@($truncatedVerification.FailureCodes | Where-Object { $_ -match 'LENGTH_MISMATCH|HASH_MISMATCH' }).Count -gt 0) 'Truncated evidence did not report a length or digest mismatch.'
+    [void](Assert-TestF2Classification -Label 'truncated-evidence-with-exact-done' -ExitCode 0 -DiagnosticLines @($truncatedDone) -ExpectedSourceSha $truncatedSourceSha -ExpectedQuerySha $truncatedQuerySha -EvidenceVerified $truncatedVerification.Verified -FailureCodes $truncatedVerification.FailureCodes -ExpectedStatus 'FAILED')
+  } finally {
+    if ($null -ne $truncatedVerification.ReadLock) { $truncatedVerification.ReadLock.Dispose() }
+  }
 
   Write-TestStage 'sql-error-fails-closed'
   $sqlErrorPath = Join-Path $testRoot 'synthetic-sql-error.sql'
   $sqlErrorScript = @(
     '\set ON_ERROR_STOP on'
-    '\echo F2_FAIL SYNTHETIC_SQL_ERROR'
     'SELECT 1 / 0;'
     '\echo F2_DONE PASS source=:approved_source_sha query=:query_packet_sha256'
     ''
@@ -682,7 +759,7 @@ $f2_setup$;
     -Port $port `
     -InputFile $sqlErrorPath `
     -ExpectedStatus 'FAILED' `
-    -ExpectedFailureCode 'SYNTHETIC_SQL_ERROR' `
+    -ExpectedFailureCode 'F2_PSQL_EXIT_CODE_3' `
     -ExpectedSourceSha $sourceSha `
     -TestRoot $testRoot `
     -EvidenceRoot $evidenceRoot `
