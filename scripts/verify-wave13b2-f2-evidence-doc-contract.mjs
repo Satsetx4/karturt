@@ -9,6 +9,9 @@ const packetPath = resolve(
   'docs/codex/Wave-13B2-Free-Only-Staging-Operator-Packet-2026-10-15.md',
 );
 const workflowPath = resolve(repoRoot, '.github/workflows/gate-a.yml');
+const preflightPath = resolve(repoRoot, 'scripts/preflight-wave13b2-local.mjs');
+const queryRunnerPath = resolve(repoRoot, 'scripts/run-wave13b2-f2-query.ps1');
+const runnerModulePath = resolve(repoRoot, 'scripts/lib/wave13b2-f2-runner.psm1');
 const reviewScriptPath = resolve(repoRoot, 'scripts/review-wave13b2-f2-evidence.mjs');
 const ownerReviewWriterPath = resolve(repoRoot, 'scripts/write-wave13b2-f2-owner-review.ps1');
 const packet = readFileSync(packetPath, 'utf8');
@@ -23,6 +26,9 @@ const requiredPacketPatterns = [
   /no `F2_FAIL` or `F2_STOP` marker exists/,
   /`F2_DONE` by itself proves neither that the catalog is empty nor that it matches the owner's expected state/,
   /offline comparison of the verified evidence file against the owner-reviewed/,
+  /Only after the existing detached approval signature verifies may offline preflight expose the expected-state SHA-256 and exact byte count as sanitized pins \(`expectedStateSha256` and `expectedStateBytes`\)/,
+  /The source-bound attempt marker and sanitized audit capture those same pins/,
+  /recomputes the expected-state SHA-256 and byte count, and rejects any byte difference from the captured pins/,
   /reads only these local files/i,
   /must not invoke psql, connect to Neon/i,
   /interactive, non-signature, hash-bound, and retained owner-local/i,
@@ -33,6 +39,7 @@ const requiredPacketPatterns = [
   /--record-owner-review/,
   /wave13b2-f2-owner-review-<sourceSHA>-<querySHA>\.local\.json/,
   /catalog state remains `UNKNOWN`/,
+  /A `BLOCKED` result exposes no expected-state pins/,
   /Preserve the old signed approval and `wave13b2-f2-query-attempt\.local\.txt` unchanged/,
 ];
 
@@ -70,6 +77,15 @@ if (!workflow.includes('node scripts/verify-wave13b2-query-integrity.mjs')) {
   throw new Error('The F2 CI path must keep the raw-query-blob/LF integrity verification.');
 }
 
+for (const [path, label] of [
+  [preflightPath, 'offline preflight'],
+  [queryRunnerPath, 'source-bound query runner'],
+  [runnerModulePath, 'F2 runner module'],
+]) {
+  if (!existsSync(path)) {
+    throw new Error(`The ${label} source must exist for expected-state pin contract verification.`);
+  }
+}
 if (!existsSync(reviewScriptPath)) {
   throw new Error('The documented offline owner-review utility must exist in the reviewed source tree.');
 }
@@ -77,8 +93,71 @@ if (!existsSync(ownerReviewWriterPath)) {
   throw new Error('The protected owner-review receipt writer must exist in the reviewed source tree.');
 }
 
+const preflight = readFileSync(preflightPath, 'utf8');
+const queryRunner = readFileSync(queryRunnerPath, 'utf8');
+const runnerModule = readFileSync(runnerModulePath, 'utf8');
 const reviewScript = readFileSync(reviewScriptPath, 'utf8');
 const ownerReviewWriter = readFileSync(ownerReviewWriterPath, 'utf8');
+
+function requireTokens(source, tokens, label) {
+  const missing = tokens.filter((token) => !source.includes(token));
+  if (missing.length > 0) {
+    throw new Error(`${label} is missing expected-state pin contract tokens: ${missing.join(', ')}`);
+  }
+}
+
+const preflightOutputStatements = [...preflight.matchAll(/process\.stdout\.write\(([\s\S]*?)\);/g)];
+const expectedStatePinOutputs = preflightOutputStatements.filter((match) =>
+  /expectedState(?:Sha256|Bytes)/.test(match[1]),
+);
+const approvalVerificationCall = preflight.indexOf('runApprovalVerifier(repoRoot, secretDir');
+if (
+  approvalVerificationCall < 0 ||
+  expectedStatePinOutputs.length !== 1 ||
+  expectedStatePinOutputs[0].index < approvalVerificationCall ||
+  !expectedStatePinOutputs[0][1].includes('LOCAL_OFFLINE_PREFLIGHT_PASS') ||
+  !expectedStatePinOutputs[0][1].includes('expectedStateSha256=') ||
+  !expectedStatePinOutputs[0][1].includes('expectedStateBytes=')
+) {
+  throw new Error('Offline preflight may expose expected-state SHA/byte pins only in its PASS output after signature verification.');
+}
+
+const startedMarkerIndex = queryRunner.indexOf('$markerText = @(');
+const startedMarkerEnd = queryRunner.indexOf('$markerBytes =', startedMarkerIndex);
+const startedMarkerSource = startedMarkerIndex >= 0 && startedMarkerEnd > startedMarkerIndex
+  ? queryRunner.slice(startedMarkerIndex, startedMarkerEnd)
+  : '';
+requireTokens(startedMarkerSource, ['status=STARTED', 'expectedStateSha256', 'expectedStateBytes'], 'The source-bound STARTED marker');
+
+function powershellFunction(source, functionName) {
+  const start = source.indexOf(`function ${functionName}(`);
+  if (start < 0) return '';
+  const next = source.indexOf('\nfunction ', start + 1);
+  return source.slice(start, next < 0 ? source.length : next);
+}
+
+requireTokens(
+  powershellFunction(runnerModule, 'Add-Wave13B2F2AttemptResult'),
+  ['expectedStateSha256', 'expectedStateBytes'],
+  'The source-bound attempt result',
+);
+requireTokens(
+  powershellFunction(runnerModule, 'New-Wave13B2F2AuditContent'),
+  ['expectedStateSha256', 'expectedStateBytes'],
+  'The sanitized F2 audit',
+);
+
+const auditValidationStart = reviewScript.indexOf('function validateAudit(');
+const auditValidationEnd = reviewScript.indexOf('\nfunction rowAsObject(', auditValidationStart);
+const auditValidation = auditValidationStart >= 0 && auditValidationEnd > auditValidationStart
+  ? reviewScript.slice(auditValidationStart, auditValidationEnd)
+  : '';
+requireTokens(
+  auditValidation,
+  ['expectedStateSha256', 'expectedStateBytes', 'sha256(expectedStateBytes)', 'expectedStateBytes.length'],
+  'Offline audit validation',
+);
+
 const requiredReviewScriptTokens = [
   '--evidence',
   '--audit',
