@@ -8,6 +8,7 @@ Scope: KartuRT V1, one isolated synthetic-only staging target, Neon Free plan
 - Master issue: [#61 — Replace F2 with Staging Readiness Gate V1](https://github.com/Satsetx4/karturt/issues/61)
 - Work items: [#62 evaluator and runner](https://github.com/Satsetx4/karturt/issues/62), [#63 staging evidence](https://github.com/Satsetx4/karturt/issues/63), [#64 exact-head CI and migration unlock review](https://github.com/Satsetx4/karturt/issues/64)
 - Historical implementation under review: [PR #60](https://github.com/Satsetx4/karturt/pull/60), source `019aeeb6d6c411ed3b95b42c3c0f1c4130381b28`
+- Gate V1 implementation: [draft PR #65](https://github.com/Satsetx4/karturt/pull/65), source `f7b06eca307fc0b4a107aaaedee56a89677a8c6b` at this snapshot
 - Decision record: [`STAGING-READINESS-GATE-V1-DECISION-2026-10-21.md`](STAGING-READINESS-GATE-V1-DECISION-2026-10-21.md)
 - Sanitized evidence ledger: [`STAGING-READINESS-GATE-V1-EVIDENCE-2026-10-21.md`](STAGING-READINESS-GATE-V1-EVIDENCE-2026-10-21.md)
 
@@ -24,11 +25,11 @@ Attempt-1 and attempt-2 evidence are immutable historical records. Do not overwr
 | Phase | Status at planning revision | Exit evidence |
 | --- | --- | --- |
 | Inventory PR #60 and reconcile attempt-2 result | COMPLETE — source and provider facts recorded; attempt evidence remains owner-reported | Review comment and this evidence ledger |
-| Implement Gate V1 evaluator, secure runner, and strict target guard | IN PROGRESS | Fail-closed evaluator, read-only SQL, byte-verified referenced evidence, auditable immutable evidence output, focused regression coverage |
-| Offline regression and CI wiring | LOCAL PASS on `e1e353eae896b0f9487f326121c866ccb039fbed` — 120/120 focused tests, PowerShell 7 parser, and early-stop/self-assertion evidence regression passed on clean HEAD. Exact-head CI pending. | Required workflow jobs run on the exact new commit |
+| Implement Gate V1 evaluator, secure runner, and strict target guard | IMPLEMENTED at `f7b06eca307fc0b4a107aaaedee56a89677a8c6b` | Fail-closed evaluator, read-only SQL, byte-verified referenced evidence, auditable immutable evidence output, migration schema-v2 digest binding, focused regressions |
+| Offline regression and CI wiring | LOCAL PASS: four focused Vitest files / 140 tests, PG18 guard 12/12, PowerShell 7 parser/preflight regression, typecheck, lint, diff check, and local production build. Exact-head push run `39571785367` and PR run `39571791405` attempt 2 passed Gate A and Windows checks; Launch Safety concurrency was branch-filter skipped and remains UNVERIFIED. PR attempt 1 had a non-reproduced Turbopack `next/font/google` build failure; its cause is unknown. | Preserve both PR attempt outcomes and keep the skipped job UNVERIFIED |
 | Refresh provider metadata and prove synthetic isolation | BLOCKED — latest branch says `init_source=parent-data`; `parent_id` omitted; capture artifacts lack trusted provenance | Authenticated exact-target control-plane readback plus verifiable root lineage and synthetic-only content evidence |
 | Run Gate V1 against staging | BLOCKED — the runner rejects unsigned provider JSON before psql; local provider API key, `PGPASSFILE`, and `PGSSLROOTCERT` are absent | Trusted provider capture and runner-attested probe, plus direct libpq `verify-full` / `channel_binding=require` and read-only catalog PASS |
-| Bind the migration guard to Gate V1 | IMPLEMENTED LOCALLY — exact-head CI pending | Schema-v2 signed authorization binds the SHA-256 of a freshly recomputed Gate V1 PASS report; operator checks it before challenge, consumption, and client creation |
+| Bind the migration guard to Gate V1 | IMPLEMENTED at `f7b06eca307fc0b4a107aaaedee56a89677a8c6b`; Gate A push and PR retry passed | Schema-v2 signed authorization binds the SHA-256 of a freshly recomputed Gate V1 PASS report; operator checks it before challenge, consumption, and client creation |
 | Review migration unlock | BLOCKED | Authenticated provider/runner evidence, root lineage, and a trusted pinned authorization key remain unavailable |
 | Apply staging migrations | NOT AUTHORIZED YET — owner authorization is conditional on all guards | Exact source and target, valid signed approval, and all preflight/interactive checks; then one guarded staging execution |
 | Production | OUT OF SCOPE | No production work in this plan |
