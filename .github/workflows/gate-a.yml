@@ -119,7 +119,7 @@ jobs:
       - name: Parse Staging Readiness Gate V1 PowerShell sources without database access
         shell: pwsh
         run: |
-          foreach ($path in @('scripts/staging-readiness-gate-v1.ps1', 'scripts/lib/staging-readiness-conninfo-v1.psm1', 'scripts/test-staging-readiness-gate-v1-preflight.ps1')) {
+          foreach ($path in @('scripts/staging-readiness-gate-v1.ps1', 'scripts/lib/staging-readiness-conninfo-v1.psm1', 'scripts/lib/staging-readiness-capture-files-v1.psm1', 'scripts/test-staging-readiness-gate-v1-preflight.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null

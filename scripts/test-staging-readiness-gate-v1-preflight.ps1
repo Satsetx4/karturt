@@ -3,6 +3,8 @@ Set-StrictMode -Version Latest
 
 $conninfoModulePath = Join-Path $PSScriptRoot 'lib/staging-readiness-conninfo-v1.psm1'
 Import-Module -Name $conninfoModulePath -Force -ErrorAction Stop
+$captureFilesModulePath = Join-Path $PSScriptRoot 'lib/staging-readiness-capture-files-v1.psm1'
+Import-Module -Name $captureFilesModulePath -Force -ErrorAction Stop
 
 function Assert-ConninfoRejects([string]$Text, [string]$ExpectedCode) {
   $rejectedAsExpected = $false
@@ -92,6 +94,60 @@ if ([IO.Directory]::Exists($caseDirectory) -or [IO.File]::Exists($caseDirectory)
 [void][IO.Directory]::CreateDirectory($caseDirectory)
 
 try {
+  $previousRunnerTemp = [Environment]::GetEnvironmentVariable('RUNNER_TEMP', 'Process')
+  $previousRunId = [Environment]::GetEnvironmentVariable('GITHUB_RUN_ID', 'Process')
+  $previousRunAttempt = [Environment]::GetEnvironmentVariable('GITHUB_RUN_ATTEMPT', 'Process')
+  [Environment]::SetEnvironmentVariable('RUNNER_TEMP', $caseDirectory, 'Process')
+  [Environment]::SetEnvironmentVariable('GITHUB_RUN_ID', '1234567890', 'Process')
+  [Environment]::SetEnvironmentVariable('GITHUB_RUN_ATTEMPT', '1', 'Process')
+  $captureRunDirectory = Join-Path (Join-Path $caseDirectory 'karturt-staging-readiness') '1234567890-1'
+  [void][IO.Directory]::CreateDirectory($captureRunDirectory)
+  $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $systemSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+  $adminsSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+  foreach ($directoryPath in @((Join-Path $caseDirectory 'karturt-staging-readiness'), $captureRunDirectory)) {
+    $directoryAcl = Get-Acl -LiteralPath $directoryPath
+    $directoryAcl.SetAccessRuleProtection($true, $false)
+  $directoryInheritance = [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit
+  $directoryAcl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($currentSid, [Security.AccessControl.FileSystemRights]::FullControl, $directoryInheritance, [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow))
+  $directoryAcl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($systemSid, [Security.AccessControl.FileSystemRights]::FullControl, $directoryInheritance, [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow))
+  $directoryAcl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($adminsSid, [Security.AccessControl.FileSystemRights]::FullControl, $directoryInheritance, [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow))
+    Set-Acl -LiteralPath $directoryPath -AclObject $directoryAcl
+  }
+  $captureFilePath = Join-Path $captureRunDirectory 'synthetic-ca.pem'
+  [IO.File]::WriteAllText($captureFilePath, 'synthetic public CA test bytes', [Text.UTF8Encoding]::new($false))
+  $captureAcl = Get-Acl -LiteralPath $captureFilePath
+  $captureAcl.SetAccessRuleProtection($true, $false)
+  $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $systemSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+  $adminsSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+  $captureAcl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($currentSid, [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.AccessControlType]::Allow))
+  $captureAcl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($systemSid, [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.AccessControlType]::Allow))
+  $captureAcl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($adminsSid, [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.AccessControlType]::Allow))
+  Set-Acl -LiteralPath $captureFilePath -AclObject $captureAcl
+  $captureFileSha256 = (Get-FileHash -LiteralPath $captureFilePath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $validatedCaptureFile = Assert-StagingCaptureFile -Path $captureFilePath -ExpectedSha256 $captureFileSha256
+  if ($validatedCaptureFile -cne [IO.Path]::GetFullPath($captureFilePath)) { throw 'TEST_CAPTURE_FILE_PATH_MISMATCH' }
+
+  $wrongPinRejected = $false
+  try {
+    $null = Assert-StagingCaptureFile -Path $captureFilePath -ExpectedSha256 ('0' * 64)
+  } catch {
+    if ([string]$_.Exception.Message -ceq 'TLS_ROOT_CA_PIN_MISMATCH') { $wrongPinRejected = $true } else { throw }
+  }
+  if (-not $wrongPinRejected) { throw 'TEST_CAPTURE_FILE_WRONG_PIN_ACCEPTED' }
+
+  $outsideTempRejected = $false
+  try {
+    $null = Assert-StagingCaptureFile -Path $captureFilesModulePath
+  } catch {
+    if ([string]$_.Exception.Message -ceq 'TLS_FILE_UNSAFE') { $outsideTempRejected = $true } else { throw }
+  }
+  if (-not $outsideTempRejected) { throw 'TEST_CAPTURE_FILE_OUTSIDE_RUNNER_TEMP_ACCEPTED' }
+  [Environment]::SetEnvironmentVariable('RUNNER_TEMP', $previousRunnerTemp, 'Process')
+  [Environment]::SetEnvironmentVariable('GITHUB_RUN_ID', $previousRunId, 'Process')
+  [Environment]::SetEnvironmentVariable('GITHUB_RUN_ATTEMPT', $previousRunAttempt, 'Process')
+
   $missingProviderPath = Join-Path $caseDirectory 'missing-provider.json'
   $failureEvidencePath = Join-Path $caseDirectory 'stop.json'
   $pwshExecutable = (Get-Process -Id $PID -ErrorAction Stop).Path
@@ -153,8 +209,28 @@ try {
     throw ('TEST_SELF_ASSERTED_PROVIDER_FALSE_PASS:' + ($failedSelfAssertedChecks -join ','))
   }
 
-  Write-Output 'Staging Readiness Gate V1 PostgreSQL 18 conninfo, early-stop, and self-assertion regressions: PASS'
+  $runnerSource = [IO.File]::ReadAllText($runnerPath)
+  foreach ($requiredRunnerFragment in @(
+      "`$startInfo.Environment['PGGSSENCMODE'] = 'disable'",
+      "`$startInfo.Environment['PGSSLMODE'] = 'verify-full'",
+      "`$startInfo.Environment['PGCHANNELBINDING'] = 'require'",
+      '$info.Environment.Clear()',
+      '$startInfo.Environment.Clear()',
+      "rootCertificateSource = 'protected-environment-variable:KARTURT_STAGING_CA_SHA256'",
+      'rootCertificateSha256 = $script:RootCertificateSha256',
+      "@{ Name = 'endpointBranchId'; Expected = `$script:ExpectedTarget.BranchId }",
+      "-ExpectedArtifactType 'root-branch-resolution'"
+    )) {
+    if (-not $runnerSource.Contains($requiredRunnerFragment)) {
+      throw 'TEST_STAGING_CAPTURE_GUARD_FRAGMENT_MISSING'
+    }
+  }
+
+  Write-Output 'Staging Readiness Gate V1 PostgreSQL 18 conninfo, TLS file ACL/pin, early-stop, and self-assertion regressions: PASS'
 } finally {
+  [Environment]::SetEnvironmentVariable('RUNNER_TEMP', $previousRunnerTemp, 'Process')
+  [Environment]::SetEnvironmentVariable('GITHUB_RUN_ID', $previousRunId, 'Process')
+  [Environment]::SetEnvironmentVariable('GITHUB_RUN_ATTEMPT', $previousRunAttempt, 'Process')
   if ([IO.Directory]::Exists($caseDirectory)) {
     $resolvedTemp = [IO.Path]::GetFullPath($tempRoot).TrimEnd([char[]]@('\', '/')) + [IO.Path]::DirectorySeparatorChar
     $resolvedCase = [IO.Path]::GetFullPath($caseDirectory)

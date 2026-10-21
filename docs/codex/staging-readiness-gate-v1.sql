@@ -6,7 +6,8 @@
 
 -- This is a read-only catalog precheck for the pinned synthetic staging target.
 -- The PowerShell runner enforces direct-host identity, verify-full TLS,
--- channel_binding=require, and checks the psql connection TLS protocol and cipher.
+-- channel_binding=require, PGGSSENCMODE=disable, a pinned root CA digest, and
+-- checks the psql connection TLS protocol and cipher.
 -- No DDL, DML, role changes, writes, or migration statements belong here.
 
 \conninfo

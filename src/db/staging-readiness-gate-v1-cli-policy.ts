@@ -48,6 +48,8 @@ export function evaluateDatabaseProbeArtifact(
     libpqConnection: unauthenticatedProbeCheck,
     libpqSslMode: unauthenticatedProbeCheck,
     libpqChannelBinding: unauthenticatedProbeCheck,
+    libpqGssEncryption: unauthenticatedProbeCheck,
+    libpqRootCertificatePin: unauthenticatedProbeCheck,
     libpqSslInUse: unauthenticatedProbeCheck,
     libpqTlsProtocol: unauthenticatedProbeCheck,
     libpqTlsCipher: unauthenticatedProbeCheck,

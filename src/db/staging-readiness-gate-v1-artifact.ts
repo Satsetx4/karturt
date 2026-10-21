@@ -160,10 +160,14 @@ function referencedArtifactChecks(
     readReferencedArtifact(evidenceDirectory, syntheticOnly.attestationReference, syntheticOnly.attestationSha256, "synthetic-only-attestation", sourceSha),
   ];
 
-  const initSource = field(field(provider, "branch"), "init_source");
+  const providerBranch = field(provider, "branch");
+  const initSource = field(providerBranch, "init_source");
+  const omittedParentReadback = !isRecord(providerBranch) || !Object.prototype.hasOwnProperty.call(providerBranch, "parent_id") ||
+    ["projectParentIdFieldObserved", "sourceProjectIdFieldObserved", "branchParentIdFieldObserved"].some((key) => lineage[key] === false);
+  const requiresRootResolution = initSource === "parent-data" || omittedParentReadback;
   let resolutionArtifact: ReturnType<typeof readReferencedArtifact> | null = null;
-  const resolution = field(lineage, "parentDataResolution");
-  if (initSource === "parent-data") {
+  const resolution = field(lineage, "rootStructureResolution");
+  if (requiresRootResolution) {
     if (!isRecord(resolution)) {
       artifacts.push({ status: "UNKNOWN" });
     } else {
@@ -171,7 +175,7 @@ function referencedArtifactChecks(
         evidenceDirectory,
         resolution.evidenceReference,
         resolution.evidenceSha256,
-        "parent-data-resolution",
+        "root-branch-resolution",
         sourceSha,
       );
       artifacts.push(resolutionArtifact);
@@ -191,12 +195,16 @@ function referencedArtifactChecks(
   const evaluatedBranch = field(provider, "branch");
   const providerForComparison = isRecord(provider) ? { ...provider } : null;
   if (providerForComparison) delete providerForComparison.evidenceSha256;
-  const providerFields = ["provider", "organizationId", "projectId", "branchId", "endpointId", "plan",
+  const providerFields = ["provider", "organizationId", "projectId", "branchId", "endpointId", "endpointBranchId", "plan",
     "computeMinCU", "computeMaxCU", "postgresMajor", "observedAtUtc", "evidenceReference"] as const;
   const providerMismatch = providerFields.some((name) => field(rawProvider, name) !== field(provider, name)) ||
     !sameJson(providerForComparison, rawProvider);
   const branchFields = ["state", "primary", "default", "parent_id", "init_source"] as const;
-  const branchMismatch = branchFields.some((name) => field(rawProviderBranch, name) !== field(evaluatedBranch, name));
+  const rawParentIdObserved = isRecord(rawProviderBranch) && Object.prototype.hasOwnProperty.call(rawProviderBranch, "parent_id");
+  const evaluatedParentIdObserved = isRecord(evaluatedBranch) && Object.prototype.hasOwnProperty.call(evaluatedBranch, "parent_id");
+  const branchMismatch = branchFields.some((name) => field(rawProviderBranch, name) !== field(evaluatedBranch, name)) ||
+    rawParentIdObserved !== evaluatedParentIdObserved ||
+    rawParentIdObserved !== (lineage.branchParentIdFieldObserved === true);
   const sourceFieldsOmitted = field(createRequest, "sourceFieldsOmitted");
   const sourceFieldsOmittedArray = Array.isArray(sourceFieldsOmitted) ? sourceFieldsOmitted : null;
   if (!providerArtifact || !isRecord(rawProvider) || !isRecord(createRequest) || !isRecord(providerReadback) ||
@@ -222,10 +230,15 @@ function referencedArtifactChecks(
   ] as const;
   if (parentFields.some((name) => providerReadback[name] !== lineage[name]) ||
       providerReadback.init_source !== initSource ||
-      (initSource === "parent-data" && (!resolutionArtifact?.value ||
+      (requiresRootResolution && (!resolutionArtifact?.value ||
         !matchesTarget(resolutionArtifact.value) ||
         resolutionArtifact.value.verificationStatus !== "VERIFIED" ||
-        resolutionArtifact.value.resolvesToNewRoot !== true))) {
+        resolutionArtifact.value.resolvesToNewRoot !== true ||
+        resolutionArtifact.value.contractReference !== "https://neon.com/docs/manage/branches" ||
+        resolutionArtifact.value.explanation !== field(resolution, "explanation") ||
+        resolutionArtifact.value.contractReference !== field(resolution, "contractReference") ||
+        resolutionArtifact.value.verificationStatus !== field(resolution, "verificationStatus") ||
+        resolutionArtifact.value.resolvesToNewRoot !== field(resolution, "resolvesToNewRoot")))) {
     return [check("FAIL", "Referenced lineage readback does not match the evaluated root-lineage claims.")];
   }
   return [check("PASS", "Every referenced provider, lineage, and synthetic-only artifact matches its exact bytes, target, and source SHA.")];

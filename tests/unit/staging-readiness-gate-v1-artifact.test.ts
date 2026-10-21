@@ -58,9 +58,19 @@ function createEvidenceBundle(bundleSourceSha = sourceSha, observedAtMs = nowMs)
     projectParentId: null,
     sourceProjectIdFieldObserved: true,
     sourceProjectId: null,
-    branchParentIdFieldObserved: true,
+    branchParentIdFieldObserved: false,
     branchParentId: null,
-    init_source: "blank",
+    init_source: "parent-data",
+  };
+  const rootResolution = {
+    schemaVersion,
+    artifactType: "root-branch-resolution",
+    sourceSha: bundleSourceSha,
+    ...target,
+    verificationStatus: "VERIFIED",
+    resolvesToNewRoot: true,
+    contractReference: "https://neon.com/docs/manage/branches",
+    explanation: "Neon creates a root/default branch for a new project; exact request and readback identify the selected branch.",
   };
   const datasetManifest = {
     schemaVersion,
@@ -81,6 +91,7 @@ function createEvidenceBundle(bundleSourceSha = sourceSha, observedAtMs = nowMs)
   const references = {
     createRequestSha256: writeArtifact(temporaryDirectory, "lineage/create-request.json", createRequest),
     providerReadbackSha256: writeArtifact(temporaryDirectory, "lineage/provider-readback.json", readback),
+    rootStructureResolutionSha256: writeArtifact(temporaryDirectory, "lineage/root-branch-resolution.json", rootResolution),
     datasetManifestSha256: writeArtifact(temporaryDirectory, "provenance/dataset-manifest.json", datasetManifest),
     attestationSha256: writeArtifact(temporaryDirectory, "provenance/attestation.json", attestation),
   };
@@ -90,6 +101,7 @@ function createEvidenceBundle(bundleSourceSha = sourceSha, observedAtMs = nowMs)
     projectId: STAGING_MIGRATION_TARGET_MANIFEST.projectId,
     branchId: STAGING_MIGRATION_TARGET_MANIFEST.branchId,
     endpointId: STAGING_MIGRATION_TARGET_MANIFEST.endpointId,
+    endpointBranchId: STAGING_MIGRATION_TARGET_MANIFEST.branchId,
     plan: "free",
     computeMinCU: 0.25,
     computeMaxCU: 0.25,
@@ -99,8 +111,7 @@ function createEvidenceBundle(bundleSourceSha = sourceSha, observedAtMs = nowMs)
       state: "ready",
       primary: true,
       default: true,
-      parent_id: null,
-      init_source: "blank",
+      init_source: "parent-data",
     },
   };
   const isolation = {
@@ -122,8 +133,17 @@ function createEvidenceBundle(bundleSourceSha = sourceSha, observedAtMs = nowMs)
       projectParentId: null,
       sourceProjectIdFieldObserved: true,
       sourceProjectId: null,
-      branchParentIdFieldObserved: true,
+      branchParentIdFieldObserved: false,
       branchParentId: null,
+      rootStructureResolution: {
+        sourceSha: bundleSourceSha,
+        verificationStatus: "VERIFIED",
+        resolvesToNewRoot: true,
+        contractReference: "https://neon.com/docs/manage/branches",
+        explanation: rootResolution.explanation,
+        evidenceReference: "lineage/root-branch-resolution.json",
+        evidenceSha256: references.rootStructureResolutionSha256,
+      },
     },
     syntheticOnly: {
       classification: "SYNTHETIC_ONLY",
@@ -176,8 +196,6 @@ function createReadinessBindingFixture(options: {
   const sessionId = "karturt-staging-readiness-gate-v1";
   const backendPid = 23456;
   const normalizedIsolation = JSON.parse(JSON.stringify(bundle.evidence.stagingIsolation)) as Record<string, unknown>;
-  const normalizedLineage = normalizedIsolation.lineage as Record<string, unknown>;
-  delete normalizedLineage.parentDataResolution;
   const evidence = {
     ...bundle.evidence,
     nowMs: reportTime,
@@ -197,6 +215,9 @@ function createReadinessBindingFixture(options: {
         connectionSucceeded: true,
         sslmode: "verify-full",
         channelBinding: "require",
+        gssEncryptionMode: "disable",
+        rootCertificateSource: "protected-environment-variable:KARTURT_STAGING_CA_SHA256",
+        rootCertificateSha256: "f".repeat(64),
         sslInUse: true,
         sslProtocol: "TLSv1.3",
         sslCipher: "TLS_AES_256_GCM_SHA384",
@@ -275,6 +296,9 @@ function createReadinessBindingFixture(options: {
       libpq: {
         sslmode: "verify-full",
         channelBinding: "require",
+        gssEncryptionMode: "disable",
+        rootCertificateSource: "protected-environment-variable:KARTURT_STAGING_CA_SHA256",
+        rootCertificateSha256: "f".repeat(64),
         tlsProtocol: "TLSv1.3",
         tlsCipher: "TLS_AES_256_GCM_SHA384",
         directHostIdentityVerified: STAGING_MIGRATION_TARGET_MANIFEST.directHostname,
@@ -335,7 +359,15 @@ afterEach(() => {
 describe("Staging Readiness Gate V1 artifact boundary", () => {
   it("accepts only byte-verified, exact-target, source-bound referenced evidence", () => {
     const bundle = createEvidenceBundle();
+    expect(Object.prototype.hasOwnProperty.call(bundle.evidence.provider.branch, "parent_id")).toBe(false);
+    expect(bundle.evidence.stagingIsolation.lineage.branchParentIdFieldObserved).toBe(false);
     expect(referencedEvidenceIntegrityCheck(bundle.evidence, bundle.directory).status).toBe("PASS");
+  });
+
+  it("rejects normalization that invents an explicit null parent_id", () => {
+    const bundle = createEvidenceBundle();
+    (bundle.evidence.provider.branch as Record<string, unknown>).parent_id = null;
+    expect(referencedEvidenceIntegrityCheck(bundle.evidence, bundle.directory).status).toBe("FAIL");
   });
 
   it("fails when a referenced artifact digest does not match its bytes", () => {
@@ -405,6 +437,8 @@ describe("Staging Readiness Gate V1 artifact boundary", () => {
     expect(combined.checks.providerCaptureAuthentication.status).toBe("UNKNOWN");
     expect(combined.checks.databaseProbeAuthentication.status).toBe("UNKNOWN");
     expect(combined.checks.providerIdentity.status).toBe("UNKNOWN");
+    expect(combined.checks.libpqGssEncryption.status).toBe("UNKNOWN");
+    expect(combined.checks.libpqRootCertificatePin.status).toBe("UNKNOWN");
     expect(combined.checks.transactionReadOnly.status).toBe("UNKNOWN");
     const summary = formatDatabaseProbeEvaluationSummary({
       readiness: combined.readiness,

@@ -36,10 +36,11 @@ export type StagingIsolationEvidence = {
     sourceProjectId: string | null;
     branchParentIdFieldObserved: boolean | null;
     branchParentId: string | null;
-    parentDataResolution: {
+    rootStructureResolution: {
       sourceSha: string | null;
       verificationStatus: string | null;
       resolvesToNewRoot: boolean | null;
+      contractReference: string | null;
       explanation: string | null;
       evidenceReference: string | null;
       evidenceSha256: string | null;
@@ -66,6 +67,7 @@ export type StagingReadinessEvidence = {
     projectId: string | null;
     branchId: string | null;
     endpointId: string | null;
+    endpointBranchId: string | null;
     plan: string | null;
     computeMinCU: number | null;
     computeMaxCU: number | null;
@@ -96,6 +98,9 @@ export type StagingReadinessEvidence = {
       connectionSucceeded: boolean | null;
       sslmode: string | null;
       channelBinding: string | null;
+      gssEncryptionMode: string | null;
+      rootCertificateSource: string | null;
+      rootCertificateSha256: string | null;
       sslInUse: boolean | null;
       sslProtocol: string | null;
       sslCipher: string | null;
@@ -148,6 +153,8 @@ export type StagingReadinessSignalsV1Result = {
     libpqConnection: StagingReadinessCheck;
     libpqSslMode: StagingReadinessCheck;
     libpqChannelBinding: StagingReadinessCheck;
+    libpqGssEncryption: StagingReadinessCheck;
+    libpqRootCertificatePin: StagingReadinessCheck;
     libpqSslInUse: StagingReadinessCheck;
     libpqTlsProtocol: StagingReadinessCheck;
     libpqTlsCipher: StagingReadinessCheck;
@@ -245,6 +252,7 @@ function providerIdentityCheck(provider: Record<string, unknown> | null) {
     [provider.projectId, STAGING_MIGRATION_TARGET_MANIFEST.projectId, "Project identity"],
     [provider.branchId, STAGING_MIGRATION_TARGET_MANIFEST.branchId, "Branch identity"],
     [provider.endpointId, STAGING_MIGRATION_TARGET_MANIFEST.endpointId, "Endpoint identity"],
+    [provider.endpointBranchId, STAGING_MIGRATION_TARGET_MANIFEST.branchId, "Endpoint branch binding"],
   ];
   const results = fields.map(([value, expected, name]) => stringMatch(value, expected, name));
   return combineChecks(results, "Provider identity matches the reviewed staging target.", "Provider identity evidence is incomplete.");
@@ -321,6 +329,8 @@ const REQUIRED_OMITTED_LINEAGE_FIELDS = [
   "restore",
 ] as const;
 
+const branchRootContractReference = "https://neon.com/docs/manage/branches";
+
 function sha256Check(value: unknown, label: string): StagingReadinessCheck {
   if (!nonEmptyString(value)) return check("UNKNOWN", `${label} evidence is missing.`);
   return /^[a-f0-9]{64}$/.test(value)
@@ -377,6 +387,7 @@ function lineageCheck(
     omittedFieldsCheck = check("PASS", "The create request attests omission of all parent, clone, import, and restore source fields.");
   }
 
+  const rootResolution = rootStructureResolutionCheck(lineage.rootStructureResolution, sourceSha);
   const parentFieldChecks: StagingReadinessCheck[] = [];
   for (const [observedKey, valueKey, label] of [
     ["projectParentIdFieldObserved", "projectParentId", "Project parent id"],
@@ -386,7 +397,9 @@ function lineageCheck(
     if (typeof lineage[observedKey] !== "boolean") {
       parentFieldChecks.push(check("UNKNOWN", `${label} provider readback is missing.`));
     } else if (lineage[observedKey] === false) {
-      parentFieldChecks.push(check("UNKNOWN", `${label} was omitted from provider readback.`));
+      parentFieldChecks.push(rootResolution.status === "PASS"
+        ? check("PASS", `${label} is omitted by the provider response and resolved by the verified new-project root contract.`)
+        : check("UNKNOWN", `${label} was omitted from provider readback without a verified new-project root resolution.`));
     } else if (lineage[valueKey] === null) {
       parentFieldChecks.push(check("PASS", `${label} was explicitly read back as null.`));
     } else if (nonEmptyString(lineage[valueKey])) {
@@ -397,50 +410,65 @@ function lineageCheck(
   }
 
   const branchParentIdCheck = !branch || !Object.prototype.hasOwnProperty.call(branch, "parent_id")
-    ? check("UNKNOWN", "Provider branch parent_id was omitted from branch readback.")
+    ? rootResolution.status === "PASS"
+      ? check("PASS", "Provider omits branch parent_id; the exact new-project root contract resolves the branch as root.")
+      : check("UNKNOWN", "Provider branch parent_id was omitted without a verified new-project root resolution.")
     : branch.parent_id === null
       ? check("PASS", "Provider branch parent_id was explicitly read back as null.")
       : nonEmptyString(branch.parent_id)
         ? check("FAIL", "Provider branch parent_id identifies a parent branch.")
         : check("UNKNOWN", "Provider branch parent_id readback is incomplete.");
+  const branchParentObservationCheck = !branch || typeof lineage.branchParentIdFieldObserved !== "boolean"
+    ? check("UNKNOWN", "Provider branch parent_id presence is not bound to its raw readback.")
+    : Object.prototype.hasOwnProperty.call(branch, "parent_id") === lineage.branchParentIdFieldObserved
+      ? check("PASS", "Provider branch parent_id presence matches the recorded observed-versus-omitted state.")
+      : check("FAIL", "Provider branch parent_id was normalized differently from the raw field-presence evidence.");
 
   const initSource = branch?.init_source;
+  const rootResolutionRequired = initSource === "parent-data" || !branch ||
+    !Object.prototype.hasOwnProperty.call(branch, "parent_id") ||
+    lineage.projectParentIdFieldObserved === false ||
+    lineage.sourceProjectIdFieldObserved === false ||
+    lineage.branchParentIdFieldObserved === false;
   const initSourceCheck = !nonEmptyString(initSource)
     ? check("UNKNOWN", "Provider branch initialization source is missing.")
     : initSource.trim().toLowerCase() === "blank"
       ? check("PASS", "Provider branch initialization source is explicitly blank.")
-      : initSource.trim().toLowerCase() === "parent-data"
-        ? parentDataResolutionCheck(lineage.parentDataResolution, sourceSha)
+    : initSource.trim().toLowerCase() === "parent-data"
+      ? rootResolution
         : ["unknown", "omitted", "not-returned"].includes(initSource.trim().toLowerCase())
           ? check("UNKNOWN", "Provider branch initialization source is ambiguous and does not prove isolation.")
           : check("FAIL", "Provider branch initialization source is not an explicitly blank or resolved root source.");
 
   return combineChecks(
-    [...targetChecks, ...requestChecks, omittedFieldsCheck, ...parentFieldChecks, branchParentIdCheck, initSourceCheck],
+    [...targetChecks, ...requestChecks, omittedFieldsCheck, ...parentFieldChecks, branchParentIdCheck, branchParentObservationCheck,
+      ...(rootResolutionRequired ? [rootResolution] : []), initSourceCheck],
     "Provider-bound creation and readback fields match the reviewed root-lineage criteria.",
     "Staging lineage evidence is incomplete; isolation remains UNKNOWN.",
   );
 }
 
-function parentDataResolutionCheck(resolution: unknown, sourceSha: unknown): StagingReadinessCheck {
+function rootStructureResolutionCheck(resolution: unknown, sourceSha: unknown): StagingReadinessCheck {
   const details = record(resolution);
-  if (!details) return check("UNKNOWN", "init_source=parent-data has no source-bound resolution evidence.");
+  if (!details) return check("UNKNOWN", "Provider-omitted parent fields or init_source=parent-data have no source-bound root-contract resolution.");
 
-  const status = verificationStatusCheck(details.verificationStatus, "parent-data resolution verification status");
-  const resolutionCheck = exactBoolean(details.resolvesToNewRoot, true, "parent-data resolution to a new root");
+  const status = verificationStatusCheck(details.verificationStatus, "new-project root-contract verification status");
+  const resolutionCheck = exactBoolean(details.resolvesToNewRoot, true, "new-project root-contract resolution");
   const sourceBinding = !nonEmptyString(details.sourceSha) || !nonEmptyString(sourceSha)
-    ? check("UNKNOWN", "parent-data resolution is not bound to a source SHA.")
+    ? check("UNKNOWN", "New-project root-contract resolution is not bound to a source SHA.")
     : details.sourceSha === sourceSha
-      ? check("PASS", "parent-data resolution is bound to the evaluated source SHA.")
-      : check("FAIL", "parent-data resolution is bound to a different source SHA.");
+      ? check("PASS", "New-project root-contract resolution is bound to the evaluated source SHA.")
+      : check("FAIL", "New-project root-contract resolution is bound to a different source SHA.");
+  const reference = stringMatch(details.contractReference, branchRootContractReference, "Neon root-branch contract reference");
   return combineChecks([
     status,
     resolutionCheck,
     sourceBinding,
-    boundedTextCheck(details.explanation, "parent-data resolution explanation"),
-    boundedReferenceCheck(details.evidenceReference, "parent-data resolution evidence reference"),
-    sha256Check(details.evidenceSha256, "parent-data resolution evidence"),
-  ], "parent-data is resolved to a new root using source-bound verification evidence.", "parent-data resolution is incomplete; isolation remains UNKNOWN.");
+    reference,
+    boundedTextCheck(details.explanation, "new-project root resolution explanation"),
+    boundedReferenceCheck(details.evidenceReference, "new-project root resolution evidence reference"),
+    sha256Check(details.evidenceSha256, "new-project root resolution evidence"),
+  ], "The exact new-project request and provider readback resolve to the Neon root/default branch contract.", "Provider root-branch structure remains unresolved.");
 }
 
 function syntheticOnlyProvenanceCheck(
@@ -526,6 +554,15 @@ function tlsCipherCheck(value: unknown) {
   return weakCipherToken.test(value.trim())
     ? check("FAIL", "libpq negotiated a weak or unauthenticated TLS cipher.")
     : check("PASS", "libpq reports a nonempty TLS cipher.");
+}
+
+function rootCertificatePinCheck(source: unknown, digest: unknown) {
+  if (!nonEmptyString(source) || !nonEmptyString(digest)) {
+    return check("UNKNOWN", "Pinned root certificate source or digest evidence is missing.");
+  }
+  return source === "protected-environment-variable:KARTURT_STAGING_CA_SHA256" && /^[a-f0-9]{64}$/.test(digest)
+    ? check("PASS", "The trusted root certificate source and SHA-256 pin are recorded.")
+    : check("FAIL", "The trusted root certificate source or SHA-256 pin is invalid.");
 }
 
 function serverIdentityCheck(server: Record<string, unknown> | null) {
@@ -618,6 +655,8 @@ export function evaluateStagingReadinessSignalsV1(
     libpqConnection: exactBoolean(libpq?.connectionSucceeded, true, "Successful libpq connection"),
     libpqSslMode: stringMatch(libpq?.sslmode, "verify-full", "libpq sslmode"),
     libpqChannelBinding: stringMatch(libpq?.channelBinding, "require", "libpq channel binding"),
+    libpqGssEncryption: stringMatch(libpq?.gssEncryptionMode, "disable", "libpq GSS encryption mode"),
+    libpqRootCertificatePin: rootCertificatePinCheck(libpq?.rootCertificateSource, libpq?.rootCertificateSha256),
     libpqSslInUse: exactBoolean(libpq?.sslInUse, true, "libpq SSL-in-use state"),
     libpqTlsProtocol: tlsProtocolCheck(libpq?.sslProtocol),
     libpqTlsCipher: tlsCipherCheck(libpq?.sslCipher),

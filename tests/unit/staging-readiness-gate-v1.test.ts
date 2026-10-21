@@ -24,6 +24,7 @@ function validEvidence(): StagingReadinessEvidence {
       projectId: STAGING_MIGRATION_TARGET_MANIFEST.projectId,
       branchId: STAGING_MIGRATION_TARGET_MANIFEST.branchId,
       endpointId: STAGING_MIGRATION_TARGET_MANIFEST.endpointId,
+      endpointBranchId: STAGING_MIGRATION_TARGET_MANIFEST.branchId,
       plan: "free",
       computeMinCU: 0.25,
       computeMaxCU: 0.25,
@@ -54,6 +55,9 @@ function validEvidence(): StagingReadinessEvidence {
         connectionSucceeded: true,
         sslmode: "verify-full",
         channelBinding: "require",
+        gssEncryptionMode: "disable",
+        rootCertificateSource: "protected-environment-variable:KARTURT_STAGING_CA_SHA256",
+        rootCertificateSha256: "f".repeat(64),
         sslInUse: true,
         sslProtocol: "TLSv1.3",
         sslCipher: "TLS_AES_256_GCM_SHA384",
@@ -105,7 +109,15 @@ function withVerifiedIsolation(evidence = validEvidence()): StagingReadinessEvid
       sourceProjectId: null,
       branchParentIdFieldObserved: true,
       branchParentId: null,
-      parentDataResolution: null,
+      rootStructureResolution: {
+        sourceSha: evidence.sourceSha,
+        verificationStatus: "VERIFIED",
+        resolvesToNewRoot: true,
+        contractReference: "https://neon.com/docs/manage/branches",
+        explanation: "Neon creates a root/default branch for a new project; exact request and readback identify the selected branch.",
+        evidenceReference: "lineage/root-branch-resolution.json",
+        evidenceSha256: "e".repeat(64),
+      },
     },
     syntheticOnly: {
       classification: "SYNTHETIC_ONLY",
@@ -164,9 +176,10 @@ describe("Staging Readiness Gate V1 technical signals", () => {
     expect(result.checks.stagingIsolation.status).toBe("UNKNOWN");
   });
 
-  it("does not infer isolation from an init_source=parent-data readback", () => {
+  it("does not infer isolation from init_source=parent-data without root-contract evidence", () => {
     const evidence = withVerifiedIsolation();
     evidence.provider!.branch!.init_source = "parent-data";
+    evidence.stagingIsolation!.lineage!.rootStructureResolution = null;
     const result = evaluateStagingReadinessSignalsV1(evidence);
 
     expect(result.technicalStatus).toBe("UNKNOWN");
@@ -174,15 +187,16 @@ describe("Staging Readiness Gate V1 technical signals", () => {
     expect(result.checks.stagingIsolation.status).toBe("UNKNOWN");
   });
 
-  it("accepts init_source=parent-data only with verified source-bound root-resolution evidence", () => {
+  it("accepts init_source=parent-data only with verified source-bound root-contract evidence", () => {
     const evidence = withVerifiedIsolation();
     evidence.provider!.branch!.init_source = "parent-data";
-    evidence.stagingIsolation!.lineage!.parentDataResolution = {
+    evidence.stagingIsolation!.lineage!.rootStructureResolution = {
       sourceSha: evidence.sourceSha,
       verificationStatus: "VERIFIED",
       resolvesToNewRoot: true,
-      explanation: "Provider create request and readback independently resolve the branch origin.",
-      evidenceReference: "lineage/parent-data-resolution.json",
+      contractReference: "https://neon.com/docs/manage/branches",
+      explanation: "Neon creates a root/default branch for a new project; exact request and readback identify the selected branch.",
+      evidenceReference: "lineage/root-branch-resolution.json",
       evidenceSha256: "e".repeat(64),
     };
     const result = evaluateStagingReadinessSignalsV1(evidence);
@@ -191,13 +205,26 @@ describe("Staging Readiness Gate V1 technical signals", () => {
     expect(result.checks.stagingLineage.status).toBe("PASS");
   });
 
-  it("keeps init_source=parent-data UNKNOWN when its resolution is not verified", () => {
+  it("accepts an omitted provider parent_id only when exact root-contract evidence resolves it", () => {
+    const evidence = withVerifiedIsolation();
+    delete evidence.provider!.branch!.parent_id;
+    evidence.stagingIsolation!.lineage!.branchParentIdFieldObserved = false;
+    evidence.stagingIsolation!.lineage!.branchParentId = null;
+    evidence.provider!.branch!.init_source = "parent-data";
+    const result = evaluateStagingReadinessSignalsV1(evidence);
+
+    expect(result.checks.stagingLineage.status).toBe("PASS");
+    expect(result.checks.stagingIsolation.status).toBe("PASS");
+  });
+
+  it("keeps init_source=parent-data UNKNOWN when root-contract evidence is not verified", () => {
     const evidence = withVerifiedIsolation();
     evidence.provider!.branch!.init_source = "parent-data";
-    evidence.stagingIsolation!.lineage!.parentDataResolution = {
+    evidence.stagingIsolation!.lineage!.rootStructureResolution = {
       sourceSha: evidence.sourceSha,
       verificationStatus: "PENDING",
       resolvesToNewRoot: true,
+      contractReference: "https://neon.com/docs/manage/branches",
       explanation: "Pending review.",
       evidenceReference: "lineage/pending.json",
       evidenceSha256: "e".repeat(64),
@@ -331,6 +358,9 @@ describe("Staging Readiness Gate V1 technical signals", () => {
     { name: "missing provider organization", check: "providerIdentity", mutate: (e) => { e.provider!.organizationId = null; } },
     { name: "missing provider plan", check: "providerScope", mutate: (e) => { e.provider!.plan = null; } },
     { name: "missing provider branch", check: "providerBranch", mutate: (e) => { e.provider!.branch = null; } },
+    { name: "missing provider endpoint branch binding", check: "providerIdentity", mutate: (e) => { e.provider!.endpointBranchId = null; } },
+    { name: "missing libpq GSS encryption mode", check: "libpqGssEncryption", mutate: (e) => { e.connection!.libpq!.gssEncryptionMode = null; } },
+    { name: "missing trusted root certificate pin", check: "libpqRootCertificatePin", mutate: (e) => { e.connection!.libpq!.rootCertificateSha256 = null; } },
     { name: "missing provider evidence reference", check: "providerEvidenceReference", mutate: (e) => { e.provider!.evidenceReference = null; } },
     { name: "missing provider evidence digest", check: "providerEvidenceReference", mutate: (e) => { e.provider!.evidenceSha256 = null; } },
     { name: "missing Free-plan minimum compute bound", check: "providerScope", mutate: (e) => { e.provider!.computeMinCU = null; } },
@@ -355,7 +385,7 @@ describe("Staging Readiness Gate V1 technical signals", () => {
     { name: "missing Drizzle journal state", check: "drizzleJournalAbsent", mutate: (e) => { e.connection!.catalog!.drizzleJournalPresent = null; } },
     { name: "missing lineage provider field", check: "stagingLineage", mutate: (e) => { e.stagingIsolation = null; } },
     { name: "missing synthetic-only provenance", check: "syntheticOnlyProvenance", mutate: (e) => { e.stagingIsolation = null; } },
-    { name: "omitted provider branch parent_id", check: "stagingLineage", mutate: (e) => { delete e.provider!.branch!.parent_id; } },
+    { name: "omitted provider branch parent_id without explicit lineage", check: "stagingLineage", mutate: (e) => { delete e.provider!.branch!.parent_id; } },
   ];
 
   for (const testCase of unknownCases) {
@@ -368,11 +398,13 @@ describe("Staging Readiness Gate V1 technical signals", () => {
     { name: "wrong project", check: "providerIdentity", mutate: (e) => { e.provider!.projectId = "wrong-project"; } },
     { name: "wrong branch", check: "providerIdentity", mutate: (e) => { e.provider!.branchId = "wrong-branch"; } },
     { name: "wrong endpoint", check: "providerIdentity", mutate: (e) => { e.provider!.endpointId = "wrong-endpoint"; } },
+    { name: "endpoint bound to a different branch", check: "providerIdentity", mutate: (e) => { e.provider!.endpointBranchId = "br-wrong-branch"; } },
     { name: "non-Free plan", check: "providerScope", mutate: (e) => { e.provider!.plan = "pro"; } },
     { name: "internal plan id used as organization plan", check: "providerScope", mutate: (e) => { e.provider!.plan = "free_v3"; } },
     { name: "provider branch is not ready", check: "providerBranch", mutate: (e) => { e.provider!.branch!.state = "idle"; } },
     { name: "provider branch is not primary", check: "providerBranch", mutate: (e) => { e.provider!.branch!.primary = false; } },
     { name: "provider branch is not default", check: "providerBranch", mutate: (e) => { e.provider!.branch!.default = false; } },
+    { name: "root contract evidence resolves to a parent", check: "stagingLineage", mutate: (e) => { withVerifiedIsolation(e); e.provider!.branch!.init_source = "parent-data"; e.stagingIsolation!.lineage!.rootStructureResolution!.resolvesToNewRoot = false; } },
     { name: "unsafe provider evidence reference", check: "providerEvidenceReference", mutate: (e) => { e.provider!.evidenceReference = "x".repeat(1025); } },
     { name: "absolute local provider evidence path", check: "providerEvidenceReference", mutate: (e) => { e.provider!.evidenceReference = "D:/Users/owner/private.json"; } },
     { name: "provider evidence path traversal", check: "providerEvidenceReference", mutate: (e) => { e.provider!.evidenceReference = "../../private.json"; } },
@@ -390,6 +422,9 @@ describe("Staging Readiness Gate V1 technical signals", () => {
     { name: "failed libpq connection", check: "libpqConnection", mutate: (e) => { e.connection!.libpq!.connectionSucceeded = false; } },
     { name: "sslmode=require", check: "libpqSslMode", mutate: (e) => { e.connection!.libpq!.sslmode = "require"; } },
     { name: "channel_binding not required", check: "libpqChannelBinding", mutate: (e) => { e.connection!.libpq!.channelBinding = "prefer"; } },
+    { name: "GSS encryption enabled", check: "libpqGssEncryption", mutate: (e) => { e.connection!.libpq!.gssEncryptionMode = "prefer"; } },
+    { name: "invalid trusted root certificate pin", check: "libpqRootCertificatePin", mutate: (e) => { e.connection!.libpq!.rootCertificateSha256 = "not-a-digest"; } },
+    { name: "untrusted root certificate pin source", check: "libpqRootCertificatePin", mutate: (e) => { e.connection!.libpq!.rootCertificateSource = "local-file"; } },
     { name: "libpq SSL inactive", check: "libpqSslInUse", mutate: (e) => { e.connection!.libpq!.sslInUse = false; } },
     { name: "weak TLS protocol", check: "libpqTlsProtocol", mutate: (e) => { e.connection!.libpq!.sslProtocol = "TLSv1.1"; } },
     { name: "weak 3DES cipher", check: "libpqTlsCipher", mutate: (e) => { e.connection!.libpq!.sslCipher = "TLS_RSA_WITH_3DES_EDE_CBC_SHA"; } },
@@ -444,7 +479,9 @@ describe("Staging Readiness Gate V1 technical signals", () => {
 
   it("keeps lineage UNKNOWN when provider omits parent fields instead of returning explicit nulls", () => {
     const evidence = withVerifiedIsolation();
+    delete evidence.provider!.branch!.parent_id;
     evidence.stagingIsolation!.lineage!.branchParentIdFieldObserved = false;
+    evidence.stagingIsolation!.lineage!.rootStructureResolution = null;
     const result = evaluateStagingReadinessSignalsV1(evidence);
 
     expect(result.checks.stagingLineage.status).toBe("UNKNOWN");

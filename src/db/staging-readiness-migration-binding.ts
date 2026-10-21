@@ -146,11 +146,10 @@ function validateProbeEvidence(
   if (!hasExactKeys(evidence, ["nowMs", "sourceSha", "provider", "stagingIsolation", "connection"]) ||
       !isRecord(evidence.provider) ||
       !hasExactKeys(evidence.provider, [
-        "observedAtUtc", "provider", "organizationId", "projectId", "branchId", "endpointId", "plan",
+        "observedAtUtc", "provider", "organizationId", "projectId", "branchId", "endpointId", "endpointBranchId", "plan",
         "computeMinCU", "computeMaxCU", "postgresMajor", "evidenceReference", "evidenceSha256", "branch",
       ]) ||
       !isRecord(evidence.provider.branch) ||
-      !hasExactKeys(evidence.provider.branch, ["state", "primary", "default", "parent_id", "init_source"]) ||
       !isRecord(evidence.stagingIsolation) ||
       !hasExactKeys(evidence.stagingIsolation, ["observedAtUtc", "targetProjectId", "targetBranchId", "lineage", "syntheticOnly"]) ||
       !isRecord(evidence.stagingIsolation.lineage) ||
@@ -165,7 +164,8 @@ function validateProbeEvidence(
       !hasExactKeys(evidence.connection.target, ["endpointId", "hostname", "port", "databaseName", "roleName", "pooled"]) ||
       !isRecord(evidence.connection.libpq) ||
       !hasExactKeys(evidence.connection.libpq, [
-        "sessionId", "connectionSucceeded", "sslmode", "channelBinding", "sslInUse", "sslProtocol", "sslCipher",
+        "sessionId", "connectionSucceeded", "sslmode", "channelBinding", "gssEncryptionMode",
+        "rootCertificateSource", "rootCertificateSha256", "sslInUse", "sslProtocol", "sslCipher",
       ]) ||
       !isRecord(evidence.connection.server) ||
       !hasExactKeys(evidence.connection.server, [
@@ -181,19 +181,35 @@ function validateProbeEvidence(
       !isRecord(evidence.connection.pgStatSsl) ||
       !hasExactKeys(evidence.connection.pgStatSsl, ["sessionId", "ssl"]) ||
       !isRecord(probe.databaseProbe.libpq) ||
-      !hasExactKeys(probe.databaseProbe.libpq, ["sslmode", "channelBinding", "tlsProtocol", "tlsCipher", "directHostIdentityVerified"]) ||
+      !hasExactKeys(probe.databaseProbe.libpq, [
+        "sslmode", "channelBinding", "gssEncryptionMode", "rootCertificateSource", "rootCertificateSha256",
+        "tlsProtocol", "tlsCipher", "directHostIdentityVerified",
+      ]) ||
       !isRecord(probe.databaseProbe.catalogCounts)) throw new Error("probe-shape");
 
   const connection = evidence.connection as JsonRecord;
   if (!Number.isSafeInteger(evidence.nowMs)) throw new Error("probe-time");
   const lineage = evidence.stagingIsolation.lineage;
+  const branch = evidence.provider.branch;
+  const branchParentIdObserved = Object.prototype.hasOwnProperty.call(branch, "parent_id");
+  const rootResolutionRequired = evidence.provider.branch.init_source === "parent-data" ||
+    !branchParentIdObserved ||
+    lineage.projectParentIdFieldObserved === false ||
+    lineage.sourceProjectIdFieldObserved === false ||
+    lineage.branchParentIdFieldObserved === false;
+  const expectedBranchKeys = ["state", "primary", "default", "init_source"];
+  if (branchParentIdObserved) expectedBranchKeys.push("parent_id");
+  if (!hasExactKeys(branch, expectedBranchKeys) ||
+      lineage.branchParentIdFieldObserved !== branchParentIdObserved ||
+      (branchParentIdObserved && branch.parent_id !== null) ||
+      (!branchParentIdObserved && lineage.branchParentId !== null)) throw new Error("provider-branch-shape");
   const expectedLineageKeys = [
     "sourceSha", "verificationSource", "verificationStatus", "createRequestMethod", "createRequestOperation",
     "createRequestReference", "createRequestSha256", "sourceFieldsOmitted", "providerReadbackReference",
     "providerReadbackSha256", "projectParentIdFieldObserved", "projectParentId", "sourceProjectIdFieldObserved",
     "sourceProjectId", "branchParentIdFieldObserved", "branchParentId",
   ];
-  if (evidence.provider.branch.init_source === "parent-data") expectedLineageKeys.push("parentDataResolution");
+  if (rootResolutionRequired) expectedLineageKeys.push("rootStructureResolution");
   if (!hasExactKeys(lineage, expectedLineageKeys)) throw new Error("lineage-shape");
   const server = connection.server as JsonRecord;
   const libpq = connection.libpq as JsonRecord;
@@ -223,6 +239,9 @@ function validateProbeEvidence(
       probe.databaseProbe.transactionReadOnly !== "on" ||
       probe.databaseProbe.libpq.sslmode !== libpq.sslmode ||
       probe.databaseProbe.libpq.channelBinding !== libpq.channelBinding ||
+      probe.databaseProbe.libpq.gssEncryptionMode !== libpq.gssEncryptionMode ||
+      probe.databaseProbe.libpq.rootCertificateSource !== libpq.rootCertificateSource ||
+      probe.databaseProbe.libpq.rootCertificateSha256 !== libpq.rootCertificateSha256 ||
       probe.databaseProbe.libpq.tlsProtocol !== libpq.sslProtocol ||
       probe.databaseProbe.libpq.tlsCipher !== libpq.sslCipher ||
       probe.databaseProbe.libpq.directHostIdentityVerified !== STAGING_MIGRATION_TARGET_MANIFEST.directHostname ||
@@ -232,6 +251,7 @@ function validateProbeEvidence(
 
   const provider = probe.evidence.provider;
   if (!isRecord(provider) ||
+      provider.endpointBranchId !== STAGING_MIGRATION_TARGET_MANIFEST.branchId ||
       probe.providerEvidence.evidenceSha256 !== provider.evidenceSha256 ||
       probe.providerEvidence.evidenceReference !== provider.evidenceReference) throw new Error("provider");
 
