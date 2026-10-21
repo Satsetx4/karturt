@@ -34,7 +34,13 @@ function Assert-StagingCaptureFile {
     throw 'TLS_FILE_UNSAFE'
   }
 
-  foreach ($directoryPath in @($runnerTemp, $captureParent, $runRoot)) {
+  $directoryPaths = [Collections.Generic.List[string]]::new()
+  $directoryInfo = [IO.DirectoryInfo]::new($runRoot)
+  while ($null -ne $directoryInfo) {
+    $directoryPaths.Add([IO.Path]::GetFullPath($directoryInfo.FullName))
+    $directoryInfo = $directoryInfo.Parent
+  }
+  foreach ($directoryPath in $directoryPaths) {
     if (-not [IO.Directory]::Exists($directoryPath)) { throw 'TLS_FILE_MISSING' }
     $directoryAttributes = [IO.File]::GetAttributes($directoryPath)
     if (($directoryAttributes -band [IO.FileAttributes]::Directory) -eq 0 -or
@@ -50,10 +56,39 @@ function Assert-StagingCaptureFile {
     [void]$allowedSids.Add($currentSid.Value)
     [void]$allowedSids.Add('S-1-5-18')
     [void]$allowedSids.Add('S-1-5-32-544')
+    $runnerTempAcl = Get-Acl -LiteralPath $runnerTemp -ErrorAction Stop
+    $runnerTempOwnerSid = $runnerTempAcl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+    if (-not $allowedSids.Contains([string]$runnerTempOwnerSid)) { throw 'TLS_FILE_ACL_UNSAFE' }
+    $runnerTempCanWrite = $false
+    $unsafeWriteRights = [Security.AccessControl.FileSystemRights]::WriteData -bor
+      [Security.AccessControl.FileSystemRights]::AppendData -bor
+      [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+      [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+      [Security.AccessControl.FileSystemRights]::Delete -bor
+      [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+      [Security.AccessControl.FileSystemRights]::TakeOwnership -bor
+      [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles
+    $runnerTempRules = $runnerTempAcl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])
+    foreach ($rule in $runnerTempRules) {
+      $sid = [string]$rule.IdentityReference.Value
+      if ($sid -ceq $currentSid.Value -and
+          $rule.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and
+          (($rule.FileSystemRights -band [Security.AccessControl.FileSystemRights]::Modify) -eq [Security.AccessControl.FileSystemRights]::Modify)) {
+        $runnerTempCanWrite = $true
+      }
+      if (-not $allowedSids.Contains($sid) -and
+          $rule.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and
+          (($rule.FileSystemRights -band $unsafeWriteRights) -ne 0)) {
+        throw 'TLS_FILE_ACL_UNSAFE'
+      }
+    }
+    if (-not $runnerTempCanWrite) { throw 'TLS_FILE_ACL_UNSAFE' }
 
     foreach ($directoryPath in @($captureParent, $runRoot)) {
       $directoryAcl = Get-Acl -LiteralPath $directoryPath -ErrorAction Stop
       if (-not $directoryAcl.AreAccessRulesProtected) { throw 'TLS_FILE_ACL_UNSAFE' }
+      $ownerSid = $directoryAcl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+      if (-not $allowedSids.Contains([string]$ownerSid)) { throw 'TLS_FILE_ACL_UNSAFE' }
       $currentSidCanWrite = $false
       $directoryRules = $directoryAcl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])
       foreach ($rule in $directoryRules) {
@@ -73,6 +108,8 @@ function Assert-StagingCaptureFile {
 
     $acl = Get-Acl -LiteralPath $fullPath -ErrorAction Stop
     if (-not $acl.AreAccessRulesProtected) { throw 'TLS_FILE_ACL_UNSAFE' }
+    $fileOwnerSid = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+    if (-not $allowedSids.Contains([string]$fileOwnerSid)) { throw 'TLS_FILE_ACL_UNSAFE' }
     $currentSidReadable = $false
     $rules = $acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])
     foreach ($rule in $rules) {

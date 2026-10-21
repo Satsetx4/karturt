@@ -329,6 +329,21 @@ function Get-FileSha256([string]$Path) {
   }
 }
 
+function Get-StreamSha256([IO.Stream]$Stream) {
+  if ($null -eq $Stream -or -not $Stream.CanSeek -or -not $Stream.CanRead) { throw 'TLS_FILE_UNSAFE' }
+  $hasher = $null
+  try {
+    $Stream.Position = 0
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    return ([BitConverter]::ToString($hasher.ComputeHash($Stream))).Replace('-', '').ToLowerInvariant()
+  } catch {
+    throw 'TLS_FILE_UNSAFE'
+  } finally {
+    if ($null -ne $hasher) { $hasher.Dispose() }
+    try { $Stream.Position = 0 } catch { }
+  }
+}
+
 function Invoke-LocalCapture([string]$Executable, [string[]]$Arguments, [int]$TimeoutMilliseconds) {
   $child = [Diagnostics.Process]::new()
   try {
@@ -482,6 +497,8 @@ function Assert-ProviderEvidence($Evidence, [string]$SourceSha, [string]$Provide
   $branchParentId = $branch.PSObject.Properties['parent_id']
   if ($null -ne $branchParentId -and $null -ne $branchParentId.Value) { throw 'PROVIDER_PARENT_ID_NOT_NULL' }
   $providerInitSource = Get-JsonField -Object $branch -Name 'init_source' -MissingCode 'PROVIDER_INIT_SOURCE_UNKNOWN'
+  $normalizedProviderInitSource = ''
+  if ($providerInitSource -is [string]) { $normalizedProviderInitSource = $providerInitSource.Trim().ToLowerInvariant() }
 
   foreach ($field in @(
     @{ Name = 'targetProjectId'; Expected = $script:ExpectedTarget.ProjectId },
@@ -530,7 +547,7 @@ function Assert-ProviderEvidence($Evidence, [string]$SourceSha, [string]$Provide
   if ($lineageBranchParentIdObserved -isnot [bool] -or $lineageBranchParentIdObserved -cne $branchParentIdObserved) {
     throw 'PROVIDER_LINEAGE_ARTIFACT_MISMATCH'
   }
-  $rootResolutionRequired = $providerInitSource -ceq 'parent-data' -or -not $branchParentIdObserved
+  $rootResolutionRequired = $normalizedProviderInitSource -ceq 'parent-data' -or -not $branchParentIdObserved
   foreach ($observedField in @('projectParentIdFieldObserved', 'sourceProjectIdFieldObserved', 'branchParentIdFieldObserved')) {
     if ((Get-JsonField -Object $lineage -Name $observedField -MissingCode 'PROVIDER_LINEAGE_PARENT_UNKNOWN') -isnot [bool]) {
       throw 'PROVIDER_LINEAGE_PARENT_UNKNOWN'
@@ -583,9 +600,9 @@ function Assert-ProviderEvidence($Evidence, [string]$SourceSha, [string]$Provide
     throw 'PROVIDER_LINEAGE_ARTIFACT_MISMATCH'
   }
 
-  if ($providerInitSource -ceq 'parent-data') {
+  if ($normalizedProviderInitSource -ceq 'parent-data') {
     if (-not $rootResolutionVerified) { throw 'PROVIDER_ROOT_RESOLUTION_UNKNOWN' }
-  } elseif ($providerInitSource -cne 'blank') {
+  } elseif ($normalizedProviderInitSource -cne 'blank') {
     throw 'PROVIDER_INIT_SOURCE_UNKNOWN'
   }
 
@@ -764,16 +781,22 @@ try {
   Stop-Safely 'PREFLIGHT_RUNTIME_ERROR'
 }
 
+$passFileGuard = $null
+$rootCertificateGuard = $null
 try {
   $verifiedPassFilePath = Get-RequiredFilePath -EnvironmentName 'PGPASSFILE'
   $verifiedRootCertificatePath = Get-RequiredFilePath -EnvironmentName 'PGSSLROOTCERT'
   if (-not [string]::Equals($verifiedPassFilePath, $passFilePath, [StringComparison]::OrdinalIgnoreCase) -or
       -not [string]::Equals($verifiedRootCertificatePath, $rootCertificatePath, [StringComparison]::OrdinalIgnoreCase)) {
-    Stop-Safely 'TLS_FILE_CHANGED'
+    throw 'TLS_FILE_CHANGED'
   }
-  $currentRootCertificateSha256 = Get-FileSha256 -Path $rootCertificatePath
-  if ($currentRootCertificateSha256 -cne $script:RootCertificateSha256) { Stop-Safely 'TLS_ROOT_CA_CHANGED' }
+  $passFileGuard = [IO.File]::Open($passFilePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+  $rootCertificateGuard = [IO.File]::Open($rootCertificatePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+  $currentRootCertificateSha256 = Get-StreamSha256 -Stream $rootCertificateGuard
+  if ($currentRootCertificateSha256 -cne $script:RootCertificateSha256) { throw 'TLS_ROOT_CA_CHANGED' }
 } catch {
+  if ($null -ne $passFileGuard) { $passFileGuard.Dispose(); $passFileGuard = $null }
+  if ($null -ne $rootCertificateGuard) { $rootCertificateGuard.Dispose(); $rootCertificateGuard = $null }
   $message = [string]$_.Exception.Message
   if ($message -match '^(TLS_[A-Z0-9_]+)$') { Stop-Safely $message }
   Stop-Safely 'TLS_FILE_UNSAFE'
@@ -873,6 +896,8 @@ try {
     } catch { }
   }
   $process.Dispose()
+  if ($null -ne $passFileGuard) { $passFileGuard.Dispose(); $passFileGuard = $null }
+  if ($null -ne $rootCertificateGuard) { $rootCertificateGuard.Dispose(); $rootCertificateGuard = $null }
 }
 
 $lines = @([regex]::Split($standardOutput, '\r?\n') | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })

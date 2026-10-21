@@ -129,6 +129,37 @@ try {
   $validatedCaptureFile = Assert-StagingCaptureFile -Path $captureFilePath -ExpectedSha256 $captureFileSha256
   if ($validatedCaptureFile -cne [IO.Path]::GetFullPath($captureFilePath)) { throw 'TEST_CAPTURE_FILE_PATH_MISMATCH' }
 
+  $untrustedSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-545')
+  $trustedCaptureParentAcl = Get-Acl -LiteralPath (Join-Path $caseDirectory 'karturt-staging-readiness')
+  $unsafeCaptureParentAcl = Get-Acl -LiteralPath (Join-Path $caseDirectory 'karturt-staging-readiness')
+  $unsafeCaptureParentAcl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($untrustedSid, [Security.AccessControl.FileSystemRights]::Modify, $directoryInheritance, [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow))
+  Set-Acl -LiteralPath (Join-Path $caseDirectory 'karturt-staging-readiness') -AclObject $unsafeCaptureParentAcl
+  $untrustedDirectoryWriteRejected = $false
+  try {
+    $null = Assert-StagingCaptureFile -Path $captureFilePath
+  } catch {
+    if ([string]$_.Exception.Message -ceq 'TLS_FILE_ACL_UNSAFE') { $untrustedDirectoryWriteRejected = $true } else { throw }
+  } finally {
+    Set-Acl -LiteralPath (Join-Path $caseDirectory 'karturt-staging-readiness') -AclObject $trustedCaptureParentAcl
+  }
+  if (-not $untrustedDirectoryWriteRejected) { throw 'TEST_CAPTURE_PARENT_UNTRUSTED_WRITE_ACCEPTED' }
+
+  $readGuard = [IO.File]::Open($captureFilePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+  $concurrentWriteRejected = $false
+  try {
+    $writer = $null
+    try {
+      $writer = [IO.File]::Open($captureFilePath, [IO.FileMode]::Open, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    } catch [IO.IOException] {
+      $concurrentWriteRejected = $true
+    } finally {
+      if ($null -ne $writer) { $writer.Dispose() }
+    }
+  } finally {
+    $readGuard.Dispose()
+  }
+  if (-not $concurrentWriteRejected) { throw 'TEST_CAPTURE_READ_GUARD_DID_NOT_BLOCK_WRITE' }
+
   $wrongPinRejected = $false
   try {
     $null = Assert-StagingCaptureFile -Path $captureFilePath -ExpectedSha256 ('0' * 64)
@@ -214,6 +245,8 @@ try {
       "`$startInfo.Environment['PGGSSENCMODE'] = 'disable'",
       "`$startInfo.Environment['PGSSLMODE'] = 'verify-full'",
       "`$startInfo.Environment['PGCHANNELBINDING'] = 'require'",
+      '$passFileGuard = [IO.File]::Open($passFilePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)',
+      'Get-StreamSha256 -Stream $rootCertificateGuard',
       '$info.Environment.Clear()',
       '$startInfo.Environment.Clear()',
       "rootCertificateSource = 'protected-environment-variable:KARTURT_STAGING_CA_SHA256'",
@@ -226,7 +259,20 @@ try {
     }
   }
 
-  Write-Output 'Staging Readiness Gate V1 PostgreSQL 18 conninfo, TLS file ACL/pin, early-stop, and self-assertion regressions: PASS'
+  $captureFilesSource = [IO.File]::ReadAllText($captureFilesModulePath)
+  foreach ($requiredCaptureFilesFragment in @(
+      '$directoryInfo = [IO.DirectoryInfo]::new($runRoot)',
+      'FileAttributes]::ReparsePoint',
+      'GetOwner([Security.Principal.SecurityIdentifier])',
+      '$unsafeWriteRights',
+      'TLS_FILE_ACL_UNSAFE'
+    )) {
+    if (-not $captureFilesSource.Contains($requiredCaptureFilesFragment)) {
+      throw 'TEST_STAGING_CAPTURE_PATH_GUARD_FRAGMENT_MISSING'
+    }
+  }
+
+  Write-Output 'Staging Readiness Gate V1 PostgreSQL 18 conninfo, path/ACL/owner guards, locked TLS files, early-stop, and self-assertion regressions: PASS'
 } finally {
   [Environment]::SetEnvironmentVariable('RUNNER_TEMP', $previousRunnerTemp, 'Process')
   [Environment]::SetEnvironmentVariable('GITHUB_RUN_ID', $previousRunId, 'Process')
