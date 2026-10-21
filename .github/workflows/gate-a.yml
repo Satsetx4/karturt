@@ -97,7 +97,7 @@ jobs:
         run: npm run build
 
   wave13b2-query-integrity-windows:
-    if: github.ref == 'refs/heads/codex/karturt-v1-staging-activation-20261015' || github.head_ref == 'codex/karturt-v1-staging-activation-20261015' || github.ref == 'refs/heads/codex/karturt-wave13b2-f2-fail-closed-20261017' || github.head_ref == 'codex/karturt-wave13b2-f2-fail-closed-20261017'
+    if: github.ref == 'refs/heads/codex/karturt-v1-staging-activation-20261015' || github.head_ref == 'codex/karturt-v1-staging-activation-20261015' || github.ref == 'refs/heads/codex/karturt-wave13b2-f2-fail-closed-20261017' || github.head_ref == 'codex/karturt-wave13b2-f2-fail-closed-20261017' || github.head_ref == 'codex/issue-59-wave13b2-f2-pwsh7-20261021'
     name: Wave 13B.2 query hash and Windows LF checkout
     runs-on: windows-latest
     timeout-minutes: 5

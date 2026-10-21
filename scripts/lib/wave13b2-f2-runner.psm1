@@ -1,4 +1,5 @@
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'wave13b2-f2-runtime.ps1')
 
 if ($null -eq ('Wave13B2F2.RawOutputPump' -as [type])) {
   Add-Type -TypeDefinition @'
@@ -141,7 +142,8 @@ foreach ($code in @(
   'F2_RECEIPT_REPARSE_DETECTED', 'F2_RECEIPT_ACL_MISMATCH', 'F2_RECEIPT_CREATE_FAILED',
   'F2_RECEIPT_WRITE_FAILED', 'F2_RECEIPT_LENGTH_MISMATCH', 'F2_RECEIPT_HASH_MISMATCH',
   'F2_RECEIPT_POST_VERIFY_FAILED', 'F2_RECEIPT_VERIFY_FAILED', 'F2_RUNNER_ABORTED_BEFORE_PSQL',
-  'F2_RUNNER_ABORTED', 'F2_EXPECTED_STATE_PREFLIGHT_INVALID', 'F2_EXPECTED_STATE_PREFLIGHT_MISMATCH'
+  'F2_RUNNER_ABORTED', 'F2_EXPECTED_STATE_PREFLIGHT_INVALID', 'F2_EXPECTED_STATE_PREFLIGHT_MISMATCH',
+  'F2_POWERSHELL_RUNTIME_UNSUPPORTED'
 )) { [void]$script:Wave13B2F2RunnerFailureCodes.Add($code) }
 
 function Test-Wave13B2F2AllowedFailureCode([string]$Code) {
@@ -756,6 +758,30 @@ function Invoke-Wave13B2F2Psql(
   [ValidateRange(1, 3600)]
   [int]$TimeoutSeconds = 60
 ) {
+  $runtimeGateResult = Get-Wave13B2F2RuntimeGateResult
+  if (-not $runtimeGateResult.Supported) {
+    return [pscustomobject]@{
+      ExitCode = -1
+      PsqlStarted = $false
+      ProcessId = -1
+      CaptureComplete = $false
+      ControlMarkers = [string[]]@()
+      StderrMarkers = [string[]]@()
+      DiagnosticLines = [string[]]@(
+        $runtimeGateResult.FailureCode
+        'Required runtime: ' + $runtimeGateResult.RequiredRuntime
+      )
+      FailureCodes = [string[]]@($runtimeGateResult.FailureCode)
+      EvidenceVerified = $false
+      EvidenceBytes = -1L
+      EvidenceSha256 = 'unavailable'
+      EvidencePath = $EvidencePath
+      StderrBytes = 0L
+      StderrSha256 = 'unavailable'
+      OutputFormat = 'csv'
+    }
+  }
+
   $failureCodes = [System.Collections.Generic.List[string]]::new()
   $exitCode = -1
   $processStarted = $false
