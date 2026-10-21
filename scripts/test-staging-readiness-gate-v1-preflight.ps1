@@ -5,6 +5,24 @@ $conninfoModulePath = Join-Path $PSScriptRoot 'lib/staging-readiness-conninfo-v1
 Import-Module -Name $conninfoModulePath -Force -ErrorAction Stop
 $captureFilesModulePath = Join-Path $PSScriptRoot 'lib/staging-readiness-capture-files-v1.psm1'
 Import-Module -Name $captureFilesModulePath -Force -ErrorAction Stop
+$systemRoot = [Environment]::GetEnvironmentVariable('SystemRoot', 'Process')
+$icaclsPath = Join-Path $systemRoot 'System32/icacls.exe'
+if (-not [IO.File]::Exists($icaclsPath)) { throw 'TEST_ICACLS_UNAVAILABLE' }
+
+function Add-UntrustedWriteAce([string]$Path) {
+  & $icaclsPath $Path '/grant' '*S-1-5-32-545:(OI)(CI)M' '/q' | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'TEST_ACL_UNTRUSTED_WRITE_ADD_FAILED' }
+}
+
+function Remove-UntrustedWriteAce([string]$Path) {
+  & $icaclsPath $Path '/remove:g' '*S-1-5-32-545' '/q' | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'TEST_ACL_UNTRUSTED_WRITE_REMOVE_FAILED' }
+}
+
+function Add-UntrustedReadAce([string]$Path) {
+  & $icaclsPath $Path '/grant' '*S-1-5-32-545:(OI)(CI)RX' '/q' | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'TEST_ACL_UNTRUSTED_READ_ADD_FAILED' }
+}
 
 function Assert-ConninfoRejects([string]$Text, [string]$ExpectedCode) {
   $rejectedAsExpected = $false
@@ -86,7 +104,10 @@ Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'Options\|', 'Options|on
 Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'Host Address\|192.0.2.41', 'Host Address|not-an-ip') -ExpectedCode 'CONNECTION_INFO_INVALID'
 
 $runnerPath = Join-Path $PSScriptRoot 'staging-readiness-gate-v1.ps1'
-$tempRoot = [IO.Path]::GetTempPath()
+$tempRoot = [Environment]::GetEnvironmentVariable('LOCALAPPDATA', 'Process')
+if ([string]::IsNullOrWhiteSpace($tempRoot) -or -not [IO.Directory]::Exists($tempRoot)) {
+  throw 'TEST_PRIVATE_TEMP_ROOT_UNAVAILABLE'
+}
 $caseDirectory = Join-Path $tempRoot ('karturt-gate-v1-preflight-' + [Guid]::NewGuid().ToString('N'))
 if ([IO.Directory]::Exists($caseDirectory) -or [IO.File]::Exists($caseDirectory)) {
   throw 'TEST_TEMP_PATH_COLLISION'
@@ -97,6 +118,15 @@ try {
   $previousRunnerTemp = [Environment]::GetEnvironmentVariable('RUNNER_TEMP', 'Process')
   $previousRunId = [Environment]::GetEnvironmentVariable('GITHUB_RUN_ID', 'Process')
   $previousRunAttempt = [Environment]::GetEnvironmentVariable('GITHUB_RUN_ATTEMPT', 'Process')
+  $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $systemSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+  $adminsSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+  $runnerTempAcl = Get-Acl -LiteralPath $caseDirectory
+  $runnerTempAcl.SetAccessRuleProtection($true, $false)
+  foreach ($sid in @($currentSid, $systemSid, $adminsSid)) {
+    $runnerTempAcl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid, [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.AccessControlType]::Allow))
+  }
+  Set-Acl -LiteralPath $caseDirectory -AclObject $runnerTempAcl
   [Environment]::SetEnvironmentVariable('RUNNER_TEMP', $caseDirectory, 'Process')
   [Environment]::SetEnvironmentVariable('GITHUB_RUN_ID', '1234567890', 'Process')
   [Environment]::SetEnvironmentVariable('GITHUB_RUN_ATTEMPT', '1', 'Process')
@@ -129,20 +159,39 @@ try {
   $validatedCaptureFile = Assert-StagingCaptureFile -Path $captureFilePath -ExpectedSha256 $captureFileSha256
   if ($validatedCaptureFile -cne [IO.Path]::GetFullPath($captureFilePath)) { throw 'TEST_CAPTURE_FILE_PATH_MISMATCH' }
 
-  $untrustedSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-545')
-  $trustedCaptureParentAcl = Get-Acl -LiteralPath (Join-Path $caseDirectory 'karturt-staging-readiness')
-  $unsafeCaptureParentAcl = Get-Acl -LiteralPath (Join-Path $caseDirectory 'karturt-staging-readiness')
-  $unsafeCaptureParentAcl.SetAccessRule([Security.AccessControl.FileSystemAccessRule]::new($untrustedSid, [Security.AccessControl.FileSystemRights]::Modify, $directoryInheritance, [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow))
-  Set-Acl -LiteralPath (Join-Path $caseDirectory 'karturt-staging-readiness') -AclObject $unsafeCaptureParentAcl
+  Add-UntrustedWriteAce -Path $caseDirectory
+  $untrustedRunnerTempWriteRejected = $false
+  try {
+    $null = Assert-StagingCaptureFile -Path $captureFilePath
+  } catch {
+    if ([string]$_.Exception.Message -ceq 'TLS_FILE_ACL_UNSAFE') { $untrustedRunnerTempWriteRejected = $true } else { throw }
+  } finally {
+    Remove-UntrustedWriteAce -Path $caseDirectory
+  }
+  if (-not $untrustedRunnerTempWriteRejected) { throw 'TEST_RUNNER_TEMP_UNTRUSTED_WRITE_ACCEPTED' }
+
+  $captureParentPath = Join-Path $caseDirectory 'karturt-staging-readiness'
+  Add-UntrustedWriteAce -Path $captureParentPath
   $untrustedDirectoryWriteRejected = $false
   try {
     $null = Assert-StagingCaptureFile -Path $captureFilePath
   } catch {
     if ([string]$_.Exception.Message -ceq 'TLS_FILE_ACL_UNSAFE') { $untrustedDirectoryWriteRejected = $true } else { throw }
   } finally {
-    Set-Acl -LiteralPath (Join-Path $caseDirectory 'karturt-staging-readiness') -AclObject $trustedCaptureParentAcl
+    Remove-UntrustedWriteAce -Path $captureParentPath
   }
   if (-not $untrustedDirectoryWriteRejected) { throw 'TEST_CAPTURE_PARENT_UNTRUSTED_WRITE_ACCEPTED' }
+
+  Add-UntrustedReadAce -Path $captureParentPath
+  $untrustedDirectoryReadRejected = $false
+  try {
+    $null = Assert-StagingCaptureFile -Path $captureFilePath
+  } catch {
+    if ([string]$_.Exception.Message -ceq 'TLS_FILE_ACL_UNSAFE') { $untrustedDirectoryReadRejected = $true } else { throw }
+  } finally {
+    Remove-UntrustedWriteAce -Path $captureParentPath
+  }
+  if (-not $untrustedDirectoryReadRejected) { throw 'TEST_CAPTURE_PARENT_UNTRUSTED_READ_ACCEPTED' }
 
   $readGuard = [IO.File]::Open($captureFilePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
   $concurrentWriteRejected = $false
@@ -234,6 +283,7 @@ try {
   if ($selfAssertedArtifact.stagingIsolation -cne 'UNKNOWN') { $failedSelfAssertedChecks.Add('stagingIsolation') }
   if ($selfAssertedArtifact.overallGate -cne 'NOT_EVALUATED') { $failedSelfAssertedChecks.Add('overallGate') }
   if ($null -ne $selfAssertedArtifact.psqlVersion) { $failedSelfAssertedChecks.Add('psqlVersion') }
+  if ($null -ne $selfAssertedArtifact.psqlSha256) { $failedSelfAssertedChecks.Add('psqlSha256') }
   if ($selfAssertedArtifact.databaseProbe.status -cne 'STOPPED') { $failedSelfAssertedChecks.Add('databaseProbe.status') }
   if ($selfAssertedArtifact.migrationAuthorization -cne 'NOT_GRANTED') { $failedSelfAssertedChecks.Add('migrationAuthorization') }
   if ($failedSelfAssertedChecks.Count -gt 0) {
@@ -247,6 +297,11 @@ try {
       "`$startInfo.Environment['PGCHANNELBINDING'] = 'require'",
       '$passFileGuard = [IO.File]::Open($passFilePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)',
       'Get-StreamSha256 -Stream $rootCertificateGuard',
+      "`$expectedPsqlSha256 = [Environment]::GetEnvironmentVariable('KARTURT_STAGING_PSQL_SHA256', 'Process')",
+      '$psqlBinaryGuard = [IO.File]::Open($psqlPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)',
+      '$script:ObservedPsqlSha256 = Get-StreamSha256 -Stream $psqlBinaryGuard',
+      "Stop-Safely 'POSTGRESQL_18_PSQL_PIN_MISMATCH'",
+      'psqlSha256 = $script:ObservedPsqlSha256',
       '$info.Environment.Clear()',
       '$startInfo.Environment.Clear()',
       "rootCertificateSource = 'protected-environment-variable:KARTURT_STAGING_CA_SHA256'",
@@ -265,6 +320,7 @@ try {
       'FileAttributes]::ReparsePoint',
       'GetOwner([Security.Principal.SecurityIdentifier])',
       '$unsafeWriteRights',
+      "'^S-1-5-5-[0-9]+-[0-9]+$'",
       'TLS_FILE_ACL_UNSAFE'
     )) {
     if (-not $captureFilesSource.Contains($requiredCaptureFilesFragment)) {

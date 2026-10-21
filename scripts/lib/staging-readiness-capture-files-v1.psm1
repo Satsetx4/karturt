@@ -96,7 +96,12 @@ function Assert-StagingCaptureFile {
           throw 'TLS_FILE_ACL_UNSAFE'
         }
         $sid = [string]$rule.IdentityReference.Value
-        if (-not $allowedSids.Contains($sid)) { throw 'TLS_FILE_ACL_UNSAFE' }
+        $isLogonSessionSid = $sid -match '^S-1-5-5-[0-9]+-[0-9]+$'
+        if (-not $allowedSids.Contains($sid) -and -not $isLogonSessionSid) { throw 'TLS_FILE_ACL_UNSAFE' }
+        if ($isLogonSessionSid -and
+            (($rule.FileSystemRights -band $unsafeWriteRights) -ne 0)) {
+          throw 'TLS_FILE_ACL_UNSAFE'
+        }
         $modifyRights = [Security.AccessControl.FileSystemRights]::Modify
         if ($sid -ceq $currentSid.Value -and
             (($rule.FileSystemRights -band $modifyRights) -eq $modifyRights)) {

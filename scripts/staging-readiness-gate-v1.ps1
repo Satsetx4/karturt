@@ -17,6 +17,7 @@ $script:SuccessEvidenceWritten = $false
 $script:FailureEvidencePath = ''
 $script:ObservedPsqlExitCode = $null
 $script:ObservedPsqlVersion = $null
+$script:ObservedPsqlSha256 = $null
 $script:QuerySha256 = $null
 $script:RootCertificateSha256 = $null
 $script:ProviderPreflightStatus = 'UNKNOWN'
@@ -53,6 +54,7 @@ function Stop-Safely([string]$Code, [int]$ExitCode = 1) {
       providerEvidenceSha256 = $providerHashForEvidence
       querySha256 = $script:QuerySha256
       psqlVersion = $script:ObservedPsqlVersion
+      psqlSha256 = $script:ObservedPsqlSha256
       psqlExitCode = $script:ObservedPsqlExitCode
       startedAtUtc = $startedForEvidence
       stoppedAtUtc = $stoppedForEvidence
@@ -752,6 +754,21 @@ if (-not [IO.File]::Exists($psqlPath)) { Stop-Safely 'POSTGRESQL_18_PSQL_MISSING
 try { $script:QuerySha256 = Get-FileSha256 -Path $queryPath }
 catch { Stop-Safely 'QUERY_HASH_UNAVAILABLE' }
 
+$expectedPsqlSha256 = [Environment]::GetEnvironmentVariable('KARTURT_STAGING_PSQL_SHA256', 'Process')
+if ([string]::IsNullOrWhiteSpace($expectedPsqlSha256) -or $expectedPsqlSha256 -cnotmatch '^[a-f0-9]{64}$') {
+  Stop-Safely 'POSTGRESQL_18_PSQL_PIN_MISSING'
+}
+$psqlBinaryGuard = $null
+try {
+  $psqlBinaryGuard = [IO.File]::Open($psqlPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+  $script:ObservedPsqlSha256 = Get-StreamSha256 -Stream $psqlBinaryGuard
+} catch {
+  Stop-Safely 'POSTGRESQL_18_PSQL_HASH_UNAVAILABLE'
+}
+if ($script:ObservedPsqlSha256 -cne $expectedPsqlSha256) {
+  Stop-Safely 'POSTGRESQL_18_PSQL_PIN_MISMATCH'
+}
+
 try {
   $psqlVersion = Get-PsqlVersion -Executable $psqlPath
   $script:ObservedPsqlVersion = $psqlVersion
@@ -898,6 +915,7 @@ try {
   $process.Dispose()
   if ($null -ne $passFileGuard) { $passFileGuard.Dispose(); $passFileGuard = $null }
   if ($null -ne $rootCertificateGuard) { $rootCertificateGuard.Dispose(); $rootCertificateGuard = $null }
+  if ($null -ne $psqlBinaryGuard) { $psqlBinaryGuard.Dispose(); $psqlBinaryGuard = $null }
 }
 
 $lines = @([regex]::Split($standardOutput, '\r?\n') | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
@@ -1195,6 +1213,7 @@ $artifact = [ordered]@{
   startedAtUtc = $script:AttemptStartedAtUtc
   completedAtUtc = $evidenceEndedAtUtc
   psqlVersion = $psqlVersion
+  psqlSha256 = $script:ObservedPsqlSha256
   querySha256 = $script:QuerySha256
   target = [ordered]@{
     organizationId = $script:ExpectedTarget.OrganizationId

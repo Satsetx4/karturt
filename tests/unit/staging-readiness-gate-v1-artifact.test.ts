@@ -268,6 +268,7 @@ function createReadinessBindingFixture(options: {
     startedAtUtc: probeStartedAtUtc,
     completedAtUtc: probeCompletedAtUtc,
     psqlVersion: "psql (PostgreSQL) 18.0",
+    psqlSha256: "e".repeat(64),
     querySha256,
     target: {
       organizationId: STAGING_MIGRATION_TARGET_MANIFEST.organizationId,
@@ -533,6 +534,24 @@ describe("Staging Readiness Gate V1 artifact boundary", () => {
     const fixture = createReadinessBindingFixture();
     expect(fixture.evaluation.readiness, JSON.stringify(fixture.evaluation.checks)).toBe("UNKNOWN");
     expect(fixture.evaluation.migrationAllowed).toBe(false);
+    expect(() => verifyStagingReadinessBinding({
+      repositoryRoot: process.cwd(),
+      evaluationPath: fixture.evaluationPath,
+      probeEvidencePath: fixture.probePath,
+      sourceSha: fixture.sourceHeadSha,
+      nowMs: fixture.now,
+    })).toThrow("fresh, source-bound Gate V1 PASS evaluation could not be verified");
+  });
+
+  it("rejects a probe without a publisher-pinned PostgreSQL client digest", () => {
+    const fixture = createReadinessBindingFixture();
+    const probe = JSON.parse(readFileSync(fixture.probePath, "utf8")) as Record<string, unknown>;
+    delete probe.psqlSha256;
+    const probeBytes = Buffer.from(`${JSON.stringify(probe)}\n`, "utf8");
+    writeFileSync(fixture.probePath, probeBytes);
+    const evaluation = JSON.parse(readFileSync(fixture.evaluationPath, "utf8")) as Record<string, unknown>;
+    evaluation.inputArtifactSha256 = sha256(probeBytes);
+    writeFileSync(fixture.evaluationPath, `${JSON.stringify(evaluation)}\n`);
     expect(() => verifyStagingReadinessBinding({
       repositoryRoot: process.cwd(),
       evaluationPath: fixture.evaluationPath,
