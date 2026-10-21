@@ -7,6 +7,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'lib/wave13b2-f2-runtime.ps1')
+$runtimeGateResult = Get-Wave13B2F2RuntimeGateResult
+if (-not $runtimeGateResult.Supported) {
+  [Console]::Error.WriteLine($runtimeGateResult.FailureCode)
+  [Console]::Error.WriteLine('Required runtime: ' + $runtimeGateResult.RequiredRuntime)
+  exit 78
+}
+
 Import-Module (Join-Path $PSScriptRoot 'lib/wave13b2-f2-runner.psm1') -Force
 
 function Require-Condition([bool]$Condition, [string]$Message) {

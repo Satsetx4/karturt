@@ -7,7 +7,17 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+$runtimeHelperPath = Join-Path (Split-Path -Parent $RunnerModulePath) 'wave13b2-f2-runtime.ps1'
+. $runtimeHelperPath
+$runtimeGateResult = Get-Wave13B2F2RuntimeGateResult
+if (-not $runtimeGateResult.Supported) {
+  [Console]::Error.WriteLine($runtimeGateResult.FailureCode)
+  [Console]::Error.WriteLine('Required runtime: ' + $runtimeGateResult.RequiredRuntime)
+  exit 78
+}
+
 Import-Module $RunnerModulePath -Force
+Write-Host ('runtime=PASS PowerShell=' + $PSVersionTable.PSVersion.ToString() + ' ProcessStartInfo.ArgumentList.Add(string)=SUPPORTED')
 
 function Require-TestCondition([bool]$Condition, [string]$Message) {
   if (-not $Condition) { throw $Message }
@@ -100,6 +110,157 @@ function Invoke-CheckedProcess([string]$Executable, [string[]]$ArgumentList, [st
   } finally {
     $process.Dispose()
   }
+}
+
+function Invoke-TestProcessCapture(
+  [string]$Executable,
+  [string[]]$ArgumentList,
+  [System.Collections.IDictionary]$EnvironmentOverrides = @{},
+  [bool]$IsolatePath = $true,
+  [int]$TimeoutSeconds = 30
+) {
+  $process = [Diagnostics.Process]::new()
+  try {
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Executable
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in $ArgumentList) { [void]$startInfo.ArgumentList.Add([string]$argument) }
+
+    $postgresEnvironmentNames = @($startInfo.Environment.Keys | Where-Object { [string]$_ -match '^PG' })
+    foreach ($name in $postgresEnvironmentNames) { [void]$startInfo.Environment.Remove([string]$name) }
+    if ($IsolatePath) {
+      $startInfo.Environment['PATH'] = (Join-Path $env:SystemRoot 'System32') + [IO.Path]::PathSeparator + $env:SystemRoot
+    }
+    foreach ($entry in $EnvironmentOverrides.GetEnumerator()) {
+      $startInfo.Environment[[string]$entry.Key] = [string]$entry.Value
+    }
+
+    $process.StartInfo = $startInfo
+    if (-not $process.Start()) { throw 'The isolated PowerShell regression process did not start.' }
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+      try { $process.Kill($true) } catch { }
+      throw 'The isolated PowerShell regression process timed out.'
+    }
+    $captureComplete = [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($stdoutTask, $stderrTask), 1000)
+    $stdout = if ($stdoutTask.IsCompletedSuccessfully) { $stdoutTask.GetAwaiter().GetResult() } else { '' }
+    $stderr = if ($stderrTask.IsCompletedSuccessfully) { $stderrTask.GetAwaiter().GetResult() } else { '' }
+    $output = @([regex]::Split(($stdout + "`n" + $stderr), '\r?\n') | Where-Object { $_.Length -gt 0 })
+    return [pscustomobject]@{
+      ExitCode = $process.ExitCode
+      Output = [string[]]$output
+      CaptureComplete = $captureComplete
+    }
+  } finally {
+    $process.Dispose()
+  }
+}
+
+function Invoke-TestPowerShell51EntrypointGate([string]$TestRoot, [string]$PowerShell51Path) {
+  $fixtureRoot = Join-Path $TestRoot 'ps51-entrypoint-fixture'
+  $fixtureScripts = Join-Path $fixtureRoot 'scripts'
+  $fixtureLibrary = Join-Path $fixtureScripts 'lib'
+  $localAppData = Join-Path $fixtureRoot 'local-app-data'
+  $sentinelPath = Join-Path $fixtureRoot 'runner-module-imported.txt'
+  [void][IO.Directory]::CreateDirectory($fixtureLibrary)
+  [void][IO.Directory]::CreateDirectory($localAppData)
+
+  $sourceEntrypoint = Join-Path $PSScriptRoot 'run-wave13b2-f2-query.ps1'
+  $sourceRuntimeHelper = Join-Path $PSScriptRoot 'lib/wave13b2-f2-runtime.ps1'
+  $fixtureEntrypoint = Join-Path $fixtureScripts 'run-wave13b2-f2-query.ps1'
+  Copy-Item -LiteralPath $sourceEntrypoint -Destination $fixtureEntrypoint
+  Copy-Item -LiteralPath $sourceRuntimeHelper -Destination (Join-Path $fixtureLibrary 'wave13b2-f2-runtime.ps1')
+  $sentinelModulePath = Join-Path $fixtureLibrary 'wave13b2-f2-runner.psm1'
+  $sentinelModuleSource = @'
+if (-not [string]::IsNullOrWhiteSpace($env:F2_RUNTIME_FIXTURE_MODULE_SENTINEL)) {
+  [IO.File]::WriteAllText($env:F2_RUNTIME_FIXTURE_MODULE_SENTINEL, 'module-imported')
+}
+'@
+  [IO.File]::WriteAllText($sentinelModulePath, $sentinelModuleSource, [Text.UTF8Encoding]::new($false))
+
+  $environment = @{
+    LOCALAPPDATA = $localAppData
+    F2_RUNTIME_FIXTURE_MODULE_SENTINEL = $sentinelPath
+  }
+  $result = Invoke-TestProcessCapture `
+    -Executable $PowerShell51Path `
+    -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $fixtureEntrypoint, '-TrustedPublicKeyFingerprint', ('b' * 64)) `
+    -EnvironmentOverrides $environment
+
+  $outputText = $result.Output -join "`n"
+  Require-TestCondition ($result.CaptureComplete) 'The PowerShell 5.1 entrypoint diagnostic capture was incomplete.'
+  Require-TestCondition ($result.ExitCode -eq 78) ('The PowerShell 5.1 entrypoint exited with ' + $result.ExitCode + ' instead of 78.')
+  Require-TestCondition ($outputText -match '(?m)^F2_POWERSHELL_RUNTIME_UNSUPPORTED$') 'The PowerShell 5.1 entrypoint did not emit the exact sanitized runtime diagnostic.'
+  Require-TestCondition ($outputText.Contains('PowerShell 7.0') -and $outputText.Contains('ProcessStartInfo.ArgumentList.Add(string)')) 'The PowerShell 5.1 diagnostic omitted the supported runtime and API requirement.'
+  Require-TestCondition (-not $outputText.Contains($fixtureRoot)) 'The PowerShell 5.1 runtime diagnostic exposed a fixture path.'
+  Require-TestCondition (-not (Test-Path -LiteralPath $sentinelPath)) 'The PowerShell 5.1 entrypoint imported the runner module before rejecting the runtime.'
+
+  $attemptRoot = Join-Path $localAppData 'KarturtStageOperator'
+  $attemptMarkers = @()
+  if (Test-Path -LiteralPath $attemptRoot) {
+    $attemptMarkers = @(Get-ChildItem -LiteralPath $attemptRoot -Filter 'wave13b2-f2-query-attempt-*.local.txt' -File -Recurse -ErrorAction Stop)
+  }
+  Require-TestCondition ($attemptMarkers.Count -eq 0) 'The PowerShell 5.1 entrypoint created an attempt marker before rejecting the runtime.'
+
+  return $result
+}
+
+function Invoke-TestPowerShell51ModuleGuard([string]$TestRoot, [string]$PowerShell51Path, [string]$ModulePath) {
+  $fixtureRoot = Join-Path $TestRoot 'ps51-module-fixture'
+  [void][IO.Directory]::CreateDirectory($fixtureRoot)
+  $probePath = Join-Path $fixtureRoot 'invoke-module-guard.ps1'
+  $evidencePath = Join-Path $fixtureRoot 'must-not-be-created.evidence.txt'
+  $missingPsqlPath = Join-Path $fixtureRoot 'must-not-start-psql.exe'
+  $missingAclCheckerPath = Join-Path $fixtureRoot 'must-not-run-acl-checker.ps1'
+  $probeSource = @'
+$ErrorActionPreference = 'Stop'
+Import-Module -Name $env:F2_RUNTIME_MODULE_PATH -Force -ErrorAction Stop
+$result = Invoke-Wave13B2F2Psql `
+  -PsqlExecutable $env:F2_RUNTIME_PSQL_PATH `
+  -ArgumentList @() `
+  -EvidencePath $env:F2_RUNTIME_EVIDENCE_PATH `
+  -AclCheckerPath $env:F2_RUNTIME_ACL_CHECKER_PATH `
+  -ExpectedSourceSha ('a' * 40) `
+  -ExpectedQuerySha256 ('b' * 64)
+$expectedFailureCode = 'F2_POWERSHELL_RUNTIME_UNSUPPORTED'
+$isExpected = $result.ExitCode -eq -1 -and
+  -not $result.PsqlStarted -and
+  $result.ProcessId -eq -1 -and
+  @($result.FailureCodes).Count -eq 1 -and
+  $result.FailureCodes[0] -ceq $expectedFailureCode -and
+  @($result.ControlMarkers).Count -eq 0 -and
+  @($result.StderrMarkers).Count -eq 0 -and
+  $result.DiagnosticLines -contains $expectedFailureCode -and
+  -not $result.EvidenceVerified -and
+  -not (Test-Path -LiteralPath $env:F2_RUNTIME_EVIDENCE_PATH)
+if (-not $isExpected) {
+  [Console]::Error.WriteLine('F2_RUNTIME_MODULE_RESULT=FAIL')
+  exit 1
+}
+[Console]::Out.WriteLine('F2_RUNTIME_MODULE_RESULT=PASS')
+exit 0
+'@
+  [IO.File]::WriteAllText($probePath, $probeSource, [Text.UTF8Encoding]::new($false))
+  $environment = @{
+    F2_RUNTIME_MODULE_PATH = (Resolve-Path -LiteralPath $ModulePath).Path
+    F2_RUNTIME_PSQL_PATH = $missingPsqlPath
+    F2_RUNTIME_EVIDENCE_PATH = $evidencePath
+    F2_RUNTIME_ACL_CHECKER_PATH = $missingAclCheckerPath
+  }
+  $result = Invoke-TestProcessCapture `
+    -Executable $PowerShell51Path `
+    -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $probePath) `
+    -EnvironmentOverrides $environment
+
+  Require-TestCondition ($result.CaptureComplete) 'The PowerShell 5.1 module guard capture was incomplete.'
+  Require-TestCondition ($result.ExitCode -eq 0 -and $result.Output -contains 'F2_RUNTIME_MODULE_RESULT=PASS') ('The PowerShell 5.1 module guard failed: ' + ($result.Output -join ' | '))
+  Require-TestCondition (-not (Test-Path -LiteralPath $evidencePath)) 'The PowerShell 5.1 module guard created evidence before returning its rejected result.'
+  Require-TestCondition (-not (Test-Path -LiteralPath $missingPsqlPath)) 'The PowerShell 5.1 module guard created a psql executable fixture unexpectedly.'
+  return $result
 }
 
 function Write-TestStage([string]$Stage) {
@@ -328,6 +489,14 @@ try {
   $testRootResolved = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $testRoot).Path)
   Require-TestCondition ($testRootResolved.StartsWith($tempRootResolved + '\', [StringComparison]::OrdinalIgnoreCase)) 'The test temp root resolved outside the Windows temporary directory.'
   Write-Host ('[PG18] tempRoot=' + $testRootResolved)
+
+  Write-TestStage 'powershell7-capability-and-powershell51-runtime-rejection'
+  $powershell51Path = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
+  Require-TestCondition (Test-Path -LiteralPath $powershell51Path -PathType Leaf) 'Windows PowerShell 5.1 is required for the offline runtime rejection fixture.'
+  $entrypointRuntimeResult = Invoke-TestPowerShell51EntrypointGate -TestRoot $testRoot -PowerShell51Path $powershell51Path
+  Write-Host 'powerShell51Entrypoint=REJECTED exit=78 markerCreated=false moduleImported=false psqlStarted=false'
+  $moduleRuntimeResult = Invoke-TestPowerShell51ModuleGuard -TestRoot $testRoot -PowerShell51Path $powershell51Path -ModulePath $RunnerModulePath
+  Write-Host 'powerShell51Module=REJECTED failure=F2_POWERSHELL_RUNTIME_UNSUPPORTED psqlStarted=false psqlProcessId=-1 evidenceCreated=false'
 
   Write-TestStage 'expected-state-preflight-pin-validation'
   $preflightSourceSha = '6' * 40
