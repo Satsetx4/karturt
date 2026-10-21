@@ -74,6 +74,7 @@ function makeMigrationContext(): ApprovedMigrationContext {
     sourceSha: "a".repeat(40),
     targetManifestFingerprint: "b".repeat(64),
     migrationManifestFingerprint: "c".repeat(64),
+    readinessEvaluationSha256: "e".repeat(64),
     authorizationId: "d".repeat(64),
   };
 }

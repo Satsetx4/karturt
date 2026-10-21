@@ -272,13 +272,14 @@ describe("Staging Readiness Gate V1 technical signals", () => {
     const evidence = withVerifiedIsolation();
     evidence.authorization = {
       artifact: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         payload: {
-          purpose: "karturt-v1-staging-migration",
+          purpose: "karturt-v1-staging-migration/v2",
           authorizationId: "b".repeat(64),
           sourceSha: evidence.sourceSha!,
           targetManifestFingerprint: "c".repeat(64),
           migrationManifestFingerprint: "d".repeat(64),
+          readinessEvaluationSha256: "e".repeat(64),
           issuedAt: new Date(nowMs - 1_000).toISOString(),
           expiresAt: new Date(nowMs + 60_000).toISOString(),
         },
@@ -289,7 +290,7 @@ describe("Staging Readiness Gate V1 technical signals", () => {
 
     expect(result.technicalStatus).toBe("PASS");
     expect(result.authorizationCheck.status).toBe("UNKNOWN");
-    expect(result.authorizationCheck.reason).toContain("No trusted");
+    expect(result.authorizationCheck.reason).toContain("after the readiness report is finalized");
   });
 
   it("fails malformed authorization evidence independently from technical signals", () => {

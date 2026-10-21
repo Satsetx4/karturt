@@ -12,6 +12,7 @@ import {
   evaluateDatabaseProbeArtifact,
   formatDatabaseProbeEvaluationSummary,
 } from "../../src/db/staging-readiness-gate-v1-cli-policy";
+import { verifyStagingReadinessBinding } from "../../src/db/staging-readiness-migration-binding";
 import type { StagingReadinessEvidence } from "../../src/db/staging-readiness-gate-v1";
 import { STAGING_MIGRATION_TARGET_MANIFEST } from "../../src/lib/staging-database-target";
 
@@ -122,7 +123,6 @@ function createEvidenceBundle(bundleSourceSha = sourceSha, observedAtMs = nowMs)
       sourceProjectId: null,
       branchParentIdFieldObserved: true,
       branchParentId: null,
-      parentDataResolution: null,
     },
     syntheticOnly: {
       classification: "SYNTHETIC_ONLY",
@@ -156,6 +156,173 @@ function createEvidenceBundle(bundleSourceSha = sourceSha, observedAtMs = nowMs)
     },
   };
   return { directory: temporaryDirectory, evidence };
+}
+
+function createReadinessBindingFixture(options: {
+  stale?: boolean;
+  mismatchedTarget?: boolean;
+  assertedPass?: boolean;
+  assertedFail?: boolean;
+} = {}) {
+  const repositoryRoot = process.cwd();
+  const sourceHeadSha = execFileSync("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
+  const now = Date.now();
+  const reportTime = options.stale ? now - 180_000 : now;
+  const bundle = createEvidenceBundle(sourceHeadSha, reportTime);
+  const sessionId = "karturt-staging-readiness-gate-v1";
+  const backendPid = 23456;
+  const normalizedIsolation = JSON.parse(JSON.stringify(bundle.evidence.stagingIsolation)) as Record<string, unknown>;
+  const normalizedLineage = normalizedIsolation.lineage as Record<string, unknown>;
+  delete normalizedLineage.parentDataResolution;
+  const evidence = {
+    ...bundle.evidence,
+    nowMs: reportTime,
+    stagingIsolation: normalizedIsolation,
+    connection: {
+      sessionId,
+      target: {
+        endpointId: STAGING_MIGRATION_TARGET_MANIFEST.endpointId,
+        hostname: STAGING_MIGRATION_TARGET_MANIFEST.directHostname,
+        port: STAGING_MIGRATION_TARGET_MANIFEST.port,
+        databaseName: STAGING_MIGRATION_TARGET_MANIFEST.databaseName,
+        roleName: STAGING_MIGRATION_TARGET_MANIFEST.roleName,
+        pooled: false,
+      },
+      libpq: {
+        sessionId,
+        connectionSucceeded: true,
+        sslmode: "verify-full",
+        channelBinding: "require",
+        sslInUse: true,
+        sslProtocol: "TLSv1.3",
+        sslCipher: "TLS_AES_256_GCM_SHA384",
+      },
+      server: {
+        sessionId,
+        databaseName: STAGING_MIGRATION_TARGET_MANIFEST.databaseName,
+        roleName: STAGING_MIGRATION_TARGET_MANIFEST.roleName,
+        postgresMajor: 18,
+        transactionReadOnly: true,
+        backendPid,
+      },
+      catalog: {
+        sessionId,
+        nonSystemSchemaCount: 1,
+        nonSystemSchemaNames: ["public"],
+        applicationRelationCount: 0,
+        applicationOwnedRelationCount: 0,
+        standaloneApplicationTypeCount: 0,
+        drizzleJournalPresent: false,
+        nonSystemRoutineCount: 0,
+        extensionNames: ["plpgsql"],
+        roleMembershipCount: 0,
+        defaultAclCount: 0,
+        counts: {
+          non_system_schema_count: 1,
+          application_relation_count: 0,
+          application_owned_relation_count: 0,
+          standalone_application_type_count: 0,
+          drizzle_journal_count: 0,
+          non_system_routine_count: 0,
+          extension_count: 1,
+          role_membership_count: 0,
+          default_acl_count: 0,
+        },
+        backendPid,
+      },
+      pgStatSsl: { sessionId, ssl: false },
+    },
+  };
+  const probeStartedAtUtc = new Date(reportTime - 20_000).toISOString();
+  const probeCompletedAtUtc = new Date(reportTime - 10_000).toISOString();
+  const querySha256 = sha256(readFileSync(path.join(repositoryRoot, "docs/codex/staging-readiness-gate-v1.sql")));
+  const probe = {
+    schemaVersion: "staging-readiness-gate-v1/database-probe-evidence/v1",
+    result: "DATABASE_PROBE_PASS",
+    sourceSha: sourceHeadSha,
+    startedAtUtc: probeStartedAtUtc,
+    completedAtUtc: probeCompletedAtUtc,
+    psqlVersion: "psql (PostgreSQL) 18.0",
+    querySha256,
+    target: {
+      organizationId: STAGING_MIGRATION_TARGET_MANIFEST.organizationId,
+      projectId: options.mismatchedTarget ? "wrong-project" : STAGING_MIGRATION_TARGET_MANIFEST.projectId,
+      branchId: STAGING_MIGRATION_TARGET_MANIFEST.branchId,
+      endpointId: STAGING_MIGRATION_TARGET_MANIFEST.endpointId,
+      directHostname: STAGING_MIGRATION_TARGET_MANIFEST.directHostname,
+      port: STAGING_MIGRATION_TARGET_MANIFEST.port,
+      database: STAGING_MIGRATION_TARGET_MANIFEST.databaseName,
+      role: STAGING_MIGRATION_TARGET_MANIFEST.roleName,
+    },
+    providerMetadata: "NOT_INCLUDED",
+    providerEvidence: {
+      evidenceReference: bundle.evidence.provider.evidenceReference,
+      evidenceSha256: bundle.evidence.provider.evidenceSha256,
+      preconnectionValidation: "PASS",
+    },
+    stagingIsolation: "UNKNOWN",
+    overallGate: "NOT_EVALUATED",
+    migrationAuthorization: "NOT_GRANTED",
+    databaseProbe: {
+      status: "DATABASE_PROBE_PASS",
+      psqlExitCode: 0,
+      sessionId,
+      backendPid,
+      libpq: {
+        sslmode: "verify-full",
+        channelBinding: "require",
+        tlsProtocol: "TLSv1.3",
+        tlsCipher: "TLS_AES_256_GCM_SHA384",
+        directHostIdentityVerified: STAGING_MIGRATION_TARGET_MANIFEST.directHostname,
+      },
+      transactionReadOnly: "on",
+      catalogCounts: {
+        non_system_schema_count: 1,
+        non_system_schema_names: ["public"],
+        application_relation_count: 0,
+        application_owned_relation_count: 0,
+        standalone_application_type_count: 0,
+        drizzle_journal_count: 0,
+        non_system_routine_count: 0,
+        extension_count: 1,
+        extension_names: ["plpgsql"],
+        role_membership_count: 0,
+        default_acl_count: 0,
+      },
+      pgStatSslDiagnostic: "reported-false",
+    },
+    evidence,
+  };
+  const probeBytes = Buffer.from(`${JSON.stringify(probe)}\n`, "utf8");
+  const probePath = path.join(bundle.directory, "database-probe.json");
+  writeFileSync(probePath, probeBytes, { flag: "wx" });
+  const evaluationStartedAtUtc = new Date(reportTime - 2_000).toISOString();
+  const evaluationCompletedAtUtc = new Date(reportTime).toISOString();
+  const combined = evaluateDatabaseProbeArtifact(
+    evidence as unknown as StagingReadinessEvidence,
+    probe,
+    bundle.directory,
+    reportTime,
+  );
+  const evaluation = {
+    schemaVersion: "staging-readiness-gate-v1/evaluation/v1",
+    sourceSha: sourceHeadSha,
+    inputArtifactSha256: sha256(probeBytes),
+    startedAtUtc: evaluationStartedAtUtc,
+    completedAtUtc: evaluationCompletedAtUtc,
+    readiness: options.assertedPass ? "PASS" : options.assertedFail ? "FAIL" : combined.readiness,
+    migrationAllowed: false,
+    authorization: combined.authorization,
+    checks: combined.checks,
+    diagnostics: combined.diagnostics,
+    executionBoundary: "READINESS_EVALUATION_ONLY_NO_DATABASE_OR_PROVIDER_ACCESS",
+  };
+  const evaluationPath = path.join(bundle.directory, "evaluation.json");
+  writeFileSync(evaluationPath, `${JSON.stringify(evaluation)}\n`, { flag: "wx" });
+  return { bundle, sourceHeadSha, now, probePath, evaluationPath, evaluation, probe };
 }
 
 afterEach(() => {
@@ -226,7 +393,7 @@ describe("Staging Readiness Gate V1 artifact boundary", () => {
       completedAtUtc: new Date(nowMs - 180_000).toISOString(),
     };
     const combined = evaluateDatabaseProbeArtifact(
-      { ...bundle.evidence, nowMs },
+      { ...bundle.evidence, nowMs } as unknown as StagingReadinessEvidence,
       staleProbeArtifact,
       bundle.directory,
       nowMs,
@@ -277,8 +444,14 @@ describe("Staging Readiness Gate V1 artifact boundary", () => {
       psqlVersion: "psql (PostgreSQL) 18.0",
       querySha256: sha256(queryBytes),
       target: {
+        organizationId: STAGING_MIGRATION_TARGET_MANIFEST.organizationId,
         projectId: STAGING_MIGRATION_TARGET_MANIFEST.projectId,
         branchId: STAGING_MIGRATION_TARGET_MANIFEST.branchId,
+        endpointId: STAGING_MIGRATION_TARGET_MANIFEST.endpointId,
+        directHostname: STAGING_MIGRATION_TARGET_MANIFEST.directHostname,
+        port: STAGING_MIGRATION_TARGET_MANIFEST.port,
+        database: STAGING_MIGRATION_TARGET_MANIFEST.databaseName,
+        role: STAGING_MIGRATION_TARGET_MANIFEST.roleName,
       },
       startedAtUtc: probeStartedAtUtc,
       completedAtUtc: probeCompletedAtUtc,
@@ -318,5 +491,70 @@ describe("Staging Readiness Gate V1 artifact boundary", () => {
     expect(stdout).toContain(`migrationAllowed=${report.migrationAllowed}\n`);
     expect(stdout.includes("Staging Readiness Gate V1 evaluation: PASS")).toBe(false);
     expect(stdout.includes("migrationAllowed=true")).toBe(false);
+  });
+
+  it("rejects a byte-bound but unauthenticated UNKNOWN report before it can authorize migration", () => {
+    const fixture = createReadinessBindingFixture();
+    expect(fixture.evaluation.readiness, JSON.stringify(fixture.evaluation.checks)).toBe("UNKNOWN");
+    expect(fixture.evaluation.migrationAllowed).toBe(false);
+    expect(() => verifyStagingReadinessBinding({
+      repositoryRoot: process.cwd(),
+      evaluationPath: fixture.evaluationPath,
+      probeEvidencePath: fixture.probePath,
+      sourceSha: fixture.sourceHeadSha,
+      nowMs: fixture.now,
+    })).toThrow("fresh, source-bound Gate V1 PASS evaluation could not be verified");
+  });
+
+  it.each([
+    ["a falsely asserted PASS", { assertedPass: true }],
+    ["a FAIL report", { assertedFail: true }],
+    ["a stale evaluation", { stale: true }],
+    ["a mismatched target", { mismatchedTarget: true }],
+  ])("rejects %s before migration", (_label, options) => {
+    const fixture = createReadinessBindingFixture(options);
+    expect(() => verifyStagingReadinessBinding({
+      repositoryRoot: process.cwd(),
+      evaluationPath: fixture.evaluationPath,
+      probeEvidencePath: fixture.probePath,
+      sourceSha: fixture.sourceHeadSha,
+      nowMs: fixture.now,
+    })).toThrow("fresh, source-bound Gate V1 PASS evaluation could not be verified");
+  });
+
+  it("rejects probe bytes that changed after the evaluation digest was created", () => {
+    const fixture = createReadinessBindingFixture();
+    const probe = JSON.parse(readFileSync(fixture.probePath, "utf8")) as Record<string, unknown>;
+    probe.result = "DATABASE_PROBE_STOPPED";
+    writeFileSync(fixture.probePath, `${JSON.stringify(probe)}\n`);
+    expect(() => verifyStagingReadinessBinding({
+      repositoryRoot: process.cwd(),
+      evaluationPath: fixture.evaluationPath,
+      probeEvidencePath: fixture.probePath,
+      sourceSha: fixture.sourceHeadSha,
+      nowMs: fixture.now,
+    })).toThrow("fresh, source-bound Gate V1 PASS evaluation could not be verified");
+  });
+
+  it("rejects a report bound to another source SHA", () => {
+    const fixture = createReadinessBindingFixture();
+    expect(() => verifyStagingReadinessBinding({
+      repositoryRoot: process.cwd(),
+      evaluationPath: fixture.evaluationPath,
+      probeEvidencePath: fixture.probePath,
+      sourceSha: "f".repeat(40),
+      nowMs: fixture.now,
+    })).toThrow("fresh, source-bound Gate V1 PASS evaluation could not be verified");
+  });
+
+  it("rejects a missing evaluation report", () => {
+    const fixture = createReadinessBindingFixture();
+    expect(() => verifyStagingReadinessBinding({
+      repositoryRoot: process.cwd(),
+      evaluationPath: path.join(fixture.bundle.directory, "missing-evaluation.json"),
+      probeEvidencePath: fixture.probePath,
+      sourceSha: fixture.sourceHeadSha,
+      nowMs: fixture.now,
+    })).toThrow("fresh, source-bound Gate V1 PASS evaluation could not be verified");
   });
 });

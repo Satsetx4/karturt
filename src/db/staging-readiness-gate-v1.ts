@@ -1,13 +1,8 @@
 import {
-  assertStagingMigrationAuthorization,
-  PINNED_STAGING_MIGRATION_APPROVAL_PUBLIC_KEY_PEM,
+  parseStagingMigrationAuthorizationArtifact,
   type StagingMigrationAuthorizationArtifact,
 } from "./migration-approval";
-import { migrationManifestFingerprint } from "./migration-manifest";
-import {
-  getStagingMigrationTargetManifestFingerprint,
-  STAGING_MIGRATION_TARGET_MANIFEST,
-} from "../lib/staging-database-target";
+import { STAGING_MIGRATION_TARGET_MANIFEST } from "../lib/staging-database-target";
 
 export const STAGING_READINESS_PROVIDER_MAX_AGE_MS = 120_000;
 export const STAGING_READINESS_FUTURE_TOLERANCE_MS = 60_000;
@@ -562,11 +557,7 @@ function exactStringArrayCheck(value: unknown, expected: readonly string[], labe
   return check("PASS", `${label} matches the reviewed empty-database baseline.`);
 }
 
-function authorizationCheck(
-  authorization: unknown,
-  sourceSha: unknown,
-  nowMs: unknown,
-): StagingReadinessCheck {
+function authorizationCheck(authorization: unknown): StagingReadinessCheck {
   if (authorization === null || authorization === undefined) {
     return check("UNKNOWN", "No separate staging migration authorization was supplied.");
   }
@@ -574,31 +565,14 @@ function authorizationCheck(
     return check("FAIL", "Separate staging migration authorization is malformed.");
   }
   const artifact = record(authorization.artifact);
-  if (
-    !artifact || artifact.schemaVersion !== 1 || !record(artifact.payload) ||
-    typeof artifact.signature !== "string"
-  ) {
+  if (!artifact) {
     return check("FAIL", "Separate staging migration authorization is malformed.");
   }
-  if (typeof nowMs !== "number" || !Number.isFinite(nowMs) || !nonEmptyString(sourceSha) || !/^[a-f0-9]{40}$/.test(sourceSha)) {
-    return check("UNKNOWN", "The current source or validation time needed to bind authorization is missing.");
-  }
-  if (!PINNED_STAGING_MIGRATION_APPROVAL_PUBLIC_KEY_PEM) {
-    return check("UNKNOWN", "No trusted staging migration approval key is pinned in this source revision.");
-  }
   try {
-    assertStagingMigrationAuthorization(
-      artifact as unknown as StagingMigrationAuthorizationArtifact,
-      {
-        sourceSha,
-        targetManifestFingerprint: getStagingMigrationTargetManifestFingerprint(),
-        migrationManifestFingerprint: migrationManifestFingerprint(),
-        nowMs,
-      },
-    );
-    return check("PASS", "Separate migration authorization is valid and bound to this source, target, and migration snapshot.");
+    parseStagingMigrationAuthorizationArtifact(JSON.stringify(artifact));
+    return check("UNKNOWN", "The migration operator verifies this one-shot authorization after the readiness report is finalized.");
   } catch {
-    return check("FAIL", "Separate staging migration authorization is invalid, expired, or does not match this source and target.");
+    return check("FAIL", "Separate staging migration authorization is malformed.");
   }
 }
 
@@ -683,7 +657,7 @@ export function evaluateStagingReadinessSignalsV1(
     "Staging isolation is not proven; the technical isolation check remains UNKNOWN.",
   );
   const technicalStatus = resultStatus(checks);
-  const separateAuthorizationCheck = authorizationCheck(root?.authorization, root?.sourceSha, root?.nowMs);
+  const separateAuthorizationCheck = authorizationCheck(root?.authorization);
   const pgStatSslState = pgStatSslDiagnostic(connection, pgStatSsl);
 
   return {
