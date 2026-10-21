@@ -11,7 +11,7 @@ PR #60 source `019aeeb6d6c411ed3b95b42c3c0f1c4130381b28` receives a static revie
 
 ## TLS finding and decision
 
-PostgreSQL documents `pg_stat_ssl` as SSL information for server-side database backends. libpq exposes client-connection TLS state through its own connection APIs; `psql \\conninfo` reports the active SSL protocol and cipher for the current client connection. Therefore, a false value in `pg_stat_ssl` is not equivalent to `PQsslInUse=false` and cannot by itself establish that the client connection was unencrypted.
+PostgreSQL documents `pg_stat_ssl` as SSL information for server-side database backends. libpq exposes client-connection TLS state through its own connection APIs; `psql \conninfo` reports the active SSL protocol and cipher for the current client connection. Therefore, a false value in `pg_stat_ssl` is not equivalent to `PQsslInUse=false` and cannot by itself establish that the client connection was unencrypted.
 
 Neon documents a connection proxy and TLS/channel-binding support. This makes a boundary or reporting discrepancy plausible, but the reviewed public evidence does not prove that this exact project/endpoint's proxy caused the attempt-2 result or establish the TLS state of every internal hop. The cause remains UNKNOWN; no false-negative or proxy-cause claim is made.
 
@@ -19,17 +19,17 @@ Neon also documents that ordinary branches inherit their parent's schema and dat
 
 Gate V1 requires a direct libpq connection to the exact approved endpoint with `sslmode=verify-full` and `channel_binding=require`. The same session must show active SSL protocol and cipher. `pg_stat_ssl` is recorded as a diagnostic only; it neither substitutes for nor overrides libpq proof. The gate must not downgrade TLS or infer a pass from metadata alone.
 
-### PostgreSQL 18 `\\conninfo` output contract
+### PostgreSQL 18 `\conninfo` output contract
 
-PostgreSQL 18 changed `\\conninfo` from prose to a two-column table. With the runner's `-A -t` settings and the query's unaligned, tuples-only settings, the expected English/C-locale output is a fixed sequence of `Label|Value` rows: the 12 base connection fields, six SSL detail fields when SSL is active, and optionally `Host Address` when DNS resolution differs from the supplied hostname. The runner now parses and validates that pinned PostgreSQL 18 shape, rejects duplicate, missing, additional, malformed, localized, legacy, or non-TLS output, and still compares the database, client user, host, and port against the exact target. Offline tests use synthetic rows only; this source-level compatibility fix is not a live TLS or staging result.
+PostgreSQL 18 changed `\conninfo` from prose to a two-column table. With the runner's `-A -t` settings and the query's unaligned, tuples-only settings, the expected English/C-locale output is a fixed sequence of `Label|Value` rows: the 12 base connection fields, six SSL detail fields when SSL is active, and optionally `Host Address` when DNS resolution differs from the supplied hostname. The runner now parses and validates that pinned PostgreSQL 18 shape, rejects duplicate, missing, additional, malformed, localized, legacy, or non-TLS output, and still compares the database, client user, host, and port against the exact target. Offline tests use synthetic rows only; this source-level compatibility fix is not a live TLS or staging result.
 
 References:
 
 - [PostgreSQL 18 `pg_stat_ssl`](https://www.postgresql.org/docs/18/monitoring-stats.html#MONITORING-PG-STAT-SSL)
 - [libpq SSL status functions](https://www.postgresql.org/docs/18/libpq-status.html#LIBPQ-PQSSLINUSE)
-- [psql `\\conninfo`](https://www.postgresql.org/docs/18/app-psql.html#APP-PSQL-META-COMMAND-CONNINFO)
-- [PostgreSQL 18 release notes: tabular `\\conninfo`](https://www.postgresql.org/docs/18/release-18.html)
-- [PostgreSQL 18 `\\conninfo` implementation](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/bin/psql/command.c#L792-L907)
+- [psql `\conninfo`](https://www.postgresql.org/docs/18/app-psql.html#APP-PSQL-META-COMMAND-CONNINFO)
+- [PostgreSQL 18 release notes: tabular `\conninfo`](https://www.postgresql.org/docs/18/release-18.html)
+- [PostgreSQL 18 `\conninfo` implementation](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/bin/psql/command.c#L792-L907)
 - [libpq certificate verification](https://www.postgresql.org/docs/18/libpq-ssl.html#LIBPQ-SSL-CLIENT-CERT)
 - [libpq channel binding](https://www.postgresql.org/docs/18/libpq-connect.html#LIBPQ-CONNECT-CHANNEL-BINDING)
 - [Neon security overview](https://neon.com/docs/security/security-overview)
@@ -45,6 +45,18 @@ References:
 4. In the same authenticated session, verify endpoint/database/role identity, server major 18, active read-only transaction, empty application-owned catalog, absent Drizzle journal, and SSL protocol/cipher. Require exactly the default `public` non-system schema and `plpgsql` extension, no non-system routines, no role memberships granted to the target database role, and no default ACLs. Use bounded timeouts.
 5. Record only sanitized results in a new immutable evidence artifact. Revalidate probe completion and all provider timestamps against the current clock during offline evaluation. Keep provider metadata, client TLS proof, catalog results, local CI, remote CI, and owner reports labeled as separate evidence layers.
 6. Return readiness PASS only when every required check is proven. Never perform writes in Gate V1. Keep `migrationAllowed=false`; migration authorization remains a separate guard.
+
+## Trusted capture path decision — 2026-10-21
+
+Use a reviewed manual GitHub Actions capture on a GitHub-hosted runner, with temporary credential files in the run-specific `$RUNNER_TEMP` directory and a protected staging environment. Archive only sanitized, attested output in a protected local folder outside the repository. Do not use a self-hosted runner, do not save credentials to the local archive, and do not publish secrets or personal data in the public repository's artifacts.
+
+Before any database connection, the collector must obtain fresh target and Free-plan metadata itself through a Neon identity with effective Viewer-only permissions, bind the output to the reviewed source SHA, and resolve root/parent lineage and synthetic-only provenance. It must not use an admin-level API key to obtain plan metadata. The current target's `init_source=parent-data` with omitted `parent_id` is unresolved; read-only operation history shows a `create_timeline` event but no parent identity. A new attestation cannot retroactively authenticate the original create request. Until authoritative lineage evidence or an explicitly accepted owner attestation exists, isolation remains UNKNOWN and the collector stops before psql.
+
+After that preflight, one direct libpq session may run the fixed catalog query in a bounded `BEGIN READ ONLY` transaction. Capture `\conninfo`/libpq SSL protocol and cipher on that same session with `sslmode=verify-full`, `channel_binding=require`, and no GSS encryption fallback. `catalog` stays UNKNOWN until this probe; it must not be required to be PASS before a read-only query can measure it. Keep `pg_stat_ssl` separate as a backend diagnostic. The probe does not read application rows or authorize migration.
+
+Attest only sanitized, create-new evidence. Verify it against repository, signer workflow, exact ref/source digest, then validate file contents and target bindings independently. GitHub attestation proves workflow provenance and byte integrity, not that self-asserted fields are truthful; review and pin the collector/actions. The full path and current blockers are recorded in [`STAGING-READINESS-GATE-V1-TRUSTED-CAPTURE-DESIGN-2026-10-21.md`](STAGING-READINESS-GATE-V1-TRUSTED-CAPTURE-DESIGN-2026-10-21.md).
+
+No capture job or protected environment was added in this checkpoint. The design still requires a reviewed collector implementation, protected-environment setup, a Viewer-only Neon identity that can prove the Free plan and exact target, staging database credential entry into the environment, and authoritative lineage resolution. The old local runner remains fail-closed at `PROVIDER_CAPTURE_UNAUTHENTICATED`.
 
 The exported `evaluateStagingReadinessSignalsV1` core API is explicitly technical-only: it returns `technicalStatus`, individual checks, diagnostics, and an informative separate authorization check. It has no `status`, `readiness`, or `migrationAllowed` field. The offline artifact CLI is the only combined report path in this implementation, and it forces provider/isolation/probe authenticity to `UNKNOWN` because no trusted capture attestation is available.
 
