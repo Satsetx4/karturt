@@ -79,7 +79,9 @@ export function evaluateDatabaseProbeArtifact(
     : states.includes("UNKNOWN") ? "UNKNOWN" : "PASS";
   return {
     readiness,
-    migrationAllowed: readiness === "PASS" && evaluation.authorizationCheck.status === "PASS",
+    // This offline evaluator is never an execution authority. Migration is
+    // gated only by the separate one-shot execution path.
+    migrationAllowed: false,
     authorization: evaluation.authorizationCheck,
     checks,
     diagnostics: evaluation.diagnostics,
