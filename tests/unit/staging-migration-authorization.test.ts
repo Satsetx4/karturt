@@ -10,7 +10,6 @@ import {
 } from "../../src/db/migration-approval";
 import { APPROVED_MIGRATION_BLOB_SHA256, assertCheckedInMigrationSnapshot, migrationManifestFingerprint } from "../../src/db/migration-manifest";
 import {
-  executeApprovedMigrationsOnce,
   formatStagingMigrationFailure,
   MigrationOutcomeUnknownError,
   MigrationPreflightError,
@@ -337,7 +336,11 @@ describe("staging migration command gates", () => {
       closeClient,
     });
 
-    expect(order).toEqual(["target", "readiness", "authorization", "confirm", "consume", "client", "migrate", "close"]);
+    expect(order).toEqual([
+      "target", "readiness", "authorization", "confirm",
+      "target", "readiness", "authorization", "consume",
+      "target", "readiness", "authorization", "client", "migrate", "close",
+    ]);
     expect(createClient).toHaveBeenCalledTimes(1);
     expect(closeClient).toHaveBeenCalledWith({}, "fulfilled");
     expect(context.authorizationId).toBe(authorizationId);
@@ -356,15 +359,148 @@ describe("staging migration command gates", () => {
     });
   });
 
-  it("does not retry a failure or timeout and reports uncertain partial state without raw driver details", async () => {
-    const context = {
-      databaseUrl: syntheticMigrationUrl,
+  it.each([
+    ["source SHA", (state: Record<string, string | boolean>) => { state.sourceSha = "f".repeat(40); }],
+    ["database URL", (state: Record<string, string | boolean>) => { state.databaseUrl = "postgresql://other.invalid/karturt"; }],
+    ["clean worktree state", (state: Record<string, string | boolean>) => { state.clean = false; }],
+    ["target manifest", (state: Record<string, string | boolean>) => { state.targetFingerprint = "f".repeat(64); }],
+    ["migration manifest", (state: Record<string, string | boolean>) => { state.migrationFingerprint = "f".repeat(64); }],
+    ["readiness evaluation", (state: Record<string, string | boolean>) => { state.readinessSha = "f".repeat(64); }],
+    ["signed approval bytes", (state: Record<string, string | boolean>) => { state.approval = `${state.approval} `; }],
+  ])("rechecks the %s binding after the interactive challenge before consuming approval", async (_label, mutate) => {
+    const state: Record<string, string | boolean> = {
       sourceSha,
-      targetManifestFingerprint: targetFingerprint,
-      migrationManifestFingerprint: migrationFingerprint,
-      readinessEvaluationSha256,
-      authorizationId,
+      targetFingerprint,
+      migrationFingerprint,
+      readinessSha: readinessEvaluationSha256,
+      approval: signedArtifact(),
+      databaseUrl: syntheticMigrationUrl,
+      clean: true,
     };
+    const setup = makeDependencies({
+      environment: {
+        APP_ENV: "staging",
+        DATABASE_ENV: "staging",
+        get MIGRATION_DATABASE_URL() { return String(state.databaseUrl); },
+      },
+      getGitIdentity: () => ({
+        repositoryRoot: process.cwd(),
+        gitCommonDirectory: resolve(process.cwd(), ".git"),
+        sourceSha: String(state.sourceSha),
+        isClean: Boolean(state.clean),
+      }),
+      getTargetManifestFingerprint: () => String(state.targetFingerprint),
+      getMigrationManifestFingerprint: () => String(state.migrationFingerprint),
+      verifyReadinessBinding: () => ({
+        evaluationSha256: String(state.readinessSha),
+        completedAtUtc: "2026-10-14T05:00:00.000Z",
+      }),
+      readAuthorizationFile: () => String(state.approval),
+      confirmChallenge: async (challenge) => {
+        mutate(state);
+        return challenge;
+      },
+    });
+    const createClient = vi.fn(() => ({}));
+
+    await expect(runStagingMigrationCommandOnce({
+      ...setup.dependencies,
+      createClient,
+      runMigrations: async () => undefined,
+      closeClient: async () => undefined,
+    })).rejects.toBeInstanceOf(MigrationPreflightError);
+
+    expect(setup.consumeAuthorizationOnce).not.toHaveBeenCalled();
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("rechecks source and evidence again after one-shot consumption and before client creation", async () => {
+    let currentSourceSha = sourceSha;
+    const consumeAuthorizationOnce = vi.fn(() => {
+      currentSourceSha = "f".repeat(40);
+    });
+    const setup = makeDependencies({
+      getGitIdentity: () => ({
+        repositoryRoot: process.cwd(),
+        gitCommonDirectory: resolve(process.cwd(), ".git"),
+        sourceSha: currentSourceSha,
+        isClean: true,
+      }),
+      consumeAuthorizationOnce,
+    });
+    const createClient = vi.fn(() => ({}));
+
+    await expect(runStagingMigrationCommandOnce({
+      ...setup.dependencies,
+      createClient,
+      runMigrations: async () => undefined,
+      closeClient: async () => undefined,
+    })).rejects.toThrow("source checkout changed while approval was being confirmed");
+
+    expect(consumeAuthorizationOnce).toHaveBeenCalledOnce();
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("stops if the readiness evidence expires while the operator is entering the challenge", async () => {
+    let currentTime = now;
+    const verifyReadinessBinding = vi.fn((input: { nowMs: number }) => {
+      if (input.nowMs - now > 120_000) throw new Error("raw Gate V1 evidence is stale");
+      return { evaluationSha256: readinessEvaluationSha256, completedAtUtc: new Date(now).toISOString() };
+    });
+    const setup = makeDependencies({
+      now: () => currentTime,
+      verifyReadinessBinding,
+      confirmChallenge: async (challenge) => {
+        currentTime = now + 120_001;
+        return challenge;
+      },
+    });
+    const createClient = vi.fn(() => ({}));
+
+    await expect(runStagingMigrationCommandOnce({
+      ...setup.dependencies,
+      createClient,
+      runMigrations: async () => undefined,
+      closeClient: async () => undefined,
+    })).rejects.toThrow("fresh, source-bound Gate V1 PASS");
+
+    expect(verifyReadinessBinding).toHaveBeenCalledTimes(2);
+    expect(verifyReadinessBinding.mock.calls[1]?.[0].nowMs).toBe(now + 120_001);
+    expect(setup.consumeAuthorizationOnce).not.toHaveBeenCalled();
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("consumes but does not open a client if readiness expires after one-shot authorization", async () => {
+    let currentTime = now;
+    const verifyReadinessBinding = vi.fn((input: { nowMs: number }) => {
+      if (input.nowMs - now > 120_000) throw new Error("raw Gate V1 evidence is stale");
+      return { evaluationSha256: readinessEvaluationSha256, completedAtUtc: new Date(now).toISOString() };
+    });
+    const consumeAuthorizationOnce = vi.fn(() => {
+      currentTime = now + 120_001;
+    });
+    const setup = makeDependencies({
+      now: () => currentTime,
+      verifyReadinessBinding,
+      consumeAuthorizationOnce,
+    });
+    const createClient = vi.fn(() => ({}));
+
+    await expect(runStagingMigrationCommandOnce({
+      ...setup.dependencies,
+      createClient,
+      runMigrations: async () => undefined,
+      closeClient: async () => undefined,
+    })).rejects.toThrow("fresh, source-bound Gate V1 PASS");
+
+    expect(verifyReadinessBinding).toHaveBeenCalledTimes(3);
+    expect(verifyReadinessBinding.mock.calls[2]?.[0].nowMs).toBe(now + 120_001);
+    expect(consumeAuthorizationOnce).toHaveBeenCalledOnce();
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("does not retry a failure or timeout and reports uncertain partial state without raw driver details", async () => {
+    const failedSetup = makeDependencies();
     const failedRun = vi.fn(async () => {
       throw new Error("synthetic password-token and URL must not escape");
     });
@@ -372,7 +508,8 @@ describe("staging migration command gates", () => {
     const failedClient = {};
     let migrationFailure: unknown;
     try {
-      await executeApprovedMigrationsOnce(context, {
+      await runStagingMigrationCommandOnce({
+        ...failedSetup.dependencies,
         createClient: () => failedClient,
         runMigrations: failedRun,
         closeClient: closeAfterFailure,
@@ -388,11 +525,13 @@ describe("staging migration command gates", () => {
     expect(closeAfterFailure).toHaveBeenCalledWith(failedClient, "rejected");
 
     const neverSettles = vi.fn(() => new Promise<void>(() => undefined));
+    const timeoutSetup = makeDependencies();
     const closeAfterTimeout = vi.fn(async () => undefined);
     const timedOutClient = {};
     let timeoutError: unknown;
     try {
-      await executeApprovedMigrationsOnce(context, {
+      await runStagingMigrationCommandOnce({
+        ...timeoutSetup.dependencies,
         createClient: () => timedOutClient,
         runMigrations: neverSettles,
         closeClient: closeAfterTimeout,
@@ -417,18 +556,12 @@ describe("staging migration command gates", () => {
 
   it("bounds a client shutdown that never settles and leaves the outcome unknown", async () => {
     vi.useFakeTimers();
-    const context = {
-      databaseUrl: syntheticMigrationUrl,
-      sourceSha,
-      targetManifestFingerprint: targetFingerprint,
-      migrationManifestFingerprint: migrationFingerprint,
-      readinessEvaluationSha256,
-      authorizationId,
-    };
+    const setup = makeDependencies();
     const createClient = vi.fn(() => ({}));
     const runMigrations = vi.fn(async () => undefined);
     const closeClient = vi.fn(() => new Promise<void>(() => undefined));
-    const command = executeApprovedMigrationsOnce(context, {
+    const command = runStagingMigrationCommandOnce({
+      ...setup.dependencies,
       createClient,
       runMigrations,
       closeClient,
@@ -449,20 +582,14 @@ describe("staging migration command gates", () => {
 
   it("keeps a late migration success classified as timed out and never retries", async () => {
     vi.useFakeTimers();
-    const context = {
-      databaseUrl: syntheticMigrationUrl,
-      sourceSha,
-      targetManifestFingerprint: targetFingerprint,
-      migrationManifestFingerprint: migrationFingerprint,
-      readinessEvaluationSha256,
-      authorizationId,
-    };
+    const setup = makeDependencies();
     let resolveMigration!: () => void;
     const delayedMigration = new Promise<void>((resolve) => { resolveMigration = resolve; });
     const createClient = vi.fn(() => ({}));
     const runMigrations = vi.fn(() => delayedMigration);
     const closeClient = vi.fn(async () => undefined);
-    const command = executeApprovedMigrationsOnce(context, {
+    const command = runStagingMigrationCommandOnce({
+      ...setup.dependencies,
       createClient,
       runMigrations,
       closeClient,
@@ -486,14 +613,7 @@ describe("staging migration command gates", () => {
   });
 
   it("fails closed when client shutdown rejects and does not expose driver details", async () => {
-    const context = {
-      databaseUrl: syntheticMigrationUrl,
-      sourceSha,
-      targetManifestFingerprint: targetFingerprint,
-      migrationManifestFingerprint: migrationFingerprint,
-      readinessEvaluationSha256,
-      authorizationId,
-    };
+    const setup = makeDependencies();
     const createClient = vi.fn(() => ({}));
     const runMigrations = vi.fn(async () => undefined);
     const closeClient = vi.fn(async () => {
@@ -502,7 +622,8 @@ describe("staging migration command gates", () => {
 
     let failure: unknown;
     try {
-      await executeApprovedMigrationsOnce(context, {
+      await runStagingMigrationCommandOnce({
+        ...setup.dependencies,
         createClient,
         runMigrations,
         closeClient,

@@ -8,27 +8,27 @@ import {
 } from "../../src/lib/staging-database-target";
 
 const directTarget =
-  "postgresql://neondb_owner:synthetic-password@ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech:5432/neondb";
+  "postgresql://karturt_owner:synthetic-password@ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech:5432/karturt";
 const secureStagingQuery = "?sslmode=verify-full&channel_binding=require";
 
 describe("staging migration target identity guard", () => {
   it("publishes the reviewed identity mapping and stable fingerprint", () => {
     expect(STAGING_MIGRATION_TARGET_MANIFEST).toMatchObject({
       organizationId: "org-ancient-boat-57106549",
-      projectId: "broad-star-40451875",
-      projectName: "karturt-v1-synthetic-staging-20261015",
-      branchName: "main",
-      branchId: "br-orange-recipe-azed9f78",
+      projectId: "wild-darkness-00489132",
+      projectName: "karturt-v1-staging-readiness-gate-v1",
+      branchName: "staging-readiness-gate-v1",
+      branchId: "br-spring-shadow-b37rykzl",
       lineageStatus: "ROOT_BY_NEW_PROJECT_CREATE_CONTRACT",
       region: "aws-ap-southeast-1",
-      plan: "free_v3",
+      plan: "free",
       postgresMajor: 18,
       computeCU: 0.25,
-      databaseName: "neondb",
-      databaseId: 708081,
-      roleName: "neondb_owner",
-      endpointId: "ep-mute-firefly-azjcru4h",
-      directHostname: "ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech",
+      databaseName: "karturt",
+      databaseId: 669644,
+      roleName: "karturt_owner",
+      endpointId: "ep-silent-haze-b3pcaa3t",
+      directHostname: "ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech",
       passwordlessAccess: true,
       passwordlessAccessMeaning: "NOT_YET_IMPLEMENTED_UNRELIED_UPON",
       passwordlessAccessContractReference: "https://neon.com/api_spec/release/v2.json",
@@ -43,24 +43,23 @@ describe("staging migration target identity guard", () => {
     expect(STAGING_ROOT_LINEAGE_ATTESTATION).toMatchObject({
       method: "ROOT_BY_NEW_PROJECT_CREATE_CONTRACT",
       scope: "project-root-lineage-only",
-      projectId: "broad-star-40451875",
-      projectCreatedAtUtc: "2026-10-15T11:04:56Z",
+      projectId: "wild-darkness-00489132",
+      projectCreatedAtUtc: "2026-10-21T09:23:42Z",
       createRequest: {
         requestSha256: null,
-        requestSha256Status: "NOT_CAPTURED",
+        requestSha256Status: "NOT_CAPTURED_TOOL_CALL_ONLY",
       },
       branch: {
-        id: "br-orange-recipe-azed9f78",
+        id: "br-spring-shadow-b37rykzl",
+        name: "staging-readiness-gate-v1",
         parentIdReadback: "OMITTED_NOT_RETURNED",
         initSourceObserved: "parent-data",
-        initSourceInterpretation: "AMBIGUOUS_NOT_USED_AS_LINEAGE_PROOF",
+        initSourceInterpretation: "ROOT_BRANCH_BY_NEW_PROJECT_CREATE_CONTRACT; FIELD_ALONE_IS_NOT_LINEAGE_PROOF",
       },
-      reviewer: {
-        verdict: "PASS",
-        summarySha256Kind: "REVIEWER_SUMMARY_CHECKSUM_NOT_PROVIDER_SIGNATURE",
-        verdictScope: "ROOT_LINEAGE_ONLY_CATALOG_UNKNOWN",
-      },
+      rootStructureAssessment: "CONSISTENT_WITH_NEW_PROJECT_ROOT_CONTRACT",
       catalogState: "UNKNOWN",
+      syntheticOnlyStatus: "UNKNOWN",
+      providerCaptureAuthentication: "UNKNOWN",
     });
     expect("parentId" in STAGING_ROOT_LINEAGE_ATTESTATION.branch).toBe(false);
     expect(STAGING_MIGRATION_TARGET_MANIFEST.rootLineageAttestation).toBe(STAGING_ROOT_LINEAGE_ATTESTATION);
@@ -71,7 +70,7 @@ describe("staging migration target identity guard", () => {
     expect(() =>
       assertStagingMigrationTarget(
         directTarget +
-          secureStagingQuery + "&endpoint=ep-mute-firefly-azjcru4h",
+          secureStagingQuery + "&endpoint=ep-silent-haze-b3pcaa3t",
       ),
     ).not.toThrow();
   });
@@ -79,21 +78,21 @@ describe("staging migration target identity guard", () => {
   it("rejects incorrect host, pooler, alias, database, role, and port", () => {
     const invalidUrls = [
       directTarget.replace(
-        "ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech",
-        "wrong-endpoint.c-3.ap-southeast-1.aws.neon.tech",
+        "ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech",
+        "wrong-endpoint.c-4.ap-southeast-1.aws.neon.tech",
       ) + secureStagingQuery,
       directTarget.replace(
-        "ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech",
-        "ep-mute-firefly-azjcru4h-pooler.c-3.ap-southeast-1.aws.neon.tech",
+        "ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech",
+        "ep-silent-haze-b3pcaa3t-pooler.c-4.ap-southeast-1.aws.neon.tech",
       ) + secureStagingQuery,
       directTarget.replace(
-        "ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech",
+        "ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech",
         "staging-db-alias.internal",
       ) + secureStagingQuery,
-      directTarget.replace("/neondb", "/karturt_stage") + secureStagingQuery,
-      directTarget.replace("neondb_owner", "other_role") + secureStagingQuery,
+      directTarget.replace("/karturt", "/karturt_stage") + secureStagingQuery,
+      directTarget.replace("karturt_owner", "other_role") + secureStagingQuery,
       directTarget.replace(":5432/", ":5433/") + secureStagingQuery,
-      directTarget.replace("ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech", "ep-mute-firefly-azjcru4h.pg.neon.tech") + secureStagingQuery,
+      directTarget.replace("ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech", "ep-silent-haze-b3pcaa3t.pg.neon.tech") + secureStagingQuery,
       "postgresql://neondb_owner:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/neondb" + secureStagingQuery,
       "postgresql://neondb_owner:synthetic-password@ep-snowy-meadow-a10304d9-pooler.ap-southeast-1.aws.neon.tech/neondb" + secureStagingQuery,
       "postgresql://karturt_staging_owner:synthetic-password@ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech:5432/karturt_staging" + secureStagingQuery,
@@ -125,7 +124,7 @@ describe("staging migration target identity guard", () => {
       directTarget + secureStagingQuery + "&host=localhost",
       directTarget + "?sslmode=prefer&channel_binding=require",
       directTarget + "?sslmode=verify-full&channel_binding=disable",
-      directTarget + secureStagingQuery + "&endpoint=ep-mute-firefly-azjcru4h&endpoint=ep-mute-firefly-azjcru4h",
+      directTarget + secureStagingQuery + "&endpoint=ep-silent-haze-b3pcaa3t&endpoint=ep-silent-haze-b3pcaa3t",
       directTarget + secureStagingQuery + "&",
       directTarget + "?&sslmode=verify-full&channel_binding=require",
       directTarget + "?",
@@ -174,6 +173,8 @@ describe("runtime database target guard", () => {
 
   it("denies both current and legacy staging endpoints outside staging labels", () => {
     const protectedHosts = [
+      "ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech",
+      "ep-silent-haze-b3pcaa3t-pooler.c-4.ap-southeast-1.aws.neon.tech",
       "ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech",
       "ep-mute-firefly-azjcru4h-pooler.c-3.ap-southeast-1.aws.neon.tech",
       "ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech",
@@ -212,6 +213,15 @@ describe("runtime database target guard", () => {
     );
   });
 
+  it("keeps the former broad-star candidate blocked as a legacy staging target", () => {
+    const legacyUrl =
+      "postgresql://neondb_owner:synthetic-password@ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=verify-full&channel_binding=require";
+    expect(() => assertStagingMigrationTarget(legacyUrl)).toThrow();
+    expect(() => assertDatabaseTargetForEnvironment(legacyUrl, "staging")).toThrow(
+      "protected legacy staging Neon endpoint for project broad-star-40451875",
+    );
+  });
+
   it("rejects the other protected legacy staging project under staging labels", () => {
     const legacyUrl =
       "postgresql://old:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=verify-full";
@@ -225,7 +235,7 @@ describe("runtime database target guard", () => {
     expect(() => assertDatabaseTargetForEnvironment(directTarget + "?sslmode=verify-full", "preview"))
       .toThrow("DATABASE_ENV must be development, staging, production, or test");
     expect(() => assertDatabaseTargetForEnvironment(
-      directTarget.replace("ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech", "ep-mute-firefly-azjcru4h.pg.neon.tech") + "?sslmode=verify-full",
+      directTarget.replace("ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech", "ep-silent-haze-b3pcaa3t.pg.neon.tech") + "?sslmode=verify-full",
       "staging",
     )).toThrow();
     expect(() =>

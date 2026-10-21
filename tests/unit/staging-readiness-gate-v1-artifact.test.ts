@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   databaseProbeFreshnessCheck,
   referencedEvidenceIntegrityCheck,
@@ -12,8 +12,9 @@ import {
   evaluateDatabaseProbeArtifact,
   formatDatabaseProbeEvaluationSummary,
 } from "../../src/db/staging-readiness-gate-v1-cli-policy";
+import * as stagingReadinessCliPolicy from "../../src/db/staging-readiness-gate-v1-cli-policy";
 import { verifyStagingReadinessBinding } from "../../src/db/staging-readiness-migration-binding";
-import type { StagingReadinessEvidence } from "../../src/db/staging-readiness-gate-v1";
+import { evaluateStagingReadinessSignalsV1, type StagingReadinessEvidence } from "../../src/db/staging-readiness-gate-v1";
 import { STAGING_MIGRATION_TARGET_MANIFEST } from "../../src/lib/staging-database-target";
 
 const sourceSha = "a".repeat(40);
@@ -326,6 +327,7 @@ function createReadinessBindingFixture(options: {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   if (temporaryDirectory) rmSync(temporaryDirectory, { recursive: true, force: true });
   temporaryDirectory = null;
 });
@@ -520,6 +522,34 @@ describe("Staging Readiness Gate V1 artifact boundary", () => {
       sourceSha: fixture.sourceHeadSha,
       nowMs: fixture.now,
     })).toThrow("fresh, source-bound Gate V1 PASS evaluation could not be verified");
+  });
+
+  it("recomputes probe and provider freshness against migration time, not the older report time", () => {
+    const fixture = createReadinessBindingFixture();
+    const verificationNow = fixture.now + 115_000;
+    const evaluateSpy = vi.spyOn(stagingReadinessCliPolicy, "evaluateDatabaseProbeArtifact");
+
+    expect(() => verifyStagingReadinessBinding({
+      repositoryRoot: process.cwd(),
+      evaluationPath: fixture.evaluationPath,
+      probeEvidencePath: fixture.probePath,
+      sourceSha: fixture.sourceHeadSha,
+      nowMs: verificationNow,
+    })).toThrow("fresh, source-bound Gate V1 PASS evaluation could not be verified");
+
+    expect(evaluateSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      fixture.bundle.directory,
+      verificationNow,
+    );
+    expect(databaseProbeFreshnessCheck(fixture.probe, verificationNow).status).toBe("UNKNOWN");
+    const coreAtMigrationTime = evaluateStagingReadinessSignalsV1({
+      ...fixture.bundle.evidence as unknown as StagingReadinessEvidence,
+      nowMs: verificationNow,
+    });
+    expect(coreAtMigrationTime.checks.providerFreshness.status).toBe("UNKNOWN");
+    evaluateSpy.mockRestore();
   });
 
   it("rejects probe bytes that changed after the evaluation digest was created", () => {

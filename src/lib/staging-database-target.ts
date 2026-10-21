@@ -1,73 +1,66 @@
 import { createHash } from "node:crypto";
 
 /**
- * Candidate source mapping for the new Wave 13B.2 synthetic-only staging
- * project. The root-lineage attestation below is a bounded reviewer summary
- * of the new-project create contract; it is not provider-signed evidence and
- * does not establish catalog emptiness. This object does not prove grants,
- * credential state, database contents, migration approval, or runtime readiness.
+ * Candidate source mapping for the separate Staging Readiness Gate V1 project.
+ * The root-lineage record is a bounded create-contract and provider-metadata
+ * summary, not provider-signed evidence. It establishes only a separate
+ * project/root branch structurally; catalog emptiness, synthetic-only data,
+ * grants, credential state, migration approval, and runtime readiness remain
+ * unproven until their independent gates pass.
  */
 export const STAGING_ROOT_LINEAGE_ATTESTATION = Object.freeze({
   schemaVersion: 1,
   method: "ROOT_BY_NEW_PROJECT_CREATE_CONTRACT",
   scope: "project-root-lineage-only",
   organizationId: "org-ancient-boat-57106549",
-  projectId: "broad-star-40451875",
-  projectCreatedAtUtc: "2026-10-15T11:04:56Z",
+  projectId: "wild-darkness-00489132",
+  projectCreatedAtUtc: "2026-10-21T09:23:42Z",
   createRequest: {
     method: "POST",
     operation: "create-project",
     sourceFieldsOmitted: ["parent_id", "parent_project_id", "source_project_id", "clone", "import", "restore"],
     requestSha256: null,
-    requestSha256Status: "NOT_CAPTURED",
+    requestSha256Status: "NOT_CAPTURED_TOOL_CALL_ONLY",
   },
   branch: {
-    id: "br-orange-recipe-azed9f78",
-    name: "main",
-    createdAtUtc: "2026-10-15T11:04:56Z",
+    id: "br-spring-shadow-b37rykzl",
+    name: "staging-readiness-gate-v1",
+    createdAtUtc: "2026-10-21T09:23:42Z",
     isPrimary: true,
     isDefault: true,
     parentIdReadback: "OMITTED_NOT_RETURNED",
     initSourceObserved: "parent-data",
-    initSourceInterpretation: "AMBIGUOUS_NOT_USED_AS_LINEAGE_PROOF",
+    initSourceInterpretation: "ROOT_BRANCH_BY_NEW_PROJECT_CREATE_CONTRACT; FIELD_ALONE_IS_NOT_LINEAGE_PROOF",
   },
   providerContracts: [
     { url: "https://neon.com/docs/manage/branches", sha256: null },
-    { url: "https://neon.com/docs/reference/api/projects/create-project", sha256: null },
-    { url: "https://neon.com/docs/reference/api/branches/get-project-branch", sha256: null },
-    { url: "https://neon.com/docs/reference/api/branches/create-project-branch", sha256: null },
-    { url: "https://neon.com/api_spec/release/v2.json", sha256: null },
+    { url: "https://api-docs.neon.tech/reference/createproject", sha256: null },
+    { url: "https://api-docs.neon.tech/reference/getprojectbranch", sha256: null },
+    { url: "https://api-docs.neon.tech/reference/listprojectbranches", sha256: null },
   ],
-  reviewer: {
-    agent: "f0_neon_lineage",
-    verdict: "PASS",
-    reviewedAtUtc: "2026-10-15T12:32:42Z",
-    summarySha256: "dc97064182562fb2b86d7bb1d7bee9ba0c7f5d175f943f44fb4501fb9a557530",
-    summarySha256Kind: "REVIEWER_SUMMARY_CHECKSUM_NOT_PROVIDER_SIGNATURE",
-    sourceReportCommit: "f8cf71c251b87b8c37d141dc2f0e40e650797462",
-    sourceReportPath: "docs/wave13b-2/2026-10-15/WAVE13B_2_OWNER_CORRECTION_EXECUTION.md",
-    verdictScope: "ROOT_LINEAGE_ONLY_CATALOG_UNKNOWN",
-  },
+  rootStructureAssessment: "CONSISTENT_WITH_NEW_PROJECT_ROOT_CONTRACT",
   catalogState: "UNKNOWN",
+  syntheticOnlyStatus: "UNKNOWN",
+  providerCaptureAuthentication: "UNKNOWN",
 } as const);
 
 export const STAGING_MIGRATION_TARGET_MANIFEST = Object.freeze({
   organizationId: "org-ancient-boat-57106549",
-  projectId: "broad-star-40451875",
-  projectName: "karturt-v1-synthetic-staging-20261015",
-  branchName: "main",
-  branchId: "br-orange-recipe-azed9f78",
+  projectId: "wild-darkness-00489132",
+  projectName: "karturt-v1-staging-readiness-gate-v1",
+  branchName: "staging-readiness-gate-v1",
+  branchId: "br-spring-shadow-b37rykzl",
   lineageStatus: STAGING_ROOT_LINEAGE_ATTESTATION.method,
   rootLineageAttestation: STAGING_ROOT_LINEAGE_ATTESTATION,
   region: "aws-ap-southeast-1",
-  plan: "free_v3",
+  plan: "free",
   postgresMajor: 18,
   computeCU: 0.25,
-  databaseName: "neondb",
-  databaseId: 708081,
-  roleName: "neondb_owner",
-  endpointId: "ep-mute-firefly-azjcru4h",
-  directHostname: "ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech",
+  databaseName: "karturt",
+  databaseId: 669644,
+  roleName: "karturt_owner",
+  endpointId: "ep-silent-haze-b3pcaa3t",
+  directHostname: "ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech",
   passwordlessAccess: true,
   passwordlessAccessMeaning: "NOT_YET_IMPLEMENTED_UNRELIED_UPON",
   passwordlessAccessContractReference: "https://neon.com/api_spec/release/v2.json",
@@ -76,6 +69,13 @@ export const STAGING_MIGRATION_TARGET_MANIFEST = Object.freeze({
 } as const);
 
 const protectedLegacyStagingTargets = [
+  {
+    projectId: "broad-star-40451875",
+    branchId: "br-orange-recipe-azed9f78",
+    databaseId: 708081,
+    endpointId: "ep-mute-firefly-azjcru4h",
+    hostname: "ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech",
+  },
   {
     projectId: "falling-bread-33359184",
     branchId: "br-muddy-frost-azot13fb",

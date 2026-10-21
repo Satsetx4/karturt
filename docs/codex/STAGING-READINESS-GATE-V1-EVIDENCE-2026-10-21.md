@@ -35,6 +35,8 @@ Source: current owner request. The owner reports `psqlExitCode=3`, verified audi
 
 ## Provider metadata snapshot
 
+### Previous candidate — snapshot at 2026-10-21 08:46 UTC
+
 Read-only Neon control-plane readback at 2026-10-21 08:46 UTC:
 
 | Check | Observed | Evidence meaning |
@@ -50,26 +52,47 @@ Read-only Neon control-plane readback at 2026-10-21 08:46 UTC:
 | Public connectivity | Enabled; no IP allowlist | Provider metadata; constrain any future credentialed inspection |
 | Logical size | 31,686,656 bytes; zero current storage-hour/write counters | Does not prove empty application catalog or synthetic-only lineage |
 
-No SQL connection, Neon SQL connector call, database mutation, or migration was performed for this evidence snapshot. Live database catalog and libpq TLS remain UNKNOWN.
+No SQL connection, Neon SQL connector call, database mutation, or migration was performed for this 08:46 evidence snapshot. The `broad-star-40451875` candidate is now retired for Gate V1 and remains blocked as a legacy staging target; it was not deleted or modified.
+
+### New project — created 2026-10-21 09:23:42 UTC; read back 09:23:55 UTC
+
+The Neon connector created a new project in the existing Free organization with PostgreSQL 18, region `aws-ap-southeast-1`, a 0.25 CU min/max, and a default branch named `staging-readiness-gate-v1`. The create request supplied no parent, source project, clone, import, or restore fields. Neon documents that a project starts with its own root/default branch and that `parent_id` identifies a parent branch ([create project API](https://api-docs.neon.tech/reference/createproject), [retrieve branch API](https://api-docs.neon.tech/reference/getprojectbranch), [branch management](https://neon.com/docs/manage/branches)).
+
+| Check | Observed | Evidence meaning |
+| --- | --- | --- |
+| Organization plan | Free | Fresh Neon control-plane readback |
+| Project | `wild-darkness-00489132` (`karturt-v1-staging-readiness-gate-v1`) | New project; create response shows no source project binding |
+| Project region / PostgreSQL | `aws-ap-southeast-1` / 18 | Provider metadata |
+| Branch | `br-spring-shadow-b37rykzl`, `staging-readiness-gate-v1`, ready, primary/default | One branch observed in the new project |
+| Branch parent fields | `parent_id` omitted; `init_source=parent-data` | Consistent with a new project's root/default branch; `init_source` alone is not lineage proof |
+| Database and owner role | `karturt` / `karturt_owner` (database id `669644`) | Provider control-plane metadata; not a catalog query |
+| Endpoint | `ep-silent-haze-b3pcaa3t`, direct host `ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech`, read-write, active, pooler disabled | Exact current provider target metadata |
+| Compute | Min/max `0.25` CU | Matches the Free-plan cap |
+| Passwordless metadata | `passwordless_access=true` | Not used as credential or TLS evidence |
+
+The endpoint and database/role metadata were refreshed through additional read-only connector calls later in this task. Project-level structural isolation from the former project is supported by the new project create request and Neon’s root-branch contract, but the control-plane snapshot is not a signed capture. **Synthetic-only application data and catalog emptiness remain UNKNOWN** until trusted evidence and the audited Gate V1 probe establish them. The branch still reports `init_source=parent-data`; no conclusion is drawn from that value alone.
+
+The provider rejected the optional `store_passwords=false` setting as unsupported, so project creation used Neon’s default provider-side password storage. No connection string or password was retrieved, displayed, committed, or used. No SQL, catalog query, data write, migration, old F2 retry, or production action occurred. The new project is the selected Gate V1 target; the previous candidate is preserved as a protected legacy target.
 
 ## Migration authorization snapshot
 
-Local repository inspection shows migration approval verification is fail-closed while `PINNED_STAGING_MIGRATION_APPROVAL_PUBLIC_KEY_PEM` is null. Existing checks bind signed approval to source, target, and migration manifest and require a one-shot interactive challenge. The broad owner authorization does not replace those checks. Migration execution remains BLOCKED.
+Local repository inspection shows migration approval verification is fail-closed while `PINNED_STAGING_MIGRATION_APPROVAL_PUBLIC_KEY_PEM` is null. Existing checks bind signed approval to source, target, and migration manifest and require a one-shot interactive challenge. The guard now revalidates the clean source SHA, target URL/manifest, migration snapshot, fresh readiness digest, and exact signed-approval bytes after that challenge and again immediately before client creation. Regression coverage was added for stale or changed bindings during the wait and after one-shot consumption. The broad owner authorization does not replace the signed approval. Migration execution remains BLOCKED.
 
 ## Current gate status
 
 | Gate | Status | Reason |
 | --- | --- | --- |
 | PR #60 static/runtime guard review | REVIEWED | Static review only; operational F2 superseded for future use |
-| Free plan and compute scope | PASS — provider snapshot only | Must refresh immediately before any future inspection |
-| Exact target provider metadata | PARTIAL | Candidate identifiers captured; must be freshly read and matched |
-| Synthetic-only branch isolation | UNKNOWN | Missing lineage and content proof |
+| Free plan and compute scope | PASS — provider snapshot only | New project metadata shows Free and 0.25 CU; refresh immediately before any future database probe |
+| Exact target provider metadata | PASS — provider metadata only | New project/branch/database/role/direct endpoint identifiers were read back; not an authenticated Gate V1 capture |
+| Project root isolation | PARTIAL — create-contract and metadata only | Separate project and root/default branch are consistent with structural isolation; control-plane readback is not a signed capture artifact |
+| Synthetic-only content and empty catalog | UNKNOWN | No database SQL/catalog inspection has run |
 | Strict libpq TLS and channel binding | UNKNOWN | No same-session libpq connection performed |
 | Read-only application catalog | UNKNOWN | No Gate V1 SQL inspection performed |
 | Gate V1 local regressions | PASS — LOCAL ONLY at `f7b06eca307fc0b4a107aaaedee56a89677a8c6b` | Four focused Vitest files / 140 tests; PG18 migration-timeout regression 12/12; PowerShell 7 parser/preflight regression; typecheck, lint, diff check, and local production build passed |
 | Exact-head CI for Gate V1 | Gate A + Windows PASS on push and PR attempt 2; Launch Safety UNVERIFIED | Push run `39571785367` and PR run `39571791405` attempt 2 passed Gate A and Windows query-integrity/PowerShell checks on the exact SHA. The separate Launch Safety concurrency job was branch-filter skipped, not passed. PR attempt 1 failed during Turbopack `next/font/google` resolution; attempt 2 passed, and the cause remains unknown. |
 | Referenced evidence and migration binding | IMPLEMENTED — LIVE PATH NOT UNLOCKED | Migration schema-v2 approval binds the exact evaluation SHA-256; runner and evaluator require byte digests, artifact schema/type, exact source SHA, target binding, freshness, and recomputed PASS. Provider-source authenticity remains a separate evidence-layer question. |
-| Provider/runner capture authenticity | UNKNOWN — DB launch blocked | Hashes authenticate bytes only. Unsigned local JSON and connector output copied into a file do not prove who produced it; the runner now stops before psql and the offline evaluator downgrades provider/isolation/probe claims to UNKNOWN |
+| Provider/runner capture authenticity | UNKNOWN — DB launch blocked | Connector output is available in this task but is not a trusted signed capture for the offline evaluator; the runner stops before psql and the evaluator downgrades provider/isolation/probe claims to UNKNOWN |
 | Staging migration authorization | BLOCKED | Pinned public verification key is null |
 | Production | OUT OF SCOPE | No production action authorized or performed |
 
@@ -88,4 +111,6 @@ Local repository inspection shows migration approval verification is fail-closed
 - 2026-10-21 08:46 UTC: Fresh read-only Neon control-plane metadata showed Free plan, PostgreSQL 18, `aws-ap-southeast-1`, project and direct endpoint compute bounds of 0.25 CU, and a ready endpoint with pooler disabled. Exact project, branch, and endpoint identifiers were re-read. Branch `init_source=parent-data` persists and `parent_id` is omitted; neither establishes root lineage or synthetic-only contents. Logical size was 31,686,656 bytes; zero usage/write counters do not prove an empty catalog. Public connections remain enabled with no IP allowlist. No connection-string retrieval, credentials, SQL, provider mutation, or migration occurred.
 - 2026-10-21 08:53 UTC: Source SHA `f7b06eca307fc0b4a107aaaedee56a89677a8c6b` passed local readiness/migration regressions (140 focused tests), PostgreSQL 18 timeout regression (12 tests), typecheck, changed-file lint, diff check, and production build. Exact-head push CI run `39571785367` passed Gate A and Windows query-integrity/PowerShell checks; the separate Launch Safety concurrency job was branch-filter skipped and remains UNVERIFIED. PR run `39571791405` attempt 1 failed during production build with 35 Turbopack `next/font/google` internal-module resolution errors; an exact-SHA retry started as attempt 2. No database connection or provider mutation was part of these checks.
 - 2026-10-21 09:04 UTC: Exact-SHA PR run `39571791405` attempt 2 passed Gate A, including the production build, and passed the Windows query-integrity/PowerShell checks. The same-run Launch Safety concurrency job remained branch-filter skipped and UNVERIFIED. The first PR attempt's font-resolution failure was not reproduced; its cause remains unknown.
+- 2026-10-21 09:23:42 UTC: After a Free-plan restriction rejected a custom suspend interval, the Neon connector created project `wild-darkness-00489132` with PostgreSQL 18, `aws-ap-southeast-1`, 0.25 CU bounds, database `karturt`, and the root/default branch `br-spring-shadow-b37rykzl`; no parent/source/import/restore field was supplied. Read-only provider calls at 09:23:55 and later confirmed the branch and endpoint `ep-silent-haze-b3pcaa3t` on the direct host `ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech`, plus role `karturt_owner`. Neon rejected `store_passwords=false`; default provider-side storage was used, but no credential or connection string was retrieved. Structural root isolation is supported by the create contract and provider readback, while synthetic-only data and catalog state remain UNKNOWN. No SQL, data writes, migration, old F2 retry, or production action occurred. The former `broad-star-40451875` candidate remains untouched and is now protected as legacy. The target source mapping and new evidence still require local regressions and exact-head CI.
 - Build failure triage: Next.js issue [#97378](https://github.com/vercel/next.js/issues/97378) reports a similar `next/font/google` internal-module error after a font-file fetch failure. The failed run here did not expose a request URL or HTTP status, so that issue is context only, not a confirmed cause. Local build and both exact-SHA push/PR retry builds passed.
+- 2026-10-21: Migration operator regression review found and closed a freshness window: readiness revalidation now recomputes raw provider and database-probe freshness against current migration time, not merely the report’s earlier completion time. Tests cover underlying probe/provider observations older than 120 seconds while the report remains under 120 seconds old, time passing during the interactive challenge, and time passing after one-shot consumption. The generic client executor is now module-private so the exported staging command requires its one-shot preflight binding. These are source/guard regressions only; no database client or migration was opened.

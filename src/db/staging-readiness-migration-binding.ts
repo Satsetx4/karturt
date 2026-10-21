@@ -109,7 +109,7 @@ function validateProbeEvidence(
   sourceSha: string,
   repositoryRoot: string,
   evidenceDirectory: string,
-  evaluationCompletedAtMs: number,
+  verificationNowMs: number,
 ) {
   if (!hasExactKeys(probe, [
     "schemaVersion", "result", "sourceSha", "startedAtUtc", "completedAtUtc", "psqlVersion",
@@ -239,7 +239,7 @@ function validateProbeEvidence(
   const completedAtMs = parseCanonicalUtc(probe.completedAtUtc);
   if (startedAtMs === null || completedAtMs === null || completedAtMs < startedAtMs ||
       completedAtMs - startedAtMs > MAX_FRESHNESS_AGE_MS ||
-      completedAtMs > evaluationCompletedAtMs + FUTURE_TOLERANCE_MS) {
+      completedAtMs > verificationNowMs + FUTURE_TOLERANCE_MS) {
     throw new Error("probe-time");
   }
 
@@ -250,7 +250,7 @@ function validateProbeEvidence(
     probe.evidence as unknown as StagingReadinessEvidence,
     probe,
     evidenceDirectory,
-    evaluationCompletedAtMs,
+    verificationNowMs,
   );
 }
 
@@ -294,7 +294,7 @@ export function verifyStagingReadinessBinding(input: StagingReadinessBindingInpu
       input.sourceSha,
       input.repositoryRoot,
       dirname(resolve(input.probeEvidencePath)),
-      completedAtMs,
+      input.nowMs,
     );
     if (evaluation.readiness !== "PASS" ||
         recomputed.readiness !== "PASS" ||

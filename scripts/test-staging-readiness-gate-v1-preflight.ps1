@@ -19,9 +19,9 @@ function Assert-ConninfoRejects([string]$Text, [string]$ExpectedCode) {
 }
 
 $psql18OutputFixture = @'
-Database|neondb
-Client User|neondb_owner
-Host|ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech
+Database|karturt
+Client User|karturt_owner
+Host|ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech
 Host Address|192.0.2.41
 Server Port|5432
 Options|
@@ -54,9 +54,9 @@ if ($fixtureJsonStart -lt 1 -or $fixtureLines.Count -ne ($fixtureJsonStart + 2))
 }
 $fixtureConninfo = $fixtureLines[0..($fixtureJsonStart - 1)] -join "`n"
 $parsedConninfo = ConvertFrom-Psql18ConninfoV1 -Text $fixtureConninfo
-if ($parsedConninfo.Database -cne 'neondb' -or
-    $parsedConninfo.Role -cne 'neondb_owner' -or
-    $parsedConninfo.Host -cne 'ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech' -or
+if ($parsedConninfo.Database -cne 'karturt' -or
+    $parsedConninfo.Role -cne 'karturt_owner' -or
+    $parsedConninfo.Host -cne 'ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech' -or
     $parsedConninfo.Port -cne '5432' -or
     $parsedConninfo.Protocol -cne 'TLSv1.3' -or
     $parsedConninfo.Cipher -cne 'TLS_AES_256_GCM_SHA384') {
@@ -69,12 +69,12 @@ if ($parsedWithoutHostAddress.Host -cne $parsedConninfo.Host) {
   throw 'TEST_OPTIONAL_HOST_ADDRESS_CHANGED_HOST_IDENTITY'
 }
 
-Assert-ConninfoRejects -Text ($fixtureConninfo + "`nDatabase|neondb") -ExpectedCode 'CONNECTION_INFO_INVALID'
+Assert-ConninfoRejects -Text ($fixtureConninfo + "`nDatabase|karturt") -ExpectedCode 'CONNECTION_INFO_INVALID'
 Assert-ConninfoRejects -Text ($fixtureConninfo -replace '(?m)^Backend PID\|[^\r\n]*\r?\n', '') -ExpectedCode 'CONNECTION_INFO_INVALID'
 Assert-ConninfoRejects -Text ($fixtureConninfo + "`nUnexpected|value") -ExpectedCode 'CONNECTION_INFO_INVALID'
-Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'Database\|neondb', 'Database neondb') -ExpectedCode 'CONNECTION_INFO_INVALID'
-Assert-ConninfoRejects -Text 'You are connected to database "neondb" as user "neondb_owner" on host "host" at port "5432".' -ExpectedCode 'CONNECTION_INFO_INVALID'
-Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'Database\|neondb', 'Datenbank|neondb') -ExpectedCode 'CONNECTION_INFO_INVALID'
+Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'Database\|karturt', 'Database karturt') -ExpectedCode 'CONNECTION_INFO_INVALID'
+Assert-ConninfoRejects -Text 'You are connected to database "karturt" as user "karturt_owner" on host "host" at port "5432".' -ExpectedCode 'CONNECTION_INFO_INVALID'
+Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'Database\|karturt', 'Datenbank|karturt') -ExpectedCode 'CONNECTION_INFO_INVALID'
 Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'SSL Connection\|true', 'SSL Connection|false') -ExpectedCode 'LIBPQ_TLS_PROOF_MISSING'
 Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'SSL Protocol\|TLSv1.3', 'SSL Protocol|TLSv1.1') -ExpectedCode 'LIBPQ_TLS_PROOF_MISSING'
 Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'SSL Cipher\|TLS_AES_256_GCM_SHA384', 'SSL Cipher|unknown') -ExpectedCode 'LIBPQ_TLS_PROOF_MISSING'
@@ -124,8 +124,8 @@ try {
     sourceSha = 'a' * 40
     provider = [ordered]@{
       provider = 'neon'
-      projectId = 'broad-star-40451875'
-      branchId = 'br-orange-recipe-azed9f78'
+      projectId = 'wild-darkness-00489132'
+      branchId = 'br-spring-shadow-b37rykzl'
       claimedCaptureAuthentication = 'VERIFIED'
     }
     stagingIsolation = [ordered]@{ verificationStatus = 'VERIFIED'; classification = 'SYNTHETIC_ONLY' }

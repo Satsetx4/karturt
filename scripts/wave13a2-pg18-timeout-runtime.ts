@@ -1,13 +1,25 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { Pool, type PoolClient } from "pg";
 import {
   closeMigrationPoolForShutdown,
-  executeApprovedMigrationsOnce,
   formatStagingMigrationFailure,
-  type ApprovedMigrationContext,
+  runStagingMigrationCommandOnce,
 } from "../src/db/migration-safety";
+import {
+  serializeStagingMigrationAuthorizationPayload,
+  type StagingMigrationAuthorizationPayload,
+} from "../src/db/migration-approval";
+import { migrationManifestFingerprint } from "../src/db/migration-manifest";
+import {
+  getStagingMigrationTargetManifestFingerprint,
+  STAGING_MIGRATION_TARGET_MANIFEST,
+} from "../src/lib/staging-database-target";
 import {
   buildWave13A2Pg18ChildEnvironment,
   validateWave13A2Pg18ChildEnvironment,
@@ -68,17 +80,6 @@ function quoteLiteral(value: string) {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-function makeMigrationContext(): ApprovedMigrationContext {
-  return {
-    databaseUrl: "not-used synthetic execution context",
-    sourceSha: "a".repeat(40),
-    targetManifestFingerprint: "b".repeat(64),
-    migrationManifestFingerprint: "c".repeat(64),
-    readinessEvaluationSha256: "e".repeat(64),
-    authorizationId: "d".repeat(64),
-  };
-}
-
 function emitChildEvidence(evidence: ChildEvidence) {
   process.stdout.write(`${JSON.stringify(evidence)}\n`, "utf8");
 }
@@ -95,6 +96,37 @@ async function runChildScenario(scenario: Scenario) {
   const pool = new Pool(pgConnectionConfig(config));
   pool.on("error", () => undefined);
 
+  const repositoryRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+  const sourceSha = execFileSync("git", ["rev-parse", "--verify", "HEAD"], { cwd: repositoryRoot, encoding: "utf8" }).trim();
+  const commonDirectory = execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd: repositoryRoot, encoding: "utf8" }).trim();
+  const worktreeStatus = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+  });
+  const targetManifestFingerprint = getStagingMigrationTargetManifestFingerprint();
+  const currentMigrationManifestFingerprint = migrationManifestFingerprint();
+  const readinessEvaluationSha256 = "e".repeat(64);
+  const harnessNow = Date.now();
+  const keyPair = generateKeyPairSync("ed25519");
+  const approvalPayload: StagingMigrationAuthorizationPayload = {
+    purpose: "karturt-v1-staging-migration/v2",
+    authorizationId: randomBytes(32).toString("hex"),
+    sourceSha,
+    targetManifestFingerprint,
+    migrationManifestFingerprint: currentMigrationManifestFingerprint,
+    readinessEvaluationSha256,
+    issuedAt: new Date(harnessNow).toISOString(),
+    expiresAt: new Date(harnessNow + 10 * 60 * 1000).toISOString(),
+  };
+  const approvalSignature = sign(
+    null,
+    Buffer.from(serializeStagingMigrationAuthorizationPayload(approvalPayload), "utf8"),
+    keyPair.privateKey,
+  ).toString("base64");
+  const authorizationArtifact = JSON.stringify({ schemaVersion: 2, payload: approvalPayload, signature: approvalSignature });
+  const syntheticTargetUrl = "synthetic-loopback-runtime-harness-target";
+  const consumedAuthorizations = new Set<string>();
+
   let activeClient: PoolClient | undefined;
   let migrationInvocationCount = 0;
   let queryAttemptCount = 0;
@@ -102,7 +134,44 @@ async function runChildScenario(scenario: Scenario) {
   let backendPid: number | undefined;
 
   try {
-    await executeApprovedMigrationsOnce(makeMigrationContext(), {
+    await runStagingMigrationCommandOnce({
+      environment: {
+        APP_ENV: "staging",
+        DATABASE_ENV: "staging",
+        MIGRATION_DATABASE_URL: syntheticTargetUrl,
+      },
+      argv: [
+        "--execute-once",
+        "--readiness-evaluation-file", resolve(tmpdir(), "karturt-wave13a2-harness-evaluation.json"),
+        "--database-probe-evidence-file", resolve(tmpdir(), "karturt-wave13a2-harness-probe.json"),
+        "--authorization-file", resolve(tmpdir(), "karturt-wave13a2-harness-authorization.json"),
+      ],
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+      repositoryRoot,
+      getGitIdentity: () => ({
+        repositoryRoot,
+        gitCommonDirectory: resolve(repositoryRoot, commonDirectory),
+        sourceSha,
+        isClean: worktreeStatus.length === 0,
+      }),
+      assertTargetIdentity: (databaseUrl) => {
+        if (databaseUrl !== syntheticTargetUrl) throw new Error("Synthetic loopback harness target mismatch.");
+      },
+      getTargetManifestFingerprint: getStagingMigrationTargetManifestFingerprint,
+      getTargetManifest: () => STAGING_MIGRATION_TARGET_MANIFEST,
+      getMigrationManifestFingerprint: migrationManifestFingerprint,
+      readAuthorizationFile: () => authorizationArtifact,
+      verifyReadinessBinding: ({ sourceSha: readinessSourceSha }) => {
+        if (readinessSourceSha !== sourceSha) throw new Error("Synthetic harness source mismatch.");
+        return { evaluationSha256: readinessEvaluationSha256, completedAtUtc: new Date(harnessNow).toISOString() };
+      },
+      consumeAuthorizationOnce: (authorizationId) => {
+        if (consumedAuthorizations.has(authorizationId)) throw new Error("Synthetic authorization replay.");
+        consumedAuthorizations.add(authorizationId);
+      },
+      confirmChallenge: async (challenge) => challenge,
+      approvalPublicKeyPem: keyPair.publicKey.export({ type: "spki", format: "pem" }).toString(),
       createClient: () => pool,
       runMigrations: async () => {
         migrationInvocationCount += 1;
@@ -421,8 +490,8 @@ async function runIntegration() {
       runId,
       postgresMajor: 18,
       driver: "pg.Pool over loopback TCP",
-      migrationSafetyPath: "executeApprovedMigrationsOnce + closeMigrationPoolForShutdown",
-      authorizationFlow: "not invoked; the harness does not sign approvals or call the staging operator gate",
+      migrationSafetyPath: "runStagingMigrationCommandOnce + closeMigrationPoolForShutdown",
+      authorizationFlow: "ephemeral Ed25519 approval and synthetic readiness verifier; loopback target identity is injected for the disposable harness",
       scenarios: {
         normalQueryAndClose: "PASS; child natural exit 0; one invocation; one query",
         immediateQueryError: "PASS; child natural exit 1; one invocation; no retry",

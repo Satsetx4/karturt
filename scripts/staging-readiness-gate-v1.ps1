@@ -109,13 +109,13 @@ try {
 
 $script:ExpectedTarget = [ordered]@{
   OrganizationId = 'org-ancient-boat-57106549'
-  ProjectId = 'broad-star-40451875'
-  BranchId = 'br-orange-recipe-azed9f78'
-  EndpointId = 'ep-mute-firefly-azjcru4h'
-  DirectHostname = 'ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech'
+  ProjectId = 'wild-darkness-00489132'
+  BranchId = 'br-spring-shadow-b37rykzl'
+  EndpointId = 'ep-silent-haze-b3pcaa3t'
+  DirectHostname = 'ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech'
   Port = '5432'
-  Database = 'neondb'
-  Role = 'neondb_owner'
+  Database = 'karturt'
+  Role = 'karturt_owner'
   PostgresMajor = 18
   ApplicationName = 'karturt-staging-readiness-gate-v1'
 }
