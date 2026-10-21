@@ -32,7 +32,7 @@ afterEach(() => {
 
 const localDevelopmentUrl = "postgresql://karturt:synthetic-password@localhost:5432/karturt_dev";
 const newStagingUrl =
-  "postgresql://neondb_owner:synthetic-password@ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=verify-full&channel_binding=require";
+  "postgresql://karturt_owner:synthetic-password@ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech:5432/karturt?sslmode=verify-full&channel_binding=require";
 const oldStagingUrl =
   "postgresql://karturt_staging_owner:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech:5432/karturt_staging?sslmode=require";
 
@@ -70,6 +70,8 @@ describe("Wave 13A.1 source regression audit", () => {
 
   it("denies new and legacy direct or pooler endpoints under every database label", () => {
     const protectedHosts = [
+      "ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech",
+      "ep-silent-haze-b3pcaa3t-pooler.c-4.ap-southeast-1.aws.neon.tech",
       "ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech",
       "ep-mute-firefly-azjcru4h-pooler.c-3.ap-southeast-1.aws.neon.tech",
       "ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech",
