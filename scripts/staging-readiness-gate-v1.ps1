@@ -620,8 +620,11 @@ try {
   }
 
   try {
-    $gitCommand = Get-Command 'git.exe' -CommandType Application -ErrorAction Stop
-    $gitExecutable = $gitCommand.Source
+    $gitCommand = Get-Command 'git.exe' -CommandType Application -ErrorAction Stop | Select-Object -First 1
+    if ($null -eq $gitCommand -or [string]::IsNullOrWhiteSpace([string]$gitCommand.Source)) {
+      Stop-Safely 'SOURCE_GIT_UNAVAILABLE'
+    }
+    $gitExecutable = [string]$gitCommand.Source
   } catch {
     Stop-Safely 'SOURCE_GIT_UNAVAILABLE'
   }

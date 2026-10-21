@@ -59,7 +59,7 @@ try {
   $selfAssertedArtifact = Get-Content -LiteralPath $selfAssertedOutputPath -Raw | ConvertFrom-Json -ErrorAction Stop
   $failedSelfAssertedChecks = [Collections.Generic.List[string]]::new()
   if ($selfAssertedArtifact.result -cne 'DATABASE_PROBE_STOPPED') { $failedSelfAssertedChecks.Add('result') }
-  if ($selfAssertedArtifact.stopCode -cne 'PROVIDER_CAPTURE_UNAUTHENTICATED') { $failedSelfAssertedChecks.Add('stopCode') }
+  if ($selfAssertedArtifact.stopCode -cne 'PROVIDER_CAPTURE_UNAUTHENTICATED') { $failedSelfAssertedChecks.Add('stopCode=' + [string]$selfAssertedArtifact.stopCode) }
   if ($selfAssertedArtifact.providerCaptureAuthentication -cne 'UNKNOWN') { $failedSelfAssertedChecks.Add('providerCaptureAuthentication') }
   if ($selfAssertedArtifact.providerPreflight -cne 'UNKNOWN') { $failedSelfAssertedChecks.Add('providerPreflight') }
   if ($selfAssertedArtifact.stagingIsolation -cne 'UNKNOWN') { $failedSelfAssertedChecks.Add('stagingIsolation') }
