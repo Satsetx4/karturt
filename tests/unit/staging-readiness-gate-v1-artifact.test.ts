@@ -269,6 +269,8 @@ function createReadinessBindingFixture(options: {
     completedAtUtc: probeCompletedAtUtc,
     psqlVersion: "psql (PostgreSQL) 18.0",
     psqlSha256: "e".repeat(64),
+    psqlPinSource: "protected-environment-variable:KARTURT_STAGING_PSQL_SHA256",
+    psqlExpectedSha256: "e".repeat(64),
     querySha256,
     target: {
       organizationId: STAGING_MIGRATION_TARGET_MANIFEST.organizationId,
@@ -543,10 +545,15 @@ describe("Staging Readiness Gate V1 artifact boundary", () => {
     })).toThrow("fresh, source-bound Gate V1 PASS evaluation could not be verified");
   });
 
-  it("rejects a probe without a publisher-pinned PostgreSQL client digest", () => {
+  it.each([
+    ["missing the observed client digest", (probe: Record<string, unknown>) => { delete probe.psqlSha256; }],
+    ["missing the configured client digest", (probe: Record<string, unknown>) => { delete probe.psqlExpectedSha256; }],
+    ["binding a different configured client digest", (probe: Record<string, unknown>) => { probe.psqlExpectedSha256 = "f".repeat(64); }],
+    ["using an untrusted client pin source", (probe: Record<string, unknown>) => { probe.psqlPinSource = "probe-self-asserted"; }],
+  ])("rejects a probe %s", (_label, mutateProbe) => {
     const fixture = createReadinessBindingFixture();
     const probe = JSON.parse(readFileSync(fixture.probePath, "utf8")) as Record<string, unknown>;
-    delete probe.psqlSha256;
+    mutateProbe(probe);
     const probeBytes = Buffer.from(`${JSON.stringify(probe)}\n`, "utf8");
     writeFileSync(fixture.probePath, probeBytes);
     const evaluation = JSON.parse(readFileSync(fixture.evaluationPath, "utf8")) as Record<string, unknown>;

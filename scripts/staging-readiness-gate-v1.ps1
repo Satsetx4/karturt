@@ -18,6 +18,7 @@ $script:FailureEvidencePath = ''
 $script:ObservedPsqlExitCode = $null
 $script:ObservedPsqlVersion = $null
 $script:ObservedPsqlSha256 = $null
+$script:ExpectedPsqlSha256 = $null
 $script:QuerySha256 = $null
 $script:RootCertificateSha256 = $null
 $script:ProviderPreflightStatus = 'UNKNOWN'
@@ -55,6 +56,8 @@ function Stop-Safely([string]$Code, [int]$ExitCode = 1) {
       querySha256 = $script:QuerySha256
       psqlVersion = $script:ObservedPsqlVersion
       psqlSha256 = $script:ObservedPsqlSha256
+      psqlPinSource = if ($null -ne $script:ExpectedPsqlSha256) { 'protected-environment-variable:KARTURT_STAGING_PSQL_SHA256' } else { $null }
+      psqlExpectedSha256 = $script:ExpectedPsqlSha256
       psqlExitCode = $script:ObservedPsqlExitCode
       startedAtUtc = $startedForEvidence
       stoppedAtUtc = $stoppedForEvidence
@@ -758,6 +761,7 @@ $expectedPsqlSha256 = [Environment]::GetEnvironmentVariable('KARTURT_STAGING_PSQ
 if ([string]::IsNullOrWhiteSpace($expectedPsqlSha256) -or $expectedPsqlSha256 -cnotmatch '^[a-f0-9]{64}$') {
   Stop-Safely 'POSTGRESQL_18_PSQL_PIN_MISSING'
 }
+$script:ExpectedPsqlSha256 = $expectedPsqlSha256
 $psqlBinaryGuard = $null
 try {
   $psqlBinaryGuard = [IO.File]::Open($psqlPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
@@ -1214,6 +1218,8 @@ $artifact = [ordered]@{
   completedAtUtc = $evidenceEndedAtUtc
   psqlVersion = $psqlVersion
   psqlSha256 = $script:ObservedPsqlSha256
+  psqlPinSource = 'protected-environment-variable:KARTURT_STAGING_PSQL_SHA256'
+  psqlExpectedSha256 = $script:ExpectedPsqlSha256
   querySha256 = $script:QuerySha256
   target = [ordered]@{
     organizationId = $script:ExpectedTarget.OrganizationId

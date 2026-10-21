@@ -1,6 +1,74 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+if (-not ('Karturt.Security.TokenInfo' -as [type])) {
+  Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Security;
+
+namespace Karturt.Security {
+  public static class TokenInfo {
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SidAndAttributes {
+      public IntPtr Sid;
+      public uint Attributes;
+    }
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool GetTokenInformation(
+      IntPtr tokenHandle,
+      int tokenInformationClass,
+      IntPtr tokenInformation,
+      uint tokenInformationLength,
+      out uint returnLength);
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool ConvertSidToStringSid(IntPtr sid, out IntPtr stringSid);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr LocalFree(IntPtr memory);
+
+    public static string GetLogonSid(IntPtr tokenHandle) {
+      uint length = 0;
+      if (GetTokenInformation(tokenHandle, 28, IntPtr.Zero, 0, out length)) {
+        throw new SecurityException("Token logon SID size query unexpectedly succeeded.");
+      }
+      int error = Marshal.GetLastWin32Error();
+      if (error != 122 || length == 0) {
+        throw new Win32Exception(error);
+      }
+      IntPtr buffer = Marshal.AllocHGlobal((int)length);
+      try {
+        if (!GetTokenInformation(tokenHandle, 28, buffer, length, out length)) {
+          throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+        uint groupCount = unchecked((uint)Marshal.ReadInt32(buffer));
+        if (groupCount != 1) throw new SecurityException("Expected one logon SID.");
+        int groupOffset = IntPtr.Size == 8 ? 8 : 4;
+        SidAndAttributes group = Marshal.PtrToStructure<SidAndAttributes>(IntPtr.Add(buffer, groupOffset));
+        if (group.Sid == IntPtr.Zero || (group.Attributes & 0xC0000000u) != 0xC0000000u) {
+          throw new SecurityException("Token group is not the logon SID.");
+        }
+        IntPtr stringSid;
+        if (!ConvertSidToStringSid(group.Sid, out stringSid)) {
+          throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+        try {
+          return Marshal.PtrToStringUni(stringSid);
+        } finally {
+          LocalFree(stringSid);
+        }
+      } finally {
+        Marshal.FreeHGlobal(buffer);
+      }
+    }
+  }
+}
+'@
+}
+
 function Assert-StagingCaptureFile {
   [CmdletBinding()]
   param(
@@ -50,8 +118,14 @@ function Assert-StagingCaptureFile {
   }
 
   try {
-    $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
-    if ($null -eq $currentSid) { throw 'TLS_FILE_ACL_UNSAFE' }
+    $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    try {
+      $currentSid = $currentIdentity.User
+      if ($null -eq $currentSid) { throw 'TLS_FILE_ACL_UNSAFE' }
+      $currentLogonSessionSid = [Karturt.Security.TokenInfo]::GetLogonSid($currentIdentity.Token)
+    } finally {
+      $currentIdentity.Dispose()
+    }
     $allowedSids = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     [void]$allowedSids.Add($currentSid.Value)
     [void]$allowedSids.Add('S-1-5-18')
@@ -96,7 +170,7 @@ function Assert-StagingCaptureFile {
           throw 'TLS_FILE_ACL_UNSAFE'
         }
         $sid = [string]$rule.IdentityReference.Value
-        $isLogonSessionSid = $sid -match '^S-1-5-5-[0-9]+-[0-9]+$'
+        $isLogonSessionSid = $sid -ceq $currentLogonSessionSid
         if (-not $allowedSids.Contains($sid) -and -not $isLogonSessionSid) { throw 'TLS_FILE_ACL_UNSAFE' }
         if ($isLogonSessionSid -and
             (($rule.FileSystemRights -band $unsafeWriteRights) -ne 0)) {

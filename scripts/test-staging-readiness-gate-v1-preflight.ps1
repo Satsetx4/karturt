@@ -24,6 +24,16 @@ function Add-UntrustedReadAce([string]$Path) {
   if ($LASTEXITCODE -ne 0) { throw 'TEST_ACL_UNTRUSTED_READ_ADD_FAILED' }
 }
 
+function Add-ForeignLogonReadAce([string]$Path) {
+  & $icaclsPath $Path '/grant' '*S-1-5-5-123-456:(OI)(CI)RX' '/q' | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'TEST_ACL_FOREIGN_LOGON_READ_ADD_FAILED' }
+}
+
+function Remove-ForeignLogonReadAce([string]$Path) {
+  & $icaclsPath $Path '/remove:g' '*S-1-5-5-123-456' '/q' | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'TEST_ACL_FOREIGN_LOGON_READ_REMOVE_FAILED' }
+}
+
 function Assert-ConninfoRejects([string]$Text, [string]$ExpectedCode) {
   $rejectedAsExpected = $false
   try {
@@ -193,6 +203,17 @@ try {
   }
   if (-not $untrustedDirectoryReadRejected) { throw 'TEST_CAPTURE_PARENT_UNTRUSTED_READ_ACCEPTED' }
 
+  Add-ForeignLogonReadAce -Path $captureParentPath
+  $foreignLogonDirectoryReadRejected = $false
+  try {
+    $null = Assert-StagingCaptureFile -Path $captureFilePath
+  } catch {
+    if ([string]$_.Exception.Message -ceq 'TLS_FILE_ACL_UNSAFE') { $foreignLogonDirectoryReadRejected = $true } else { throw }
+  } finally {
+    Remove-ForeignLogonReadAce -Path $captureParentPath
+  }
+  if (-not $foreignLogonDirectoryReadRejected) { throw 'TEST_FOREIGN_LOGON_SESSION_READ_ACCEPTED' }
+
   $readGuard = [IO.File]::Open($captureFilePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
   $concurrentWriteRejected = $false
   try {
@@ -284,6 +305,8 @@ try {
   if ($selfAssertedArtifact.overallGate -cne 'NOT_EVALUATED') { $failedSelfAssertedChecks.Add('overallGate') }
   if ($null -ne $selfAssertedArtifact.psqlVersion) { $failedSelfAssertedChecks.Add('psqlVersion') }
   if ($null -ne $selfAssertedArtifact.psqlSha256) { $failedSelfAssertedChecks.Add('psqlSha256') }
+  if ($null -ne $selfAssertedArtifact.psqlExpectedSha256) { $failedSelfAssertedChecks.Add('psqlExpectedSha256') }
+  if ($null -ne $selfAssertedArtifact.psqlPinSource) { $failedSelfAssertedChecks.Add('psqlPinSource') }
   if ($selfAssertedArtifact.databaseProbe.status -cne 'STOPPED') { $failedSelfAssertedChecks.Add('databaseProbe.status') }
   if ($selfAssertedArtifact.migrationAuthorization -cne 'NOT_GRANTED') { $failedSelfAssertedChecks.Add('migrationAuthorization') }
   if ($failedSelfAssertedChecks.Count -gt 0) {
@@ -320,7 +343,9 @@ try {
       'FileAttributes]::ReparsePoint',
       'GetOwner([Security.Principal.SecurityIdentifier])',
       '$unsafeWriteRights',
-      "'^S-1-5-5-[0-9]+-[0-9]+$'",
+      '[Karturt.Security.TokenInfo]::GetLogonSid($currentIdentity.Token)',
+      '$sid -ceq $currentLogonSessionSid',
+      'GetTokenInformation(tokenHandle, 28',
       'TLS_FILE_ACL_UNSAFE'
     )) {
     if (-not $captureFilesSource.Contains($requiredCaptureFilesFragment)) {
@@ -328,7 +353,7 @@ try {
     }
   }
 
-  Write-Output 'Staging Readiness Gate V1 PostgreSQL 18 conninfo, path/ACL/owner guards, locked TLS files, early-stop, and self-assertion regressions: PASS'
+  Write-Output 'Staging Readiness Gate V1 PostgreSQL 18 conninfo, path/ACL/owner guards, current-logon-SID binding, locked TLS files, early-stop, and self-assertion regressions: PASS'
 } finally {
   [Environment]::SetEnvironmentVariable('RUNNER_TEMP', $previousRunnerTemp, 'Process')
   [Environment]::SetEnvironmentVariable('GITHUB_RUN_ID', $previousRunId, 'Process')

@@ -113,6 +113,7 @@ function validateProbeEvidence(
 ) {
   if (!hasExactKeys(probe, [
     "schemaVersion", "result", "sourceSha", "startedAtUtc", "completedAtUtc", "psqlVersion", "psqlSha256",
+    "psqlPinSource", "psqlExpectedSha256",
     "querySha256", "target", "providerMetadata", "providerEvidence", "stagingIsolation",
     "overallGate", "migrationAuthorization", "databaseProbe", "evidence",
   ]) || probe.schemaVersion !== PROBE_SCHEMA ||
@@ -139,6 +140,10 @@ function validateProbeEvidence(
       !/^psql \(PostgreSQL\) 18\./.test(probe.psqlVersion) ||
       typeof probe.psqlSha256 !== "string" ||
       !/^[a-f0-9]{64}$/.test(probe.psqlSha256) ||
+      probe.psqlPinSource !== "protected-environment-variable:KARTURT_STAGING_PSQL_SHA256" ||
+      typeof probe.psqlExpectedSha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(probe.psqlExpectedSha256) ||
+      probe.psqlExpectedSha256 !== probe.psqlSha256 ||
       typeof probe.querySha256 !== "string" ||
       !/^[a-f0-9]{64}$/.test(probe.querySha256)) throw new Error("probe");
 
