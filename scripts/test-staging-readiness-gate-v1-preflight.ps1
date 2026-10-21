@@ -1,6 +1,88 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+$conninfoModulePath = Join-Path $PSScriptRoot 'lib/staging-readiness-conninfo-v1.psm1'
+Import-Module -Name $conninfoModulePath -Force -ErrorAction Stop
+
+function Assert-ConninfoRejects([string]$Text, [string]$ExpectedCode) {
+  $rejectedAsExpected = $false
+  try {
+    $null = ConvertFrom-Psql18ConninfoV1 -Text $Text
+  } catch {
+    if ([string]$_.Exception.Message -ceq $ExpectedCode) {
+      $rejectedAsExpected = $true
+    } else {
+      throw
+    }
+  }
+  if (-not $rejectedAsExpected) { throw ('TEST_CONNINFO_ACCEPTED_INVALID_INPUT:' + $ExpectedCode) }
+}
+
+$psql18OutputFixture = @'
+Database|neondb
+Client User|neondb_owner
+Host|ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech
+Host Address|192.0.2.41
+Server Port|5432
+Options|
+Protocol Version|3.0
+Password Used|true
+GSSAPI Authenticated|false
+Backend PID|12345
+SSL Connection|true
+SSL Library|OpenSSL
+SSL Protocol|TLSv1.3
+SSL Key Bits|256
+SSL Cipher|TLS_AES_256_GCM_SHA384
+SSL Compression|false
+ALPN|none
+Superuser|false
+Hot Standby|false
+{"kind":"identity"}
+{"kind":"catalog_counts"}
+'@
+$fixtureLines = @([regex]::Split($psql18OutputFixture, '\r?\n') | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+$fixtureJsonStart = -1
+for ($index = 0; $index -lt $fixtureLines.Count; $index++) {
+  if ($fixtureLines[$index].TrimStart().StartsWith('{', [StringComparison]::Ordinal)) {
+    $fixtureJsonStart = $index
+    break
+  }
+}
+if ($fixtureJsonStart -lt 1 -or $fixtureLines.Count -ne ($fixtureJsonStart + 2)) {
+  throw 'TEST_PG18_CONNINFO_FIXTURE_SHAPE_INVALID'
+}
+$fixtureConninfo = $fixtureLines[0..($fixtureJsonStart - 1)] -join "`n"
+$parsedConninfo = ConvertFrom-Psql18ConninfoV1 -Text $fixtureConninfo
+if ($parsedConninfo.Database -cne 'neondb' -or
+    $parsedConninfo.Role -cne 'neondb_owner' -or
+    $parsedConninfo.Host -cne 'ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech' -or
+    $parsedConninfo.Port -cne '5432' -or
+    $parsedConninfo.Protocol -cne 'TLSv1.3' -or
+    $parsedConninfo.Cipher -cne 'TLS_AES_256_GCM_SHA384') {
+  throw 'TEST_PG18_CONNINFO_FIELDS_MISMATCH'
+}
+
+$withoutHostAddress = $fixtureConninfo -replace '(?m)^Host Address\|[^\r\n]*\r?\n', ''
+$parsedWithoutHostAddress = ConvertFrom-Psql18ConninfoV1 -Text $withoutHostAddress
+if ($parsedWithoutHostAddress.Host -cne $parsedConninfo.Host) {
+  throw 'TEST_OPTIONAL_HOST_ADDRESS_CHANGED_HOST_IDENTITY'
+}
+
+Assert-ConninfoRejects -Text ($fixtureConninfo + "`nDatabase|neondb") -ExpectedCode 'CONNECTION_INFO_INVALID'
+Assert-ConninfoRejects -Text ($fixtureConninfo -replace '(?m)^Backend PID\|[^\r\n]*\r?\n', '') -ExpectedCode 'CONNECTION_INFO_INVALID'
+Assert-ConninfoRejects -Text ($fixtureConninfo + "`nUnexpected|value") -ExpectedCode 'CONNECTION_INFO_INVALID'
+Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'Database\|neondb', 'Database neondb') -ExpectedCode 'CONNECTION_INFO_INVALID'
+Assert-ConninfoRejects -Text 'You are connected to database "neondb" as user "neondb_owner" on host "host" at port "5432".' -ExpectedCode 'CONNECTION_INFO_INVALID'
+Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'Database\|neondb', 'Datenbank|neondb') -ExpectedCode 'CONNECTION_INFO_INVALID'
+Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'SSL Connection\|true', 'SSL Connection|false') -ExpectedCode 'LIBPQ_TLS_PROOF_MISSING'
+Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'SSL Protocol\|TLSv1.3', 'SSL Protocol|TLSv1.1') -ExpectedCode 'LIBPQ_TLS_PROOF_MISSING'
+Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'SSL Cipher\|TLS_AES_256_GCM_SHA384', 'SSL Cipher|unknown') -ExpectedCode 'LIBPQ_TLS_PROOF_MISSING'
+Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'SSL Compression\|false', 'SSL Compression|true') -ExpectedCode 'LIBPQ_TLS_PROOF_MISSING'
+Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'SSL Protocol\|TLSv1.3\r?\n', '') -ExpectedCode 'CONNECTION_INFO_INVALID'
+Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'Options\|', 'Options|one|two') -ExpectedCode 'CONNECTION_INFO_INVALID'
+Assert-ConninfoRejects -Text ($fixtureConninfo -replace 'Host Address\|192.0.2.41', 'Host Address|not-an-ip') -ExpectedCode 'CONNECTION_INFO_INVALID'
+
 $runnerPath = Join-Path $PSScriptRoot 'staging-readiness-gate-v1.ps1'
 $tempRoot = [IO.Path]::GetTempPath()
 $caseDirectory = Join-Path $tempRoot ('karturt-gate-v1-preflight-' + [Guid]::NewGuid().ToString('N'))
@@ -71,7 +153,7 @@ try {
     throw ('TEST_SELF_ASSERTED_PROVIDER_FALSE_PASS:' + ($failedSelfAssertedChecks -join ','))
   }
 
-  Write-Output 'Staging Readiness Gate V1 early-stop and self-assertion regressions: PASS'
+  Write-Output 'Staging Readiness Gate V1 PostgreSQL 18 conninfo, early-stop, and self-assertion regressions: PASS'
 } finally {
   if ([IO.Directory]::Exists($caseDirectory)) {
     $resolvedTemp = [IO.Path]::GetFullPath($tempRoot).TrimEnd([char[]]@('\', '/')) + [IO.Path]::DirectorySeparatorChar

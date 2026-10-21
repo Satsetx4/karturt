@@ -101,6 +101,12 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
   Stop-Safely 'POWERSHELL_7_REQUIRED' 78
 }
 
+try {
+  Import-Module -Name (Join-Path $PSScriptRoot 'lib/staging-readiness-conninfo-v1.psm1') -Force -ErrorAction Stop
+} catch {
+  Stop-Safely 'CONNECTION_PARSER_UNAVAILABLE'
+}
+
 $script:ExpectedTarget = [ordered]@{
   OrganizationId = 'org-ancient-boat-57106549'
   ProjectId = 'broad-star-40451875'
@@ -393,13 +399,22 @@ function Get-ValidatedSourceSha([string]$Root, [string]$GitExecutable) {
     throw 'SOURCE_SHA_UNAVAILABLE'
   }
 
-  foreach ($relativePath in @('scripts/staging-readiness-gate-v1.ps1', 'docs/codex/staging-readiness-gate-v1.sql')) {
+  foreach ($relativePath in @(
+      'scripts/staging-readiness-gate-v1.ps1',
+      'scripts/lib/staging-readiness-conninfo-v1.psm1',
+      'docs/codex/staging-readiness-gate-v1.sql'
+    )) {
     $tracked = Invoke-LocalCapture -Executable $GitExecutable -Arguments @('-C', $Root, 'ls-files', '--error-unmatch', '--', $relativePath) -TimeoutMilliseconds 5000
     if ($tracked.ExitCode -ne 0 -or $tracked.Stdout -cne $relativePath -or $tracked.Stderr.Length -gt 0) {
       throw 'SOURCE_NOT_TRACKED_AT_HEAD'
     }
   }
-  $diff = Invoke-LocalCapture -Executable $GitExecutable -Arguments @('-C', $Root, 'diff', '--quiet', 'HEAD', '--', 'scripts/staging-readiness-gate-v1.ps1', 'docs/codex/staging-readiness-gate-v1.sql') -TimeoutMilliseconds 5000
+  $diff = Invoke-LocalCapture -Executable $GitExecutable -Arguments @(
+    '-C', $Root, 'diff', '--quiet', 'HEAD', '--',
+    'scripts/staging-readiness-gate-v1.ps1',
+    'scripts/lib/staging-readiness-conninfo-v1.psm1',
+    'docs/codex/staging-readiness-gate-v1.sql'
+  ) -TimeoutMilliseconds 5000
   if ($diff.ExitCode -ne 0 -or $diff.Stdout.Length -gt 0 -or $diff.Stderr.Length -gt 0) {
     throw 'SOURCE_NOT_EXACT_HEAD'
   }
@@ -818,27 +833,25 @@ for ($index = 0; $index -lt $lines.Count; $index++) {
 if ($jsonStart -lt 1 -or $lines.Count -ne ($jsonStart + 2)) { Stop-Safely 'PSQL_OUTPUT_INVALID' }
 
 $connectionInfo = $lines[0..($jsonStart - 1)] -join "`n"
-$connectionFields = @{
-  Database = [regex]::Match($connectionInfo, '(?im)\bdatabase\s+"(?<value>[^"]+)"')
-  Role = [regex]::Match($connectionInfo, '(?im)\bas\s+user\s+"(?<value>[^"]+)"')
-  Host = [regex]::Match($connectionInfo, '(?im)\bon\s+host\s+"(?<value>[^"]+)"')
-  Port = [regex]::Match($connectionInfo, '(?im)\bat\s+port\s+"?(?<value>\d+)"?')
+try {
+  $connectionFields = ConvertFrom-Psql18ConninfoV1 -Text $connectionInfo
+} catch {
+  $connectionInfoError = [string]$_.Exception.Message
+  if ($connectionInfoError -cnotin @(
+      'CONNECTION_INFO_INVALID', 'CONNECTION_IDENTITY_UNVERIFIED', 'LIBPQ_TLS_PROOF_MISSING'
+    )) {
+    $connectionInfoError = 'CONNECTION_INFO_INVALID'
+  }
+  Stop-Safely $connectionInfoError
 }
-foreach ($field in $connectionFields.Values) {
-  if (-not $field.Success) { Stop-Safely 'CONNECTION_IDENTITY_UNVERIFIED' }
-}
-if ($connectionFields.Database.Groups['value'].Value -cne $script:ExpectedTarget.Database -or
-    $connectionFields.Role.Groups['value'].Value -cne $script:ExpectedTarget.Role -or
-    $connectionFields.Host.Groups['value'].Value -cne $script:ExpectedTarget.DirectHostname -or
-    $connectionFields.Port.Groups['value'].Value -cne $script:ExpectedTarget.Port) {
+if ($connectionFields.Database -cne $script:ExpectedTarget.Database -or
+    $connectionFields.Role -cne $script:ExpectedTarget.Role -or
+    $connectionFields.Host -cne $script:ExpectedTarget.DirectHostname -or
+    $connectionFields.Port -cne $script:ExpectedTarget.Port) {
   Stop-Safely 'CONNECTION_IDENTITY_MISMATCH'
 }
-
-$protocolMatch = [regex]::Match($connectionInfo, '(?im)\bprotocol\b[^\r\n|:]{0,24}[:|]\s*(?<protocol>TLSv1\.(?:2|3))\b')
-$cipherMatch = [regex]::Match($connectionInfo, '(?im)\bcipher\b[^\r\n|:]{0,24}[:|]\s*(?<cipher>[A-Za-z0-9][A-Za-z0-9_.-]*)\b')
-if (-not $protocolMatch.Success -or -not $cipherMatch.Success) {
-  Stop-Safely 'LIBPQ_TLS_PROOF_MISSING'
-}
+$tlsProtocol = $connectionFields.Protocol
+$tlsCipher = $connectionFields.Cipher
 
 try {
   $identity = ConvertFrom-Json -InputObject $lines[$jsonStart] -ErrorAction Stop
@@ -1058,8 +1071,8 @@ $evaluatorEvidence = [ordered]@{
       sslmode = 'verify-full'
       channelBinding = 'require'
       sslInUse = $true
-      sslProtocol = $protocolMatch.Groups['protocol'].Value
-      sslCipher = $cipherMatch.Groups['cipher'].Value
+      sslProtocol = $tlsProtocol
+      sslCipher = $tlsCipher
     }
     server = [ordered]@{
       sessionId = $sameSessionId
@@ -1126,8 +1139,8 @@ $artifact = [ordered]@{
     libpq = [ordered]@{
       sslmode = 'verify-full'
       channelBinding = 'require'
-      tlsProtocol = $protocolMatch.Groups['protocol'].Value
-      tlsCipher = $cipherMatch.Groups['cipher'].Value
+      tlsProtocol = $tlsProtocol
+      tlsCipher = $tlsCipher
       directHostIdentityVerified = $script:ExpectedTarget.DirectHostname
     }
     transactionReadOnly = 'on'
@@ -1169,8 +1182,8 @@ finally { $artifactHasher.Dispose() }
 [Console]::Out.WriteLine('stagingIsolation=PREFLIGHT_PASS')
 [Console]::Out.WriteLine('sourceSha=' + $sourceSha)
 [Console]::Out.WriteLine('psqlVersion=' + $psqlVersion)
-[Console]::Out.WriteLine('tls_protocol=' + $protocolMatch.Groups['protocol'].Value)
-[Console]::Out.WriteLine('tls_cipher=' + $cipherMatch.Groups['cipher'].Value)
+[Console]::Out.WriteLine('tls_protocol=' + $tlsProtocol)
+[Console]::Out.WriteLine('tls_cipher=' + $tlsCipher)
 [Console]::Out.WriteLine('transaction_read_only=on')
 [Console]::Out.WriteLine('evidence_file=' + $evidencePath)
 [Console]::Out.WriteLine('evidence_sha256=' + $artifactSha256)

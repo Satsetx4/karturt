@@ -19,11 +19,17 @@ Neon also documents that ordinary branches inherit their parent's schema and dat
 
 Gate V1 requires a direct libpq connection to the exact approved endpoint with `sslmode=verify-full` and `channel_binding=require`. The same session must show active SSL protocol and cipher. `pg_stat_ssl` is recorded as a diagnostic only; it neither substitutes for nor overrides libpq proof. The gate must not downgrade TLS or infer a pass from metadata alone.
 
+### PostgreSQL 18 `\\conninfo` output contract
+
+PostgreSQL 18 changed `\\conninfo` from prose to a two-column table. With the runner's `-A -t` settings and the query's unaligned, tuples-only settings, the expected English/C-locale output is a fixed sequence of `Label|Value` rows: the 12 base connection fields, six SSL detail fields when SSL is active, and optionally `Host Address` when DNS resolution differs from the supplied hostname. The runner now parses and validates that pinned PostgreSQL 18 shape, rejects duplicate, missing, additional, malformed, localized, legacy, or non-TLS output, and still compares the database, client user, host, and port against the exact target. Offline tests use synthetic rows only; this source-level compatibility fix is not a live TLS or staging result.
+
 References:
 
 - [PostgreSQL 18 `pg_stat_ssl`](https://www.postgresql.org/docs/18/monitoring-stats.html#MONITORING-PG-STAT-SSL)
 - [libpq SSL status functions](https://www.postgresql.org/docs/18/libpq-status.html#LIBPQ-PQSSLINUSE)
 - [psql `\\conninfo`](https://www.postgresql.org/docs/18/app-psql.html#APP-PSQL-META-COMMAND-CONNINFO)
+- [PostgreSQL 18 release notes: tabular `\\conninfo`](https://www.postgresql.org/docs/18/release-18.html)
+- [PostgreSQL 18 `\\conninfo` implementation](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/bin/psql/command.c#L792-L907)
 - [libpq certificate verification](https://www.postgresql.org/docs/18/libpq-ssl.html#LIBPQ-SSL-CLIENT-CERT)
 - [libpq channel binding](https://www.postgresql.org/docs/18/libpq-connect.html#LIBPQ-CONNECT-CHANNEL-BINDING)
 - [Neon security overview](https://neon.com/docs/security/security-overview)
@@ -44,7 +50,7 @@ The exported `evaluateStagingReadinessSignalsV1` core API is explicitly technica
 
 ## Migration decision
 
-Owner authorization permits guarded staging changes, but it does not bypass the repository's migration controls. The current pinned public verification key is null, so signed approval verification is disabled fail-closed. No migration may run until the trusted authorization mechanism is legitimately available and the exact-SHA, exact-target, manifest, preflight, and interactive checks pass. Do not access or derive owner private-key material.
+Owner authorization permits guarded staging changes, but it does not bypass the repository's migration controls. The current pinned public verification key is null, so signed approval verification is disabled fail-closed. Static review also found that the existing migration operator does not consume a Gate V1 evaluation artifact. Before enabling the key or running a migration, version the signed authorization to include the fresh Gate V1 evaluation SHA-256, then have the operator verify and recompute the report's PASS status, exact source/target/manifest bindings, freshness, and evidence provenance before creating a client. No migration may run until this binding, a trusted authorization mechanism, and the exact-SHA, exact-target, manifest, preflight, and interactive checks all pass. Do not access or derive owner private-key material.
 
 ## Rejected outcomes
 
