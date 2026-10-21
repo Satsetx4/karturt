@@ -135,7 +135,7 @@ describe("runtime environment guards", () => {
   });
 
   it("matches the exact staging target and keeps access blocked while isolation is unverified", () => {
-    const approvedTarget = "postgresql://neondb_owner:synthetic-password@ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=verify-full";
+    const approvedTarget = "postgresql://neondb_owner:synthetic-password@ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=verify-full&channel_binding=require";
     setEnvironment({ APP_ENV: "staging", DATABASE_ENV: "staging", DATABASE_URL: approvedTarget });
     expect(() => requireDatabaseEnvironment()).toThrow("runtime readiness and verified emptiness are not established");
   });

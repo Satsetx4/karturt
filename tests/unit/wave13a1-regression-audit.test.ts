@@ -32,7 +32,7 @@ afterEach(() => {
 
 const localDevelopmentUrl = "postgresql://karturt:synthetic-password@localhost:5432/karturt_dev";
 const newStagingUrl =
-  "postgresql://neondb_owner:synthetic-password@ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=verify-full";
+  "postgresql://neondb_owner:synthetic-password@ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=verify-full&channel_binding=require";
 const oldStagingUrl =
   "postgresql://karturt_staging_owner:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech:5432/karturt_staging?sslmode=require";
 
