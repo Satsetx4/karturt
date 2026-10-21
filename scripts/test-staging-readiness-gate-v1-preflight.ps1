@@ -255,10 +255,68 @@ try {
   if ([string]::IsNullOrWhiteSpace($pwshExecutable) -or -not [IO.File]::Exists($pwshExecutable)) {
     throw 'TEST_POWERSHELL_EXECUTABLE_UNAVAILABLE'
   }
-  & $pwshExecutable -NoProfile -File $runnerPath `
-    -ProviderEvidencePath $missingProviderPath `
-    -EvidenceOutputPath $failureEvidencePath 1>$null 2>$null
-  $runnerExitCode = $LASTEXITCODE
+  $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+  $gitExecutable = (Get-Command 'git.exe' -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+  if ([string]::IsNullOrWhiteSpace($gitExecutable) -or -not [IO.File]::Exists($gitExecutable)) {
+    throw 'TEST_GIT_EXECUTABLE_UNAVAILABLE'
+  }
+  $emptyGitConfigPath = Join-Path $caseDirectory 'empty-git-config'
+  [IO.File]::WriteAllText($emptyGitConfigPath, '', [Text.UTF8Encoding]::new($false))
+
+  function Invoke-IsolatedReadinessRunner([string]$ProviderPath, [string]$OutputPath) {
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $pwshExecutable
+    $startInfo.WorkingDirectory = $projectRoot
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in @(
+        '-NoProfile', '-NonInteractive', '-File', $runnerPath,
+        '-ProviderEvidencePath', $ProviderPath,
+        '-EvidenceOutputPath', $OutputPath
+      )) {
+      [void]$startInfo.ArgumentList.Add([string]$argument)
+    }
+    $startInfo.Environment.Clear()
+    $startInfo.Environment['SystemRoot'] = $systemRoot
+    $startInfo.Environment['WINDIR'] = $systemRoot
+    $startInfo.Environment['PATH'] = @(
+      [IO.Path]::GetDirectoryName($pwshExecutable),
+      [IO.Path]::GetDirectoryName($gitExecutable),
+      (Join-Path $systemRoot 'System32')
+    ) -join [IO.Path]::PathSeparator
+    $startInfo.Environment['TEMP'] = $tempRoot
+    $startInfo.Environment['TMP'] = $tempRoot
+    $startInfo.Environment['RUNNER_TEMP'] = $tempRoot
+    $startInfo.Environment['GITHUB_RUN_ID'] = '1234567890'
+    $startInfo.Environment['GITHUB_RUN_ATTEMPT'] = '1'
+    $startInfo.Environment['GIT_CONFIG_GLOBAL'] = $emptyGitConfigPath
+    $startInfo.Environment['GIT_CONFIG_NOSYSTEM'] = '1'
+    $startInfo.Environment['GIT_CONFIG_COUNT'] = '1'
+    $startInfo.Environment['GIT_CONFIG_KEY_0'] = 'core.autocrlf'
+    $startInfo.Environment['GIT_CONFIG_VALUE_0'] = 'true'
+
+    $process = [Diagnostics.Process]::new()
+    try {
+      $process.StartInfo = $startInfo
+      if (-not $process.Start()) { throw 'TEST_RUNNER_PROCESS_START_FAILED' }
+      $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+      $stderrTask = $process.StandardError.ReadToEndAsync()
+      if (-not $process.WaitForExit(30000)) {
+        try { $process.Kill($true) } catch { }
+        throw 'TEST_RUNNER_PROCESS_TIMEOUT'
+      }
+      $process.WaitForExit()
+      $null = $stdoutTask.GetAwaiter().GetResult()
+      $null = $stderrTask.GetAwaiter().GetResult()
+      return $process.ExitCode
+    } finally {
+      $process.Dispose()
+    }
+  }
+
+  $runnerExitCode = Invoke-IsolatedReadinessRunner -ProviderPath $missingProviderPath -OutputPath $failureEvidencePath
   if ($runnerExitCode -eq 0) { throw 'TEST_EXPECTED_PREFLIGHT_STOP' }
   if (-not [IO.File]::Exists($failureEvidencePath)) { throw 'TEST_FAILURE_ARTIFACT_MISSING' }
 
@@ -289,10 +347,7 @@ try {
   }
   $selfAssertedJson = ConvertTo-Json -InputObject $selfAssertedProvider -Depth 6 -Compress
   [IO.File]::WriteAllText($selfAssertedProviderPath, $selfAssertedJson, [Text.UTF8Encoding]::new($false))
-  & $pwshExecutable -NoProfile -File $runnerPath `
-    -ProviderEvidencePath $selfAssertedProviderPath `
-    -EvidenceOutputPath $selfAssertedOutputPath 1>$null 2>$null
-  $runnerExitCode = $LASTEXITCODE
+  $runnerExitCode = Invoke-IsolatedReadinessRunner -ProviderPath $selfAssertedProviderPath -OutputPath $selfAssertedOutputPath
   if ($runnerExitCode -eq 0) { throw 'TEST_SELF_ASSERTED_PROVIDER_WAS_ACCEPTED' }
   if (-not [IO.File]::Exists($selfAssertedOutputPath)) { throw 'TEST_SELF_ASSERTED_STOP_EVIDENCE_MISSING' }
   $selfAssertedArtifact = Get-Content -LiteralPath $selfAssertedOutputPath -Raw | ConvertFrom-Json -ErrorAction Stop
@@ -311,6 +366,162 @@ try {
   if ($selfAssertedArtifact.migrationAuthorization -cne 'NOT_GRANTED') { $failedSelfAssertedChecks.Add('migrationAuthorization') }
   if ($failedSelfAssertedChecks.Count -gt 0) {
     throw ('TEST_SELF_ASSERTED_PROVIDER_FALSE_PASS:' + ($failedSelfAssertedChecks -join ','))
+  }
+
+  function Write-ForgedProviderArtifact([string]$Path, [string]$ArtifactType, [string]$SourceSha, $Fields) {
+    $artifact = [ordered]@{
+      schemaVersion = 'staging-readiness-gate-v1/evidence-artifact/v1'
+      artifactType = $ArtifactType
+      sourceSha = $SourceSha
+    }
+    foreach ($fieldName in $Fields.Keys) { $artifact[$fieldName] = $Fields[$fieldName] }
+    $json = ConvertTo-Json -InputObject $artifact -Depth 12 -Compress
+    [IO.File]::WriteAllText($Path, $json, [Text.UTF8Encoding]::new($false))
+    return [pscustomobject]@{
+      Reference = [IO.Path]::GetFileName($Path)
+      Sha256 = (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
+    }
+  }
+
+  $gitHead = & $gitExecutable -C $projectRoot rev-parse --verify 'HEAD^{commit}'
+  if ($LASTEXITCODE -ne 0 -or [string]$gitHead -cnotmatch '^[a-f0-9]{40,64}$') {
+    throw 'TEST_SOURCE_SHA_UNAVAILABLE'
+  }
+  $sourceSha = ([string]$gitHead).Trim()
+  $syntheticObservedAtUtc = [DateTimeOffset]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", [Globalization.CultureInfo]::InvariantCulture)
+  $expectedProjectId = 'wild-darkness-00489132'
+  $expectedBranchId = 'br-spring-shadow-b37rykzl'
+  $requiredOmittedSourceFields = @('parent_id', 'parent_project_id', 'source_project_id', 'clone', 'import', 'restore')
+
+  $createRequestArtifact = Write-ForgedProviderArtifact -Path (Join-Path $caseDirectory 'forged-create-request.json') `
+    -ArtifactType 'lineage-create-request' -SourceSha $sourceSha -Fields ([ordered]@{
+      targetProjectId = $expectedProjectId
+      targetBranchId = $expectedBranchId
+      method = 'POST'
+      operation = 'create-project'
+      sourceFieldsOmitted = $requiredOmittedSourceFields
+    })
+  $providerReadbackArtifact = Write-ForgedProviderArtifact -Path (Join-Path $caseDirectory 'forged-provider-readback.json') `
+    -ArtifactType 'provider-lineage-readback' -SourceSha $sourceSha -Fields ([ordered]@{
+      targetProjectId = $expectedProjectId
+      targetBranchId = $expectedBranchId
+      projectParentIdFieldObserved = $false
+      projectParentId = $null
+      sourceProjectIdFieldObserved = $false
+      sourceProjectId = $null
+      branchParentIdFieldObserved = $false
+      branchParentId = $null
+      init_source = 'parent-data'
+    })
+  $rootResolutionArtifact = Write-ForgedProviderArtifact -Path (Join-Path $caseDirectory 'forged-root-resolution.json') `
+    -ArtifactType 'root-branch-resolution' -SourceSha $sourceSha -Fields ([ordered]@{
+      targetProjectId = $expectedProjectId
+      targetBranchId = $expectedBranchId
+      verificationStatus = 'VERIFIED'
+      resolvesToNewRoot = $true
+      contractReference = 'https://neon.com/docs/manage/branches'
+      explanation = 'Synthetic preflight fixture only.'
+    })
+  $datasetManifestArtifact = Write-ForgedProviderArtifact -Path (Join-Path $caseDirectory 'forged-dataset-manifest.json') `
+    -ArtifactType 'synthetic-dataset-manifest' -SourceSha $sourceSha -Fields ([ordered]@{
+      targetProjectId = $expectedProjectId
+      targetBranchId = $expectedBranchId
+      classification = 'SYNTHETIC_ONLY'
+      noProductionData = $true
+    })
+  $syntheticAttestationArtifact = Write-ForgedProviderArtifact -Path (Join-Path $caseDirectory 'forged-synthetic-attestation.json') `
+    -ArtifactType 'synthetic-only-attestation' -SourceSha $sourceSha -Fields ([ordered]@{
+      targetProjectId = $expectedProjectId
+      targetBranchId = $expectedBranchId
+      classification = 'SYNTHETIC_ONLY'
+      noProductionData = $true
+    })
+
+  $forgedProviderPath = Join-Path $caseDirectory 'fully-forged-provider.json'
+  $forgedProviderOutputPath = Join-Path $caseDirectory 'fully-forged-stop.json'
+  $forgedProvider = [ordered]@{
+    schemaVersion = 'staging-readiness-gate-v1/evidence-artifact/v1'
+    artifactType = 'provider-metadata'
+    sourceSha = $sourceSha
+    provider = [ordered]@{
+      provider = 'neon'
+      organizationId = 'org-ancient-boat-57106549'
+      projectId = $expectedProjectId
+      branchId = $expectedBranchId
+      endpointId = 'ep-silent-haze-b3pcaa3t'
+      endpointBranchId = $expectedBranchId
+      evidenceReference = 'fully-forged-provider.json'
+      observedAtUtc = $syntheticObservedAtUtc
+      plan = 'free'
+      postgresMajor = 18
+      computeMinCU = 0.25
+      computeMaxCU = 0.25
+      branch = [ordered]@{ state = 'ready'; primary = $true; default = $true; init_source = 'parent-data' }
+    }
+    stagingIsolation = [ordered]@{
+      sourceSha = $sourceSha
+      observedAtUtc = $syntheticObservedAtUtc
+      targetProjectId = $expectedProjectId
+      targetBranchId = $expectedBranchId
+      lineage = [ordered]@{
+        sourceSha = $sourceSha
+        verificationSource = 'provider-api-create-request-and-readback'
+        verificationStatus = 'VERIFIED'
+        createRequestMethod = 'POST'
+        createRequestOperation = 'create-project'
+        createRequestReference = $createRequestArtifact.Reference
+        createRequestSha256 = $createRequestArtifact.Sha256
+        providerReadbackReference = $providerReadbackArtifact.Reference
+        providerReadbackSha256 = $providerReadbackArtifact.Sha256
+        sourceFieldsOmitted = $requiredOmittedSourceFields
+        projectParentIdFieldObserved = $false
+        projectParentId = $null
+        sourceProjectIdFieldObserved = $false
+        sourceProjectId = $null
+        branchParentIdFieldObserved = $false
+        branchParentId = $null
+        rootStructureResolution = [ordered]@{
+          sourceSha = $sourceSha
+          verificationStatus = 'VERIFIED'
+          contractReference = 'https://neon.com/docs/manage/branches'
+          resolvesToNewRoot = $true
+          explanation = 'Synthetic preflight fixture only.'
+          evidenceReference = $rootResolutionArtifact.Reference
+          evidenceSha256 = $rootResolutionArtifact.Sha256
+        }
+      }
+      syntheticOnly = [ordered]@{
+        sourceSha = $sourceSha
+        classification = 'SYNTHETIC_ONLY'
+        datasetManifestReference = $datasetManifestArtifact.Reference
+        datasetManifestSha256 = $datasetManifestArtifact.Sha256
+        attestationReference = $syntheticAttestationArtifact.Reference
+        attestationSha256 = $syntheticAttestationArtifact.Sha256
+        noProductionData = $true
+      }
+    }
+  }
+  $fullyForgedJson = ConvertTo-Json -InputObject $forgedProvider -Depth 16 -Compress
+  [IO.File]::WriteAllText($forgedProviderPath, $fullyForgedJson, [Text.UTF8Encoding]::new($false))
+  $fullyForgedProviderSha256 = (Get-FileHash -LiteralPath $forgedProviderPath -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
+  $runnerExitCode = Invoke-IsolatedReadinessRunner -ProviderPath $forgedProviderPath -OutputPath $forgedProviderOutputPath
+  if ($runnerExitCode -eq 0) { throw 'TEST_FULLY_FORGED_PROVIDER_WAS_ACCEPTED' }
+  if (-not [IO.File]::Exists($forgedProviderOutputPath)) { throw 'TEST_FULLY_FORGED_STOP_EVIDENCE_MISSING' }
+  $fullyForgedArtifact = Get-Content -LiteralPath $forgedProviderOutputPath -Raw | ConvertFrom-Json -ErrorAction Stop
+  $fullyForgedFailure = [Collections.Generic.List[string]]::new()
+  if ($fullyForgedArtifact.result -cne 'DATABASE_PROBE_STOPPED') { $fullyForgedFailure.Add('result') }
+  if ($fullyForgedArtifact.stopCode -cne 'PROVIDER_CAPTURE_UNAUTHENTICATED') { $fullyForgedFailure.Add('stopCode=' + [string]$fullyForgedArtifact.stopCode) }
+  if ($fullyForgedArtifact.providerEvidenceSha256 -cne $fullyForgedProviderSha256) { $fullyForgedFailure.Add('providerEvidenceSha256') }
+  if ($fullyForgedArtifact.providerCaptureAuthentication -cne 'UNKNOWN') { $fullyForgedFailure.Add('providerCaptureAuthentication') }
+  if ($fullyForgedArtifact.providerPreflight -cne 'UNKNOWN') { $fullyForgedFailure.Add('providerPreflight') }
+  if ($fullyForgedArtifact.stagingIsolation -cne 'UNKNOWN') { $fullyForgedFailure.Add('stagingIsolation') }
+  if ($fullyForgedArtifact.overallGate -cne 'NOT_EVALUATED') { $fullyForgedFailure.Add('overallGate') }
+  if ($null -ne $fullyForgedArtifact.psqlVersion) { $fullyForgedFailure.Add('psqlVersion') }
+  if ($null -ne $fullyForgedArtifact.psqlSha256) { $fullyForgedFailure.Add('psqlSha256') }
+  if ($null -ne $fullyForgedArtifact.psqlExitCode) { $fullyForgedFailure.Add('psqlExitCode') }
+  if ($fullyForgedArtifact.migrationAuthorization -cne 'NOT_GRANTED') { $fullyForgedFailure.Add('migrationAuthorization') }
+  if ($fullyForgedFailure.Count -gt 0) {
+    throw ('TEST_FULLY_FORGED_PROVIDER_FALSE_PASS:' + ($fullyForgedFailure -join ','))
   }
 
   $runnerSource = [IO.File]::ReadAllText($runnerPath)
@@ -353,7 +564,7 @@ try {
     }
   }
 
-  Write-Output 'Staging Readiness Gate V1 PostgreSQL 18 conninfo, path/ACL/owner guards, current-logon-SID binding, locked TLS files, early-stop, and self-assertion regressions: PASS'
+  Write-Output 'Staging Readiness Gate V1 PostgreSQL 18 conninfo, path/ACL/owner guards, current-logon-SID binding, locked TLS files, missing/partial/full-forged provider early-stop, and self-assertion regressions: PASS'
 } finally {
   [Environment]::SetEnvironmentVariable('RUNNER_TEMP', $previousRunnerTemp, 'Process')
   [Environment]::SetEnvironmentVariable('GITHUB_RUN_ID', $previousRunId, 'Process')
