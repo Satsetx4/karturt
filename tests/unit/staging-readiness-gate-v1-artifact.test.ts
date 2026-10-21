@@ -36,6 +36,7 @@ function writeArtifact(directory: string, reference: string, artifact: Record<st
 
 function createEvidenceBundle(bundleSourceSha = sourceSha, observedAtMs = nowMs) {
   temporaryDirectory = mkdtempSync(path.join(os.tmpdir(), "karturt-gate-v1-"));
+  const lineageObservedAtUtc = new Date(observedAtMs - 30_000).toISOString();
   const target = {
     targetProjectId: STAGING_MIGRATION_TARGET_MANIFEST.projectId,
     targetBranchId: STAGING_MIGRATION_TARGET_MANIFEST.branchId,
@@ -54,6 +55,7 @@ function createEvidenceBundle(bundleSourceSha = sourceSha, observedAtMs = nowMs)
     artifactType: "provider-lineage-readback",
     sourceSha: bundleSourceSha,
     ...target,
+    observedAtUtc: lineageObservedAtUtc,
     projectParentIdFieldObserved: true,
     projectParentId: null,
     sourceProjectIdFieldObserved: true,
@@ -115,7 +117,7 @@ function createEvidenceBundle(bundleSourceSha = sourceSha, observedAtMs = nowMs)
     },
   };
   const isolation = {
-    observedAtUtc: new Date(observedAtMs - 30_000).toISOString(),
+    observedAtUtc: lineageObservedAtUtc,
     targetProjectId: target.targetProjectId,
     targetBranchId: target.targetBranchId,
     lineage: {
@@ -392,6 +394,18 @@ describe("Staging Readiness Gate V1 artifact boundary", () => {
     artifact.sourceSha = "f".repeat(40);
     writeFileSync(filePath, `${JSON.stringify(artifact)}\n`);
     bundle.evidence.stagingIsolation.lineage.providerReadbackSha256 = sha256(Buffer.from(`${JSON.stringify(artifact)}\n`));
+    expect(referencedEvidenceIntegrityCheck(bundle.evidence, bundle.directory).status).toBe("FAIL");
+  });
+
+  it("rejects a lineage readback timestamp that differs from its evaluated observation time", () => {
+    const bundle = createEvidenceBundle();
+    const filePath = path.join(bundle.directory, "lineage/provider-readback.json");
+    const artifact = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
+    artifact.observedAtUtc = new Date(nowMs - 45_000).toISOString();
+    const bytes = Buffer.from(`${JSON.stringify(artifact)}\n`);
+    writeFileSync(filePath, bytes);
+    bundle.evidence.stagingIsolation.lineage.providerReadbackSha256 = sha256(bytes);
+
     expect(referencedEvidenceIntegrityCheck(bundle.evidence, bundle.directory).status).toBe("FAIL");
   });
 

@@ -1,16 +1,16 @@
 import { createHash } from "node:crypto";
 
 /**
- * Candidate source mapping for the separate Staging Readiness Gate V1 project.
- * The root-lineage record is a bounded create-contract and provider-metadata
- * summary, not provider-signed evidence. It establishes only a separate
- * project/root branch structurally; catalog emptiness, synthetic-only data,
- * grants, credential state, migration approval, and runtime readiness remain
- * unproven until their independent gates pass.
+ * Candidate target mapping for the separate Staging Readiness Gate V1 project.
+ * The original create-request bytes were not retained, and current provider
+ * metadata cannot reconstruct them. The selected branch's root lineage is
+ * therefore UNKNOWN; default status, an omitted parent_id, and init_source do
+ * not establish ancestry. Catalog, synthetic-only data, grants, credential
+ * state, migration approval, and runtime readiness are also unproven.
  */
 export const STAGING_ROOT_LINEAGE_ATTESTATION = Object.freeze({
   schemaVersion: 1,
-  method: "ROOT_BY_NEW_PROJECT_CREATE_CONTRACT",
+  method: "UNKNOWN_CREATE_REQUEST_NOT_RETAINED",
   scope: "project-root-lineage-only",
   organizationId: "org-ancient-boat-57106549",
   projectId: "wild-darkness-00489132",
@@ -18,7 +18,8 @@ export const STAGING_ROOT_LINEAGE_ATTESTATION = Object.freeze({
   createRequest: {
     method: "POST",
     operation: "create-project",
-    sourceFieldsOmitted: ["parent_id", "parent_project_id", "source_project_id", "clone", "import", "restore"],
+    sourceFieldsOmittedClaimedByToolCall: ["parent_id", "parent_project_id", "source_project_id", "clone", "import", "restore"],
+    sourceFieldsOmittedEvidenceStatus: "UNVERIFIED_TOOL_CALL_ONLY",
     requestSha256: null,
     requestSha256Status: "NOT_CAPTURED_TOOL_CALL_ONLY",
   },
@@ -30,7 +31,7 @@ export const STAGING_ROOT_LINEAGE_ATTESTATION = Object.freeze({
     isDefault: true,
     parentIdReadback: "OMITTED_NOT_RETURNED",
     initSourceObserved: "parent-data",
-    initSourceInterpretation: "ROOT_BRANCH_BY_NEW_PROJECT_CREATE_CONTRACT; FIELD_ALONE_IS_NOT_LINEAGE_PROOF",
+    initSourceInterpretation: "AMBIGUOUS_NOT_LINEAGE_PROOF",
   },
   providerContracts: [
     { url: "https://neon.com/docs/manage/branches", sha256: null },
@@ -38,7 +39,7 @@ export const STAGING_ROOT_LINEAGE_ATTESTATION = Object.freeze({
     { url: "https://api-docs.neon.tech/reference/getprojectbranch", sha256: null },
     { url: "https://api-docs.neon.tech/reference/listprojectbranches", sha256: null },
   ],
-  rootStructureAssessment: "CONSISTENT_WITH_NEW_PROJECT_ROOT_CONTRACT",
+  rootStructureAssessment: "UNKNOWN_CREATE_REQUEST_HASH_MISSING",
   catalogState: "UNKNOWN",
   syntheticOnlyStatus: "UNKNOWN",
   providerCaptureAuthentication: "UNKNOWN",
@@ -50,7 +51,7 @@ export const STAGING_MIGRATION_TARGET_MANIFEST = Object.freeze({
   projectName: "karturt-v1-staging-readiness-gate-v1",
   branchName: "staging-readiness-gate-v1",
   branchId: "br-spring-shadow-b37rykzl",
-  lineageStatus: STAGING_ROOT_LINEAGE_ATTESTATION.method,
+  lineageStatus: "UNKNOWN",
   rootLineageAttestation: STAGING_ROOT_LINEAGE_ATTESTATION,
   region: "aws-ap-southeast-1",
   plan: "free",

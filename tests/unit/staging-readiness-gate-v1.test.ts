@@ -6,7 +6,10 @@ import {
   type StagingReadinessSignalsV1Result,
   type StagingReadinessState,
 } from "../../src/db/staging-readiness-gate-v1";
-import { STAGING_MIGRATION_TARGET_MANIFEST } from "../../src/lib/staging-database-target";
+import {
+  STAGING_MIGRATION_TARGET_MANIFEST,
+  STAGING_ROOT_LINEAGE_ATTESTATION,
+} from "../../src/lib/staging-database-target";
 
 const nowMs = Date.parse("2026-10-21T10:00:00.000Z");
 type CheckName = keyof StagingReadinessSignalsV1Result["checks"];
@@ -87,6 +90,7 @@ function validEvidence(): StagingReadinessEvidence {
   };
 }
 
+// Hypothetical offline evaluator fixture only; the hashes and evidence references below are synthetic.
 function withVerifiedIsolation(evidence = validEvidence()): StagingReadinessEvidence {
   evidence.stagingIsolation = {
     observedAtUtc: new Date(nowMs - 30_000).toISOString(),
@@ -147,7 +151,7 @@ function deepFreeze<T>(value: T): T {
 }
 
 describe("Staging Readiness Gate V1 technical signals", () => {
-  it("reports passing technical signals for the exact reviewed target", () => {
+  it("reports passing technical signals for a hypothetical fully populated evidence fixture", () => {
     const result = evaluateStagingReadinessSignalsV1(withVerifiedIsolation());
 
     expect(result.technicalStatus).toBe("PASS");
@@ -187,7 +191,7 @@ describe("Staging Readiness Gate V1 technical signals", () => {
     expect(result.checks.stagingIsolation.status).toBe("UNKNOWN");
   });
 
-  it("accepts init_source=parent-data only with verified source-bound root-contract evidence", () => {
+  it("accepts init_source=parent-data only in a hypothetical fixture with verified source-bound root-contract evidence", () => {
     const evidence = withVerifiedIsolation();
     evidence.provider!.branch!.init_source = "parent-data";
     evidence.stagingIsolation!.lineage!.rootStructureResolution = {
@@ -485,7 +489,24 @@ describe("Staging Readiness Gate V1 technical signals", () => {
     const result = evaluateStagingReadinessSignalsV1(evidence);
 
     expect(result.checks.stagingLineage.status).toBe("UNKNOWN");
+    expect(result.checks.syntheticOnlyProvenance.status).toBe("UNKNOWN");
     expect(result.checks.stagingIsolation.status).toBe("UNKNOWN");
+  });
+
+  it("keeps synthetic-only UNKNOWN when the original create request digest is missing", () => {
+    const evidence = withVerifiedIsolation();
+    evidence.provider!.branch!.default = true;
+    delete evidence.provider!.branch!.parent_id;
+    evidence.provider!.branch!.init_source = "parent-data";
+    evidence.stagingIsolation!.lineage!.createRequestSha256 = STAGING_ROOT_LINEAGE_ATTESTATION.createRequest.requestSha256;
+    evidence.stagingIsolation!.lineage!.branchParentIdFieldObserved = false;
+    evidence.stagingIsolation!.lineage!.rootStructureResolution = null;
+    const result = evaluateStagingReadinessSignalsV1(evidence);
+
+    expect(result.checks.stagingLineage.status).toBe("UNKNOWN");
+    expect(result.checks.syntheticOnlyProvenance.status).toBe("UNKNOWN");
+    expect(result.checks.stagingIsolation.status).toBe("UNKNOWN");
+    expect(result.technicalStatus).toBe("UNKNOWN");
   });
 
   it("fails when the create request does not attest omission of all source and clone fields", () => {
@@ -502,6 +523,18 @@ describe("Staging Readiness Gate V1 technical signals", () => {
     const productionData = withVerifiedIsolation();
     productionData.stagingIsolation!.syntheticOnly!.noProductionData = false;
     expect(evaluateStagingReadinessSignalsV1(productionData).checks.syntheticOnlyProvenance.status).toBe("FAIL");
+  });
+
+  it("preserves an explicit synthetic provenance failure when lineage is unresolved", () => {
+    const evidence = withVerifiedIsolation();
+    evidence.stagingIsolation!.lineage!.createRequestSha256 = STAGING_ROOT_LINEAGE_ATTESTATION.createRequest.requestSha256;
+    evidence.stagingIsolation!.syntheticOnly!.sourceSha = "e".repeat(40);
+    const result = evaluateStagingReadinessSignalsV1(evidence);
+
+    expect(result.checks.stagingLineage.status).toBe("UNKNOWN");
+    expect(result.checks.syntheticOnlyProvenance.status).toBe("FAIL");
+    expect(result.checks.stagingIsolation.status).toBe("FAIL");
+    expect(result.technicalStatus).toBe("FAIL");
   });
 
   it("prioritizes any failed safety check over missing evidence", () => {

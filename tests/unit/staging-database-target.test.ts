@@ -19,7 +19,7 @@ describe("staging migration target identity guard", () => {
       projectName: "karturt-v1-staging-readiness-gate-v1",
       branchName: "staging-readiness-gate-v1",
       branchId: "br-spring-shadow-b37rykzl",
-      lineageStatus: "ROOT_BY_NEW_PROJECT_CREATE_CONTRACT",
+      lineageStatus: "UNKNOWN",
       region: "aws-ap-southeast-1",
       plan: "free",
       postgresMajor: 18,
@@ -39,28 +39,30 @@ describe("staging migration target identity guard", () => {
     expect(getStagingMigrationTargetManifestFingerprint()).toBe(getStagingMigrationTargetManifestFingerprint());
   });
 
-  it("records bounded root-by-create-contract evidence separately from unknown catalog state", () => {
+  it("keeps target lineage UNKNOWN when the original create request was not retained", () => {
     expect(STAGING_ROOT_LINEAGE_ATTESTATION).toMatchObject({
-      method: "ROOT_BY_NEW_PROJECT_CREATE_CONTRACT",
+      method: "UNKNOWN_CREATE_REQUEST_NOT_RETAINED",
       scope: "project-root-lineage-only",
       projectId: "wild-darkness-00489132",
       projectCreatedAtUtc: "2026-10-21T09:23:42Z",
       createRequest: {
         requestSha256: null,
         requestSha256Status: "NOT_CAPTURED_TOOL_CALL_ONLY",
+        sourceFieldsOmittedEvidenceStatus: "UNVERIFIED_TOOL_CALL_ONLY",
       },
       branch: {
         id: "br-spring-shadow-b37rykzl",
         name: "staging-readiness-gate-v1",
         parentIdReadback: "OMITTED_NOT_RETURNED",
         initSourceObserved: "parent-data",
-        initSourceInterpretation: "ROOT_BRANCH_BY_NEW_PROJECT_CREATE_CONTRACT; FIELD_ALONE_IS_NOT_LINEAGE_PROOF",
+        initSourceInterpretation: "AMBIGUOUS_NOT_LINEAGE_PROOF",
       },
-      rootStructureAssessment: "CONSISTENT_WITH_NEW_PROJECT_ROOT_CONTRACT",
+      rootStructureAssessment: "UNKNOWN_CREATE_REQUEST_HASH_MISSING",
       catalogState: "UNKNOWN",
       syntheticOnlyStatus: "UNKNOWN",
       providerCaptureAuthentication: "UNKNOWN",
     });
+    expect(STAGING_MIGRATION_TARGET_MANIFEST.lineageStatus).toBe("UNKNOWN");
     expect("parentId" in STAGING_ROOT_LINEAGE_ATTESTATION.branch).toBe(false);
     expect(STAGING_MIGRATION_TARGET_MANIFEST.rootLineageAttestation).toBe(STAGING_ROOT_LINEAGE_ATTESTATION);
   });

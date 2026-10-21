@@ -228,7 +228,8 @@ function referencedArtifactChecks(
     "branchParentIdFieldObserved",
     "branchParentId",
   ] as const;
-  if (parentFields.some((name) => providerReadback[name] !== lineage[name]) ||
+  if (providerReadback.observedAtUtc !== isolation.observedAtUtc ||
+      parentFields.some((name) => providerReadback[name] !== lineage[name]) ||
       providerReadback.init_source !== initSource ||
       (requiresRootResolution && (!resolutionArtifact?.value ||
         !matchesTarget(resolutionArtifact.value) ||

@@ -670,7 +670,7 @@ export function evaluateStagingReadinessSignalsV1(
     providerBranch: providerBranchCheck(provider),
     providerEvidenceReference: providerEvidenceReferenceCheck(provider),
     stagingLineage: lineageCheck(stagingIsolation, root?.nowMs, provider, root?.sourceSha),
-    syntheticOnlyProvenance: syntheticOnlyProvenanceCheck(stagingIsolation, root?.sourceSha),
+    syntheticOnlyProvenance: check("UNKNOWN", "Synthetic-only provenance cannot be accepted while target lineage is unresolved."),
     stagingIsolation: check("UNKNOWN", "Staging isolation evidence is incomplete."),
     directConnectionTarget: directTargetCheck(target),
     sameSession,
@@ -690,6 +690,11 @@ export function evaluateStagingReadinessSignalsV1(
     roleMembershipsAbsent: emptyCountCheck(catalog?.roleMembershipCount, "Current-role membership count"),
     defaultAclsAbsent: emptyCountCheck(catalog?.defaultAclCount, "Default ACL count"),
   };
+  const syntheticOnlyProvenance = syntheticOnlyProvenanceCheck(stagingIsolation, root?.sourceSha);
+  checks.syntheticOnlyProvenance = checks.stagingLineage.status === "PASS" ||
+    syntheticOnlyProvenance.status === "FAIL"
+    ? syntheticOnlyProvenance
+    : check("UNKNOWN", "Synthetic-only provenance cannot be accepted while target lineage is unresolved.");
   checks.stagingIsolation = combineChecks(
     [checks.providerBranch, checks.stagingLineage, checks.syntheticOnlyProvenance],
     "Staging lineage and synthetic-only provenance are both verified.",
