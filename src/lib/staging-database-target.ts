@@ -202,6 +202,8 @@ function assertStagingTargetIdentity(databaseUrl: string) {
     parsed.username !== STAGING_MIGRATION_TARGET_MANIFEST.roleName ||
     !parsed.searchParams.has("sslmode") ||
     parsed.searchParams.get("sslmode") !== "verify-full" ||
+    !parsed.searchParams.has("channel_binding") ||
+    parsed.searchParams.get("channel_binding") !== "require" ||
     (endpointParameter !== null && endpointParameter !== STAGING_MIGRATION_TARGET_MANIFEST.endpointId)
   ) {
     throw new Error(

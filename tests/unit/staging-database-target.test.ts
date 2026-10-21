@@ -9,6 +9,7 @@ import {
 
 const directTarget =
   "postgresql://neondb_owner:synthetic-password@ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech:5432/neondb";
+const secureStagingQuery = "?sslmode=verify-full&channel_binding=require";
 
 describe("staging migration target identity guard", () => {
   it("publishes the reviewed identity mapping and stable fingerprint", () => {
@@ -66,11 +67,11 @@ describe("staging migration target identity guard", () => {
   });
 
   it("accepts the exact direct target URL without opening a connection", () => {
-    expect(() => assertStagingMigrationTarget(directTarget + "?sslmode=verify-full")).not.toThrow();
+    expect(() => assertStagingMigrationTarget(directTarget + secureStagingQuery)).not.toThrow();
     expect(() =>
       assertStagingMigrationTarget(
         directTarget +
-          "?sslmode=verify-full&channel_binding=require&endpoint=ep-mute-firefly-azjcru4h",
+          secureStagingQuery + "&endpoint=ep-mute-firefly-azjcru4h",
       ),
     ).not.toThrow();
   });
@@ -80,23 +81,36 @@ describe("staging migration target identity guard", () => {
       directTarget.replace(
         "ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech",
         "wrong-endpoint.c-3.ap-southeast-1.aws.neon.tech",
-      ) + "?sslmode=require",
+      ) + secureStagingQuery,
       directTarget.replace(
         "ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech",
         "ep-mute-firefly-azjcru4h-pooler.c-3.ap-southeast-1.aws.neon.tech",
-      ) + "?sslmode=require",
+      ) + secureStagingQuery,
       directTarget.replace(
         "ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech",
         "staging-db-alias.internal",
-      ) + "?sslmode=require",
-      directTarget.replace("/neondb", "/karturt_stage") + "?sslmode=require",
-      directTarget.replace("neondb_owner", "other_role") + "?sslmode=require",
-      directTarget.replace(":5432/", ":5433/") + "?sslmode=require",
-      directTarget + "?sslmode=require",
-      directTarget.replace("ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech", "ep-mute-firefly-azjcru4h.pg.neon.tech") + "?sslmode=verify-full",
-      "postgresql://neondb_owner:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
-      "postgresql://neondb_owner:synthetic-password@ep-snowy-meadow-a10304d9-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
-      "postgresql://karturt_staging_owner:synthetic-password@ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech:5432/karturt_staging?sslmode=require",
+      ) + secureStagingQuery,
+      directTarget.replace("/neondb", "/karturt_stage") + secureStagingQuery,
+      directTarget.replace("neondb_owner", "other_role") + secureStagingQuery,
+      directTarget.replace(":5432/", ":5433/") + secureStagingQuery,
+      directTarget.replace("ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech", "ep-mute-firefly-azjcru4h.pg.neon.tech") + secureStagingQuery,
+      "postgresql://neondb_owner:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech/neondb" + secureStagingQuery,
+      "postgresql://neondb_owner:synthetic-password@ep-snowy-meadow-a10304d9-pooler.ap-southeast-1.aws.neon.tech/neondb" + secureStagingQuery,
+      "postgresql://karturt_staging_owner:synthetic-password@ep-silent-butterfly-azrflu40.c-3.ap-southeast-1.aws.neon.tech:5432/karturt_staging" + secureStagingQuery,
+    ];
+
+    for (const databaseUrl of invalidUrls) {
+      expect(() => assertStagingMigrationTarget(databaseUrl), databaseUrl).toThrow();
+    }
+  });
+
+  it("requires explicit channel binding in addition to verified TLS", () => {
+    const invalidUrls = [
+      directTarget + "?sslmode=verify-full",
+      directTarget + "?sslmode=verify-full&channel_binding=prefer",
+      directTarget + "?sslmode=verify-full&channel_binding=disable",
+      directTarget + secureStagingQuery + "&channel_binding=require",
+      directTarget + secureStagingQuery + "&channel_binding=disable",
     ];
 
     for (const databaseUrl of invalidUrls) {
@@ -106,14 +120,14 @@ describe("staging migration target identity guard", () => {
 
   it("rejects duplicate or unsupported query parameters and unsafe TLS settings", () => {
     const invalidUrls = [
-      directTarget + "?sslmode=require&sslmode=verify-full",
-      directTarget + "?sslmode=require&endpoint=wrong-endpoint",
-      directTarget + "?sslmode=require&host=localhost",
-      directTarget + "?sslmode=prefer",
-      directTarget + "?sslmode=require&channel_binding=disable",
-      directTarget + "?sslmode=require&endpoint=ep-mute-firefly-azjcru4h&endpoint=ep-mute-firefly-azjcru4h",
-      directTarget + "?sslmode=require&",
-      directTarget + "?&&sslmode=require",
+      directTarget + "?sslmode=verify-full&channel_binding=require&sslmode=verify-full",
+      directTarget + secureStagingQuery + "&endpoint=wrong-endpoint",
+      directTarget + secureStagingQuery + "&host=localhost",
+      directTarget + "?sslmode=prefer&channel_binding=require",
+      directTarget + "?sslmode=verify-full&channel_binding=disable",
+      directTarget + secureStagingQuery + "&endpoint=ep-mute-firefly-azjcru4h&endpoint=ep-mute-firefly-azjcru4h",
+      directTarget + secureStagingQuery + "&",
+      directTarget + "?&sslmode=verify-full&channel_binding=require",
       directTarget + "?",
       directTarget,
     ];
@@ -123,7 +137,7 @@ describe("staging migration target identity guard", () => {
     }
 
     expect(() =>
-      assertDatabaseTargetForEnvironment(directTarget + "?sslmode=require", "staging"),
+      assertDatabaseTargetForEnvironment(directTarget + "?sslmode=require&channel_binding=require", "staging"),
     ).toThrow("reviewed direct target identity manifest");
   });
 
@@ -154,7 +168,7 @@ describe("staging migration target identity guard", () => {
 describe("runtime database target guard", () => {
   it("validates the new staging identity but keeps runtime access closed", () => {
     expect(() =>
-      assertDatabaseTargetForEnvironment(directTarget + "?sslmode=verify-full", "staging"),
+      assertDatabaseTargetForEnvironment(directTarget + secureStagingQuery, "staging"),
     ).toThrow("runtime readiness and verified emptiness are not established");
   });
 
