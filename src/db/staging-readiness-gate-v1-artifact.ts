@@ -197,12 +197,15 @@ function referencedArtifactChecks(
     !sameJson(providerForComparison, rawProvider);
   const branchFields = ["state", "primary", "default", "parent_id", "init_source"] as const;
   const branchMismatch = branchFields.some((name) => field(rawProviderBranch, name) !== field(evaluatedBranch, name));
-  if (!providerArtifact || !isRecord(rawProvider) || !createRequest || !providerReadback || !datasetManifest || !attestation ||
+  const sourceFieldsOmitted = field(createRequest, "sourceFieldsOmitted");
+  const sourceFieldsOmittedArray = Array.isArray(sourceFieldsOmitted) ? sourceFieldsOmitted : null;
+  if (!providerArtifact || !isRecord(rawProvider) || !isRecord(createRequest) || !isRecord(providerReadback) ||
+      !isRecord(datasetManifest) || !isRecord(attestation) ||
       providerMismatch || branchMismatch || !sameJson(field(providerArtifact, "stagingIsolation"), isolation) ||
       !matchesTarget(createRequest) || !matchesTarget(providerReadback) ||
       createRequest.method !== "POST" || createRequest.operation !== "create-project" ||
-      !Array.isArray(createRequest.sourceFieldsOmitted) ||
-      !REQUIRED_OMITTED_LINEAGE_FIELDS.every((name) => createRequest.sourceFieldsOmitted.includes(name)) ||
+      !sourceFieldsOmittedArray ||
+      !REQUIRED_OMITTED_LINEAGE_FIELDS.every((name) => sourceFieldsOmittedArray.includes(name)) ||
       !matchesTarget(datasetManifest) || !matchesTarget(attestation) ||
       datasetManifest.classification !== "SYNTHETIC_ONLY" || attestation.classification !== "SYNTHETIC_ONLY" ||
       !isTrue(datasetManifest.noProductionData) || !isTrue(attestation.noProductionData)) {

@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
-  evaluateStagingReadinessGateV1,
+  evaluateStagingReadinessSignalsV1,
   STAGING_READINESS_PROVIDER_MAX_AGE_MS,
   type StagingReadinessEvidence,
-  type StagingReadinessGateV1Result,
+  type StagingReadinessSignalsV1Result,
   type StagingReadinessState,
 } from "../../src/db/staging-readiness-gate-v1";
 import { STAGING_MIGRATION_TARGET_MANIFEST } from "../../src/lib/staging-database-target";
 
 const nowMs = Date.parse("2026-10-21T10:00:00.000Z");
-type CheckName = keyof StagingReadinessGateV1Result["checks"];
+type CheckName = keyof StagingReadinessSignalsV1Result["checks"];
 type EvidenceMutation = (evidence: StagingReadinessEvidence) => void;
 
 function validEvidence(): StagingReadinessEvidence {
@@ -123,7 +123,7 @@ function withVerifiedIsolation(evidence = validEvidence()): StagingReadinessEvid
 function expectCheck(mutate: EvidenceMutation, name: CheckName, status: StagingReadinessState) {
   const evidence = validEvidence();
   mutate(evidence);
-  expect(evaluateStagingReadinessGateV1(evidence).checks[name].status).toBe(status);
+  expect(evaluateStagingReadinessSignalsV1(evidence).checks[name].status).toBe(status);
 }
 
 function deepFreeze<T>(value: T): T {
@@ -134,37 +134,44 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-describe("Staging Readiness Gate V1", () => {
-  it("passes technical readiness for the exact reviewed target while keeping migration closed without separate authorization", () => {
-    const result = evaluateStagingReadinessGateV1(withVerifiedIsolation());
+describe("Staging Readiness Gate V1 technical signals", () => {
+  it("reports passing technical signals for the exact reviewed target", () => {
+    const result = evaluateStagingReadinessSignalsV1(withVerifiedIsolation());
 
-    expect(result.status).toBe("PASS");
+    expect(result.technicalStatus).toBe("PASS");
     expect(result.checks.stagingLineage.status).toBe("PASS");
     expect(result.checks.syntheticOnlyProvenance.status).toBe("PASS");
     expect(result.checks.stagingIsolation.status).toBe("PASS");
-    expect(result.migrationAllowed).toBe(false);
-    expect(result.authorization.status).toBe("UNKNOWN");
+    expect(result.authorizationCheck.status).toBe("UNKNOWN");
   });
 
-  it("keeps isolation and overall readiness UNKNOWN when no explicit lineage or synthetic-only evidence exists", () => {
-    const result = evaluateStagingReadinessGateV1(validEvidence());
+  it("exposes technical signals without overall readiness or migration permission fields", () => {
+    const result = evaluateStagingReadinessSignalsV1(withVerifiedIsolation());
 
-    expect(result.status).toBe("UNKNOWN");
+    expect(Object.prototype.hasOwnProperty.call(result, "technicalStatus")).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(result, "authorizationCheck")).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(result, "status")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(result, "readiness")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(result, "migrationAllowed")).toBe(false);
+  });
+
+  it("keeps isolation and technical signals UNKNOWN when no explicit lineage or synthetic-only evidence exists", () => {
+    const result = evaluateStagingReadinessSignalsV1(validEvidence());
+
+    expect(result.technicalStatus).toBe("UNKNOWN");
     expect(result.checks.stagingLineage.status).toBe("UNKNOWN");
     expect(result.checks.syntheticOnlyProvenance.status).toBe("UNKNOWN");
     expect(result.checks.stagingIsolation.status).toBe("UNKNOWN");
-    expect(result.migrationAllowed).toBe(false);
   });
 
   it("does not infer isolation from an init_source=parent-data readback", () => {
     const evidence = withVerifiedIsolation();
     evidence.provider!.branch!.init_source = "parent-data";
-    const result = evaluateStagingReadinessGateV1(evidence);
+    const result = evaluateStagingReadinessSignalsV1(evidence);
 
-    expect(result.status).toBe("UNKNOWN");
+    expect(result.technicalStatus).toBe("UNKNOWN");
     expect(result.checks.stagingLineage.status).toBe("UNKNOWN");
     expect(result.checks.stagingIsolation.status).toBe("UNKNOWN");
-    expect(result.migrationAllowed).toBe(false);
   });
 
   it("accepts init_source=parent-data only with verified source-bound root-resolution evidence", () => {
@@ -178,11 +185,10 @@ describe("Staging Readiness Gate V1", () => {
       evidenceReference: "lineage/parent-data-resolution.json",
       evidenceSha256: "e".repeat(64),
     };
-    const result = evaluateStagingReadinessGateV1(evidence);
+    const result = evaluateStagingReadinessSignalsV1(evidence);
 
-    expect(result.status).toBe("PASS");
+    expect(result.technicalStatus).toBe("PASS");
     expect(result.checks.stagingLineage.status).toBe("PASS");
-    expect(result.migrationAllowed).toBe(false);
   });
 
   it("keeps init_source=parent-data UNKNOWN when its resolution is not verified", () => {
@@ -196,45 +202,44 @@ describe("Staging Readiness Gate V1", () => {
       evidenceReference: "lineage/pending.json",
       evidenceSha256: "e".repeat(64),
     };
-    expect(evaluateStagingReadinessGateV1(evidence).checks.stagingLineage.status).toBe("UNKNOWN");
+    expect(evaluateStagingReadinessSignalsV1(evidence).checks.stagingLineage.status).toBe("UNKNOWN");
   });
 
   it("keeps isolation UNKNOWN when its provider lineage snapshot is stale", () => {
     const evidence = withVerifiedIsolation();
     evidence.stagingIsolation!.observedAtUtc = new Date(nowMs - STAGING_READINESS_PROVIDER_MAX_AGE_MS - 1).toISOString();
-    const result = evaluateStagingReadinessGateV1(evidence);
+    const result = evaluateStagingReadinessSignalsV1(evidence);
 
     expect(result.checks.stagingLineage.status).toBe("UNKNOWN");
     expect(result.checks.stagingIsolation.status).toBe("UNKNOWN");
-    expect(result.migrationAllowed).toBe(false);
   });
 
   it("accepts the exact 120-second provider-readback age boundary", () => {
     const evidence = validEvidence();
     evidence.provider!.observedAtUtc = new Date(nowMs - STAGING_READINESS_PROVIDER_MAX_AGE_MS).toISOString();
 
-    expect(evaluateStagingReadinessGateV1(evidence).checks.providerFreshness.status).toBe("PASS");
+    expect(evaluateStagingReadinessSignalsV1(evidence).checks.providerFreshness.status).toBe("PASS");
   });
 
   it("marks provider metadata older than 120 seconds as UNKNOWN", () => {
     const evidence = validEvidence();
     evidence.provider!.observedAtUtc = new Date(nowMs - STAGING_READINESS_PROVIDER_MAX_AGE_MS - 1).toISOString();
 
-    expect(evaluateStagingReadinessGateV1(evidence).checks.providerFreshness.status).toBe("UNKNOWN");
+    expect(evaluateStagingReadinessSignalsV1(evidence).checks.providerFreshness.status).toBe("UNKNOWN");
   });
 
   it("rejects a provider timestamp too far in the future as UNKNOWN", () => {
     const evidence = validEvidence();
     evidence.provider!.observedAtUtc = new Date(nowMs + 60_001).toISOString();
 
-    expect(evaluateStagingReadinessGateV1(evidence).checks.providerFreshness.status).toBe("UNKNOWN");
+    expect(evaluateStagingReadinessSignalsV1(evidence).checks.providerFreshness.status).toBe("UNKNOWN");
   });
 
   it("treats a pg_stat_ssl false result as a backend diagnostic and never as client TLS proof", () => {
     const evidence = withVerifiedIsolation();
-    const result = evaluateStagingReadinessGateV1(evidence);
+    const result = evaluateStagingReadinessSignalsV1(evidence);
 
-    expect(result.status).toBe("PASS");
+    expect(result.technicalStatus).toBe("PASS");
     expect(result.checks.libpqSslInUse.status).toBe("PASS");
     expect(result.diagnostics.pgStatSsl).toBe("TLS_INACTIVE_ON_BACKEND");
     expect(result.diagnostics.clientTlsEvidenceSource).toBe("LIBPQ_SAME_SESSION_ONLY");
@@ -246,25 +251,24 @@ describe("Staging Readiness Gate V1", () => {
     const evidence = withVerifiedIsolation();
     evidence.connection!.pgStatSsl!.ssl = true;
     evidence.connection!.libpq!.sslInUse = false;
-    const result = evaluateStagingReadinessGateV1(evidence);
+    const result = evaluateStagingReadinessSignalsV1(evidence);
 
-    expect(result.status).toBe("FAIL");
+    expect(result.technicalStatus).toBe("FAIL");
     expect(result.checks.libpqSslInUse.status).toBe("FAIL");
     expect(result.diagnostics.pgStatSsl).toBe("TLS_ACTIVE_ON_BACKEND");
-    expect(result.migrationAllowed).toBe(false);
   });
 
   it("reports a pg_stat_ssl session mismatch diagnostically without changing libpq readiness", () => {
     const evidence = withVerifiedIsolation();
     evidence.connection!.pgStatSsl!.sessionId = "different-diagnostic-session";
-    const result = evaluateStagingReadinessGateV1(evidence);
+    const result = evaluateStagingReadinessSignalsV1(evidence);
 
-    expect(result.status).toBe("PASS");
+    expect(result.technicalStatus).toBe("PASS");
     expect(result.checks.sameSession.status).toBe("PASS");
     expect(result.diagnostics.pgStatSsl).toBe("SESSION_MISMATCH");
   });
 
-  it("keeps readiness independent from migration authorization and fails closed without a pinned trust anchor", () => {
+  it("reports authorization separately and fails closed without a pinned trust anchor", () => {
     const evidence = withVerifiedIsolation();
     evidence.authorization = {
       artifact: {
@@ -281,32 +285,29 @@ describe("Staging Readiness Gate V1", () => {
         signature: "AA==",
       },
     };
-    const result = evaluateStagingReadinessGateV1(evidence);
+    const result = evaluateStagingReadinessSignalsV1(evidence);
 
-    expect(result.status).toBe("PASS");
-    expect(result.authorization.status).toBe("UNKNOWN");
-    expect(result.authorization.reason).toContain("No trusted");
-    expect(result.migrationAllowed).toBe(false);
+    expect(result.technicalStatus).toBe("PASS");
+    expect(result.authorizationCheck.status).toBe("UNKNOWN");
+    expect(result.authorizationCheck.reason).toContain("No trusted");
   });
 
-  it("fails malformed authorization evidence independently from technical readiness", () => {
+  it("fails malformed authorization evidence independently from technical signals", () => {
     const evidence = withVerifiedIsolation();
     evidence.authorization = { artifact: {} as never };
-    const result = evaluateStagingReadinessGateV1(evidence);
+    const result = evaluateStagingReadinessSignalsV1(evidence);
 
-    expect(result.status).toBe("PASS");
-    expect(result.authorization.status).toBe("FAIL");
-    expect(result.migrationAllowed).toBe(false);
+    expect(result.technicalStatus).toBe("PASS");
+    expect(result.authorizationCheck.status).toBe("FAIL");
   });
 
-  it("never opens migration when the staging isolation gate fails", () => {
+  it("fails technical signals when the staging isolation checks fail", () => {
     const evidence = withVerifiedIsolation();
     evidence.stagingIsolation!.lineage!.branchParentId = "br-inherited";
-    const result = evaluateStagingReadinessGateV1(evidence);
+    const result = evaluateStagingReadinessSignalsV1(evidence);
 
-    expect(result.status).toBe("FAIL");
+    expect(result.technicalStatus).toBe("FAIL");
     expect(result.checks.stagingIsolation.status).toBe("FAIL");
-    expect(result.migrationAllowed).toBe(false);
   });
 
   it("does not mutate or write to supplied evidence", () => {
@@ -315,13 +316,12 @@ describe("Staging Readiness Gate V1", () => {
 
     let didThrow = false;
     try {
-      evaluateStagingReadinessGateV1(evidence);
+      evaluateStagingReadinessSignalsV1(evidence);
     } catch {
       didThrow = true;
     }
     expect(didThrow).toBe(false);
     expect(evidence).toEqual(before);
-    expect(evaluateStagingReadinessGateV1(evidence).migrationAllowed).toBe(false);
   });
 
   const unknownCases: Array<{ name: string; check: CheckName; mutate: EvidenceMutation }> = [
@@ -414,38 +414,37 @@ describe("Staging Readiness Gate V1", () => {
   it("returns UNKNOWN when the connection evidence is absent", () => {
     const evidence = validEvidence();
     evidence.connection = null;
-    const result = evaluateStagingReadinessGateV1(evidence);
+    const result = evaluateStagingReadinessSignalsV1(evidence);
 
-    expect(result.status).toBe("UNKNOWN");
+    expect(result.technicalStatus).toBe("UNKNOWN");
     expect(result.checks.directConnectionTarget.status).toBe("UNKNOWN");
     expect(result.checks.sameSession.status).toBe("UNKNOWN");
-    expect(result.migrationAllowed).toBe(false);
   });
 
   it("returns UNKNOWN for invalid catalog counts instead of treating them as empty", () => {
     for (const count of [-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       const evidence = validEvidence();
       evidence.connection!.catalog!.applicationRelationCount = count;
-      expect(evaluateStagingReadinessGateV1(evidence).checks.applicationRelationsEmpty.status).toBe("UNKNOWN");
+      expect(evaluateStagingReadinessSignalsV1(evidence).checks.applicationRelationsEmpty.status).toBe("UNKNOWN");
     }
   });
 
   it("fails lineage when an explicit project or branch parent is present", () => {
     const evidence = withVerifiedIsolation();
     evidence.stagingIsolation!.lineage!.projectParentId = "parent-project";
-    expect(evaluateStagingReadinessGateV1(evidence).checks.stagingLineage.status).toBe("FAIL");
+    expect(evaluateStagingReadinessSignalsV1(evidence).checks.stagingLineage.status).toBe("FAIL");
   });
 
   it("fails lineage evidence bound to a different target project", () => {
     const evidence = withVerifiedIsolation();
     evidence.stagingIsolation!.targetProjectId = "different-project";
-    expect(evaluateStagingReadinessGateV1(evidence).checks.stagingLineage.status).toBe("FAIL");
+    expect(evaluateStagingReadinessSignalsV1(evidence).checks.stagingLineage.status).toBe("FAIL");
   });
 
   it("keeps lineage UNKNOWN when provider omits parent fields instead of returning explicit nulls", () => {
     const evidence = withVerifiedIsolation();
     evidence.stagingIsolation!.lineage!.branchParentIdFieldObserved = false;
-    const result = evaluateStagingReadinessGateV1(evidence);
+    const result = evaluateStagingReadinessSignalsV1(evidence);
 
     expect(result.checks.stagingLineage.status).toBe("UNKNOWN");
     expect(result.checks.stagingIsolation.status).toBe("UNKNOWN");
@@ -454,17 +453,17 @@ describe("Staging Readiness Gate V1", () => {
   it("fails when the create request does not attest omission of all source and clone fields", () => {
     const evidence = withVerifiedIsolation();
     evidence.stagingIsolation!.lineage!.sourceFieldsOmitted = ["parent_id", "clone"];
-    expect(evaluateStagingReadinessGateV1(evidence).checks.stagingLineage.status).toBe("FAIL");
+    expect(evaluateStagingReadinessSignalsV1(evidence).checks.stagingLineage.status).toBe("FAIL");
   });
 
   it("fails synthetic provenance that is source-mismatched or includes production data", () => {
     const wrongSource = withVerifiedIsolation();
     wrongSource.stagingIsolation!.syntheticOnly!.sourceSha = "e".repeat(40);
-    expect(evaluateStagingReadinessGateV1(wrongSource).checks.syntheticOnlyProvenance.status).toBe("FAIL");
+    expect(evaluateStagingReadinessSignalsV1(wrongSource).checks.syntheticOnlyProvenance.status).toBe("FAIL");
 
     const productionData = withVerifiedIsolation();
     productionData.stagingIsolation!.syntheticOnly!.noProductionData = false;
-    expect(evaluateStagingReadinessGateV1(productionData).checks.syntheticOnlyProvenance.status).toBe("FAIL");
+    expect(evaluateStagingReadinessSignalsV1(productionData).checks.syntheticOnlyProvenance.status).toBe("FAIL");
   });
 
   it("prioritizes any failed safety check over missing evidence", () => {
@@ -472,6 +471,6 @@ describe("Staging Readiness Gate V1", () => {
     evidence.provider!.organizationId = "wrong-org";
     evidence.connection!.catalog!.standaloneApplicationTypeCount = null;
 
-    expect(evaluateStagingReadinessGateV1(evidence).status).toBe("FAIL");
+    expect(evaluateStagingReadinessSignalsV1(evidence).technicalStatus).toBe("FAIL");
   });
 });

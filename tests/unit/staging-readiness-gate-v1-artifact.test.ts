@@ -111,6 +111,9 @@ function createEvidenceBundle(bundleSourceSha = sourceSha, observedAtMs = nowMs)
       createRequestOperation: "create-project",
       createRequestReference: "lineage/create-request.json",
       createRequestSha256: references.createRequestSha256,
+      sourceFieldsOmitted: ["parent_id", "parent_project_id", "source_project_id", "clone", "import", "restore"],
+      verificationSource: "provider-api-create-request-and-readback",
+      verificationStatus: "VERIFIED",
       providerReadbackReference: "lineage/provider-readback.json",
       providerReadbackSha256: references.providerReadbackSha256,
       projectParentIdFieldObserved: true,
@@ -143,6 +146,14 @@ function createEvidenceBundle(bundleSourceSha = sourceSha, observedAtMs = nowMs)
     sourceSha: bundleSourceSha,
     provider: { ...provider, observedAtUtc: providerArtifact.provider.observedAtUtc, evidenceSha256: providerSha256 },
     stagingIsolation: isolation,
+    connection: {
+      sessionId: null,
+      target: null,
+      libpq: null,
+      server: null,
+      catalog: null,
+      pgStatSsl: null,
+    },
   };
   return { directory: temporaryDirectory, evidence };
 }
@@ -220,7 +231,7 @@ describe("Staging Readiness Gate V1 artifact boundary", () => {
       bundle.directory,
       nowMs,
     );
-    expect(combined.readiness).not.toBe("PASS");
+    expect(combined.readiness === "PASS").toBe(false);
     expect(combined.migrationAllowed).toBe(false);
     expect(combined.checks.providerCaptureAuthentication.status).toBe("UNKNOWN");
     expect(combined.checks.databaseProbeAuthentication.status).toBe("UNKNOWN");
@@ -235,8 +246,8 @@ describe("Staging Readiness Gate V1 artifact boundary", () => {
     });
     expect(summary).toContain(`Staging Readiness Gate V1 evaluation: ${combined.readiness}\n`);
     expect(summary).toContain("migrationAllowed=false\n");
-    expect(summary).not.toContain("evaluation: PASS");
-    expect(summary).not.toContain("migrationAllowed=true");
+    expect(summary.includes("evaluation: PASS")).toBe(false);
+    expect(summary.includes("migrationAllowed=true")).toBe(false);
   });
 
   it("runs the evaluator CLI and prints the same fail-closed status as its report", () => {
@@ -305,7 +316,7 @@ describe("Staging Readiness Gate V1 artifact boundary", () => {
     expect(report.checks.databaseProbeAuthentication.status).toBe("UNKNOWN");
     expect(stdout).toContain(`Staging Readiness Gate V1 evaluation: ${report.readiness}\n`);
     expect(stdout).toContain(`migrationAllowed=${report.migrationAllowed}\n`);
-    expect(stdout).not.toContain("Staging Readiness Gate V1 evaluation: PASS");
-    expect(stdout).not.toContain("migrationAllowed=true");
+    expect(stdout.includes("Staging Readiness Gate V1 evaluation: PASS")).toBe(false);
+    expect(stdout.includes("migrationAllowed=true")).toBe(false);
   });
 });

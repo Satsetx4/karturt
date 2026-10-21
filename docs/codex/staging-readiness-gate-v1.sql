@@ -105,6 +105,7 @@ SELECT pg_catalog.json_build_object(
     FROM pg_catalog.pg_extension AS extension
   ), '[]'::jsonb),
   'role_membership_count', (
+    -- This is scoped to the current target database role, not a global role inventory.
     SELECT count(*)::bigint
     FROM pg_catalog.pg_auth_members AS membership
     JOIN pg_catalog.pg_roles AS member_role

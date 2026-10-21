@@ -1,5 +1,5 @@
 import {
-  evaluateStagingReadinessGateV1,
+  evaluateStagingReadinessSignalsV1,
   type StagingReadinessEvidence,
   type StagingReadinessState,
 } from "./staging-readiness-gate-v1";
@@ -16,7 +16,7 @@ export function evaluateDatabaseProbeArtifact(
 ) {
   const databaseProbeFreshness = databaseProbeFreshnessCheck(probeArtifact, nowMs);
   const referencedEvidenceIntegrity = referencedEvidenceIntegrityCheck(evidence, evidenceDirectory);
-  const evaluation = evaluateStagingReadinessGateV1({ ...evidence, nowMs });
+  const evaluation = evaluateStagingReadinessSignalsV1({ ...evidence, nowMs });
   const providerCaptureAuthentication = {
     status: "UNKNOWN" as const,
     reason: "Provider and isolation artifacts are unsigned self-assertions; the V1 evaluator has no trusted capture attestation to verify.",
@@ -68,7 +68,7 @@ export function evaluateDatabaseProbeArtifact(
     referencedEvidenceIntegrity,
   };
   const states: StagingReadinessState[] = [
-    evaluation.status,
+    evaluation.technicalStatus,
     providerCaptureAuthentication.status,
     databaseProbeAuthentication.status,
     databaseProbeFreshness.status,
@@ -79,8 +79,8 @@ export function evaluateDatabaseProbeArtifact(
     : states.includes("UNKNOWN") ? "UNKNOWN" : "PASS";
   return {
     readiness,
-    migrationAllowed: readiness === "PASS" && evaluation.migrationAllowed,
-    authorization: evaluation.authorization,
+    migrationAllowed: readiness === "PASS" && evaluation.authorizationCheck.status === "PASS",
+    authorization: evaluation.authorizationCheck,
     checks,
     diagnostics: evaluation.diagnostics,
   };

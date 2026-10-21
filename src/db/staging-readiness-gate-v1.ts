@@ -135,9 +135,9 @@ export type StagingReadinessEvidence = {
   } | null;
 };
 
-export type StagingReadinessGateV1Result = {
-  status: StagingReadinessState;
-  migrationAllowed: boolean;
+export type StagingReadinessSignalsV1Result = {
+  /** Rollup of technical evidence checks only; this is not a readiness or authorization decision. */
+  technicalStatus: StagingReadinessState;
   checks: {
     providerFreshness: StagingReadinessCheck;
     sourceSha: StagingReadinessCheck;
@@ -168,7 +168,7 @@ export type StagingReadinessGateV1Result = {
     roleMembershipsAbsent: StagingReadinessCheck;
     defaultAclsAbsent: StagingReadinessCheck;
   };
-  authorization: StagingReadinessCheck;
+  authorizationCheck: StagingReadinessCheck;
   diagnostics: {
     pgStatSsl: "UNKNOWN" | "SESSION_MISMATCH" | "TLS_ACTIVE_ON_BACKEND" | "TLS_INACTIVE_ON_BACKEND";
     clientTlsEvidenceSource: "LIBPQ_SAME_SESSION_ONLY";
@@ -618,16 +618,17 @@ function resultStatus(checks: Record<string, StagingReadinessCheck>): StagingRea
 }
 
 /**
- * Evaluates sanitized, already-collected evidence only. It never creates a
- * database client, reads environment variables or secret files, runs SQL, or
- * performs writes. Authorization is checked separately from technical
- * readiness and must be supplied as a signed artifact with its public trust
- * anchor. `pg_stat_ssl` is retained only as a backend-leg diagnostic; it is
+ * Evaluates sanitized, already-collected technical evidence only. Its
+ * `technicalStatus` is a rollup of technical checks, not an overall staging
+ * readiness decision. The separate `authorizationCheck` is informative and
+ * never grants migration permission. This function never creates a database
+ * client, reads environment variables or secret files, runs SQL, or performs
+ * writes. `pg_stat_ssl` is retained only as a backend-leg diagnostic; it is
  * never treated as evidence of the libpq client's TLS state or given a cause.
  */
-export function evaluateStagingReadinessGateV1(
+export function evaluateStagingReadinessSignalsV1(
   evidence: StagingReadinessEvidence,
-): StagingReadinessGateV1Result {
+): StagingReadinessSignalsV1Result {
   const root = record(evidence);
   const provider = record(root?.provider);
   const stagingIsolation = record(root?.stagingIsolation);
@@ -679,17 +680,16 @@ export function evaluateStagingReadinessGateV1(
   checks.stagingIsolation = combineChecks(
     [checks.providerBranch, checks.stagingLineage, checks.syntheticOnlyProvenance],
     "Staging lineage and synthetic-only provenance are both verified.",
-    "Staging isolation is not proven; migration readiness remains closed.",
+    "Staging isolation is not proven; the technical isolation check remains UNKNOWN.",
   );
-  const status = resultStatus(checks);
-  const authorization = authorizationCheck(root?.authorization, root?.sourceSha, root?.nowMs);
+  const technicalStatus = resultStatus(checks);
+  const separateAuthorizationCheck = authorizationCheck(root?.authorization, root?.sourceSha, root?.nowMs);
   const pgStatSslState = pgStatSslDiagnostic(connection, pgStatSsl);
 
   return {
-    status,
-    migrationAllowed: status === "PASS" && authorization.status === "PASS",
+    technicalStatus,
     checks,
-    authorization,
+    authorizationCheck: separateAuthorizationCheck,
     diagnostics: {
       pgStatSsl: pgStatSslState,
       clientTlsEvidenceSource: "LIBPQ_SAME_SESSION_ONLY",
