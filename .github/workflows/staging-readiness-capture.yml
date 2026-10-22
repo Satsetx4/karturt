@@ -145,7 +145,9 @@ jobs:
           if ($env:EXPECTED_APPROVED_SHA -cnotmatch '^[a-f0-9]{40}$' -or
               $env:PREFLIGHT_CANDIDATE_SHA -cnotmatch '^[a-f0-9]{40}$' -or
               $env:EXPECTED_APPROVED_SHA -cne $env:PREFLIGHT_CANDIDATE_SHA -or
-              $env:EVENT_SHA -cnotmatch '^[a-f0-9]{40}
+              $env:EVENT_SHA -cnotmatch '^[a-f0-9]{40}$' -or
+              $env:EVENT_SHA -cne $env:EXPECTED_APPROVED_SHA -or
+              $env:GITHUB_SHA -cne $env:EVENT_SHA) {
             throw 'CAPTURE_STOP: PROTECTED_APPROVED_SOURCE_SHA_MISMATCH'
           }
           if ($env:EXPECTED_LAUNCHER_SHA -cnotmatch '^[a-f0-9]{40}$' -or
