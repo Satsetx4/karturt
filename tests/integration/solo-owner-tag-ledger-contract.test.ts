@@ -19,6 +19,7 @@ const policy: SoloOwnerTagLedgerPolicy = {
   ownerId: "304263836",
   ledgerRepository,
   ledgerRepositoryId: 900000001,
+  ledgerCommitSha: "e".repeat(40),
   rulesetId: 900000002,
   rulesetName: "Protect Solo Owner Used Ticket Tags",
 };
@@ -107,6 +108,13 @@ function createFakeTransport() {
       rulesetRead += 1;
       return rulesetFactory(rulesetRead);
     },
+    getCommit: async (repository, sha) => {
+      calls.push("ledger-commit-read");
+      targets.push(repository);
+      return repository === ledgerRepository && sha === policy.ledgerCommitSha
+        ? { status: 200, body: { sha } }
+        : { status: 404, body: {} };
+    },
     createAnnotatedTagObject: async (input) => {
       calls.push("tag-create");
       targets.push(input.repository);
@@ -181,7 +189,7 @@ async function denied(
 }
 
 describe("Solo Owner separate tag-ledger protocol (offline injected transport)", () => {
-  it("creates an annotated object, exact candidate ref, trusted readback, and remains explicitly untrusted", async () => {
+  it("targets the verified ledger commit while retaining the application candidate as receipt metadata", async () => {
     const fake = createFakeTransport();
     const result = await reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport);
 
@@ -191,17 +199,65 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
     expect(result.liveRulesetBehaviorVerified).toBe(false);
     expect(result.runtimeEnableAllowed).toBe(false);
     expect(fake.calls).toEqual([
-      "scope", "ruleset", "tag-create", "ref-create", "ref-read", "tag-read", "scope", "ruleset",
+      "scope",
+      "ruleset",
+      "ledger-commit-read",
+      "tag-create",
+      "ref-create",
+      "ref-read",
+      "tag-read",
+      "scope",
+      "ruleset",
     ]);
-    expect(fake.targets).toEqual(Array(6).fill(ledgerRepository));
+    expect(fake.targets).toEqual(Array(7).fill(ledgerRepository));
     expect(result.tagRef).toMatch(/^refs\/tags\/karturt-solo\/used\/v1\/[a-f0-9]{64}$/);
     expect(fake.refs.get(result.tagRef)).toBe(result.tagObjectSha);
     expect(result.receipt.ticketDigest).toHaveLength(64);
     expect(JSON.stringify(result.receipt)).not.toContain(claim().ticket);
-    const storedMessage = [...fake.objects.values()][0]?.message ?? "";
+    const storedTag = [...fake.objects.values()][0];
+    expect(storedTag?.object).toBe(policy.ledgerCommitSha);
+    expect(storedTag?.object).not.toBe(claim().candidateSha);
+    expect(result.receipt.candidateSha).toBe(claim().candidateSha);
+    const storedMessage = storedTag?.message ?? "";
     expect(storedMessage).not.toContain(claim().ticket);
     expect(storedMessage).toContain(result.receipt.ticketDigest);
+    expect(storedMessage).toContain(claim().candidateSha);
   });
+
+  it("rejects a malformed ledger commit SHA before any transport call", async () => {
+    const fake = createFakeTransport();
+    await denied(
+      reserveSoloOwnerTicketInTagLedger(
+        { ...policy, ledgerCommitSha: "not-a-commit-sha" },
+        claim(),
+        fake.transport,
+      ),
+      "LEDGER_TARGET_COMMIT_SHA_INVALID",
+    );
+    expect(fake.calls).toEqual([]);
+  });
+
+  it.each([
+    [404, {}, "LEDGER_TARGET_COMMIT_UNAVAILABLE"],
+    [200, { sha: "f".repeat(40) }, "LEDGER_TARGET_COMMIT_MISMATCH"],
+    [200, {}, "LEDGER_TARGET_COMMIT_MISMATCH"],
+  ] as const)(
+    "rejects a missing or mismatched ledger commit before creating tag data (status %i)",
+    async (status, body, code) => {
+      const fake = createFakeTransport();
+      fake.transport.getCommit = async (repository, sha) => {
+        fake.calls.push("ledger-commit-read");
+        fake.targets.push(repository);
+        expect(repository).toBe(ledgerRepository);
+        expect(sha).toBe(policy.ledgerCommitSha);
+        return { status, body };
+      };
+      await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), code);
+      expect(fake.calls).toEqual(["scope", "ruleset", "ledger-commit-read"]);
+      expect(fake.objects.size).toBe(0);
+      expect(fake.refs.size).toBe(0);
+    },
+  );
 
   it("rejects sequential duplicate use even when run ID and source SHA change", async () => {
     const fake = createFakeTransport();
@@ -384,7 +440,7 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
       };
     };
     await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "TAG_OBJECT_RESPONSE_MISMATCH");
-    expect(fake.calls).toEqual(["scope", "ruleset", "tag-create"]);
+    expect(fake.calls).toEqual(["scope", "ruleset", "ledger-commit-read", "tag-create"]);
     expect(fake.refs.size).toBe(0);
   });
 
@@ -396,7 +452,7 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
         return { status, body: {} };
       };
       await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "TICKET_ALREADY_CONSUMED_OR_REF_CONFLICT");
-      expect(fake.calls).toEqual(["scope", "ruleset", "tag-create", "ref-create"]);
+      expect(fake.calls).toEqual(["scope", "ruleset", "ledger-commit-read", "tag-create", "ref-create"]);
       expect(fake.objects.size).toBe(1); // An unreferenced object may remain.
     }
   });
@@ -408,7 +464,7 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
       return { status: 403, body: {} };
     };
     await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "LEDGER_WRITER_UNAUTHORIZED");
-    expect(fake.calls).toEqual(["scope", "ruleset", "tag-create", "ref-create"]);
+    expect(fake.calls).toEqual(["scope", "ruleset", "ledger-commit-read", "tag-create", "ref-create"]);
   });
 
   it("treats a lost or ambiguous create-ref response as indeterminate and never retries", async () => {
@@ -418,7 +474,7 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
       throw new Error("synthetic connection loss after request send");
     };
     await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "REF_CREATE_INDETERMINATE");
-    expect(fake.calls).toEqual(["scope", "ruleset", "tag-create", "ref-create"]);
+    expect(fake.calls).toEqual(["scope", "ruleset", "ledger-commit-read", "tag-create", "ref-create"]);
     expect(fake.refs.size).toBe(0);
   });
 
@@ -431,7 +487,7 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
         return { status, body: {} };
       };
       await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "REF_CREATE_INDETERMINATE");
-      expect(fake.calls).toEqual(["scope", "ruleset", "tag-create", "ref-create"]);
+      expect(fake.calls).toEqual(["scope", "ruleset", "ledger-commit-read", "tag-create", "ref-create"]);
       expect(fake.refs.size).toBe(0);
     },
   );
@@ -444,7 +500,7 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
       return { status: 503, body: {} };
     };
     await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "REF_CREATE_INDETERMINATE");
-    expect(fake.calls).toEqual(["scope", "ruleset", "tag-create", "ref-create"]);
+    expect(fake.calls).toEqual(["scope", "ruleset", "ledger-commit-read", "tag-create", "ref-create"]);
     expect(fake.refs.size).toBe(1); // The server may have committed before the ambiguous response.
   });
 
@@ -455,7 +511,7 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
       return { status: 400, body: {} };
     };
     await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "REF_CREATE_REJECTED");
-    expect(fake.calls).toEqual(["scope", "ruleset", "tag-create", "ref-create"]);
+    expect(fake.calls).toEqual(["scope", "ruleset", "ledger-commit-read", "tag-create", "ref-create"]);
   });
 
   it("treats an ambiguous annotated-tag create status as indeterminate", async () => {
@@ -465,7 +521,7 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
       return { status: 408, body: {} };
     };
     await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "TAG_OBJECT_CREATE_INDETERMINATE");
-    expect(fake.calls).toEqual(["scope", "ruleset", "tag-create"]);
+    expect(fake.calls).toEqual(["scope", "ruleset", "ledger-commit-read", "tag-create"]);
     expect(fake.refs.size).toBe(0);
   });
 

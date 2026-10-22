@@ -55,6 +55,8 @@ export type SoloOwnerTagLedgerPolicy = {
   ownerId: string;
   ledgerRepository: string;
   ledgerRepositoryId: number;
+  /** Existing commit SHA resolved from the ledger repository before any write. */
+  ledgerCommitSha: string;
   rulesetId: number;
   rulesetName: string;
 };
@@ -148,6 +150,8 @@ export interface SoloOwnerTagLedgerTransport {
   inspectWriterScope(): Promise<WriterScopeReadback>;
   /** Must read every applicable repository/parent ruleset, including pagination. */
   listRulesets(repository: string): Promise<RulesetReadback>;
+  /** Must confirm this commit exists in the ledger repository before any write. */
+  getCommit(repository: string, sha: string): Promise<GitHubApiResponse>;
   createAnnotatedTagObject(input: AnnotatedTagObjectInput): Promise<GitHubApiResponse>;
   createReference(input: GitReferenceInput): Promise<GitHubApiResponse>;
   getReference(repository: string, ref: string): Promise<GitHubApiResponse>;
@@ -169,6 +173,9 @@ function validatePolicy(policy: SoloOwnerTagLedgerPolicy): void {
       policy.rulesetId <= 0 ||
       policy.rulesetName.length === 0) {
     deny("SEPARATE_LEDGER_POLICY_INVALID");
+  }
+  if (!SHA_PATTERN.test(policy.ledgerCommitSha)) {
+    deny("LEDGER_TARGET_COMMIT_SHA_INVALID");
   }
 }
 
@@ -295,6 +302,15 @@ function requireRecord(value: unknown, code: string): JsonRecord {
   return value;
 }
 
+function validateLedgerCommitLookup(response: GitHubApiResponse, expectedSha: string): void {
+  if (response.status === 401 || response.status === 403) deny("LEDGER_TARGET_COMMIT_UNAUTHORIZED");
+  if (response.status !== 200) deny("LEDGER_TARGET_COMMIT_UNAVAILABLE");
+  const body = requireRecord(response.body, "LEDGER_TARGET_COMMIT_RESPONSE_INVALID");
+  if (typeof body.sha !== "string" || !SHA_PATTERN.test(body.sha) || body.sha !== expectedSha) {
+    deny("LEDGER_TARGET_COMMIT_MISMATCH");
+  }
+}
+
 function isAmbiguousWriteStatus(status: number): boolean {
   return !Number.isInteger(status) ||
     status < 200 ||
@@ -361,7 +377,7 @@ function validateTagReadback(
   tagObjectSha: string,
   tagName: string,
   message: string,
-  candidateSha: string,
+  ledgerCommitSha: string,
 ): void {
   if (response.status !== 200) deny("TRUSTED_TAG_OBJECT_READBACK_FAILED");
   const body = requireRecord(response.body, "TRUSTED_TAG_OBJECT_READBACK_INVALID");
@@ -369,7 +385,7 @@ function validateTagReadback(
   if (body.sha !== tagObjectSha ||
       body.tag !== tagName ||
       body.message !== message ||
-      object.sha !== candidateSha ||
+      object.sha !== ledgerCommitSha ||
       object.type !== "commit") {
     deny("TRUSTED_TAG_OBJECT_READBACK_MISMATCH");
   }
@@ -441,13 +457,21 @@ export async function reserveSoloOwnerTicketInTagLedger(
   }
   const rulesFingerprintBefore = verifyRuleset(policy, rulesBefore);
 
+  let ledgerCommitResponse: GitHubApiResponse;
+  try {
+    ledgerCommitResponse = await transport.getCommit(policy.ledgerRepository, policy.ledgerCommitSha);
+  } catch {
+    deny("LEDGER_TARGET_COMMIT_UNAVAILABLE");
+  }
+  validateLedgerCommitLookup(ledgerCommitResponse, policy.ledgerCommitSha);
+
   let tagObjectResponse: GitHubApiResponse;
   try {
     tagObjectResponse = await transport.createAnnotatedTagObject({
       repository: policy.ledgerRepository,
       tag: tagName,
       message,
-      object: claim.candidateSha,
+      object: policy.ledgerCommitSha,
       type: "commit",
     });
   } catch {
@@ -464,7 +488,7 @@ export async function reserveSoloOwnerTicketInTagLedger(
   }
   const tagObjectBody = requireRecord(tagObjectResponse.body, "TAG_OBJECT_RESPONSE_INVALID");
   const tagObjectSha = typeof tagObjectBody.sha === "string" ? tagObjectBody.sha : "";
-  validateTagObject(tagObjectResponse, tagObjectSha, tagName, message, claim.candidateSha);
+  validateTagObject(tagObjectResponse, tagObjectSha, tagName, message, policy.ledgerCommitSha);
 
   let refCreateResponse: GitHubApiResponse;
   try {
@@ -494,7 +518,7 @@ export async function reserveSoloOwnerTicketInTagLedger(
   } catch {
     deny("TRUSTED_TAG_OBJECT_READBACK_FAILED");
   }
-  validateTagReadback(tagReadback, tagObjectSha, tagName, message, claim.candidateSha);
+  validateTagReadback(tagReadback, tagObjectSha, tagName, message, policy.ledgerCommitSha);
 
   let scopeAfter: WriterScopeReadback;
   try {
