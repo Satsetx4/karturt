@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assessSoloOwnerLedgerRulesets, SOLO_OWNER_LEDGER_REF,
+  SOLO_OWNER_LEDGER_RULESET_ID, SOLO_OWNER_LEDGER_RULESET_NAME,
 } from "../../scripts/lib/solo-owner-ledger-rulesets";
 
 const observedMainOnly = () => ([{
@@ -12,7 +13,7 @@ const observedMainOnly = () => ([{
 }]);
 
 const directBranchRule = () => ([{
-  id: 42, name: "ledger-protect", target: "branch", enforcement: "active",
+  id: SOLO_OWNER_LEDGER_RULESET_ID, name: SOLO_OWNER_LEDGER_RULESET_NAME, target: "branch", enforcement: "active",
   bypass_actors: [],
   conditions: { ref_name: { include: [SOLO_OWNER_LEDGER_REF], exclude: [] } },
   rules: [{ type: "deletion" }, { type: "non_fast_forward" }],
@@ -54,4 +55,37 @@ describe("Solo Owner ledger branch ruleset risk (offline only)", () => {
       expect(result.safeForSecretBearingCapture).toBe(false);
     },
   );
+  it("recognizes the actual, explicitly pinned active ledger ruleset readback, not as append-only", () => {
+    const actualReadback = [
+      ...observedMainOnly(),
+      {
+        id: 25623088,
+        name: "Protect Solo Owner Ledger",
+        source_type: "Repository",
+        target: "branch",
+        enforcement: "active",
+        bypass_actors: [],
+        conditions: { ref_name: { include: ["refs/heads/audit/solo-owner-approval-ledger"], exclude: [] } },
+        rules: [{ type: "deletion" }, { type: "non_fast_forward" }],
+      },
+    ];
+    expect(assessSoloOwnerLedgerRulesets(actualReadback)).toMatchObject({
+      branchDeletionAndForcePushProtected: true,
+      appendOnlyProven: false,
+      branchLimitedWriteTokenProven: false,
+      safeForSecretBearingCapture: false,
+    });
+  });
+  it.each([
+    ["wrong ruleset ID", { id: 42 }],
+    ["wrong ruleset name", { name: "Fake Audit Ledger" }],
+    ["removed bypass metadata", { bypass_actors: undefined }],
+    ["removed one of the protections", { rules: [{ type: "deletion" }] }],
+  ])("denies %s even if a branch rule apparently matches", (_title, mutate) => {
+    const input = [{ ...directBranchRule()[0], ...mutate }];
+    const assessed = assessSoloOwnerLedgerRulesets(input);
+    expect(assessed.branchDeletionAndForcePushProtected).toBe(false);
+    expect(assessed.safeForSecretBearingCapture).toBe(false);
+  });
+
 });

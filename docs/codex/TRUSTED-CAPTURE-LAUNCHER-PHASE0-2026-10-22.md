@@ -87,3 +87,11 @@ New `scripts/lib/solo-owner-ledger-rulesets.ts` and offline tests classify the o
 5. Require a successful signed redacted capture in that controlled context showing the token's own `effective_project_permission=VIEWER` and matching project ID. Existing connected Admin session cannot fulfill this proof. Keep PG18 catalog/migration/production gates independent.
 
 No credentials were accessed, created, written, or uploaded to GitHub during preparation. Production NO-GO.
+
+## 2026-10-22 — Ledger branch ruleset verified ACTIVE, but NOT append-only
+
+Owner completed the GitHub UI settings. Read-only authenticated GitHub API lookup confirmed a second repository ruleset **`Protect Solo Owner Ledger`**, ruleset ID **`25623088`**. Its `enforcement` is **`active`**, target `branch`, exact include `refs/heads/audit/solo-owner-approval-ledger`, empty exclude and `bypass_actors=[]`. Its rules are **`deletion`** and **`non_fast_forward`**. The original main-only ruleset `Protect` (#24900928) remains separate. The new ledger branch itself exists and has only `audit/solo-owner/README.md`; no ticket has been issued/consumed.
+
+This proves the *specific branch protection against deletion and force-push*, not that receipts are unchangeable through ordinary authorized fast-forward updates. The checked-in validator is now pinned to exact ruleset ID `25623088` and exact ruleset name, with a fixture of the observed live metadata and negative tests for impersonating/missing protections. Even with the correct ruleset the result remains `appendOnlyProven=false`, `branchLimitedWriteTokenProven=false`, and `safeForSecretBearingCapture=false`. The ledger is NOT a substitute for trusted owner authorization or an immutable/replay-proof receipt store. The CI fixture is only an offline regression and must not be mistaken for in-job authenticated, fresh GitHub API verification.
+
+**Status update:** `LEDGER_BRANCH_PROTECTION=PASS`; `LEDGER_APPEND_ONLY=NOT_PROVEN`; `LEDGER_WRITE_IDENTITY_SCOPE=NOT_PROVEN`; `VIEWER_API_KEY=OWNER_HAS_IT_NOT_INSTALLED`; `TRUSTED_CAPTURE=DISABLED`. Keep the existing phase-0 workflow `exit 78`, no secrets, no reviewer-gate relaxation, no migrations/F2/production.

@@ -5,6 +5,9 @@
  * prevent a fast-forward update or overwrite of a receipt.
  */
 export const SOLO_OWNER_LEDGER_REF = "refs/heads/audit/solo-owner-approval-ledger";
+// Pin the observed live GitHub ruleset rather than accepting any look-alike.
+export const SOLO_OWNER_LEDGER_RULESET_ID = 25623088;
+export const SOLO_OWNER_LEDGER_RULESET_NAME = "Protect Solo Owner Ledger";
 
 type RecordLike = Record<string, unknown>;
 const isRecord = (v: unknown): v is RecordLike =>
@@ -33,6 +36,8 @@ export function assessSoloOwnerLedgerRulesets(input: unknown): LedgerRulesetAsse
     blockers.push("RULESETS_UNAVAILABLE");
   } else {
     const matches = input.filter((v): v is RecordLike => isRecord(v) &&
+      v.id === SOLO_OWNER_LEDGER_RULESET_ID &&
+      v.name === SOLO_OWNER_LEDGER_RULESET_NAME &&
       v.target === "branch" && v.enforcement === "active" && appliesToLedger(v));
     if (matches.length === 0) blockers.push("LEDGER_BRANCH_RULESET_MISSING");
     else {
