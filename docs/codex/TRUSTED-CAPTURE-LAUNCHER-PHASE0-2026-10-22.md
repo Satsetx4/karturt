@@ -36,3 +36,16 @@ GitHub Required reviewers is optional. There is no fictional second GitHub accou
 - **Next engineering task:** implement stateful single-use approval record, replay denial, authenticated provider capture plus attestation, effective Viewer guard and immutable audit; all remain non-operational until authorized.
 
 GitHub reference: https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments . No additional paid plan or team member is required solely for an optional reviewer rule on a public repository.
+
+## Replay reservation prototype — not wired to staging
+
+Source: `scripts/lib/solo-owner-approval-ledger.ts`; tests: `tests/unit/solo-owner-approval-ledger.test.ts`. These are **offline-only prototype components**. They do not execute as part of the phase-0 GitHub Actions workflow, which still ALWAYS exits 78.
+
+A future owner-approved capture workflow may use a **create-only**, permanent audit record on a dedicated GitHub ledger branch `audit/solo-owner-approval-ledger`:
+
+1. After trusted owner/launcher/candidate SHA, ticket and expiry guards pass, derive SHA256 of a domain-separated 32-hex ticket, independent of run ID and source SHA.
+2. Use the GitHub Contents API to create `audit/solo-owner/used-tickets/<digest>.json` in that branch via `PUT` **without any `sha` overwrite field**, with metadata only (ticket hash, run ID, candidate and launcher SHA, time). Successful creation must return HTTP 201; any non-201 or network error is a STOP. The same ticket's path collides across repeated runs or changes of source SHA.
+3. The ledger branch must exist in advance, be protected against force pushes/deletion, and allow only a reviewed automation identity to make create-only changes. In the production-reviewed job use a narrow-scoped, short-lived GitHub workflow identity for this single operation; avoid unrestricted owner PATs or access to Neon credentials. No token may appear in logs or test fixtures. Fail if branch/permissions/ledger are absent.
+4. The protected workflow must *consume* the ticket **before** it accesses any provider credential or opens a database connection; a claim may be burned by a later failure, never reused. Parallel dispatches must still be serialized. A static Environment ticket/expiry alone is **not** sufficient.
+
+**Evidence boundary:** GitHub Contents API create-only is a useful replay reservation, but a repository administrator can alter even a protected ledger policy, so it is not cryptographically equivalent to a second independent reviewer. The helper's injected request function is tested only against offline fakes. It has not been authenticated against GitHub with the future least-privilege automation token, has not been wired into the protected Windows job, and does not authorize trusted capture, F2, staging SQL, migration, merge or deployment. Both reviewer-gate removal and granting any non-read-only workflow token remain **BLOCKED** until code review, exact-head CI and separate owner approval.
