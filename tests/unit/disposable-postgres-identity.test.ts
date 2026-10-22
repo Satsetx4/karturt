@@ -28,6 +28,7 @@ describe("disposable PostgreSQL concurrency identity", () => {
     "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015",
     "refs/heads/verify/karturt-v1-rc-quality-wave13b1t-20261015",
     "refs/heads/codex/karturt-v1-staging-activation-20261015",
+    "refs/heads/codex/karturt-stage-readiness-v1-20261021",
   ])("accepts the exact reviewed PostgreSQL 17 service context without a PostgreSQL 18 container id: %s", (branchRef) => {
     const environment = validEnvironment({
       GITHUB_ACTIONS: "true",
@@ -39,6 +40,30 @@ describe("disposable PostgreSQL concurrency identity", () => {
     });
     expect(environment.PG18_SERVICE_ID).toBeUndefined();
     expect(validateLaunchSafetyConcurrencyEnvironment(environment)).toBe("12345678_2");
+  });
+
+  it("accepts only the approved Gate V1 branch PUSH and rejects PR events or sibling refs", () => {
+    const env = validEnvironment({
+      GITHUB_ACTIONS: "true",
+      GITHUB_REPOSITORY: "Satsetx4/karturt",
+      GITHUB_EVENT_NAME: "push",
+      GITHUB_REF: "refs/heads/codex/karturt-stage-readiness-v1-20261021",
+      GITHUB_RUN_ID: "12345678",
+      GITHUB_RUN_ATTEMPT: "1",
+    });
+    expect(validateLaunchSafetyConcurrencyEnvironment(env)).toBe("12345678_1");
+    expect(() => validateLaunchSafetyConcurrencyEnvironment({ ...env, GITHUB_EVENT_NAME: "pull_request" })).toThrow(
+      "explicitly approved branch push",
+    );
+    expect(() => validateLaunchSafetyConcurrencyEnvironment({
+      ...env,
+      GITHUB_REF: "refs/heads/codex/karturt-stage-readiness-v1-unreviewed",
+    })).toThrow("explicitly approved branch push");
+    expect(() => validateDisposablePostgresTarget({
+      ...env,
+      LAUNCH_SAFETY_POSTGRES_URL: `postgresql://${username}@127.0.0.1:49152/${databaseName}`,
+      PG18_SERVICE_ID: "b".repeat(64),
+    }, { allowPasswordlessPg18: true })).toThrow("exact loopback database");
   });
 
   it("keeps the dedicated PostgreSQL 18 rehearsal initializer on its exact approved branch", () => {

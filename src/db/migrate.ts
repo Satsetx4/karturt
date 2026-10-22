@@ -71,12 +71,19 @@ function consumeAuthorizationOnce(authorizationId: string, gitCommonDirectory: s
 
 async function confirmInteractiveChallenge(
   challenge: string,
-  review: { sourceSha: string; targetManifestFingerprint: string; targetManifest: unknown; migrationManifestFingerprint: string },
+  review: {
+    sourceSha: string;
+    targetManifestFingerprint: string;
+    targetManifest: unknown;
+    migrationManifestFingerprint: string;
+    readinessEvaluationSha256: string;
+  },
 ) {
   console.info(`Source SHA: ${review.sourceSha}`);
   console.info(`Target manifest fingerprint: ${review.targetManifestFingerprint}`);
   console.info(`Target manifest: ${JSON.stringify(review.targetManifest)}`);
   console.info(`Migration manifest fingerprint: ${review.migrationManifestFingerprint}`);
+  console.info(`Gate V1 evaluation SHA-256: ${review.readinessEvaluationSha256}`);
   const prompt = createInterface({ input: stdin, output: stdout });
   try {
     return await prompt.question(`Review the external approval, source SHA, target manifest, and migration snapshot. Type this one-time challenge to continue:\n${challenge}\n> `);

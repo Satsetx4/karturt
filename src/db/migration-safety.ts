@@ -1,12 +1,17 @@
 import { lstatSync, readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   assertStagingMigrationAuthorization,
   parseStagingMigrationAuthorizationArtifact,
   type StagingMigrationAuthorizationExpectation,
 } from "@/db/migration-approval";
 import { assertCheckedInMigrationSnapshot, migrationManifestFingerprint } from "@/db/migration-manifest";
+import {
+  verifyStagingReadinessBinding,
+  type StagingReadinessBindingInput,
+  type VerifiedStagingReadinessBinding,
+} from "@/db/staging-readiness-migration-binding";
 
 export type MigrationEnvironment = {
   APP_ENV?: string;
@@ -17,6 +22,8 @@ export type MigrationEnvironment = {
 
 export type StagingMigrationInvocation = {
   authorizationFile: string;
+  readinessEvaluationFile: string;
+  databaseProbeEvidenceFile: string;
 };
 
 export type StagingMigrationGitIdentity = {
@@ -31,6 +38,7 @@ export type StagingMigrationReviewContext = {
   targetManifestFingerprint: string;
   targetManifest: unknown;
   migrationManifestFingerprint: string;
+  readinessEvaluationSha256: string;
 };
 
 export type MigrationSafetyDependencies = {
@@ -45,6 +53,7 @@ export type MigrationSafetyDependencies = {
   getTargetManifest?: () => unknown;
   getMigrationManifestFingerprint?: () => string;
   readAuthorizationFile?: (path: string) => string;
+  verifyReadinessBinding?: (input: StagingReadinessBindingInput) => VerifiedStagingReadinessBinding;
   consumeAuthorizationOnce: (authorizationId: string, gitCommonDirectory: string) => void;
   confirmChallenge: (challenge: string, review: StagingMigrationReviewContext) => Promise<string>;
   createConfirmationNonce?: () => string;
@@ -57,8 +66,24 @@ export type ApprovedMigrationContext = {
   sourceSha: string;
   targetManifestFingerprint: string;
   migrationManifestFingerprint: string;
+  readinessEvaluationSha256: string;
   authorizationId: string;
 };
+
+type MigrationPreflightBinding = {
+  invocation: StagingMigrationInvocation;
+  databaseUrl: string;
+  sourceSha: string;
+  repositoryRoot: string;
+  gitCommonDirectory: string;
+  targetManifestFingerprint: string;
+  migrationManifestFingerprint: string;
+  readinessEvaluationSha256: string;
+  authorizationId: string;
+  authorizationArtifactSha256: string;
+};
+
+const migrationPreflightBindings = new WeakMap<ApprovedMigrationContext, MigrationPreflightBinding>();
 
 export class MigrationPreflightError extends Error {
   readonly category = "preflight";
@@ -77,12 +102,145 @@ function rejectPreflight(message: string): never {
   throw new MigrationPreflightError(message);
 }
 
-export function parseStagingMigrationInvocation(argv: string[]): StagingMigrationInvocation {
-  if (argv.length !== 3 || argv[0] !== "--execute-once" || argv[1] !== "--authorization-file" || !argv[2]) {
-    rejectPreflight("Use the explicit one-shot operator command with an external authorization file.");
+function sha256(value: string) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function readAuthorizationArtifact(dependencies: MigrationSafetyDependencies, path: string) {
+  const serialized = dependencies.readAuthorizationFile
+    ? dependencies.readAuthorizationFile(path)
+    : readExternalAuthorization(path, dependencies.repositoryRoot);
+  return {
+    serialized,
+    artifact: parseStagingMigrationAuthorizationArtifact(serialized),
+  };
+}
+
+function assertMigrationPreflightBindingCurrent(
+  dependencies: MigrationSafetyDependencies,
+  binding: MigrationPreflightBinding,
+) {
+  let currentDatabaseUrl: string;
+  try {
+    currentDatabaseUrl = assertStagingMigrationEnvironment(dependencies.environment);
+  } catch {
+    rejectPreflight("The staging migration environment changed while approval was being confirmed.");
   }
-  if (!isAbsolute(argv[2])) rejectPreflight("The migration authorization file path must be absolute.");
-  return { authorizationFile: resolve(argv[2]) };
+  if (currentDatabaseUrl! !== binding.databaseUrl) {
+    rejectPreflight("The staging migration target changed while approval was being confirmed.");
+  }
+  try {
+    dependencies.assertTargetIdentity(currentDatabaseUrl!);
+  } catch {
+    rejectPreflight("MIGRATION_DATABASE_URL was rejected by the staging target identity guard.");
+  }
+
+  let currentGitIdentity: StagingMigrationGitIdentity;
+  try {
+    currentGitIdentity = dependencies.getGitIdentity();
+  } catch {
+    rejectPreflight("The migration source identity could not be verified after confirmation.");
+  }
+  if (resolve(dependencies.repositoryRoot).toLowerCase() !== resolve(binding.repositoryRoot).toLowerCase() ||
+      resolve(currentGitIdentity!.repositoryRoot).toLowerCase() !== resolve(binding.repositoryRoot).toLowerCase() ||
+      resolve(currentGitIdentity!.gitCommonDirectory).toLowerCase() !== resolve(binding.gitCommonDirectory).toLowerCase() ||
+      currentGitIdentity!.sourceSha !== binding.sourceSha ||
+      !currentGitIdentity!.isClean) {
+    rejectPreflight("The clean migration source checkout changed while approval was being confirmed.");
+  }
+
+  try {
+    assertCheckedInMigrationSnapshot(currentGitIdentity!.repositoryRoot);
+  } catch {
+    rejectPreflight("The immutable migration snapshot check failed after confirmation.");
+  }
+
+  let currentTargetManifestFingerprint: string;
+  try {
+    currentTargetManifestFingerprint = dependencies.getTargetManifestFingerprint().toLowerCase();
+  } catch {
+    rejectPreflight("The reviewed staging target manifest could not be reverified.");
+  }
+  if (currentTargetManifestFingerprint! !== binding.targetManifestFingerprint) {
+    rejectPreflight("The reviewed staging target manifest changed while approval was being confirmed.");
+  }
+
+  let currentMigrationManifestFingerprint: string;
+  try {
+    currentMigrationManifestFingerprint = (dependencies.getMigrationManifestFingerprint ?? migrationManifestFingerprint)();
+  } catch {
+    rejectPreflight("The migration manifest could not be reverified.");
+  }
+  if (currentMigrationManifestFingerprint! !== binding.migrationManifestFingerprint) {
+    rejectPreflight("The checked-in migration manifest changed while approval was being confirmed.");
+  }
+
+  let currentReadinessBinding: VerifiedStagingReadinessBinding;
+  try {
+    currentReadinessBinding = (dependencies.verifyReadinessBinding ?? verifyStagingReadinessBinding)({
+      repositoryRoot: dependencies.repositoryRoot,
+      evaluationPath: binding.invocation.readinessEvaluationFile,
+      probeEvidencePath: binding.invocation.databaseProbeEvidenceFile,
+      sourceSha: binding.sourceSha,
+      nowMs: (dependencies.now ?? Date.now)(),
+    });
+  } catch {
+    rejectPreflight("A fresh, source-bound Gate V1 PASS evaluation is required immediately before migration.");
+  }
+  if (currentReadinessBinding!.evaluationSha256 !== binding.readinessEvaluationSha256) {
+    rejectPreflight("The Gate V1 evaluation changed while approval was being confirmed.");
+  }
+
+  let currentAuthorization: ReturnType<typeof parseStagingMigrationAuthorizationArtifact>;
+  try {
+    const { serialized, artifact } = readAuthorizationArtifact(dependencies, binding.invocation.authorizationFile);
+    if (sha256(serialized) !== binding.authorizationArtifactSha256) {
+      rejectPreflight("The signed migration authorization changed while approval was being confirmed.");
+    }
+    currentAuthorization = artifact;
+  } catch (error) {
+    if (error instanceof MigrationPreflightError) throw error;
+    rejectPreflight("The signed migration authorization could not be re-read safely.");
+  }
+  try {
+    const verified = assertStagingMigrationAuthorization(currentAuthorization!, {
+      sourceSha: binding.sourceSha,
+      targetManifestFingerprint: binding.targetManifestFingerprint,
+      migrationManifestFingerprint: binding.migrationManifestFingerprint,
+      readinessEvaluationSha256: binding.readinessEvaluationSha256,
+      nowMs: (dependencies.now ?? Date.now)(),
+    }, dependencies.approvalPublicKeyPem);
+    if (verified.authorizationId !== binding.authorizationId) {
+      rejectPreflight("The signed migration authorization identity changed while approval was being confirmed.");
+    }
+  } catch (error) {
+    if (error instanceof MigrationPreflightError) throw error;
+    const message = error instanceof Error ? error.message : "";
+    rejectPreflight(message === "No owner approval key is pinned in this source revision; staging migration is disabled."
+      ? message
+      : "The signed migration authorization expired or no longer matches the reviewed source and target.");
+  }
+}
+
+export function parseStagingMigrationInvocation(argv: string[]): StagingMigrationInvocation {
+  if (argv.length !== 7 ||
+      argv[0] !== "--execute-once" ||
+      argv[1] !== "--readiness-evaluation-file" ||
+      !argv[2] ||
+      argv[3] !== "--database-probe-evidence-file" ||
+      !argv[4] ||
+      argv[5] !== "--authorization-file" ||
+      !argv[6]) {
+    rejectPreflight("Use the one-shot operator command with external readiness, probe, and authorization artifacts.");
+  }
+  if (![argv[2], argv[4], argv[6]].every(isAbsolute)) {
+    rejectPreflight("Migration readiness, probe, and authorization file paths must be absolute.");
+  }
+  return {
+    readinessEvaluationFile: resolve(argv[2]),
+    databaseProbeEvidenceFile: resolve(argv[4]),
+    authorizationFile: resolve(argv[6]),
+  };
 }
 
 export function assertStagingMigrationEnvironment(environment: MigrationEnvironment) {
@@ -104,13 +262,23 @@ function isInsideDirectory(directory: string, candidate: string) {
 }
 
 function readExternalAuthorization(path: string, repositoryRoot: string) {
-  if (isInsideDirectory(repositoryRoot, path)) {
+  const resolvedPath = resolve(path);
+  if (isInsideDirectory(repositoryRoot, resolvedPath)) {
     rejectPreflight("The migration authorization file must be stored outside the source worktree.");
   }
   try {
-    const stat = lstatSync(path);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 16 * 1024) throw new Error("invalid file");
-    return readFileSync(path, "utf8");
+    let current = resolvedPath;
+    while (true) {
+      if (lstatSync(current).isSymbolicLink()) throw new Error("unsafe path");
+      const parent = resolve(current, "..");
+      if (parent === current) break;
+      current = parent;
+    }
+    const stat = lstatSync(resolvedPath);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 2 || stat.size > 16 * 1024) {
+      throw new Error("invalid file");
+    }
+    return readFileSync(resolvedPath, "utf8");
   } catch {
     rejectPreflight("The migration authorization file is missing, unreadable, or not a regular external file.");
   }
@@ -166,12 +334,28 @@ export async function authorizeStagingMigration(dependencies: MigrationSafetyDep
     rejectPreflight("The migration manifest fingerprint is invalid.");
   }
 
-  let artifact;
+  let readinessBinding: VerifiedStagingReadinessBinding;
   try {
-    const serialized = dependencies.readAuthorizationFile
-      ? dependencies.readAuthorizationFile(invocation.authorizationFile)
-      : readExternalAuthorization(invocation.authorizationFile, dependencies.repositoryRoot);
-    artifact = parseStagingMigrationAuthorizationArtifact(serialized);
+    readinessBinding = (dependencies.verifyReadinessBinding ?? verifyStagingReadinessBinding)({
+      repositoryRoot: dependencies.repositoryRoot,
+      evaluationPath: invocation.readinessEvaluationFile,
+      probeEvidencePath: invocation.databaseProbeEvidenceFile,
+      sourceSha: gitIdentity!.sourceSha,
+      nowMs: (dependencies.now ?? Date.now)(),
+    });
+  } catch {
+    rejectPreflight("A fresh, source-bound Gate V1 PASS evaluation is required before migration.");
+  }
+  if (!/^[a-f0-9]{64}$/.test(readinessBinding!.evaluationSha256)) {
+    rejectPreflight("The Gate V1 evaluation digest is invalid.");
+  }
+
+  let approvalSerialized: string;
+  let artifact: ReturnType<typeof parseStagingMigrationAuthorizationArtifact>;
+  try {
+    const loaded = readAuthorizationArtifact(dependencies, invocation.authorizationFile);
+    approvalSerialized = loaded.serialized;
+    artifact = loaded.artifact;
   } catch (error) {
     if (error instanceof MigrationPreflightError) throw error;
     rejectPreflight("The migration authorization file is missing or malformed.");
@@ -181,6 +365,7 @@ export async function authorizeStagingMigration(dependencies: MigrationSafetyDep
     sourceSha: gitIdentity!.sourceSha,
     targetManifestFingerprint,
     migrationManifestFingerprint: currentMigrationManifestFingerprint,
+    readinessEvaluationSha256: readinessBinding!.evaluationSha256,
     nowMs: (dependencies.now ?? Date.now)(),
   };
   let verifiedAuthorization: ReturnType<typeof assertStagingMigrationAuthorization>;
@@ -199,6 +384,7 @@ export async function authorizeStagingMigration(dependencies: MigrationSafetyDep
     "STAGING-MIGRATION",
     gitIdentity!.sourceSha.slice(0, 12),
     targetManifestFingerprint.slice(0, 12),
+    readinessBinding!.evaluationSha256.slice(0, 12),
     confirmationNonce,
   ].join(" ");
   const typedChallenge = await dependencies.confirmChallenge(challenge, {
@@ -206,8 +392,23 @@ export async function authorizeStagingMigration(dependencies: MigrationSafetyDep
     targetManifestFingerprint,
     targetManifest: dependencies.getTargetManifest?.() ?? null,
     migrationManifestFingerprint: currentMigrationManifestFingerprint!,
+    readinessEvaluationSha256: readinessBinding!.evaluationSha256,
   });
   if (typedChallenge !== challenge) rejectPreflight("The interactive migration confirmation did not match this one-shot request.");
+
+  const preflightBinding: MigrationPreflightBinding = {
+    invocation,
+    databaseUrl,
+    sourceSha: gitIdentity!.sourceSha,
+    repositoryRoot: gitIdentity!.repositoryRoot,
+    gitCommonDirectory: gitIdentity!.gitCommonDirectory,
+    targetManifestFingerprint,
+    migrationManifestFingerprint: currentMigrationManifestFingerprint!,
+    readinessEvaluationSha256: readinessBinding!.evaluationSha256,
+    authorizationId: verifiedAuthorization!.authorizationId,
+    authorizationArtifactSha256: sha256(approvalSerialized!),
+  };
+  assertMigrationPreflightBindingCurrent(dependencies, preflightBinding);
 
   try {
     dependencies.consumeAuthorizationOnce(verifiedAuthorization!.authorizationId, gitIdentity!.gitCommonDirectory);
@@ -215,13 +416,16 @@ export async function authorizeStagingMigration(dependencies: MigrationSafetyDep
     rejectPreflight("This migration authorization has already been used or could not be consumed safely.");
   }
 
-  return {
+  const context: ApprovedMigrationContext = {
     databaseUrl,
     sourceSha: gitIdentity!.sourceSha,
     targetManifestFingerprint,
     migrationManifestFingerprint: currentMigrationManifestFingerprint,
+    readinessEvaluationSha256: readinessBinding!.evaluationSha256,
     authorizationId: verifiedAuthorization!.authorizationId,
   };
+  migrationPreflightBindings.set(context, preflightBinding);
+  return context;
 }
 
 export type MigrationExecutionDependencies<Client> = {
@@ -316,7 +520,7 @@ function migrationOutcomeUnknownMessage(
   return `${migrationDetail}${shutdownDetail} Database outcome is unverified. STOP: keep this approval consumed and do not retry. Request separately authorized read-only reconciliation of the migration ledger and schema state before any new approval or execution. Client shutdown does not prove backend cancellation or rollback.`;
 }
 
-export async function executeApprovedMigrationsOnce<Client>(
+async function executeApprovedMigrationsOnce<Client>(
   context: ApprovedMigrationContext,
   dependencies: MigrationExecutionDependencies<Client>,
 ) {
@@ -345,6 +549,9 @@ export async function runStagingMigrationCommandOnce<Client>(
   dependencies: StagingMigrationCommandDependencies<Client>,
 ) {
   const context = await authorizeStagingMigration(dependencies);
+  const binding = migrationPreflightBindings.get(context);
+  if (!binding) rejectPreflight("The approved migration context is not bound to this one-shot preflight.");
+  assertMigrationPreflightBindingCurrent(dependencies, binding!);
   await executeApprovedMigrationsOnce(context, dependencies);
   return context;
 }

@@ -16,6 +16,7 @@ const launchSafetyConcurrencyBranchRefs = new Set([
   "refs/heads/verify/karturt-v1-rc-wave13b1s-20261015",
   "refs/heads/verify/karturt-v1-rc-quality-wave13b1t-20261015",
   "refs/heads/codex/karturt-v1-staging-activation-20261015",
+  "refs/heads/codex/karturt-stage-readiness-v1-20261021",
 ]);
 
 export function validateLaunchSafetyConcurrencyEnvironment(env: NodeJS.ProcessEnv): string {

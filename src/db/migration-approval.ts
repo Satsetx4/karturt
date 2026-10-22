@@ -1,6 +1,6 @@
 import { createHash, verify } from "node:crypto";
 
-export const STAGING_MIGRATION_AUTHORIZATION_PURPOSE = "karturt-v1-staging-migration" as const;
+export const STAGING_MIGRATION_AUTHORIZATION_PURPOSE = "karturt-v1-staging-migration/v2" as const;
 export const STAGING_MIGRATION_AUTHORIZATION_WINDOW_MS = 15 * 60 * 1000;
 
 // Wave 13A intentionally has no owner key. A separately reviewed source change must pin it.
@@ -15,12 +15,13 @@ export type StagingMigrationAuthorizationPayload = {
   sourceSha: string;
   targetManifestFingerprint: string;
   migrationManifestFingerprint: string;
+  readinessEvaluationSha256: string;
   issuedAt: string;
   expiresAt: string;
 };
 
 export type StagingMigrationAuthorizationArtifact = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   payload: StagingMigrationAuthorizationPayload;
   signature: string;
 };
@@ -29,6 +30,7 @@ export type StagingMigrationAuthorizationExpectation = {
   sourceSha: string;
   targetManifestFingerprint: string;
   migrationManifestFingerprint: string;
+  readinessEvaluationSha256: string;
   nowMs: number;
 };
 
@@ -40,6 +42,7 @@ export function serializeStagingMigrationAuthorizationPayload(payload: StagingMi
     sourceSha: payload.sourceSha,
     targetManifestFingerprint: payload.targetManifestFingerprint,
     migrationManifestFingerprint: payload.migrationManifestFingerprint,
+    readinessEvaluationSha256: payload.readinessEvaluationSha256,
     issuedAt: payload.issuedAt,
     expiresAt: payload.expiresAt,
   });
@@ -60,17 +63,18 @@ export function parseStagingMigrationAuthorizationArtifact(serialized: string): 
   const artifact = parsed as Partial<StagingMigrationAuthorizationArtifact>;
   const payload = artifact.payload as Partial<StagingMigrationAuthorizationPayload> | undefined;
   if (
-    artifact.schemaVersion !== 1 || !payload || typeof payload !== "object" ||
+    artifact.schemaVersion !== 2 || !payload || typeof payload !== "object" ||
     Object.keys(artifact).some((key) => !["schemaVersion", "payload", "signature"].includes(key)) ||
     Object.keys(payload).some((key) => ![
       "purpose", "authorizationId", "sourceSha", "targetManifestFingerprint",
-      "migrationManifestFingerprint", "issuedAt", "expiresAt",
+      "migrationManifestFingerprint", "readinessEvaluationSha256", "issuedAt", "expiresAt",
     ].includes(key)) ||
     payload.purpose !== STAGING_MIGRATION_AUTHORIZATION_PURPOSE ||
     typeof payload.authorizationId !== "string" || !/^[a-f0-9]{64}$/.test(payload.authorizationId) ||
     typeof payload.sourceSha !== "string" || !/^[a-f0-9]{40}$/.test(payload.sourceSha) ||
     typeof payload.targetManifestFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(payload.targetManifestFingerprint) ||
     typeof payload.migrationManifestFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(payload.migrationManifestFingerprint) ||
+    typeof payload.readinessEvaluationSha256 !== "string" || !/^[a-f0-9]{64}$/.test(payload.readinessEvaluationSha256) ||
     typeof payload.issuedAt !== "string" || typeof payload.expiresAt !== "string" ||
     typeof artifact.signature !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(artifact.signature)
   ) {
@@ -78,7 +82,7 @@ export function parseStagingMigrationAuthorizationArtifact(serialized: string): 
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     payload: payload as StagingMigrationAuthorizationPayload,
     signature: artifact.signature,
   };
@@ -104,7 +108,8 @@ export function assertStagingMigrationAuthorization(
     expiresAtMs <= issuedAtMs || expiresAtMs - issuedAtMs > STAGING_MIGRATION_AUTHORIZATION_WINDOW_MS ||
     payload.sourceSha !== expected.sourceSha ||
     payload.targetManifestFingerprint !== expected.targetManifestFingerprint ||
-    payload.migrationManifestFingerprint !== expected.migrationManifestFingerprint
+    payload.migrationManifestFingerprint !== expected.migrationManifestFingerprint ||
+    payload.readinessEvaluationSha256 !== expected.readinessEvaluationSha256
   ) {
     throw new Error("The migration authorization does not match this source, target, migration snapshot, or time window.");
   }

@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { runStagingMigrationCommandOnce } from "../../src/db/migration-safety";
 import { PINNED_STAGING_MIGRATION_APPROVAL_PUBLIC_KEY_PEM } from "../../src/db/migration-approval";
 import { assertDatabaseTargetForEnvironment } from "../../src/lib/staging-database-target";
 
 const currentStagingTarget =
-  "postgresql://neondb_owner:synthetic-password@ep-mute-firefly-azjcru4h.c-3.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=verify-full";
+  "postgresql://karturt_owner:synthetic-password@ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech:5432/karturt?sslmode=verify-full&channel_binding=require";
 const legacyStagingTarget =
   "postgresql://karturt_staging_owner:synthetic-password@ep-snowy-meadow-a10304d9.ap-southeast-1.aws.neon.tech:5432/karturt_staging?sslmode=require";
 
@@ -52,7 +52,12 @@ describe("Wave 13A.2 independent safety QA", () => {
         MIGRATION_DATABASE_URL:
           "postgresql://migration:synthetic-only@approved.invalid:5432/karturt_staging?sslmode=require",
       },
-      argv: ["--execute-once", "--authorization-file", join(process.cwd(), "external-authorization.json")],
+      argv: [
+        "--execute-once",
+        "--readiness-evaluation-file", resolve("external-readiness.json"),
+        "--database-probe-evidence-file", resolve("external-probe.json"),
+        "--authorization-file", resolve("external-authorization.json"),
+      ],
       stdinIsTTY: true,
       stdoutIsTTY: true,
       repositoryRoot: process.cwd(),
@@ -65,14 +70,19 @@ describe("Wave 13A.2 independent safety QA", () => {
       assertTargetIdentity: vi.fn(),
       getTargetManifestFingerprint: () => "a".repeat(64),
       getMigrationManifestFingerprint: () => "d".repeat(64),
+      verifyReadinessBinding: () => ({
+        evaluationSha256: "e".repeat(64),
+        completedAtUtc: new Date(now).toISOString(),
+      }),
       readAuthorizationFile: () => JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         payload: {
-          purpose: "karturt-v1-staging-migration",
+          purpose: "karturt-v1-staging-migration/v2",
           authorizationId,
           sourceSha: "b".repeat(40),
           targetManifestFingerprint: "a".repeat(64),
           migrationManifestFingerprint: "d".repeat(64),
+          readinessEvaluationSha256: "e".repeat(64),
           issuedAt: new Date(now - 60_000).toISOString(),
           expiresAt: new Date(now + 60_000).toISOString(),
         },
