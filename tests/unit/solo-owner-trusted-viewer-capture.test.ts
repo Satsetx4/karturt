@@ -11,6 +11,12 @@ const viewerKey = "SYNTHETIC_VIEWER_TOKEN_NEVER_USE_ANYWHERE";
 const now = Date.parse("2026-10-22T07:00:00Z");
 const context = (): SoloOwnerReservationEnvironment => ({
   repository: "Satsetx4/karturt",
+  repositoryId: "1386907262",
+  ownerId: "304263836",
+  actorId: "304263836",
+  refProtected: "true",
+  eventSha: sourceSha,
+  workflowSha: launcherSha,
   eventName: "workflow_dispatch",
   ref: "refs/heads/main",
   workflowRef: "Satsetx4/karturt/.github/workflows/staging-readiness-capture.yml@refs/heads/main",

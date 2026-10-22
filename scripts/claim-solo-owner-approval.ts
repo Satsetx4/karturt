@@ -22,6 +22,12 @@ async function main() {
   const e = process.env;
   const context: SoloOwnerReservationEnvironment = {
     repository: e.GITHUB_REPOSITORY ?? "",
+    repositoryId: e.REPOSITORY_ID ?? "",
+    ownerId: e.OWNER_ID ?? "",
+    actorId: e.ACTOR_ID ?? "",
+    refProtected: e.REF_PROTECTED ?? "",
+    eventSha: e.EVENT_SHA ?? "",
+    workflowSha: e.WORKFLOW_SHA ?? "",
     eventName: e.GITHUB_EVENT_NAME ?? "",
     ref: e.GITHUB_REF ?? "",
     workflowRef: e.GITHUB_WORKFLOW_REF ?? "",
@@ -29,8 +35,8 @@ async function main() {
     triggeringActor: e.GITHUB_TRIGGERING_ACTOR ?? "",
     runAttempt: e.GITHUB_RUN_ATTEMPT ?? "",
     runId: e.GITHUB_RUN_ID ?? "",
-    launcherSha: e.GITHUB_SHA ?? "",
-    candidateSha: e.CANDIDATE_SHA ?? "",
+    launcherSha: e.WORKFLOW_SHA ?? "",
+    candidateSha: e.PREFLIGHT_CANDIDATE_SHA ?? "",
     dispatchTicket: e.DISPATCH_APPROVAL_TICKET ?? "",
     approvedCandidateSha: e.EXPECTED_APPROVED_SHA ?? "",
     approvedLauncherSha: e.EXPECTED_LAUNCHER_SHA ?? "",

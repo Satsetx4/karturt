@@ -10,6 +10,12 @@ const a = "a".repeat(40), b = "b".repeat(40), ticket = "c".repeat(32);
 function valid(): SoloOwnerReservationEnvironment {
   return {
     repository: "Satsetx4/karturt",
+    repositoryId: "1386907262",
+    ownerId: "304263836",
+    actorId: "304263836",
+    refProtected: "true",
+    eventSha: b,
+    workflowSha: a,
     eventName: "workflow_dispatch",
     ref: "refs/heads/main",
     workflowRef: "Satsetx4/karturt/.github/workflows/staging-readiness-capture.yml@refs/heads/main",
@@ -44,8 +50,33 @@ describe("Solo Owner approved ticket reservation contract (offline only)", () =>
       .rejects.toMatchObject({ code: "SOLO_APPROVAL_LEDGER_NOT_RESERVED" });
     expect(used.size).toBe(1);
   });
+  it("rejects the same ticket replayed from a distinct new dispatch run", async () => {
+    const { callback, used } = createOnlyFake();
+    await reserveApprovedSoloOwnerTicket(valid(), now, callback);
+    const replayedRun = { ...valid(), runId: "39730000002" };
+    await expect(reserveApprovedSoloOwnerTicket(replayedRun, now, callback))
+      .rejects.toMatchObject({ code: "SOLO_APPROVAL_LEDGER_NOT_RESERVED" });
+    // In this mock model the ticket-keyed create-only path is shared across run IDs.
+    expect(used.size).toBe(1);
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(callback.mock.calls[0]?.[0]).toBe(callback.mock.calls[1]?.[0]);
+  });
+  it("admits only one concurrent reservation in the offline atomic-store model", async () => {
+    const { callback, used } = createOnlyFake();
+    const results = await Promise.allSettled([
+      reserveApprovedSoloOwnerTicket(valid(), now, callback),
+      reserveApprovedSoloOwnerTicket(valid(), now, callback),
+    ]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(used.size).toBe(1);
+  });
   it.each([
     ["wrong repo", { repository: "external/karturt" }, "SOLO_RESERVATION_DISPATCH_INVALID"],
+    ["wrong repository id", { repositoryId: "0" }, "SOLO_RESERVATION_DISPATCH_INVALID"],
+    ["wrong owner id", { ownerId: "0" }, "SOLO_RESERVATION_DISPATCH_INVALID"],
+    ["wrong owner actor id", { actorId: "0" }, "SOLO_RESERVATION_DISPATCH_INVALID"],
+    ["unprotected ref", { refProtected: "false" }, "SOLO_RESERVATION_DISPATCH_INVALID"],
     ["wrong ref", { ref: "refs/heads/feature" }, "SOLO_RESERVATION_DISPATCH_INVALID"],
     ["wrong event", { eventName: "pull_request" }, "SOLO_RESERVATION_DISPATCH_INVALID"],
     ["substituted workflow", { workflowRef: "other/workflow@main" }, "SOLO_RESERVATION_DISPATCH_INVALID"],
@@ -54,6 +85,9 @@ describe("Solo Owner approved ticket reservation contract (offline only)", () =>
     ["attempt two", { runAttempt: "2" }, "SOLO_RESERVATION_DISPATCH_INVALID"],
     ["invalid run id", { runId: "0" }, "SOLO_RESERVATION_DISPATCH_INVALID"],
     ["stale source", { candidateSha: "d".repeat(40) }, "SOLO_RESERVATION_SHA_MISMATCH"],
+    ["dispatch source mismatch", { eventSha: "d".repeat(40) }, "SOLO_RESERVATION_SHA_MISMATCH"],
+    ["malformed dispatch source", { eventSha: "bad" }, "SOLO_RESERVATION_SHA_MISMATCH"],
+    ["launcher workflow SHA mismatch", { workflowSha: "d".repeat(40) }, "SOLO_RESERVATION_SHA_MISMATCH"],
     ["stale launcher", { launcherSha: "d".repeat(40) }, "SOLO_RESERVATION_SHA_MISMATCH"],
     ["unapproved source", { approvedCandidateSha: "" }, "SOLO_RESERVATION_SHA_MISMATCH"],
     ["wrong ticket", { dispatchTicket: "d".repeat(32) }, "SOLO_RESERVATION_TICKET_MISMATCH"],

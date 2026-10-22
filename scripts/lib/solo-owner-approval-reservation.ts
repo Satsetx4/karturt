@@ -8,6 +8,12 @@ import { claimSoloOwnerTicket, SoloOwnerClaimDenied, type CreateOnlyGitHubReques
  */
 export type SoloOwnerReservationEnvironment = {
   repository: string;
+  repositoryId: string;
+  ownerId: string;
+  actorId: string;
+  refProtected: string;
+  eventSha: string;
+  workflowSha: string;
   eventName: string;
   ref: string;
   workflowRef: string;
@@ -43,6 +49,8 @@ export async function reserveApprovedSoloOwnerTicket(
   createOnly: CreateOnlyGitHubRequest,
 ): Promise<TicketReceipt> {
   if (e.repository !== "Satsetx4/karturt" ||
+      e.repositoryId !== "1386907262" || e.ownerId !== "304263836" ||
+      e.actorId !== "304263836" || e.refProtected !== "true" ||
       e.eventName !== "workflow_dispatch" ||
       e.ref !== "refs/heads/main" ||
       e.workflowRef !== "Satsetx4/karturt/.github/workflows/staging-readiness-capture.yml@refs/heads/main" ||
@@ -51,7 +59,10 @@ export async function reserveApprovedSoloOwnerTicket(
     deny("SOLO_RESERVATION_DISPATCH_INVALID");
   }
   if (!shaPattern.test(e.launcherSha) ||
+      !shaPattern.test(e.workflowSha) || !shaPattern.test(e.eventSha) ||
+      e.launcherSha !== e.workflowSha ||
       !shaPattern.test(e.candidateSha) ||
+      e.candidateSha !== e.eventSha ||
       !shaPattern.test(e.approvedCandidateSha) ||
       !shaPattern.test(e.approvedLauncherSha) ||
       e.candidateSha !== e.approvedCandidateSha ||

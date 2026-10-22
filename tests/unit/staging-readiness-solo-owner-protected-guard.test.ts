@@ -27,21 +27,29 @@ function protectedGuardScript(): string {
 }
 
 function validEnvironment(): Record<string, string> {
+  const approved = new Date(Date.now() - 5 * 60_000).toISOString().replace(/\.\d{3}Z$/, "Z");
   const expires = new Date(Date.now() + 5 * 60_000).toISOString().replace(/\.\d{3}Z$/, "Z");
   return {
     GITHUB_REPOSITORY: "Satsetx4/karturt",
+    REPOSITORY_ID: "1386907262",
+    OWNER_ID: "304263836",
+    ACTOR_ID: "304263836",
+    REF_PROTECTED: "true",
+    EVENT_SHA: sourceSha,
+    WORKFLOW_SHA: launcherSha,
     GITHUB_EVENT_NAME: "workflow_dispatch",
     GITHUB_REF: "refs/heads/main",
     GITHUB_ACTOR: "Satsetx4",
     GITHUB_TRIGGERING_ACTOR: "Satsetx4",
     GITHUB_RUN_ATTEMPT: "1",
     GITHUB_WORKFLOW_REF: "Satsetx4/karturt/.github/workflows/staging-readiness-capture.yml@refs/heads/main",
-    GITHUB_SHA: launcherSha,
+    GITHUB_SHA: sourceSha,
     EXPECTED_APPROVED_SHA: sourceSha,
     PREFLIGHT_CANDIDATE_SHA: sourceSha,
     EXPECTED_LAUNCHER_SHA: launcherSha,
     EXPECTED_APPROVAL_TICKET: ticket,
     DISPATCH_APPROVAL_TICKET: ticket,
+    EXPECTED_APPROVAL_AT: approved,
     EXPECTED_APPROVAL_EXPIRES: expires,
   };
 }
@@ -56,6 +64,22 @@ function runGuard(overrides: Record<string, string> = {}) {
   return result;
 }
 
+describe("Solo Owner protected job context bindings", () => {
+  it("checks actor ID inside the step, not the job-level condition", () => {
+    const protectedJobStart = yaml.indexOf("  protected-approval-boundary:");
+    expect(protectedJobStart).toBeGreaterThanOrEqual(0);
+    const protectedJob = yaml.slice(protectedJobStart);
+    const jobIf = protectedJob.match(/^    if: (.+)$/m)?.[1];
+    expect(jobIf).toBeDefined();
+    expect(jobIf).not.toContain("github.actor_id");
+
+    const stepStart = protectedJob.indexOf("      - name: Validate expiring Solo Owner approval and STOP before staging access");
+    expect(stepStart).toBeGreaterThanOrEqual(0);
+    const runStart = protectedJob.indexOf("\n        run: |\n", stepStart);
+    expect(runStart).toBeGreaterThan(stepStart);
+    expect(protectedJob.slice(stepStart, runStart)).toContain("ACTOR_ID: ${{ github.actor_id }}");
+  });
+});
 describe.skipIf(process.platform !== "linux")("Solo Owner protected Windows guard executed offline", () => {
   it("always refuses live capture even when owner/SHAs/ticket/expiry match", () => {
     const result = runGuard();
@@ -73,14 +97,24 @@ describe.skipIf(process.platform !== "linux")("Solo Owner protected Windows guar
     ["wrong branch", { GITHUB_REF: "refs/heads/feature" }, "SOLO_OWNER_PROTECTED_CONTEXT_INVALID"],
     ["PR event", { GITHUB_EVENT_NAME: "pull_request" }, "SOLO_OWNER_PROTECTED_CONTEXT_INVALID"],
     ["wrong repository", { GITHUB_REPOSITORY: "other/karturt" }, "SOLO_OWNER_PROTECTED_CONTEXT_INVALID"],
+    ["wrong repository id", { REPOSITORY_ID: "0" }, "SOLO_OWNER_PROTECTED_CONTEXT_INVALID"],
+    ["wrong owner id", { OWNER_ID: "0" }, "SOLO_OWNER_PROTECTED_CONTEXT_INVALID"],
+    ["wrong owner actor id", { ACTOR_ID: "0" }, "SOLO_OWNER_PROTECTED_CONTEXT_INVALID"],
+    ["unprotected ref", { REF_PROTECTED: "false" }, "SOLO_OWNER_PROTECTED_CONTEXT_INVALID"],
     ["workflow substitution", { GITHUB_WORKFLOW_REF: "Satsetx4/karturt/.github/workflows/fake.yml@refs/heads/main" }, "SOLO_OWNER_WORKFLOW_REF_INVALID"],
     ["candidate source mismatch", { PREFLIGHT_CANDIDATE_SHA: "d".repeat(40) }, "PROTECTED_APPROVED_SOURCE_SHA_MISMATCH"],
+    ["dispatch source mismatch", { EVENT_SHA: "d".repeat(40) }, "PROTECTED_APPROVED_SOURCE_SHA_MISMATCH"],
+    ["run source SHA mismatch", { GITHUB_SHA: "d".repeat(40) }, "PROTECTED_APPROVED_SOURCE_SHA_MISMATCH"],
+    ["malformed dispatch source SHA", { EVENT_SHA: "bad" }, "PROTECTED_APPROVED_SOURCE_SHA_MISMATCH"],
     ["missing candidate approval", { EXPECTED_APPROVED_SHA: "" }, "PROTECTED_APPROVED_SOURCE_SHA_MISMATCH"],
-    ["launcher SHA substitution", { GITHUB_SHA: "d".repeat(40) }, "PROTECTED_APPROVED_LAUNCHER_SHA_MISMATCH"],
+    ["launcher workflow SHA substitution", { WORKFLOW_SHA: "d".repeat(40) }, "PROTECTED_APPROVED_LAUNCHER_SHA_MISMATCH"],
     ["missing launcher approval", { EXPECTED_LAUNCHER_SHA: "" }, "PROTECTED_APPROVED_LAUNCHER_SHA_MISMATCH"],
     ["wrong ticket", { DISPATCH_APPROVAL_TICKET: "e".repeat(32) }, "SOLO_OWNER_APPROVAL_TICKET_MISMATCH"],
     ["missing protected ticket", { EXPECTED_APPROVAL_TICKET: "" }, "SOLO_OWNER_APPROVAL_TICKET_MISMATCH"],
     ["invalid expiry", { EXPECTED_APPROVAL_EXPIRES: "tomorrow" }, "SOLO_OWNER_APPROVAL_EXPIRY_INVALID"],
+    ["invalid approval issue time", { EXPECTED_APPROVAL_AT: "yesterday" }, "SOLO_OWNER_APPROVAL_ISSUED_AT_INVALID"],
+    ["future approval issue time", { EXPECTED_APPROVAL_AT: new Date(Date.now() + 60_000).toISOString().replace(/\.\d{3}Z$/, "Z") }, "SOLO_OWNER_APPROVAL_EXPIRED_OR_TOO_LONG"],
+    ["stale approval issue time", { EXPECTED_APPROVAL_AT: new Date(Date.now() - 16 * 60_000).toISOString().replace(/\.\d{3}Z$/, "Z") }, "SOLO_OWNER_APPROVAL_EXPIRED_OR_TOO_LONG"],
     ["expired approval", { EXPECTED_APPROVAL_EXPIRES: new Date(Date.now() - 60_000).toISOString().replace(/\.\d{3}Z$/, "Z") }, "SOLO_OWNER_APPROVAL_EXPIRED_OR_TOO_LONG"],
     ["excessive validity", { EXPECTED_APPROVAL_EXPIRES: new Date(Date.now() + 60 * 60_000).toISOString().replace(/\.\d{3}Z$/, "Z") }, "SOLO_OWNER_APPROVAL_EXPIRED_OR_TOO_LONG"],
   ] as const)("rejects %s before reaching the hard-stop stage", (_name, overrides, code) => {
