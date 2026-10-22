@@ -102,14 +102,13 @@ jobs:
   protected-approval-boundary:
     name: Solo Owner Environment — ALWAYS STOP (phase-0 only)
     needs: no-secret-preflight
-    if: ${{ success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true && github.repository == 'Satsetx4/karturt' && github.repository_id == '1386907262' && github.repository_owner_id == '304263836' && github.actor == 'Satsetx4' && github.actor_id == '304263836' && github.triggering_actor == 'Satsetx4' && github.run_attempt == 1 }}
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true && github.repository == 'Satsetx4/karturt' && github.repository_id == '1386907262' && github.repository_owner_id == '304263836' && github.actor == 'Satsetx4' && github.triggering_actor == 'Satsetx4' && github.run_attempt == 1 }}
     runs-on: windows-2025
     timeout-minutes: 5
     environment: karturt-staging-readiness
     env:
       REPOSITORY_ID: ${{ github.repository_id }}
       OWNER_ID: ${{ github.repository_owner_id }}
-      ACTOR_ID: ${{ github.actor_id }}
       REF_PROTECTED: ${{ github.ref_protected }}
       EVENT_SHA: ${{ github.sha }}
       WORKFLOW_SHA: ${{ github.workflow_sha }}
@@ -123,6 +122,8 @@ jobs:
     steps:
       - name: Validate expiring Solo Owner approval and STOP before staging access
         shell: pwsh
+        env:
+          ACTOR_ID: ${{ github.actor_id }}
         run: |
           $ErrorActionPreference = 'Stop'
           # Env values above are nonsecret approval metadata, NOT keys or one-time authentication.
