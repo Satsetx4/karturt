@@ -64,6 +64,22 @@ function runGuard(overrides: Record<string, string> = {}) {
   return result;
 }
 
+describe("Solo Owner protected job context bindings", () => {
+  it("checks actor ID inside the step, not the job-level condition", () => {
+    const protectedJobStart = yaml.indexOf("  protected-approval-boundary:");
+    expect(protectedJobStart).toBeGreaterThanOrEqual(0);
+    const protectedJob = yaml.slice(protectedJobStart);
+    const jobIf = protectedJob.match(/^    if: (.+)$/m)?.[1];
+    expect(jobIf).toBeDefined();
+    expect(jobIf).not.toContain("github.actor_id");
+
+    const stepStart = protectedJob.indexOf("      - name: Validate expiring Solo Owner approval and STOP before staging access");
+    expect(stepStart).toBeGreaterThanOrEqual(0);
+    const runStart = protectedJob.indexOf("\\n        run: |\\n", stepStart);
+    expect(runStart).toBeGreaterThan(stepStart);
+    expect(protectedJob.slice(stepStart, runStart)).toContain("ACTOR_ID: ${{ github.actor_id }}");
+  });
+});
 describe.skipIf(process.platform !== "linux")("Solo Owner protected Windows guard executed offline", () => {
   it("always refuses live capture even when owner/SHAs/ticket/expiry match", () => {
     const result = runGuard();
