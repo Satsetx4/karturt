@@ -1,0 +1,47 @@
+# Isolated real PostgreSQL 18 contract only; NO Neon or production credentials.
+name: Solo Owner Claim PG18 (disposable)
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/solo-owner-claim-pg18-contract.yml"
+      - "scripts/solo-owner-claim-pg18-contract.ts"
+      - "scripts/lib/solo-owner-approval-ledger.ts"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ephemeral-claim:
+    if: github.repository == 'Satsetx4/karturt'
+    name: PG18 synthetic atomic ticket claim and insert-only role
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: CI_SYNTHETIC_TICKET_TEST_ONLY_20261022
+          POSTGRES_DB: karturt_ticket_contract_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d karturt_ticket_contract_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      APP_ENV: test
+      DATABASE_ENV: test
+      SOLO_TICKET_CONTRACT_ONLY: "1"
+      SOLO_TICKET_CI_URL: postgresql://postgres:CI_SYNTHETIC_TICKET_TEST_ONLY_20261022@127.0.0.1:5432/karturt_ticket_contract_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Prove atomic claim and denied modifications in disposable PG18
+        run: npx tsx scripts/solo-owner-claim-pg18-contract.ts
