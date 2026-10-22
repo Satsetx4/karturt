@@ -60,8 +60,9 @@ export async function reserveApprovedSoloOwnerTicket(
   }
   if (!shaPattern.test(e.launcherSha) ||
       !shaPattern.test(e.workflowSha) || !shaPattern.test(e.eventSha) ||
-      e.launcherSha !== e.workflowSha || e.eventSha !== e.workflowSha ||
+      e.launcherSha !== e.workflowSha ||
       !shaPattern.test(e.candidateSha) ||
+      e.candidateSha !== e.eventSha ||
       !shaPattern.test(e.approvedCandidateSha) ||
       !shaPattern.test(e.approvedLauncherSha) ||
       e.candidateSha !== e.approvedCandidateSha ||
