@@ -36,7 +36,7 @@ async function main() {
     runAttempt: e.GITHUB_RUN_ATTEMPT ?? "",
     runId: e.GITHUB_RUN_ID ?? "",
     launcherSha: e.WORKFLOW_SHA ?? "",
-    candidateSha: e.CANDIDATE_SHA ?? "",
+    candidateSha: e.PREFLIGHT_CANDIDATE_SHA ?? "",
     dispatchTicket: e.DISPATCH_APPROVAL_TICKET ?? "",
     approvedCandidateSha: e.EXPECTED_APPROVED_SHA ?? "",
     approvedLauncherSha: e.EXPECTED_LAUNCHER_SHA ?? "",
