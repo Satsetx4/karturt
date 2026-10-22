@@ -52,7 +52,7 @@ jobs:
                 "$GITHUB_REF" != 'refs/heads/main' ||
                 "$REF_PROTECTED" != 'true' ||
                 ! "$WORKFLOW_SHA" =~ ^[a-f0-9]{40}$ ||
-                "$EVENT_SHA" != "$WORKFLOW_SHA" ]]; then
+                ! "$EVENT_SHA" =~ ^[a-f0-9]{40}$ ]]; then
             echo 'CAPTURE_STOP: TRUSTED_DISPATCH_CONTEXT_INVALID' >&2
             exit 1
           fi
@@ -70,6 +70,10 @@ jobs:
           fi
           if [[ ! "$CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]; then
             echo 'CAPTURE_STOP: CANDIDATE_SHA_FORMAT_INVALID' >&2
+            exit 1
+          fi
+          if [[ "$CANDIDATE_SHA" != "$EVENT_SHA" ]]; then
+            echo 'CAPTURE_STOP: SOURCE_SHA_CONTEXT_MISMATCH' >&2
             exit 1
           fi
           if [[ ! "$OWNER_APPROVAL_TICKET" =~ ^[a-f0-9]{32}$ ]]; then
@@ -140,7 +144,56 @@ jobs:
           }
           if ($env:EXPECTED_APPROVED_SHA -cnotmatch '^[a-f0-9]{40}$' -or
               $env:PREFLIGHT_CANDIDATE_SHA -cnotmatch '^[a-f0-9]{40}$' -or
-              $env:EXPECTED_APPROVED_SHA -cne $env:PREFLIGHT_CANDIDATE_SHA) {
+              $env:EXPECTED_APPROVED_SHA -cne $env:PREFLIGHT_CANDIDATE_SHA -or
+              $env:EVENT_SHA -cnotmatch '^[a-f0-9]{40}
+            throw 'CAPTURE_STOP: PROTECTED_APPROVED_SOURCE_SHA_MISMATCH'
+          }
+          if ($env:EXPECTED_LAUNCHER_SHA -cnotmatch '^[a-f0-9]{40}$' -or
+              $env:WORKFLOW_SHA -cnotmatch '^[a-f0-9]{40}$' -or
+              $env:WORKFLOW_SHA -cne $env:EXPECTED_LAUNCHER_SHA) {
+            throw 'CAPTURE_STOP: PROTECTED_APPROVED_LAUNCHER_SHA_MISMATCH'
+          }
+          if ($env:EXPECTED_APPROVAL_TICKET -cnotmatch '^[a-f0-9]{32}$' -or
+              $env:DISPATCH_APPROVAL_TICKET -cnotmatch '^[a-f0-9]{32}$' -or
+              $env:EXPECTED_APPROVAL_TICKET -cne $env:DISPATCH_APPROVAL_TICKET) {
+            throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_TICKET_MISMATCH'
+          }
+          if ($env:EXPECTED_APPROVAL_AT -cnotmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$') {
+            throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_ISSUED_AT_INVALID'
+          }
+          if ($env:EXPECTED_APPROVAL_EXPIRES -cnotmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$') {
+            throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_EXPIRY_INVALID'
+          }
+          $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
+          $approvedAt = [DateTimeOffset]::MinValue
+          $expiration = [DateTimeOffset]::MinValue
+          if (-not [DateTimeOffset]::TryParseExact(
+            $env:EXPECTED_APPROVAL_AT, "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$approvedAt)) {
+            throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_ISSUED_AT_INVALID'
+          }
+          if (-not [DateTimeOffset]::TryParseExact(
+            $env:EXPECTED_APPROVAL_EXPIRES, "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$expiration)) {
+            throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_EXPIRY_INVALID'
+          }
+          $now = [DateTimeOffset]::UtcNow
+          $validity = $expiration - $approvedAt
+          $age = $now - $approvedAt
+          if ($approvedAt -gt $now -or $expiration -le $now -or
+              $validity.TotalSeconds -le 0 -or $validity.TotalSeconds -gt 900 -or
+              $age.TotalSeconds -lt 0 -or $age.TotalSeconds -gt 900) {
+            throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_EXPIRED_OR_TOO_LONG'
+          }
+          # Positive audit of the bound checks; do not output ticket or credentials.
+          Write-Host 'SOLO_OWNER_APPROVAL_SHAPE_PASS: actor, main, candidate SHA, launcher SHA, ticket and expiry match.'
+          Write-Host 'CAPTURE_STOP: LIVE_CAPTURE_NOT_IMPLEMENTED_OR_AUTHORIZED'
+          Write-Host 'Static Environment ticket can be replayed before expiry; no stateful one-time proof implemented.'
+          Write-Host 'No provider connection, psql, secrets, migration, deployment or F2 executed.'
+          exit 78
+ -or
+              $env:EVENT_SHA -cne $env:EXPECTED_APPROVED_SHA -or
+              $env:GITHUB_SHA -cne $env:EVENT_SHA) {
             throw 'CAPTURE_STOP: PROTECTED_APPROVED_SOURCE_SHA_MISMATCH'
           }
           if ($env:EXPECTED_LAUNCHER_SHA -cnotmatch '^[a-f0-9]{40}$' -or
