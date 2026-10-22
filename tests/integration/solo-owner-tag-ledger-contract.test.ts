@@ -419,7 +419,7 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
     expect(fake.refs.size).toBe(0);
   });
 
-  it.each([202, 302, 408, 425, 429, 500, 503])(
+  it.each([150, 202, 302, 408, 425, 429, 500, 503])(
     "treats ambiguous create-ref HTTP status %i as indeterminate without retry",
     async (status) => {
       const fake = createFakeTransport();
@@ -432,6 +432,18 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
       expect(fake.refs.size).toBe(0);
     },
   );
+
+  it("stops indeterminate when a ref may exist despite an ambiguous create response", async () => {
+    const fake = createFakeTransport();
+    fake.transport.createReference = async (input: GitReferenceInput) => {
+      fake.calls.push("ref-create");
+      fake.refs.set(input.ref, input.sha);
+      return { status: 503, body: {} };
+    };
+    await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "REF_CREATE_INDETERMINATE");
+    expect(fake.calls).toEqual(["scope", "ruleset", "tag-create", "ref-create"]);
+    expect(fake.refs.size).toBe(1); // The server may have committed before the ambiguous response.
+  });
 
   it("rejects a definitive invalid create-ref request without retrying", async () => {
     const fake = createFakeTransport();
