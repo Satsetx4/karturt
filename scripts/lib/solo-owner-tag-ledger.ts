@@ -295,6 +295,18 @@ function requireRecord(value: unknown, code: string): JsonRecord {
   return value;
 }
 
+function isAmbiguousWriteStatus(status: number): boolean {
+  return !Number.isInteger(status) ||
+    status < 100 ||
+    status > 599 ||
+    status === 408 ||
+    status === 425 ||
+    status === 429 ||
+    (status >= 200 && status < 300) ||
+    (status >= 300 && status < 400) ||
+    status >= 500;
+}
+
 function validateTagObject(
   response: GitHubApiResponse,
   expectedSha: string,
@@ -324,8 +336,10 @@ function validateReferenceResponse(
 ): void {
   if (response.status === 401 || response.status === 403) deny("LEDGER_WRITER_UNAUTHORIZED");
   if (response.status === 409 || response.status === 422) deny("TICKET_ALREADY_CONSUMED_OR_REF_CONFLICT");
-  if (response.status === 429 || response.status >= 500) deny("REF_CREATE_INDETERMINATE");
-  if (response.status !== 201) deny("REF_CREATE_REJECTED");
+  if (response.status !== 201) {
+    if (isAmbiguousWriteStatus(response.status)) deny("REF_CREATE_INDETERMINATE");
+    deny("REF_CREATE_REJECTED");
+  }
   const body = requireRecord(response.body, "REF_CREATE_RESPONSE_INVALID");
   const object = requireRecord(body.object, "REF_CREATE_RESPONSE_INVALID");
   if (body.ref !== ref || object.type !== "tag" || object.sha !== tagObjectSha) {
@@ -442,7 +456,12 @@ export async function reserveSoloOwnerTicketInTagLedger(
   if (tagObjectResponse.status === 401 || tagObjectResponse.status === 403) {
     deny("LEDGER_WRITER_UNAUTHORIZED");
   }
-  if (tagObjectResponse.status !== 201) deny("TAG_OBJECT_CREATE_REJECTED");
+  if (tagObjectResponse.status !== 201) {
+    if (isAmbiguousWriteStatus(tagObjectResponse.status)) {
+      deny("TAG_OBJECT_CREATE_INDETERMINATE");
+    }
+    deny("TAG_OBJECT_CREATE_REJECTED");
+  }
   const tagObjectBody = requireRecord(tagObjectResponse.body, "TAG_OBJECT_RESPONSE_INVALID");
   const tagObjectSha = typeof tagObjectBody.sha === "string" ? tagObjectBody.sha : "";
   validateTagObject(tagObjectResponse, tagObjectSha, tagName, message, claim.candidateSha);
