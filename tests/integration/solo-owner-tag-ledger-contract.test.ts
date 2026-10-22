@@ -361,6 +361,29 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
     expect(fake.calls).toEqual(["scope"]);
   });
 
+  it("accepts the exact GitHub-observed active tag ruleset including non_fast_forward", async () => {
+    const fake = createFakeTransport();
+    fake.setRulesetFactory(() => ({
+      status: 200,
+      complete: true,
+      rulesets: [{
+        ...tagRuleset(),
+        rules: [
+          { type: "deletion" },
+          { type: "non_fast_forward" },
+          { type: "update" },
+        ],
+      }],
+    }));
+    const result = await reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport);
+    expect(result.status).toBe("CREATE_AND_READBACK_MATCHED_UNATTESTED");
+    expect(result.runtimeEnableAllowed).toBe(false);
+    expect(result.atomicityProven).toBe(false);
+    expect(result.replayProof).toBe(false);
+    expect(result.liveRulesetBehaviorVerified).toBe(false);
+    expect(fake.calls.filter((call) => call === "ruleset")).toHaveLength(2);
+  });
+
   it.each([
     ["branch-target ruleset", (rule: Record<string, unknown>) => ({ ...rule, target: "branch" })],
     ["inactive ruleset", (rule: Record<string, unknown>) => ({ ...rule, enforcement: "disabled" })],
@@ -383,6 +406,22 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
     ["creation restriction blocks intended writer", (rule: Record<string, unknown>) => ({
       ...rule,
       rules: [{ type: "creation" }, { type: "deletion" }, { type: "update" }],
+    })],
+    ["unknown extra rule", (rule: Record<string, unknown>) => ({
+      ...rule,
+      rules: [{ type: "deletion" }, { type: "update" }, { type: "required_signatures" }],
+    })],
+    ["duplicate rule", (rule: Record<string, unknown>) => ({
+      ...rule,
+      rules: [{ type: "deletion" }, { type: "update" }, { type: "update" }],
+    })],
+    ["malformed rule entry", (rule: Record<string, unknown>) => ({
+      ...rule,
+      rules: [{ type: "deletion" }, { type: "update" }, null],
+    })],
+    ["non_fast_forward cannot replace update", (rule: Record<string, unknown>) => ({
+      ...rule,
+      rules: [{ type: "deletion" }, { type: "non_fast_forward" }],
     })],
     ["bypass actor", (rule: Record<string, unknown>) => ({
       ...rule,
