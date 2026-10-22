@@ -50,6 +50,17 @@ describe("Solo Owner approved ticket reservation contract (offline only)", () =>
       .rejects.toMatchObject({ code: "SOLO_APPROVAL_LEDGER_NOT_RESERVED" });
     expect(used.size).toBe(1);
   });
+  it("rejects the same ticket replayed from a distinct new dispatch run", async () => {
+    const { callback, used } = createOnlyFake();
+    await reserveApprovedSoloOwnerTicket(valid(), now, callback);
+    const replayedRun = { ...valid(), runId: "39730000002" };
+    await expect(reserveApprovedSoloOwnerTicket(replayedRun, now, callback))
+      .rejects.toMatchObject({ code: "SOLO_APPROVAL_LEDGER_NOT_RESERVED" });
+    // In this mock model the ticket-keyed create-only path is shared across run IDs.
+    expect(used.size).toBe(1);
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(callback.mock.calls[0]?.[0]).toBe(callback.mock.calls[1]?.[0]);
+  });
   it("admits only one concurrent reservation in the offline atomic-store model", async () => {
     const { callback, used } = createOnlyFake();
     const results = await Promise.allSettled([
