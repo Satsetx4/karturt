@@ -377,8 +377,8 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
         status: 201,
         body: {
           sha: "not-a-sha",
-        tag: "forged",
-        message: "{}",
+          tag: "forged",
+          message: "{}",
           object: { sha: "f".repeat(40), type: "commit" },
         },
       };
