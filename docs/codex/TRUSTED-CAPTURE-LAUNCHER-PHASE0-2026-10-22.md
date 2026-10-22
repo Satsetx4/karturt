@@ -45,3 +45,16 @@ Negative tests: wrong ref, wrong workflow identity, short/uppercase/non-hex SHA,
 ## Handoff
 
 Critical path: [issue #66](https://github.com/Satsetx4/karturt/issues/66). This document is deliberately a **phase-0** bridge, not evidence for readiness. If gate evidence is unavailable within the deadline, maintain NO-GO for production and deliver a tested release candidate rather than bypass controls.
+
+## 2026-10-22 blocker review: effective Neon API permissions
+
+External docs reviewed on 2026-10-22 establish two distinct permission facts that an implementation must not confuse:
+
+1. Neon effective user permissions may be additive between org and project roles; the **Viewer** role is metadata-read-only and cannot access connection strings. A project-level Viewer grant does not cancel a broader org Editor/Admin grant. Source: https://neon.com/blog/neon-now-has-per-project-permissions
+2. Neon's **organization-wide** API keys are Admin-equivalent. Its **project-scoped organization API keys are NOT automatically Viewer-only**; published API-key guidance describes member-/Editor-level access to the project. Source: https://api-docs.neon.tech/reference/authentication and https://neon.com/docs/manage/orgs-api
+
+Therefore, **do not replace the required Viewer principal with an organization/project-scoped organization API key** just because its name includes a project. A distinct principal with only effective Viewer rights (and an independently validated, correspondingly limited credential) is required; if unavailable, stop at `VIEWER_CREDENTIAL_UNAVAILABLE` before any provider capture or DB client creation. API-control-plane Viewer metadata access is not a substitute for the separately authorized read-only PostgreSQL catalog session.
+
+Repository policy: independent Environment reviewer is distinct from workflow dispatcher; Prevent self-review ON, bypass disabled, only reviewed `main` allowed. GitHub public-repo Free plans support required reviewers according to https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments . The current reviewer/credential configuration has NOT been verified live from this conversation; preserve BLOCKED.
+
+**Owner action issue:** https://github.com/Satsetx4/karturt/issues/68 . Keep phase-0 launcher inert until independent review, authenticated original lineage evidence or a separately reviewed alternative (including new audited creation if separately authorized), and exact-SHA approvals are all available. No F2, staging connection, migration, merge or deployment is authorized by this document.
