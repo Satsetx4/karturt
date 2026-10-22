@@ -67,7 +67,7 @@ Annotated-tag message berisi JSON dengan urutan field tetap: version, ticketDige
 1. Validasi repository/owner/actor, workflow dispatch pada protected main, attempt pertama, workflow ref, source SHA dan launcher SHA terhadap context dan approval, format ticket, serta jendela UTC maksimum 15 menit.
 2. Verifikasi scope descriptor writer dan ruleset lengkap sebelum write. Tolak akses repo aplikasi, permission tambahan, aturan tag salah, missing bypass metadata, bypass actor, atau aturan creation.
 3. Buat annotated-tag object untuk commit source; object orphan boleh tertinggal jika langkah ref gagal.
-4. Kirim satu kali POST create-ref ke nama digest. Hanya HTTP 201 yang boleh melanjutkan. 409/422 berhenti sebagai duplicate/conflict; 401/403 berhenti karena scope/authorization; timeout, 429, 5xx, atau koneksi hilang berhenti INDETERMINATE dan tidak dicoba ulang.
+4. Kirim satu kali POST create-ref ke nama digest. Hanya HTTP 201 yang boleh melanjutkan. 409/422 berhenti sebagai duplicate/conflict; 401/403 berhenti karena scope/authorization; HTTP 408/425/429, status 2xx selain 201, 3xx, 5xx, status malformed, atau koneksi hilang berhenti INDETERMINATE dan tidak dicoba ulang.
 5. Baca ulang ref dan annotated object dengan GET terautentikasi; harus cocok persis dengan object SHA, name, source commit, message receipt dan digest.
 6. Baca ulang scope dan ruleset. Jika berbeda atau tidak terbaca, tiket dianggap mungkin telah terbakar dan workflow tetap berhenti.
 7. Hasil prototipe bukan izin menjalankan kerja sensitif. Hanya exact ref create plus readback menghasilkan CREATE_AND_READBACK_MATCHED_UNATTESTED.
