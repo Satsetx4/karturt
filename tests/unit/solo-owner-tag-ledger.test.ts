@@ -21,13 +21,10 @@ describe("Solo Owner tag-ledger pure contract", () => {
       .toBe("refs/tags/karturt-solo/used/v1/" + digest);
   });
 
-  it.each([
-    ["uppercase ticket", "C".repeat(32), "TICKET_FORMAT_INVALID"],
-    ["short ticket", "c".repeat(31), "TICKET_FORMAT_INVALID"],
-    ["wrong digest length", "a".repeat(63), "TICKET_DIGEST_INVALID"],
-    ["non-hex digest", "z".repeat(64), "TICKET_DIGEST_INVALID"],
-  ])("rejects %s", (_label, value, code) => {
-    expect(() => value.length === 64 ? soloOwnerTicketRef(value) : soloOwnerTicketDigest(value))
-      .toThrow(code);
+  it("rejects malformed tickets and digests with the matching validator", () => {
+    expect(() => soloOwnerTicketDigest("C".repeat(32))).toThrow("TICKET_FORMAT_INVALID");
+    expect(() => soloOwnerTicketDigest("c".repeat(31))).toThrow("TICKET_FORMAT_INVALID");
+    expect(() => soloOwnerTicketRef("a".repeat(63))).toThrow("TICKET_DIGEST_INVALID");
+    expect(() => soloOwnerTicketRef("z".repeat(64))).toThrow("TICKET_DIGEST_INVALID");
   });
 });
