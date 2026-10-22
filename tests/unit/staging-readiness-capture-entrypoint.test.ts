@@ -19,13 +19,21 @@ describe("staging capture launcher phase-0 trust boundary", () => {
     expect(launcher).toContain("https://api.github.com/repos/Satsetx4/karturt/commits/");
   });
 
-  it("requires an independently protected Environment before running any second-stage job", () => {
+  it("requires owner-bound SHA, ticket and expiry in protected Environment before any second-stage job", () => {
     expect(launcher).toContain("needs: no-secret-preflight");
     expect(launcher).toContain("environment: karturt-staging-readiness");
     expect(launcher).toContain("vars.KARTURT_CAPTURE_APPROVED_SOURCE_SHA");
     expect(launcher).toContain("PROTECTED_APPROVED_SOURCE_SHA_MISMATCH");
+    expect(launcher).toContain("KARTURT_SOLO_APPROVED_LAUNCHER_SHA");
+    expect(launcher).toContain("KARTURT_SOLO_APPROVED_TICKET");
+    expect(launcher).toContain("KARTURT_SOLO_APPROVAL_EXPIRES_AT_UTC");
+    expect(launcher).toContain("SOLO_OWNER_APPROVAL_EXPIRED_OR_TOO_LONG");
+    expect(launcher).toContain("SOLO_OWNER_ACTOR_OR_RETRY_INVALID");
+    expect(launcher).toContain("GITHUB_TRIGGERING_ACTOR");
+    expect(launcher).toContain("owner_approval_ticket");
     expect(launcher).toContain("LIVE_CAPTURE_NOT_IMPLEMENTED_OR_AUTHORIZED");
     expect(launcher).toContain("exit 78");
+    expect(launcher).toContain("LIVE_CAPTURE_NOT_IMPLEMENTED_OR_AUTHORIZED");
   });
 
   it("cannot accidentally exercise F2, database tools, credentials or a deployment", () => {

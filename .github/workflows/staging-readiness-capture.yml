@@ -1,7 +1,7 @@
 # KartuRT V1 — intentionally inert trusted-capture entrypoint.
 # This launcher NEVER contacts Neon, reads secrets, invokes psql or deploys.
-# To enable real capture, a separate security-reviewed PR and independent
-# environment approval must replace the explicit fail-closed stop.
+# Solo Owner Gate: owner-bound, short-lived manual approval; no second reviewer.
+# Phase-0 still ALWAYS stops. Never enable secrets or live database access.
 name: Staging Readiness Capture (locked preflight)
 
 on:
@@ -9,6 +9,10 @@ on:
     inputs:
       candidate_source_sha:
         description: "Exact full 40-hex SHA of reviewed candidate source"
+        required: true
+        type: string
+      owner_approval_ticket:
+        description: "32 lowercase hex audit correlation ID pre-registered in protected Environment; NOT a secret or a one-time token"
         required: true
         type: string
 
@@ -32,12 +36,19 @@ jobs:
         shell: bash
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_source_sha }}
+          OWNER_APPROVAL_TICKET: ${{ inputs.owner_approval_ticket }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REPOSITORY" != 'Satsetx4/karturt' ||
                 "$GITHUB_EVENT_NAME" != 'workflow_dispatch' ||
                 "$GITHUB_REF" != 'refs/heads/main' ]]; then
             echo 'CAPTURE_STOP: TRUSTED_DISPATCH_CONTEXT_INVALID' >&2
+            exit 1
+          fi
+          if [[ "${GITHUB_ACTOR:-}" != 'Satsetx4' ||
+                "${GITHUB_TRIGGERING_ACTOR:-}" != 'Satsetx4' ||
+                "${GITHUB_RUN_ATTEMPT:-}" != '1' ]]; then
+            echo 'CAPTURE_STOP: SOLO_OWNER_ACTOR_OR_RETRY_INVALID' >&2
             exit 1
           fi
           expected_ref='Satsetx4/karturt/.github/workflows/staging-readiness-capture.yml@refs/heads/main'
@@ -47,6 +58,10 @@ jobs:
           fi
           if [[ ! "$CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]; then
             echo 'CAPTURE_STOP: CANDIDATE_SHA_FORMAT_INVALID' >&2
+            exit 1
+          fi
+          if [[ ! "$OWNER_APPROVAL_TICKET" =~ ^[a-f0-9]{32}$ ]]; then
+            echo 'CAPTURE_STOP: OWNER_APPROVAL_TICKET_FORMAT_INVALID' >&2
             exit 1
           fi
           # Public repository GET only; a missing, malformed or unreachable
@@ -66,29 +81,71 @@ jobs:
             exit 1
           fi
           echo "candidate_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
-          echo 'CAPTURE_PREFLIGHT_PASS: commit exists; independent approval and provenance remain required.'
+          echo 'CAPTURE_PREFLIGHT_PASS: SHA exists; Solo Owner protected approval and provenance NOT YET VERIFIED.'
 
   protected-approval-boundary:
-    name: Protected Environment — explicit disabled stop
+    name: Solo Owner Environment — ALWAYS STOP (phase-0 only)
     needs: no-secret-preflight
-    if: ${{ success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'Satsetx4' && github.triggering_actor == 'Satsetx4' && github.run_attempt == 1 }}
     runs-on: windows-2025
     timeout-minutes: 5
     environment: karturt-staging-readiness
     env:
       EXPECTED_APPROVED_SHA: ${{ vars.KARTURT_CAPTURE_APPROVED_SOURCE_SHA }}
+      EXPECTED_LAUNCHER_SHA: ${{ vars.KARTURT_SOLO_APPROVED_LAUNCHER_SHA }}
+      EXPECTED_APPROVAL_TICKET: ${{ vars.KARTURT_SOLO_APPROVED_TICKET }}
+      EXPECTED_APPROVAL_EXPIRES: ${{ vars.KARTURT_SOLO_APPROVAL_EXPIRES_AT_UTC }}
       PREFLIGHT_CANDIDATE_SHA: ${{ needs.no-secret-preflight.outputs.candidate_sha }}
+      DISPATCH_APPROVAL_TICKET: ${{ inputs.owner_approval_ticket }}
     steps:
-      - name: Check protected expected SHA and stop — live capture NOT enabled
+      - name: Validate expiring Solo Owner approval and STOP before staging access
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if ($env:EXPECTED_APPROVED_SHA -cnotmatch '^[a-f0-9]{40}$') {
-            throw 'CAPTURE_STOP: PROTECTED_APPROVED_SOURCE_SHA_MISSING'
+          # Env values above are nonsecret approval metadata, NOT keys or one-time authentication.
+          if ($env:GITHUB_REPOSITORY -cne 'Satsetx4/karturt' -or
+              $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch' -or
+              $env:GITHUB_REF -cne 'refs/heads/main' -or
+              $env:GITHUB_ACTOR -cne 'Satsetx4' -or
+              $env:GITHUB_TRIGGERING_ACTOR -cne 'Satsetx4' -or
+              $env:GITHUB_RUN_ATTEMPT -cne '1') {
+            throw 'CAPTURE_STOP: SOLO_OWNER_PROTECTED_CONTEXT_INVALID'
           }
-          if ($env:EXPECTED_APPROVED_SHA -cne $env:PREFLIGHT_CANDIDATE_SHA) {
+          $expectedWorkflowRef = 'Satsetx4/karturt/.github/workflows/staging-readiness-capture.yml@refs/heads/main'
+          if ($env:GITHUB_WORKFLOW_REF -cne $expectedWorkflowRef) {
+            throw 'CAPTURE_STOP: SOLO_OWNER_WORKFLOW_REF_INVALID'
+          }
+          if ($env:EXPECTED_APPROVED_SHA -cnotmatch '^[a-f0-9]{40}$' -or
+              $env:PREFLIGHT_CANDIDATE_SHA -cnotmatch '^[a-f0-9]{40}$' -or
+              $env:EXPECTED_APPROVED_SHA -cne $env:PREFLIGHT_CANDIDATE_SHA) {
             throw 'CAPTURE_STOP: PROTECTED_APPROVED_SOURCE_SHA_MISMATCH'
           }
+          if ($env:EXPECTED_LAUNCHER_SHA -cnotmatch '^[a-f0-9]{40}$' -or
+              $env:GITHUB_SHA -cne $env:EXPECTED_LAUNCHER_SHA) {
+            throw 'CAPTURE_STOP: PROTECTED_APPROVED_LAUNCHER_SHA_MISMATCH'
+          }
+          if ($env:EXPECTED_APPROVAL_TICKET -cnotmatch '^[a-f0-9]{32}$' -or
+              $env:DISPATCH_APPROVAL_TICKET -cnotmatch '^[a-f0-9]{32}$' -or
+              $env:EXPECTED_APPROVAL_TICKET -cne $env:DISPATCH_APPROVAL_TICKET) {
+            throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_TICKET_MISMATCH'
+          }
+          if ($env:EXPECTED_APPROVAL_EXPIRES -cnotmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$') {
+            throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_EXPIRY_INVALID'
+          }
+          $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
+          $expiration = [DateTimeOffset]::MinValue
+          if (-not [DateTimeOffset]::TryParseExact(
+            $env:EXPECTED_APPROVAL_EXPIRES, "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$expiration)) {
+            throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_EXPIRY_INVALID'
+          }
+          $remaining = $expiration - [DateTimeOffset]::UtcNow
+          if ($remaining.TotalSeconds -le 0 -or $remaining.TotalMinutes -gt 15) {
+            throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_EXPIRED_OR_TOO_LONG'
+          }
+          # Positive audit of the bound checks; do not output ticket or credentials.
+          Write-Host 'SOLO_OWNER_APPROVAL_SHAPE_PASS: actor, main, candidate SHA, launcher SHA, ticket and expiry match.'
           Write-Host 'CAPTURE_STOP: LIVE_CAPTURE_NOT_IMPLEMENTED_OR_AUTHORIZED'
+          Write-Host 'Static Environment ticket can be replayed before expiry; no stateful one-time proof implemented.'
           Write-Host 'No provider connection, psql, secrets, migration, deployment or F2 executed.'
           exit 78

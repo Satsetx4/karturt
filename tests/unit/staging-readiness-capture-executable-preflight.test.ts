@@ -42,6 +42,10 @@ function executePreflight(overrides: Record<string, string> = {}) {
         GITHUB_WORKFLOW_REF: "Satsetx4/karturt/.github/workflows/staging-readiness-capture.yml@refs/heads/main",
         GITHUB_OUTPUT: output,
         CANDIDATE_SHA: fullSha,
+        OWNER_APPROVAL_TICKET: "c".repeat(32),
+        GITHUB_ACTOR: "Satsetx4",
+        GITHUB_TRIGGERING_ACTOR: "Satsetx4",
+        GITHUB_RUN_ATTEMPT: "1",
         FAKE_GITHUB_COMMIT_SHA: fullSha,
         ...overrides,
       },
@@ -64,6 +68,11 @@ describe.skipIf(process.platform !== "linux")("trusted capture phase-0 executabl
 
   it.each([
     ["wrong repo", { GITHUB_REPOSITORY: "external/fork" }, "TRUSTED_DISPATCH_CONTEXT_INVALID"],
+    ["other actor", { GITHUB_ACTOR: "someoneelse" }, "SOLO_OWNER_ACTOR_OR_RETRY_INVALID"],
+    ["other rerun actor", { GITHUB_TRIGGERING_ACTOR: "someoneelse" }, "SOLO_OWNER_ACTOR_OR_RETRY_INVALID"],
+    ["retry attempt", { GITHUB_RUN_ATTEMPT: "2" }, "SOLO_OWNER_ACTOR_OR_RETRY_INVALID"],
+    ["missing owner ticket", { OWNER_APPROVAL_TICKET: "" }, "OWNER_APPROVAL_TICKET_FORMAT_INVALID"],
+    ["malformed owner ticket", { OWNER_APPROVAL_TICKET: "f".repeat(31) }, "OWNER_APPROVAL_TICKET_FORMAT_INVALID"],
     ["PR event", { GITHUB_EVENT_NAME: "pull_request" }, "TRUSTED_DISPATCH_CONTEXT_INVALID"],
     ["candidate-branch ref", { GITHUB_REF: "refs/heads/feature" }, "TRUSTED_DISPATCH_CONTEXT_INVALID"],
     ["wrong workflow", { GITHUB_WORKFLOW_REF: "Satsetx4/karturt/.github/workflows/other.yml@refs/heads/main" }, "TRUSTED_WORKFLOW_REF_INVALID"],
