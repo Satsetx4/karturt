@@ -419,14 +419,39 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
     expect(fake.refs.size).toBe(0);
   });
 
-  it("does not accept a non-201 create-ref status as success", async () => {
+  it.each([202, 302, 408, 425, 429, 500, 503])(
+    "treats ambiguous create-ref HTTP status %i as indeterminate without retry",
+    async (status) => {
+      const fake = createFakeTransport();
+      fake.transport.createReference = async () => {
+        fake.calls.push("ref-create");
+        return { status, body: {} };
+      };
+      await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "REF_CREATE_INDETERMINATE");
+      expect(fake.calls).toEqual(["scope", "ruleset", "tag-create", "ref-create"]);
+      expect(fake.refs.size).toBe(0);
+    },
+  );
+
+  it("rejects a definitive invalid create-ref request without retrying", async () => {
     const fake = createFakeTransport();
     fake.transport.createReference = async () => {
       fake.calls.push("ref-create");
-      return { status: 202, body: {} };
+      return { status: 400, body: {} };
     };
     await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "REF_CREATE_REJECTED");
     expect(fake.calls).toEqual(["scope", "ruleset", "tag-create", "ref-create"]);
+  });
+
+  it("treats an ambiguous annotated-tag create status as indeterminate", async () => {
+    const fake = createFakeTransport();
+    fake.transport.createAnnotatedTagObject = async () => {
+      fake.calls.push("tag-create");
+      return { status: 408, body: {} };
+    };
+    await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "TAG_OBJECT_CREATE_INDETERMINATE");
+    expect(fake.calls).toEqual(["scope", "ruleset", "tag-create"]);
+    expect(fake.refs.size).toBe(0);
   });
 
   it("fails closed when the created ref readback points to a different object", async () => {
