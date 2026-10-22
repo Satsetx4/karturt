@@ -75,7 +75,7 @@ describe("Solo Owner protected job context bindings", () => {
 
     const stepStart = protectedJob.indexOf("      - name: Validate expiring Solo Owner approval and STOP before staging access");
     expect(stepStart).toBeGreaterThanOrEqual(0);
-    const runStart = protectedJob.indexOf("\\n        run: |\\n", stepStart);
+    const runStart = protectedJob.indexOf("\n        run: |\n", stepStart);
     expect(runStart).toBeGreaterThan(stepStart);
     expect(protectedJob.slice(stepStart, runStart)).toContain("ACTOR_ID: ${{ github.actor_id }}");
   });
