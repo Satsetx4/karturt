@@ -1,0 +1,94 @@
+# KartuRT V1 — intentionally inert trusted-capture entrypoint.
+# This launcher NEVER contacts Neon, reads secrets, invokes psql or deploys.
+# To enable real capture, a separate security-reviewed PR and independent
+# environment approval must replace the explicit fail-closed stop.
+name: Staging Readiness Capture (locked preflight)
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_source_sha:
+        description: "Exact full 40-hex SHA of reviewed candidate source"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: karturt-staging-capture-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  no-secret-preflight:
+    name: Validate trusted dispatch (no staging credentials)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    outputs:
+      candidate_sha: ${{ steps.guard.outputs.candidate_sha }}
+    steps:
+      - name: Validate repository, main ref, workflow and source SHA
+        id: guard
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_source_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REPOSITORY" != 'Satsetx4/karturt' ||
+                "$GITHUB_EVENT_NAME" != 'workflow_dispatch' ||
+                "$GITHUB_REF" != 'refs/heads/main' ]]; then
+            echo 'CAPTURE_STOP: TRUSTED_DISPATCH_CONTEXT_INVALID' >&2
+            exit 1
+          fi
+          expected_ref='Satsetx4/karturt/.github/workflows/staging-readiness-capture.yml@refs/heads/main'
+          if [[ "${GITHUB_WORKFLOW_REF:-}" != "$expected_ref" ]]; then
+            echo 'CAPTURE_STOP: TRUSTED_WORKFLOW_REF_INVALID' >&2
+            exit 1
+          fi
+          if [[ ! "$CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+            echo 'CAPTURE_STOP: CANDIDATE_SHA_FORMAT_INVALID' >&2
+            exit 1
+          fi
+          # Public repository GET only; a missing, malformed or unreachable
+          # commit is a hard stop. This proves existence, NOT reviewed status.
+          response="$(curl --fail --silent --show-error --location --max-time 15 \
+            --header 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/Satsetx4/karturt/commits/$CANDIDATE_SHA")" || {
+            echo 'CAPTURE_STOP: SOURCE_COMMIT_NOT_VERIFIABLE' >&2
+            exit 1
+          }
+          observed="$(printf '%s' "$response" | jq -r '.sha // empty')" || {
+            echo 'CAPTURE_STOP: SOURCE_COMMIT_RESPONSE_INVALID' >&2
+            exit 1
+          }
+          if [[ "$observed" != "$CANDIDATE_SHA" ]]; then
+            echo 'CAPTURE_STOP: SOURCE_COMMIT_SHA_MISMATCH' >&2
+            exit 1
+          fi
+          echo "candidate_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
+          echo 'CAPTURE_PREFLIGHT_PASS: commit exists; independent approval and provenance remain required.'
+
+  protected-approval-boundary:
+    name: Protected Environment — explicit disabled stop
+    needs: no-secret-preflight
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    runs-on: windows-2025
+    timeout-minutes: 5
+    environment: karturt-staging-readiness
+    env:
+      EXPECTED_APPROVED_SHA: ${{ vars.KARTURT_CAPTURE_APPROVED_SOURCE_SHA }}
+      PREFLIGHT_CANDIDATE_SHA: ${{ needs.no-secret-preflight.outputs.candidate_sha }}
+    steps:
+      - name: Check protected expected SHA and stop — live capture NOT enabled
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:EXPECTED_APPROVED_SHA -cnotmatch '^[a-f0-9]{40}$') {
+            throw 'CAPTURE_STOP: PROTECTED_APPROVED_SOURCE_SHA_MISSING'
+          }
+          if ($env:EXPECTED_APPROVED_SHA -cne $env:PREFLIGHT_CANDIDATE_SHA) {
+            throw 'CAPTURE_STOP: PROTECTED_APPROVED_SOURCE_SHA_MISMATCH'
+          }
+          Write-Host 'CAPTURE_STOP: LIVE_CAPTURE_NOT_IMPLEMENTED_OR_AUTHORIZED'
+          Write-Host 'No provider connection, psql, secrets, migration, deployment or F2 executed.'
+          exit 78
