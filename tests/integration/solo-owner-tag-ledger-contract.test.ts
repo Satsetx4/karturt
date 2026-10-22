@@ -371,15 +371,18 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
 
   it("rejects malformed or forged annotated-tag objects before creating a ref", async () => {
     const fake = createFakeTransport();
-    fake.transport.createAnnotatedTagObject = async () => ({
-      status: 201,
-      body: {
-        sha: "not-a-sha",
+    fake.transport.createAnnotatedTagObject = async () => {
+      fake.calls.push("tag-create");
+      return {
+        status: 201,
+        body: {
+          sha: "not-a-sha",
         tag: "forged",
         message: "{}",
-        object: { sha: "f".repeat(40), type: "commit" },
-      },
-    });
+          object: { sha: "f".repeat(40), type: "commit" },
+        },
+      };
+    };
     await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport), "TAG_OBJECT_RESPONSE_MISMATCH");
     expect(fake.calls).toEqual(["scope", "ruleset", "tag-create"]);
     expect(fake.refs.size).toBe(0);
