@@ -1,0 +1,32 @@
+# READ-ONLY only. No Viewer API key, approval ticket or database access.
+name: Solo Owner Ledger Readonly Audit
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/solo-owner-ledger-audit.yml"
+      - "scripts/audit-solo-owner-ledger-readonly.ts"
+      - "scripts/lib/solo-owner-ledger-live.ts"
+      - "scripts/lib/solo-owner-ledger-history.ts"
+      - "tests/unit/solo-owner-ledger-live.test.ts"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    if: github.repository == 'Satsetx4/karturt'
+    name: Ledger GitHub GET-only history audit (NOT trusted)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Inspect GitHub audit branch (GET only, no secrets)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npx tsx scripts/audit-solo-owner-ledger-readonly.ts
