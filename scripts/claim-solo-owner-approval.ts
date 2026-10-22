@@ -6,8 +6,10 @@ import { SoloOwnerClaimDenied, type CreateOnlyGitHubRequest } from "./lib/solo-o
 
 /**
  * Future reviewed protected-job component. No workflow currently invokes it.
- * Requires GITHUB_TOKEN with least-privilege permission limited to the ledger
- * branch and a replay-protected append-only policy. Always STOP when absent.
+ * CAUTION: the default Actions GITHUB_TOKEN with contents:write is scoped
+ * repository-wide, NOT to a single branch. This CLI MUST NOT be wired into
+ * a secret-bearing workflow until a reviewed restricted writer, immutable
+ * receipt policy and audited branch protections are actually proven.
  *
  * No database, Neon, staging metadata API, migration, F2 or deployment calls.
  */
