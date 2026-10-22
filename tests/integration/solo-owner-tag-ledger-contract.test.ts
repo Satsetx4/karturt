@@ -82,6 +82,7 @@ function tagRuleset(): Record<string, unknown> {
 
 function createFakeTransport() {
   const calls: string[] = [];
+  const targets: string[] = [];
   const objects = new Map<string, AnnotatedTagObjectInput>();
   const refs = new Map<string, string>();
   let nextObject = 0;
@@ -100,13 +101,15 @@ function createFakeTransport() {
       scopeRead += 1;
       return scopeFactory(scopeRead);
     },
-    listRulesets: async () => {
+    listRulesets: async (repository) => {
       calls.push("ruleset");
+      targets.push(repository);
       rulesetRead += 1;
       return rulesetFactory(rulesetRead);
     },
     createAnnotatedTagObject: async (input) => {
       calls.push("tag-create");
+      targets.push(input.repository);
       nextObject += 1;
       const sha = nextObject.toString(16).padStart(40, "0");
       objects.set(sha, input);
@@ -122,6 +125,7 @@ function createFakeTransport() {
     },
     createReference: async (input) => {
       calls.push("ref-create");
+      targets.push(input.repository);
       if (refs.has(input.ref)) return { status: 422, body: { message: "collision" } };
       refs.set(input.ref, input.sha);
       return {
@@ -129,15 +133,17 @@ function createFakeTransport() {
         body: { ref: input.ref, object: { sha: input.sha, type: "tag" } },
       };
     },
-    getReference: async (ref) => {
+    getReference: async (repository, ref) => {
       calls.push("ref-read");
+      targets.push(repository);
       const sha = refs.get(ref);
       return sha
         ? { status: 200, body: { ref, object: { sha, type: "tag" } } }
         : { status: 404, body: {} };
     },
-    getTagObject: async (sha) => {
+    getTagObject: async (repository, sha) => {
       calls.push("tag-read");
+      targets.push(repository);
       const input = objects.get(sha);
       return input
         ? {
@@ -156,6 +162,7 @@ function createFakeTransport() {
   return {
     transport,
     calls,
+    targets,
     objects,
     refs,
     setRulesetFactory(factory: (read: number) => RulesetReadback) { rulesetFactory = factory; },
@@ -186,6 +193,7 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
     expect(fake.calls).toEqual([
       "scope", "ruleset", "tag-create", "ref-create", "ref-read", "tag-read", "scope", "ruleset",
     ]);
+    expect(fake.targets).toEqual(Array(6).fill(ledgerRepository));
     expect(result.tagRef).toMatch(/^refs\/tags\/karturt-solo\/used\/v1\/[a-f0-9]{64}$/);
     expect(fake.refs.get(result.tagRef)).toBe(result.tagObjectSha);
     expect(result.receipt.ticketDigest).toHaveLength(64);

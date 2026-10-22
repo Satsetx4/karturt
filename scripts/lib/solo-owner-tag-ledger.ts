@@ -127,6 +127,7 @@ export type RulesetReadback = {
 };
 
 export type AnnotatedTagObjectInput = {
+  repository: string;
   tag: string;
   message: string;
   object: string;
@@ -134,6 +135,7 @@ export type AnnotatedTagObjectInput = {
 };
 
 export type GitReferenceInput = {
+  repository: string;
   ref: string;
   sha: string;
 };
@@ -145,11 +147,11 @@ export interface SoloOwnerTagLedgerTransport {
    */
   inspectWriterScope(): Promise<WriterScopeReadback>;
   /** Must read every applicable repository/parent ruleset, including pagination. */
-  listRulesets(): Promise<RulesetReadback>;
+  listRulesets(repository: string): Promise<RulesetReadback>;
   createAnnotatedTagObject(input: AnnotatedTagObjectInput): Promise<GitHubApiResponse>;
   createReference(input: GitReferenceInput): Promise<GitHubApiResponse>;
-  getReference(ref: string): Promise<GitHubApiResponse>;
-  getTagObject(sha: string): Promise<GitHubApiResponse>;
+  getReference(repository: string, ref: string): Promise<GitHubApiResponse>;
+  getTagObject(repository: string, sha: string): Promise<GitHubApiResponse>;
 }
 
 function validatePolicy(policy: SoloOwnerTagLedgerPolicy): void {
@@ -419,7 +421,7 @@ export async function reserveSoloOwnerTicketInTagLedger(
 
   let rulesBefore: RulesetReadback;
   try {
-    rulesBefore = await transport.listRulesets();
+    rulesBefore = await transport.listRulesets(policy.ledgerRepository);
   } catch {
     deny("LEDGER_RULESET_UNAVAILABLE");
   }
@@ -428,6 +430,7 @@ export async function reserveSoloOwnerTicketInTagLedger(
   let tagObjectResponse: GitHubApiResponse;
   try {
     tagObjectResponse = await transport.createAnnotatedTagObject({
+      repository: policy.ledgerRepository,
       tag: tagName,
       message,
       object: claim.candidateSha,
@@ -446,7 +449,11 @@ export async function reserveSoloOwnerTicketInTagLedger(
 
   let refCreateResponse: GitHubApiResponse;
   try {
-    refCreateResponse = await transport.createReference({ ref, sha: tagObjectSha });
+    refCreateResponse = await transport.createReference({
+      repository: policy.ledgerRepository,
+      ref,
+      sha: tagObjectSha,
+    });
   } catch {
     // The server may have created the ref before the connection was lost.
     // Do not retry. No success is reported for an ambiguous outcome.
@@ -456,7 +463,7 @@ export async function reserveSoloOwnerTicketInTagLedger(
 
   let refReadback: GitHubApiResponse;
   try {
-    refReadback = await transport.getReference(ref);
+    refReadback = await transport.getReference(policy.ledgerRepository, ref);
   } catch {
     deny("TRUSTED_REF_READBACK_FAILED");
   }
@@ -464,7 +471,7 @@ export async function reserveSoloOwnerTicketInTagLedger(
 
   let tagReadback: GitHubApiResponse;
   try {
-    tagReadback = await transport.getTagObject(tagObjectSha);
+    tagReadback = await transport.getTagObject(policy.ledgerRepository, tagObjectSha);
   } catch {
     deny("TRUSTED_TAG_OBJECT_READBACK_FAILED");
   }
@@ -488,7 +495,7 @@ export async function reserveSoloOwnerTicketInTagLedger(
 
   let rulesAfter: RulesetReadback;
   try {
-    rulesAfter = await transport.listRulesets();
+    rulesAfter = await transport.listRulesets(policy.ledgerRepository);
   } catch {
     deny("LEDGER_TAG_RULESET_CHANGED_AFTER_RESERVATION");
   }
