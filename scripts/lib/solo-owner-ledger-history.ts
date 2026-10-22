@@ -89,7 +89,8 @@ export function inspectSoloOwnerLedgerSnapshots(input: unknown): SoloLedgerSnaps
           if (!current.has(path)) fail("LEDGER_FILE_DELETED");
           else if (current.get(path) !== blob) fail("LEDGER_FILE_REWRITTEN");
         }
-        const additions = [...current.keys()].filter(path => !previous.has(path));
+        const earlierSnapshot = previous;
+        const additions = [...current.keys()].filter(path => !earlierSnapshot.has(path));
         if (additions.length !== 1 || !RECEIPT.test(additions[0] ?? "")) {
           fail("NEW_RECEIPT_STEP_INVALID");
         } else {
