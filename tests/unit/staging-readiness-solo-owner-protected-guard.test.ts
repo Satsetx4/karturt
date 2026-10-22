@@ -16,10 +16,12 @@ function protectedGuardScript(): string {
   if (start < 0) throw new Error("Solo Owner protected guard step missing");
   const block = yaml.indexOf("\n        run: |\n", start);
   if (block < start) throw new Error("Solo Owner guard script missing");
-  const nextStep = yaml.indexOf("\n      - name:", block + 15);
-  const nextJob = yaml.indexOf("\n  ", block + 15);
-  // This guard must be the LAST step of the protected job.
-  if (nextStep !== -1 || nextJob !== -1) throw new Error("Unexpected step/job after permanent guard");
+  const remainder = yaml.slice(block + "\n        run: |\n".length);
+  // This guard must be the LAST step of the protected job; whitespace-only
+  // line breaks inside the script are harmless, subsequent steps are not.
+  if (/^      - name:/m.test(remainder) || /^  [a-zA-Z][\w-]*:/m.test(remainder)) {
+    throw new Error("Unexpected step/job after permanent guard");
+  }
   const body = yaml.slice(block + "\n        run: |\n".length);
   return body.split("\n").map((line) => line.startsWith("          ") ? line.slice(10) : line).join("\n");
 }
