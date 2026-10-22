@@ -263,8 +263,19 @@ function verifyRuleset(policy: SoloOwnerTagLedgerPolicy, listing: RulesetReadbac
   const refName = isRecord(conditions) ? conditions.ref_name : undefined;
   const includes = isRecord(refName) ? refName.include : undefined;
   const excludes = isRecord(refName) ? refName.exclude : undefined;
-  const rules = Array.isArray(rule.rules) ? rule.rules : [];
-  const ruleTypes = rules.filter(isRecord).map((entry) => entry.type).sort();
+  // GitHub tag rulesets may include the protective non_fast_forward rule.
+  // Only the two audited exact sets are permitted; unknown/duplicate/malformed
+  // entries must never silently disappear from a ruleset readback.
+  const rawRules = rule.rules;
+  const ruleTypes = Array.isArray(rawRules) && rawRules.every(isRecord)
+    ? rawRules.map((entry) => entry.type).sort()
+    : [];
+  const exactBasicRules = ruleTypes.length === 2 &&
+    ruleTypes[0] === "deletion" && ruleTypes[1] === "update";
+  const exactForcePushProtectedRules = ruleTypes.length === 3 &&
+    ruleTypes[0] === "deletion" &&
+    ruleTypes[1] === "non_fast_forward" &&
+    ruleTypes[2] === "update";
   const bypassActors = rule.bypass_actors;
   if (rule.name !== policy.rulesetName ||
       rule.source_type !== "Repository" ||
@@ -278,9 +289,7 @@ function verifyRuleset(policy: SoloOwnerTagLedgerPolicy, listing: RulesetReadbac
       excludes.length !== 0 ||
       !Array.isArray(bypassActors) ||
       bypassActors.length !== 0 ||
-      ruleTypes.length !== 2 ||
-      ruleTypes[0] !== "deletion" ||
-      ruleTypes[1] !== "update") {
+      (!exactBasicRules && !exactForcePushProtectedRules)) {
     deny("LEDGER_TAG_RULESET_REQUIREMENTS_UNMET");
   }
   return JSON.stringify({
