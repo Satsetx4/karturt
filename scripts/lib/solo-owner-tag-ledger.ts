@@ -297,7 +297,7 @@ function requireRecord(value: unknown, code: string): JsonRecord {
 
 function isAmbiguousWriteStatus(status: number): boolean {
   return !Number.isInteger(status) ||
-    status < 100 ||
+    status < 200 ||
     status > 599 ||
     status === 408 ||
     status === 425 ||
