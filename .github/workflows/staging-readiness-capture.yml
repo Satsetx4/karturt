@@ -37,15 +37,27 @@ jobs:
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_source_sha }}
           OWNER_APPROVAL_TICKET: ${{ inputs.owner_approval_ticket }}
+          REPOSITORY_ID: ${{ github.repository_id }}
+          OWNER_ID: ${{ github.repository_owner_id }}
+          ACTOR_ID: ${{ github.actor_id }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+          EVENT_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REPOSITORY" != 'Satsetx4/karturt' ||
+                "$REPOSITORY_ID" != '1386907262' ||
+                "$OWNER_ID" != '304263836' ||
                 "$GITHUB_EVENT_NAME" != 'workflow_dispatch' ||
-                "$GITHUB_REF" != 'refs/heads/main' ]]; then
+                "$GITHUB_REF" != 'refs/heads/main' ||
+                "$REF_PROTECTED" != 'true' ||
+                ! "$WORKFLOW_SHA" =~ ^[a-f0-9]{40}$ ||
+                "$EVENT_SHA" != "$WORKFLOW_SHA" ]]; then
             echo 'CAPTURE_STOP: TRUSTED_DISPATCH_CONTEXT_INVALID' >&2
             exit 1
           fi
           if [[ "${GITHUB_ACTOR:-}" != 'Satsetx4' ||
+                "$ACTOR_ID" != '304263836' ||
                 "${GITHUB_TRIGGERING_ACTOR:-}" != 'Satsetx4' ||
                 "${GITHUB_RUN_ATTEMPT:-}" != '1' ]]; then
             echo 'CAPTURE_STOP: SOLO_OWNER_ACTOR_OR_RETRY_INVALID' >&2
@@ -86,14 +98,21 @@ jobs:
   protected-approval-boundary:
     name: Solo Owner Environment — ALWAYS STOP (phase-0 only)
     needs: no-secret-preflight
-    if: ${{ success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'Satsetx4' && github.triggering_actor == 'Satsetx4' && github.run_attempt == 1 }}
+    if: ${{ success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true && github.repository == 'Satsetx4/karturt' && github.repository_id == '1386907262' && github.repository_owner_id == '304263836' && github.actor == 'Satsetx4' && github.actor_id == '304263836' && github.triggering_actor == 'Satsetx4' && github.run_attempt == 1 }}
     runs-on: windows-2025
     timeout-minutes: 5
     environment: karturt-staging-readiness
     env:
+      REPOSITORY_ID: ${{ github.repository_id }}
+      OWNER_ID: ${{ github.repository_owner_id }}
+      ACTOR_ID: ${{ github.actor_id }}
+      REF_PROTECTED: ${{ github.ref_protected }}
+      EVENT_SHA: ${{ github.sha }}
+      WORKFLOW_SHA: ${{ github.workflow_sha }}
       EXPECTED_APPROVED_SHA: ${{ vars.KARTURT_CAPTURE_APPROVED_SOURCE_SHA }}
       EXPECTED_LAUNCHER_SHA: ${{ vars.KARTURT_SOLO_APPROVED_LAUNCHER_SHA }}
       EXPECTED_APPROVAL_TICKET: ${{ vars.KARTURT_SOLO_APPROVED_TICKET }}
+      EXPECTED_APPROVAL_AT: ${{ vars.KARTURT_SOLO_APPROVAL_ISSUED_AT_UTC }}
       EXPECTED_APPROVAL_EXPIRES: ${{ vars.KARTURT_SOLO_APPROVAL_EXPIRES_AT_UTC }}
       PREFLIGHT_CANDIDATE_SHA: ${{ needs.no-secret-preflight.outputs.candidate_sha }}
       DISPATCH_APPROVAL_TICKET: ${{ inputs.owner_approval_ticket }}
@@ -104,8 +123,12 @@ jobs:
           $ErrorActionPreference = 'Stop'
           # Env values above are nonsecret approval metadata, NOT keys or one-time authentication.
           if ($env:GITHUB_REPOSITORY -cne 'Satsetx4/karturt' -or
+              $env:REPOSITORY_ID -cne '1386907262' -or
+              $env:OWNER_ID -cne '304263836' -or
+              $env:REF_PROTECTED -cne 'true' -or
               $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch' -or
               $env:GITHUB_REF -cne 'refs/heads/main' -or
+              $env:ACTOR_ID -cne '304263836' -or
               $env:GITHUB_ACTOR -cne 'Satsetx4' -or
               $env:GITHUB_TRIGGERING_ACTOR -cne 'Satsetx4' -or
               $env:GITHUB_RUN_ATTEMPT -cne '1') {
@@ -121,7 +144,10 @@ jobs:
             throw 'CAPTURE_STOP: PROTECTED_APPROVED_SOURCE_SHA_MISMATCH'
           }
           if ($env:EXPECTED_LAUNCHER_SHA -cnotmatch '^[a-f0-9]{40}$' -or
-              $env:GITHUB_SHA -cne $env:EXPECTED_LAUNCHER_SHA) {
+              $env:WORKFLOW_SHA -cnotmatch '^[a-f0-9]{40}$' -or
+              $env:WORKFLOW_SHA -cne $env:EXPECTED_LAUNCHER_SHA -or
+              $env:EVENT_SHA -cne $env:WORKFLOW_SHA -or
+              $env:GITHUB_SHA -cne $env:WORKFLOW_SHA) {
             throw 'CAPTURE_STOP: PROTECTED_APPROVED_LAUNCHER_SHA_MISMATCH'
           }
           if ($env:EXPECTED_APPROVAL_TICKET -cnotmatch '^[a-f0-9]{32}$' -or
@@ -129,18 +155,31 @@ jobs:
               $env:EXPECTED_APPROVAL_TICKET -cne $env:DISPATCH_APPROVAL_TICKET) {
             throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_TICKET_MISMATCH'
           }
+          if ($env:EXPECTED_APPROVAL_AT -cnotmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$') {
+            throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_ISSUED_AT_INVALID'
+          }
           if ($env:EXPECTED_APPROVAL_EXPIRES -cnotmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$') {
             throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_EXPIRY_INVALID'
           }
           $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
+          $approvedAt = [DateTimeOffset]::MinValue
           $expiration = [DateTimeOffset]::MinValue
+          if (-not [DateTimeOffset]::TryParseExact(
+            $env:EXPECTED_APPROVAL_AT, "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$approvedAt)) {
+            throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_ISSUED_AT_INVALID'
+          }
           if (-not [DateTimeOffset]::TryParseExact(
             $env:EXPECTED_APPROVAL_EXPIRES, "yyyy-MM-dd'T'HH:mm:ss'Z'",
             [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$expiration)) {
             throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_EXPIRY_INVALID'
           }
-          $remaining = $expiration - [DateTimeOffset]::UtcNow
-          if ($remaining.TotalSeconds -le 0 -or $remaining.TotalMinutes -gt 15) {
+          $now = [DateTimeOffset]::UtcNow
+          $validity = $expiration - $approvedAt
+          $age = $now - $approvedAt
+          if ($approvedAt -gt $now -or $expiration -le $now -or
+              $validity.TotalSeconds -le 0 -or $validity.TotalSeconds -gt 900 -or
+              $age.TotalSeconds -lt 0 -or $age.TotalSeconds -gt 900) {
             throw 'CAPTURE_STOP: SOLO_OWNER_APPROVAL_EXPIRED_OR_TOO_LONG'
           }
           # Positive audit of the bound checks; do not output ticket or credentials.
