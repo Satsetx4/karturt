@@ -10,7 +10,7 @@ export type GetReadonlyJson = (url: string) => Promise<unknown>;
 export class LedgerReadOnlyDenied extends Error {
   constructor(public readonly code: string) { super(code); this.name = "LedgerReadOnlyDenied"; }
 }
-const stop = (code: string): never => { throw new LedgerReadOnlyDenied(code); };
+function stop(code: string): never { throw new LedgerReadOnlyDenied(code); }
 const sha = (v: unknown): string => typeof v === "string" && SHA.test(v) ? v : stop("SHA_INVALID");
 const get = async (fn: GetReadonlyJson, u: string) => {
   try { return await fn(u); } catch { return stop("GITHUB_GET_UNAVAILABLE"); }
