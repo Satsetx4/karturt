@@ -15,6 +15,7 @@ Date: 2026-10-22 (Asia/Jakarta). **Status: candidate only, no authorized runtime
 | Direct host | `ep-silent-haze-b3pcaa3t.c-4.ap-southeast-1.aws.neon.tech` | `ep-falling-mountain-a1hlzrdb.ap-southeast-1.aws.neon.tech` |
 | PG, region, CU | PG18, Singapore, 0.25 | PG18, Singapore, 0.25 |
 | Plan | Free | Free (provider `free_v3`) |
+| Database ID | `669644` | `42124647` (Neon read-only database metadata on 2026-10-22) |
 | Lineage | UNKNOWN | UNKNOWN; new default branch still `init_source=parent-data` without `parent_id` |
 | Synthetic-only and SQL catalog | UNKNOWN / not proved | UNKNOWN / no SQL run |
 | Status | Existing PR #65 binding | **Offline candidate only** |
@@ -23,6 +24,7 @@ Date: 2026-10-22 (Asia/Jakarta). **Status: candidate only, no authorized runtime
 
 - Exact original create-request intent timestamped **before** API call at [issue #68 pre-creation](https://github.com/Satsetx4/karturt/issues/68#issuecomment-6333016123).
 - Actual provider readback (project, branch, endpoint, PG18 Free, 0.25 CU, operations) at [issue #68 post-creation](https://github.com/Satsetx4/karturt/issues/68#issuecomment-6333045271).
+- Provider `list_postgres_databases` on the new branch reported database ID `42124647`, database `karturt`, owner `karturt_owner`. This is **control-plane metadata only**, NOT a SQL catalog check or proof of emptiness.
 - Provider create_timeline `287c6cc3-4c01-4622-8fdd-1f1d72f29f00`, project created 2026-10-22T04:52:37Z. The API reports `creation_source=console` and branch `init_source=parent-data`.
 - Neon API currently connected with effective **ADMIN** rights, not suitable as the protected Viewer-only principal. No credential or connection URI was read or committed.
 - Both GitHub comments can be edited. They are NOT cryptographic provider attestations or immutable original request bytes. Even a consistent, hash-matched request/readback packet cannot establish authenticated lineage or synthetic-only contents.

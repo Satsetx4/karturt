@@ -12,6 +12,7 @@ export const SOLO_STAGING_CANDIDATE = Object.freeze({
   endpointId: "ep-falling-mountain-a1hlzrdb",
   directHostname: "ep-falling-mountain-a1hlzrdb.ap-southeast-1.aws.neon.tech",
   databaseName: "karturt",
+  databaseId: 42124647,
   roleName: "karturt_owner",
   regionId: "aws-ap-southeast-1",
   postgresMajor: 18,
@@ -54,7 +55,7 @@ export function assessSoloCandidateOffline(packet: unknown): SoloCandidateAssess
   const fail = (code: string) => { failures.push(code); };
   const c = SOLO_STAGING_CANDIDATE;
 
-  if (!object(packet) || !exactFields(packet, ["schemaVersion", "request", "project", "branch", "endpoint", "operation"])) {
+  if (!object(packet) || !exactFields(packet, ["schemaVersion", "request", "project", "branch", "endpoint", "database", "operation"])) {
     fail("PACKET_SHAPE_INVALID");
   } else {
     if (packet.schemaVersion !== "karturt/solo-staging-candidate-offline/v1") fail("SCHEMA_INVALID");
@@ -111,6 +112,17 @@ export function assessSoloCandidateOffline(packet: unknown): SoloCandidateAssess
       endpoint.regionId !== c.regionId || endpoint.poolerEnabled !== false ||
       endpoint.computeMinCU !== c.computeCU || endpoint.computeMaxCU !== c.computeCU
     ) fail("ENDPOINT_IDENTITY_MISMATCH");
+
+    // Database identifiers come from the provider database metadata readback,
+    // not from the name alone. A wrong ID/owner/branch is a hard STOP.
+    const database = packet.database;
+    if (!object(database) || !exactFields(database, ["id", "branchId", "name", "ownerName", "createdAtUtc"])) {
+      fail("DATABASE_SHAPE_INVALID");
+    } else if (
+      database.id !== c.databaseId || database.branchId !== c.branchId ||
+      database.name !== c.databaseName || database.ownerName !== c.roleName ||
+      database.createdAtUtc !== c.createdAtUtc || utcInstant(database.createdAtUtc) === null
+    ) fail("DATABASE_IDENTITY_MISMATCH");
 
     const operation = packet.operation;
     if (!object(operation) || !exactFields(operation, ["id", "projectId", "branchId", "action", "status", "createdAtUtc"])) {
