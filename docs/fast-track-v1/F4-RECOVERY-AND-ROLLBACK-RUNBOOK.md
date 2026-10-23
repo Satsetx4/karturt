@@ -12,7 +12,7 @@ This runbook defines the evidence and operator sequence required for a future Fa
 - Reconfirm the candidate SHA and all evidence after every source change. The reference SHA above is a starting point, not a permanent release identity.
 - The F1 candidate contains no schema or migration changes. Record the result of a fresh main-to-candidate migration inventory for each release candidate; do not infer it from this statement.
 - The backup/restore drill recorded in docs/backup-restore-drill.md belongs to a previous staging environment. Its backup, branch, database, hashes, and PASS result are historical evidence and cannot prove recovery readiness for the current Fast Track target.
-- Current Neon lineage is unresolved while the candidate root reports init_source=parent-data. Do not connect, query, migrate, seed, restore, or change provider settings until synthetic-only lineage and target identity are independently established.
+- Current Neon metadata identifies a PostgreSQL 18 Singapore project created through the Neon MCP server. Its default root has no parent_id in the provider readback and reports init_source=parent-data. Neon’s [Create project API](https://neon.com/docs/reference/api/projects/create-project) example returns that same source value on a newly created root without a parent_id; its [Create branch API](https://neon.com/docs/reference/api/branches/create-project-branch) defines parent-data as copying schema and data from a parent. The value alone therefore proves neither a production parent nor synthetic-only contents. Current control-plane history shows no import/restore operation, but it does not certify contents or exclude out-of-band writes. Keep contents UNKNOWN. Do not open a database session until project-level separation from production and target-bound read-only authorization are independently established. Then limit the session to a read-only identity/content preflight. Do not mutate until that preflight passes and separate write authorization is present.
 - Vercel Hobby status and a suitable Preview project/path are not currently confirmed. Do not deploy until plan and project scope are verified.
 
 ## Gate 1 — Freeze and identify the candidate
@@ -30,14 +30,14 @@ A skipped, mock, PGlite, or unrelated PostgreSQL job does not satisfy staging co
 
 Complete the identity and plan checks before opening a database connection or making a provider change:
 
-- Record the Neon project, root branch, database, region, PostgreSQL major version, and authoritative branch lineage. The root must be proven synthetic-only and independent of production.
+- Record the Neon project, root branch, database, region, PostgreSQL major version, and provider creation/lineage evidence. Establish that the project is distinct from production; for a root branch, interpret init_source together with parent_id, project creation source, and operation history. Do not treat init_source=parent-data alone as proof of a parent link or empty contents.
 - Verify the application and database are separate from production and development. Record the exact resource identifiers and how the evidence was obtained.
 - Confirm Neon Free and Vercel Hobby are the active plans. Stop if the required capability would require a paid tier or upgrade.
 - Confirm the Vercel project is dedicated to staging, the deployment target is Preview, and APP_ENV, DATABASE_ENV, and VERCEL_ENV agree with that target.
 - Obtain the required scoped authorization for the specific non-production operation. A green CI run, project label, or this document does not authorize provider changes.
-- Only after lineage is proven and the operation authorization covers a read-only connection, verify PostgreSQL major version, endpoint binding, TLS certificate validation, and the effective database role. Record sanitized evidence.
+- Only after project-level separation is independently verified and the operation authorization names the target and read-only scope, run a read-only preflight to verify database identity, PostgreSQL major version, endpoint binding, TLS certificate validation, effective role, and sanitized content classification. Keep raw catalogs and resident data out of evidence. If contents cannot be proven synthetic-only, stop before writes and keep F2 blocked.
 
-If lineage, isolation, plan, or deployment identity is unknown, stop before connecting. If role or TLS evidence is unknown, stop before any write, migration, seed, or restore.
+If project-level separation, target identity, plan, or read-only authorization is unknown, stop before connecting. If content classification, role, or TLS evidence is unknown, stop before any write, migration, seed, or restore.
 
 ## Gate 3 — Establish and prove a recovery point
 
