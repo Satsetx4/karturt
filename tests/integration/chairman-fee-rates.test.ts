@@ -325,7 +325,7 @@ describe("Chairman fee rate read/write service", () => {
     const request = await createResidentPaymentRequest(database, resident, {
       period: "2026-11",
       idempotencyKey: randomUUID(),
-    });
+    }, "2026-11-01");
     const [requestRow] = await testDatabase.db.select().from(paymentRequests)
       .where(eq(paymentRequests.requestCode, request.requestCode));
     const [requestItem] = await testDatabase.db.select().from(paymentRequestItems)
