@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  F3_UAT_EVIDENCE_FIELDS,
   F3_UAT_SCENARIOS,
   renderF3UatPlan,
   resolveF3UatCommand,
@@ -20,6 +21,15 @@ describe("Fast Track F3 rehearsal command", () => {
     expect(new Set(result.scenarios.map(({ id }) => id)).size).toBe(result.scenarios.length);
     expect(renderF3UatPlan(result.scenarios)).toContain("offline rehearsal only");
     expect(renderF3UatPlan(result.scenarios)).not.toContain("must-not-be-printed");
+    expect(renderF3UatPlan(result.scenarios)).toContain("Sanitized evidence fields");
+    for (const { label } of F3_UAT_EVIDENCE_FIELDS) {
+      expect(renderF3UatPlan(result.scenarios)).toContain(label);
+    }
+    expect(renderF3UatPlan(result.scenarios)).toContain("full 40-character Git SHA");
+    expect(renderF3UatPlan(result.scenarios)).toContain("ISO 8601 timestamp with timezone");
+    expect(renderF3UatPlan(result.scenarios)).toContain("<name and role>");
+    expect(renderF3UatPlan(result.scenarios)).toContain("without secrets, connection strings");
+    expect(renderF3UatPlan(result.scenarios)).not.toContain("postgresql://");
   });
 
   it("describes the cash versus transfer-request race and both valid outcomes", () => {
@@ -30,6 +40,30 @@ describe("Fast Track F3 rehearsal command", () => {
     expect(scenario?.expected).toContain("If cash wins");
     expect(scenario?.expected).toContain("if request creation wins");
     expect(scenario?.expected).toContain("no cash payment");
+  });
+
+  it("includes cancellation and reversal outcomes with role and household boundaries", () => {
+    const cancellation = F3_UAT_SCENARIOS.find(({ id }) => id === "payment-request-cancellation");
+    const reversal = F3_UAT_SCENARIOS.find(({ id }) => id === "payment-reversal-and-repayment");
+
+    expect(cancellation?.expected).toContain("releases its claims");
+    expect(cancellation?.expected).toContain("leaves dues unpaid");
+    expect(cancellation?.expected).toContain("foreign request is denied");
+    expect(reversal?.action).toContain("retry reversal");
+    expect(reversal?.expected).toContain("pending request blocks reversal");
+    expect(reversal?.expected).toContain("second reversal is rejected");
+    expect(reversal?.expected).toContain("replacement payment uses a fresh key");
+    expect(reversal?.expected).toContain("unauthorized attempts do not mutate state");
+  });
+
+  it("includes mobile viewport checks at the supported phone widths", () => {
+    const mobile = F3_UAT_SCENARIOS.find(({ id }) => id === "mobile-viewport-smoke");
+
+    expect(mobile?.action).toContain("360×800");
+    expect(mobile?.action).toContain("390×844");
+    expect(mobile?.action).toContain("420×900");
+    expect(mobile?.expected).toContain("No horizontal overflow");
+    expect(mobile?.expected).toContain("44×44 CSS-pixel touch targets");
   });
 
   it("blocks a production-shaped target before any live mode can be selected", () => {

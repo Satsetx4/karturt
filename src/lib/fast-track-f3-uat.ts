@@ -5,6 +5,22 @@ export type F3UatScenario = {
   expected: string;
 };
 
+export const F3_UAT_EVIDENCE_FIELDS = [
+  { id: "candidate-sha", label: "Candidate commit SHA", value: "<full 40-character Git SHA>" },
+  {
+    id: "deployment-target-identity",
+    label: "Deployment / staging target identity",
+    value: "<Vercel Preview deployment ID and environment; Neon project ID, root branch ID, and endpoint ID>",
+  },
+  { id: "observed-at", label: "Observation time", value: "<ISO 8601 timestamp with timezone>" },
+  { id: "verified-by", label: "Verifier", value: "<name and role>" },
+  {
+    id: "scenario-results",
+    label: "Scenario results",
+    value: "<PASS, FAIL, or NOT RUN per scenario, with a sanitized evidence reference>",
+  },
+] as const;
+
 export const F3_UAT_SCENARIOS: readonly F3UatScenario[] = [
   {
     id: "annual-period-status",
@@ -61,6 +77,18 @@ export const F3_UAT_SCENARIOS: readonly F3UatScenario[] = [
     expected: "An identical retry returns the original result; a changed payload conflicts without creating a second payment.",
   },
   {
+    id: "payment-request-cancellation",
+    actor: "Resident",
+    action: "Cancel the resident's own pending online transfer request, then attempt cancellation using another household or RT request identity.",
+    expected: "Only the active resident who owns the request can cancel it; cancellation releases its claims, leaves dues unpaid, creates no payment or allocation, and records one audit event. A foreign request is denied without disclosure or mutation.",
+  },
+  {
+    id: "payment-reversal-and-repayment",
+    actor: "Treasurer and Resident",
+    action: "Reverse an active verified cash or transfer payment, review the due and receipt, then repay with a fresh idempotency key; also retry reversal and attempt it as a resident or another RT's treasurer.",
+    expected: "Only an active treasurer assigned to the same RT can reverse; a pending request blocks reversal. A successful reversal preserves payment history, releases its active settlements, and removes its active receipt; each affected due returns to unpaid when the reversal leaves an outstanding balance. A second reversal is rejected. A replacement payment uses a fresh key and creates one active receipt; unauthorized attempts do not mutate state.",
+  },
+  {
     id: "cash-transfer-race",
     actor: "Treasurer and Resident",
     action: "Race treasurer cash recording against resident online transfer-request creation for the same due period.",
@@ -71,6 +99,12 @@ export const F3_UAT_SCENARIOS: readonly F3UatScenario[] = [
     actor: "Resident, Treasurer, and RT Chairman",
     action: "Read receipts and RT reports while presenting another household or RT identifier.",
     expected: "Receipts and reports stay within the authenticated household or RT scope.",
+  },
+  {
+    id: "mobile-viewport-smoke",
+    actor: "Resident and Treasurer",
+    action: "At 360×800, 390×844, and 420×900 CSS-pixel viewports, inspect annual cards, online requests, treasurer cash recording, and receipts using touch input.",
+    expected: "No horizontal overflow or obscured controls; period status and receipt details remain readable; primary controls are reachable and have at least 44×44 CSS-pixel touch targets.",
   },
 ] as const;
 
@@ -156,11 +190,16 @@ export function renderF3UatPlan(scenarios: readonly F3UatScenario[] = F3_UAT_SCE
   const rows = scenarios.map((scenario, index) =>
     `${index + 1}. [${scenario.id}] ${scenario.actor}: ${scenario.action} Expected: ${scenario.expected}`,
   );
+  const evidenceFields = F3_UAT_EVIDENCE_FIELDS.map(({ id, label, value }) => `- ${label} (${id}): ${value}`);
 
   return [
     "KartuRT V1 F3 UAT plan — offline rehearsal only",
     "This command prints a static scenario list. It does not load database clients, call provider APIs, or start an app server.",
     "Live execution remains disabled until F2 independently verifies an isolated synthetic-only staging target.",
     ...rows,
+    "",
+    "Sanitized evidence fields — fill only during separately authorized staging UAT:",
+    ...evidenceFields,
+    "Record evidence without secrets, connection strings, resident personal data, or raw database catalog contents.",
   ].join("\n");
 }
