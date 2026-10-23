@@ -13,6 +13,7 @@ const project = () => ({
   name: "karturt-v1-solo-provenance-20261022",
   region_id: "aws-ap-southeast-1",
   pg_version: 18,
+  owner: { subscription_type: "free_v3" },
   effective_project_permission: "VIEWER",
 });
 function makeTransport(overrides: Record<string, unknown> = {}, status = 200) {
@@ -34,6 +35,7 @@ describe("Neon Viewer GET metadata preflight — offline only", () => {
       targetProjectId: "super-band-12770762",
       sourceSha,
       observedPermission: "VIEWER",
+      observedFreePlan: "free_v3",
       check: "METADATA_MATCHES_BUT_UNATTESTED",
       principalTokenPersisted: false,
       providerAttested: false,
@@ -47,6 +49,32 @@ describe("Neon Viewer GET metadata preflight — offline only", () => {
     expect(JSON.stringify(result)).not.toContain(token);
     expect(transport).toHaveBeenCalledTimes(1);
   });
+  it.each(["free_v2", "free_v3"])("accepts the documented Free subscription type %s", async subscriptionType => {
+    const transport = makeTransport({ owner: { subscription_type: subscriptionType } });
+    const result = await checkViewerOnlyNeonProjectGet(token, sourceSha, transport);
+    expect(result.observedFreePlan).toBe(subscriptionType);
+    expect(result.check).toBe("METADATA_MATCHES_BUT_UNATTESTED");
+  });
+  it.each(["launch", "scale", "UNKNOWN", ""])(
+    "rejects non-Free or unknown subscription type %s",
+    async subscriptionType => {
+      const transport = makeTransport({ owner: { subscription_type: subscriptionType } });
+      await expect(checkViewerOnlyNeonProjectGet(token, sourceSha, transport))
+        .rejects.toMatchObject({ code: "VIEWER_API_FREE_PLAN_REQUIRED" });
+    },
+  );
+  it.each([
+    ["missing owner", { owner: undefined }],
+    ["missing subscription type", { owner: {} }],
+    ["null subscription type", { owner: { subscription_type: null } }],
+  ] as Array<[string, Record<string, unknown>]>) (
+    "fails closed on %s metadata",
+    async (_label, override) => {
+      const transport = makeTransport(override);
+      await expect(checkViewerOnlyNeonProjectGet(token, sourceSha, transport))
+        .rejects.toMatchObject({ code: "VIEWER_API_PLAN_UNVERIFIED" });
+    },
+  );
   it.each(["ADMIN", "EDITOR", "OWNER", "member", "viewer", "", null])(
     "denies elevated or unknown effective permission %s", async (permission) => {
       const transport = makeTransport({ effective_project_permission: permission });
