@@ -30,7 +30,8 @@ import {
   recordTreasurerCashPayment,
   searchTreasurerCashPaymentHouseholds,
 } from "@/lib/billing/treasurer-cash-payments";
-import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase } from "../helpers/database";
+import { createChairmanWaiver } from "@/lib/billing/chairman-waiver";
+import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase, ensureTestChairman } from "../helpers/database";
 
 type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
 
@@ -47,7 +48,7 @@ describe("Treasurer direct cash payment", () => {
     await testDatabase?.close();
   });
 
-  async function createScenario(periods = ["2026-11", "2026-12", "2027-02"]) {
+  async function createScenario(periods = ["2026-11", "2026-12", "2027-02"], notDuePeriods: string[] = []) {
     const rtUnitId = await createRt(testDatabase.db);
     const household = await createHousehold(testDatabase.db, rtUnitId, { number: `R-${randomUUID().slice(0, 6)}` });
     const residentUser = await createAuthUser(testDatabase.db, "Resident Fixture");
@@ -109,15 +110,16 @@ describe("Treasurer direct cash payment", () => {
     const dueRows = await testDatabase.db.insert(monthlyDues).values(periods.map((period) => {
       const [year, month] = period.split("-").map(Number);
       const [billingYearId, feeRateId] = years.get(year!)!.split(":");
+      const isNotDue = notDuePeriods.includes(period);
       return {
         rtUnitId,
         householdId: household.householdId,
         billingYearId: billingYearId!,
-        feeRateId: feeRateId!,
+        feeRateId: isNotDue ? null : feeRateId!,
         month: month!,
-        amount: 40000,
+        amount: isNotDue ? 0 : 40000,
         dueDate: `${period}-10`,
-        status: "unpaid" as const,
+        status: isNotDue ? "not_due" as const : "unpaid" as const,
       };
     })).returning({ id: monthlyDues.id });
 
@@ -178,6 +180,73 @@ describe("Treasurer direct cash payment", () => {
     const residentDues = await getResidentMonthlyDues(database, scenario.residentPrincipal);
     expect(residentDues.every((due) => due.status === "paid" && dueToken(due) === "PAID")).toBe(true);
     expect(duesSummary(residentDues)).toEqual({ paid: 120000, pending: 0, unpaid: 0 });
+  });
+
+  it("skips paid, waived, and not-due months when recording through a future year-boundary target", async () => {
+    const businessDate = "2026-10-24";
+    const scenario = await createScenario(
+      ["2026-11", "2026-12", "2027-01", "2027-02", "2027-03"],
+      ["2027-01"],
+    );
+    const initialCash = await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: scenario.householdId,
+      period: "2026-11",
+      idempotencyKey: randomUUID(),
+    }, businessDate);
+    expect(initialCash.periods).toEqual(["2026-11"]);
+
+    const chairmanAccountId = await ensureTestChairman(testDatabase.db, scenario.rtUnitId);
+    const [chairmanAccount] = await testDatabase.db.select({ authUserId: appAccounts.authUserId })
+      .from(appAccounts)
+      .where(eq(appAccounts.id, chairmanAccountId))
+      .limit(1);
+    const chairmanPrincipal: Principal = {
+      authUserId: chairmanAccount!.authUserId,
+      appAccountId: chairmanAccountId,
+      role: "rt_chairman",
+      rtUnitId: scenario.rtUnitId,
+      householdId: null,
+      personId: null,
+    };
+    const waiver = await createChairmanWaiver(database, chairmanPrincipal, {
+      householdId: scenario.householdId,
+      periods: ["2026-12"],
+      reason: "Fixture for cash allocation regression",
+      idempotencyKey: randomUUID(),
+    }, businessDate);
+    expect(waiver.periods).toEqual(["2026-12"]);
+
+    const result = await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: scenario.householdId,
+      period: "2027-03",
+      idempotencyKey: randomUUID(),
+    }, businessDate);
+
+    expect(result).toEqual({
+      status: "recorded",
+      periods: ["2027-02", "2027-03"],
+      itemCount: 2,
+      totalAmount: 80000,
+      replayed: false,
+    });
+    const persistedDues = await testDatabase.db.select({
+      year: billingYears.year,
+      month: monthlyDues.month,
+      status: monthlyDues.status,
+    }).from(monthlyDues)
+      .innerJoin(billingYears, and(
+        eq(billingYears.id, monthlyDues.billingYearId),
+        eq(billingYears.rtUnitId, monthlyDues.rtUnitId),
+      ))
+      .where(inArray(monthlyDues.id, scenario.dueIds));
+    expect(persistedDues.map(({ year, month, status }) => [`${year}-${String(month).padStart(2, "0")}`, status]).sort())
+      .toEqual([
+        ["2026-11", "paid"],
+        ["2026-12", "waived"],
+        ["2027-01", "not_due"],
+        ["2027-02", "paid"],
+        ["2027-03", "paid"],
+      ]);
   });
 
   it("replays the same key and rejects reuse for a different period or household", async () => {
@@ -336,7 +405,7 @@ describe("Treasurer direct cash payment", () => {
       .where(inArray(paymentAllocations.monthlyDueId, scenario.dueIds))).toHaveLength(2);
   });
 
-  it("serializes resident request creation against cash so a due has only one ownership path", async () => {
+  it("serializes resident transfer-request creation against cash so a due has only one ownership path", async () => {
     const scenario = await createScenario(["2026-12"]);
     const [cashAttempt, requestAttempt] = await Promise.allSettled([
       recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
@@ -378,6 +447,13 @@ describe("Treasurer direct cash payment", () => {
       scenario.treasurerPrincipal,
       foreignHousehold.householdId,
     )).rejects.toBeInstanceOf(CashPaymentHouseholdNotFoundError);
+    await expect(recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: foreignHousehold.householdId,
+      period: "2026-12",
+      idempotencyKey: randomUUID(),
+    })).rejects.toBeInstanceOf(CashPaymentHouseholdNotFoundError);
+    expect(await testDatabase.db.select().from(payments)
+      .where(and(eq(payments.rtUnitId, scenario.rtUnitId), eq(payments.method, "cash")))).toHaveLength(0);
     await expect(recordTreasurerCashPayment(database, scenario.residentPrincipal, {
       householdId: scenario.householdId,
       period: "2026-12",
