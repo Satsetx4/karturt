@@ -642,7 +642,7 @@ describe("F13 PGlite manual reporting oracle", () => {
     expect(reportMay05.dueNowOutstanding).toBe(195_000);
     expect(reportMay05.futureUnpaidOutstanding).toBe(840_000);
     expect(reportMay20.arrears).toMatchObject({ totalOutstanding: 195_000, count: 5, householdCount: 3 });
-    expect(expectedReportHouseholds(reportMay20)).toEqual(expect.arrayContaining([
+    expect(expectedReportHouseholds(reportMay20)).toEqual([
       {
         key: "H1", houseNumber: "A-01", lifecycle: "active", startsOn: "2024-01-01", endsOn: null,
         residentNames: ["H1 Resident"], totalOutstanding: 75_000, pending: true,
@@ -664,9 +664,26 @@ describe("F13 PGlite manual reporting oracle", () => {
         residentNames: ["H3 Old Resident"], totalOutstanding: 40_000, pending: false,
         periods: [{ month: 2, dueDate: "2026-02-10", outstanding: 40_000, pending: false }],
       },
-    ]));
+    ]);
 
     expect(reportMay05.arrears).toMatchObject({ totalOutstanding: 115_000, count: 3, householdCount: 3 });
+    expect(expectedReportHouseholds(reportMay05)).toEqual([
+      {
+        key: "H1", houseNumber: "A-01", lifecycle: "active", startsOn: "2024-01-01", endsOn: null,
+        residentNames: ["H1 Resident"], totalOutstanding: 35_000, pending: true,
+        periods: [{ month: 3, dueDate: "2026-03-10", outstanding: 35_000, pending: true }],
+      },
+      {
+        key: "H3-new", houseNumber: "A-03", lifecycle: "active", startsOn: "2026-03-01", endsOn: null,
+        residentNames: ["H3 New Resident"], totalOutstanding: 40_000, pending: false,
+        periods: [{ month: 4, dueDate: "2026-04-10", outstanding: 40_000, pending: false }],
+      },
+      {
+        key: "H3-old", houseNumber: "A-03", lifecycle: "historical", startsOn: "2024-01-01", endsOn: "2026-02-28",
+        residentNames: ["H3 Old Resident"], totalOutstanding: 40_000, pending: false,
+        periods: [{ month: 2, dueDate: "2026-02-10", outstanding: 40_000, pending: false }],
+      },
+    ]);
 
     // Independently aggregate raw dues, adjustments, active allocation methods, reversals, waivers, and claims in SQL.
     const sqlMay20Monthly = await testDatabase.client.query<Record<string, number>>(
