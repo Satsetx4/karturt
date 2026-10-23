@@ -27,7 +27,7 @@ describe("Fast Track F3 rehearsal command", () => {
     }
     expect(renderF3UatPlan(result.scenarios)).toContain("full 40-character Git SHA");
     expect(renderF3UatPlan(result.scenarios)).toContain("ISO 8601 timestamp with timezone");
-    expect(renderF3UatPlan(result.scenarios)).toContain("<name and role>");
+    expect(renderF3UatPlan(result.scenarios)).toContain("authorized verifier role or non-personal reviewer ID");
     expect(renderF3UatPlan(result.scenarios)).toContain("without secrets, connection strings");
     expect(renderF3UatPlan(result.scenarios)).not.toContain("postgresql://");
   });

@@ -13,7 +13,7 @@ export const F3_UAT_EVIDENCE_FIELDS = [
     value: "<Vercel Preview deployment ID and environment; Neon project ID, root branch ID, and endpoint ID>",
   },
   { id: "observed-at", label: "Observation time", value: "<ISO 8601 timestamp with timezone>" },
-  { id: "verified-by", label: "Verifier", value: "<name and role>" },
+  { id: "verified-by", label: "Verifier", value: "<authorized verifier role or non-personal reviewer ID>" },
   {
     id: "scenario-results",
     label: "Scenario results",
