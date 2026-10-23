@@ -7,6 +7,8 @@
 
 This runbook defines the evidence and operator sequence required for a future Fast Track release candidate. It is not a database approval, migration authorization, deployment authorization, or production GO.
 
+Working F4 artifacts: [candidate release notes draft](RELEASE-NOTES-DRAFT.md) and [release decision packet template](F4-RELEASE-DECISION-PACKET-TEMPLATE.md). Neither is release evidence until reviewed and bound to the final candidate SHA; the packet template must be completed before a final verdict.
+
 ## Evidence boundary
 
 - Reconfirm the candidate SHA and all evidence after every source change. The reference SHA above is a starting point, not a permanent release identity.
@@ -104,6 +106,7 @@ For each candidate, attach or link:
 - Vercel plan, Preview project, deployment SHA, and smoke evidence.
 - UAT and concurrency results from the verified staging target.
 - Recovery drill result, rollback target, operator record, and unresolved items.
+- Reviewed candidate release notes and the completed decision packet, including the open risk register and exact owner decision required next. A blank template does not satisfy this record.
 - Final verdict and the owner decision required next.
 
 Never put secrets, connection strings, raw catalogs, or resident-identifying data in the repository or GitHub evidence.
