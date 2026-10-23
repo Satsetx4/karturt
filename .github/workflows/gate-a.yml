@@ -89,7 +89,18 @@ jobs:
         run: npm run build
 
   launch-safety-postgres-concurrency:
-    if: github.ref == 'refs/heads/feat/launch-safety-single-rt' || github.head_ref == 'feat/launch-safety-single-rt' || github.ref == 'refs/heads/fix/launch-safety-security-closure' || github.head_ref == 'fix/launch-safety-security-closure' || github.ref == 'refs/heads/feat/delivery-readiness-single-rt' || github.head_ref == 'feat/delivery-readiness-single-rt'
+    # Keep the isolated PostgreSQL race suite active for Fast Track V1 work.
+    if: >-
+      github.ref == 'refs/heads/feat/launch-safety-single-rt' ||
+      github.head_ref == 'feat/launch-safety-single-rt' ||
+      github.ref == 'refs/heads/fix/launch-safety-security-closure' ||
+      github.head_ref == 'fix/launch-safety-security-closure' ||
+      github.ref == 'refs/heads/feat/delivery-readiness-single-rt' ||
+      github.head_ref == 'feat/delivery-readiness-single-rt' ||
+      contains(github.ref, 'fast-track-v1-') ||
+      contains(github.head_ref, 'fast-track-v1-') ||
+      contains(github.ref, 'fast-track-f') ||
+      contains(github.head_ref, 'fast-track-f')
     name: Launch Safety independent PostgreSQL concurrency
     needs: gate-a
     runs-on: ubuntu-latest
