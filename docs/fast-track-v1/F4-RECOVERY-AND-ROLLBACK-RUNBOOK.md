@@ -22,7 +22,7 @@ Before any non-production release operation:
 1. Record the full candidate commit SHA, PR, protected-main SHA, exact-head Gate A run, and results for the full suite, schema checks, build, and independent PostgreSQL concurrency.
 2. Confirm the candidate is still SINGLE-RT and contains no production credentials, real resident data, or unapproved service dependencies.
 3. Compare the candidate with its base for schema and migration changes. Record the changed migration filenames and expected journal head, or record none.
-4. Record the previous known-good staging application deployment and source SHA, if one exists. If there is no verified rollback target, stop.
+4. If replacing an existing staging deployment, record the previous known-good deployment and source SHA; stop if that rollback target is not verified. For a first deployment, record that it is first use and confirm the target is disposable, contains no valuable data, and has a bounded discard/recreate recovery path covered by the existing operation authorization. Stop if neither a verified rollback target nor that disposable-target recovery path exists.
 
 A skipped, mock, PGlite, or unrelated PostgreSQL job does not satisfy staging concurrency.
 
@@ -79,7 +79,7 @@ Stop the Preview/UAT and preserve sanitized logs if any of these occur:
 
 1. Stop tester activity and record the affected Preview deployment and candidate SHA. Keep evidence sanitized.
 2. If the issue is application-only and the database remains valid, return the staging Preview to the recorded known-good staging deployment using a rollback action verified to be available on the Hobby plan. Re-run the critical login, payment, authorization, and financial checks.
-3. If a migration or data change may have affected staging, do not assume an application rollback reverses it. Keep the shared staging target unchanged until the owner-approved recovery path is selected.
+3. If a migration or data change may have affected staging, do not assume an application rollback reverses it. Use the already authorized, target-scoped procedure for bounded non-destructive diagnosis or restore to a separate disposable target. Stop before destructive changes to shared staging; those require separate approval naming the target and action.
 4. For recovery validation, restore the last verified synthetic backup to a separate disposable staging target. Compare the migration journal and allowlisted integrity/financial aggregates before considering that target recovered.
 5. Never run a destructive down migration, drop/truncate operation, or in-place restore unless a separate operation-specific approval explicitly names the verified non-production target and recovery action.
 6. Record the trigger, actions, start/end times, candidate and deployment SHAs, sanitized checks, final target identity, and unresolved anomalies. A failed recovery drill keeps the release at NO-GO.
@@ -107,4 +107,3 @@ For each candidate, attach or link:
 - Final verdict and the owner decision required next.
 
 Never put secrets, connection strings, raw catalogs, or resident-identifying data in the repository or GitHub evidence.
-
