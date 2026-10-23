@@ -79,7 +79,7 @@ describe("resident monthly-dues authorization", () => {
     });
 
     const principal = await resolvePrincipalForUser(db as never, user.id, "2026-06-15");
-    const dues = await getResidentMonthlyDues(db as never, principal);
+    const dues = await getResidentMonthlyDues(db as never, principal, "2026-06-15");
 
     expect(dues).toHaveLength(2);
     expect(dues.map((due) => [due.billingYear, due.month, due.status])).toEqual([
@@ -97,9 +97,13 @@ describe("resident monthly-dues authorization", () => {
       "originalAmount",
       "outstanding",
       "paymentRequestStatus",
+      "periodTiming",
+      "receipts",
       "status",
     ]);
     expect(dues.map((due) => due.paymentRequestStatus)).toEqual([null, null]);
+    expect(dues.map((due) => due.periodTiming)).toEqual(["past", "past"]);
+    expect(dues.map((due) => due.receipts)).toEqual([[], []]);
     for (const due of dues) {
       expect(due).not.toHaveProperty("id");
       expect(due).not.toHaveProperty("rtUnitId");
