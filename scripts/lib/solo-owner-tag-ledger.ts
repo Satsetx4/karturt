@@ -3,6 +3,11 @@ import { createHash } from "node:crypto";
 export const SOLO_OWNER_APPLICATION_REPOSITORY = "Satsetx4/karturt";
 export const SOLO_OWNER_APPLICATION_REPOSITORY_ID = "1386907262";
 export const SOLO_OWNER_OWNER_ID = "304263836";
+export const SOLO_OWNER_LEDGER_REPOSITORY = "Satsetx4/karturt-solo-owner-ledger";
+export const SOLO_OWNER_LEDGER_REPOSITORY_ID = 1430124299;
+export const SOLO_OWNER_LEDGER_BOOTSTRAP_COMMIT_SHA = "7ebdb3399b2f8b99275d5d3423dd71533c8b5fc9";
+export const SOLO_OWNER_LEDGER_RULESET_ID = 25665659;
+export const SOLO_OWNER_LEDGER_RULESET_NAME = "Protect Solo Owner Used Ticket Tags";
 export const SOLO_OWNER_LEDGER_TAG_PREFIX = "karturt-solo/used/v1/";
 export const SOLO_OWNER_LEDGER_TAG_RULE_PATTERN = "refs/tags/karturt-solo/used/v1/*";
 export const SOLO_OWNER_LEDGER_RECEIPT_VERSION = "karturt-solo-owner-receipt/v1";
@@ -164,18 +169,17 @@ function validatePolicy(policy: SoloOwnerTagLedgerPolicy): void {
       policy.ownerId !== SOLO_OWNER_OWNER_ID) {
     deny("APPLICATION_IDENTITY_INVALID");
   }
-  if (!/^[^/]+\/[A-Za-z0-9._-]+$/.test(policy.ledgerRepository) ||
-      policy.ledgerRepository.split("/")[0] !== "Satsetx4" ||
-      policy.ledgerRepository === policy.applicationRepository ||
-      !Number.isSafeInteger(policy.ledgerRepositoryId) ||
-      policy.ledgerRepositoryId <= 0 ||
-      !Number.isSafeInteger(policy.rulesetId) ||
-      policy.rulesetId <= 0 ||
-      policy.rulesetName.length === 0) {
+  if (policy.ledgerRepository !== SOLO_OWNER_LEDGER_REPOSITORY ||
+      policy.ledgerRepositoryId !== SOLO_OWNER_LEDGER_REPOSITORY_ID ||
+      policy.rulesetId !== SOLO_OWNER_LEDGER_RULESET_ID ||
+      policy.rulesetName !== SOLO_OWNER_LEDGER_RULESET_NAME) {
     deny("SEPARATE_LEDGER_POLICY_INVALID");
   }
   if (!SHA_PATTERN.test(policy.ledgerCommitSha)) {
     deny("LEDGER_TARGET_COMMIT_SHA_INVALID");
+  }
+  if (policy.ledgerCommitSha !== SOLO_OWNER_LEDGER_BOOTSTRAP_COMMIT_SHA) {
+    deny("LEDGER_TARGET_COMMIT_SHA_MISMATCH");
   }
 }
 
@@ -267,7 +271,7 @@ function verifyRuleset(policy: SoloOwnerTagLedgerPolicy, listing: RulesetReadbac
   // Only the two audited exact sets are permitted; unknown/duplicate/malformed
   // entries must never silently disappear from a ruleset readback.
   const rawRules = rule.rules;
-  const ruleTypes = Array.isArray(rawRules) && rawRules.every(isRecord)
+  const ruleTypes = Array.isArray(rawRules) && rawRules.every((entry) => isRecord(entry) && typeof entry.type === "string")
     ? rawRules.map((entry) => entry.type).sort()
     : [];
   const exactBasicRules = ruleTypes.length === 2 &&

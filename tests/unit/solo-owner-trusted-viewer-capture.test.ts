@@ -41,6 +41,7 @@ const validProject = () => ({
     name: "karturt-v1-solo-provenance-20261022",
     region_id: "aws-ap-southeast-1",
     pg_version: 18,
+    owner: { subscription_type: "free_v3" },
     effective_project_permission: "VIEWER",
   },
 });

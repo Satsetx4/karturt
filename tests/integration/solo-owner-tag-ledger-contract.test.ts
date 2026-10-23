@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   reserveSoloOwnerTicketInTagLedger,
+  SOLO_OWNER_LEDGER_BOOTSTRAP_COMMIT_SHA,
+  SOLO_OWNER_LEDGER_REPOSITORY_ID,
+  SOLO_OWNER_LEDGER_RULESET_ID,
+  SOLO_OWNER_LEDGER_RULESET_NAME,
+  SOLO_OWNER_LEDGER_REPOSITORY,
   SOLO_OWNER_LEDGER_TAG_RULE_PATTERN,
   type AnnotatedTagObjectInput,
-  type GitHubApiResponse,
   type GitReferenceInput,
   type RulesetReadback,
   type SoloOwnerTagLedgerClaim,
@@ -12,16 +16,16 @@ import {
   type WriterScopeReadback,
 } from "../../scripts/lib/solo-owner-tag-ledger";
 
-const ledgerRepository = "Satsetx4/karturt-solo-owner-ledger";
+const ledgerRepository = SOLO_OWNER_LEDGER_REPOSITORY;
 const policy: SoloOwnerTagLedgerPolicy = {
   applicationRepository: "Satsetx4/karturt",
   applicationRepositoryId: "1386907262",
   ownerId: "304263836",
   ledgerRepository,
-  ledgerRepositoryId: 900000001,
-  ledgerCommitSha: "e".repeat(40),
-  rulesetId: 900000002,
-  rulesetName: "Protect Solo Owner Used Ticket Tags",
+  ledgerRepositoryId: SOLO_OWNER_LEDGER_REPOSITORY_ID,
+  ledgerCommitSha: SOLO_OWNER_LEDGER_BOOTSTRAP_COMMIT_SHA,
+  rulesetId: SOLO_OWNER_LEDGER_RULESET_ID,
+  rulesetName: SOLO_OWNER_LEDGER_RULESET_NAME,
 };
 
 const claim = (overrides: Partial<SoloOwnerTagLedgerClaim> = {}): SoloOwnerTagLedgerClaim => ({
@@ -76,7 +80,7 @@ function tagRuleset(): Record<string, unknown> {
         exclude: [],
       },
     },
-    rules: [{ type: "update" }, { type: "deletion" }],
+    rules: [{ type: "update" }, { type: "deletion" }, { type: "non_fast_forward" }],
     bypass_actors: [],
   };
 }
@@ -189,6 +193,25 @@ async function denied(
 }
 
 describe("Solo Owner separate tag-ledger protocol (offline injected transport)", () => {
+  it("pins the verified repo, bootstrap commit, and active ruleset identifiers", async () => {
+    const fake = createFakeTransport();
+    const result = await reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport);
+
+    expect(result.status).toBe("CREATE_AND_READBACK_MATCHED_UNATTESTED");
+    expect(fake.targets).toEqual(Array(7).fill(SOLO_OWNER_LEDGER_REPOSITORY));
+    expect(fake.calls).toEqual([
+      "scope",
+      "ruleset",
+      "ledger-commit-read",
+      "tag-create",
+      "ref-create",
+      "ref-read",
+      "tag-read",
+      "scope",
+      "ruleset",
+    ]);
+  });
+
   it("targets the verified ledger commit while retaining the application candidate as receipt metadata", async () => {
     const fake = createFakeTransport();
     const result = await reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport);
@@ -236,6 +259,36 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
     );
     expect(fake.calls).toEqual([]);
   });
+
+  it("rejects a different but well-formed bootstrap commit before any transport call", async () => {
+    const fake = createFakeTransport();
+    await denied(
+      reserveSoloOwnerTicketInTagLedger(
+        { ...policy, ledgerCommitSha: "e".repeat(40) },
+        claim(),
+        fake.transport,
+      ),
+      "LEDGER_TARGET_COMMIT_SHA_MISMATCH",
+    );
+    expect(fake.calls).toEqual([]);
+  });
+
+  it.each([
+    ["ledger repository", { ledgerRepository: "Satsetx4/karturt" }],
+    ["ledger repository ID", { ledgerRepositoryId: 1386907262 }],
+    ["ruleset ID", { rulesetId: 1 }],
+    ["ruleset name", { rulesetName: "Other ruleset" }],
+  ] as Array<[string, Partial<SoloOwnerTagLedgerPolicy>]>) (
+    "rejects an unreviewed %s binding before any transport call",
+    async (_label, override) => {
+      const fake = createFakeTransport();
+      await denied(
+        reserveSoloOwnerTicketInTagLedger({ ...policy, ...override }, claim(), fake.transport),
+        "SEPARATE_LEDGER_POLICY_INVALID",
+      );
+      expect(fake.calls).toEqual([]);
+    },
+  );
 
   it.each([
     [404, {}, "LEDGER_TARGET_COMMIT_UNAVAILABLE"],
@@ -382,6 +435,42 @@ describe("Solo Owner separate tag-ledger protocol (offline injected transport)",
     expect(result.replayProof).toBe(false);
     expect(result.liveRulesetBehaviorVerified).toBe(false);
     expect(fake.calls.filter((call) => call === "ruleset")).toHaveLength(2);
+  });
+
+  it("accepts the separately audited two-rule set without non_fast_forward", async () => {
+    const fake = createFakeTransport();
+    fake.setRulesetFactory(() => ({
+      status: 200,
+      complete: true,
+      rulesets: [{
+        ...tagRuleset(),
+        rules: [{ type: "deletion" }, { type: "update" }],
+      }],
+    }));
+    const result = await reserveSoloOwnerTicketInTagLedger(policy, claim(), fake.transport);
+    expect(result.status).toBe("CREATE_AND_READBACK_MATCHED_UNATTESTED");
+    expect(result.runtimeEnableAllowed).toBe(false);
+  });
+
+  it("rejects missing, duplicate, or renamed target ruleset readbacks before writing", async () => {
+    const missing = createFakeTransport();
+    missing.setRulesetFactory(() => ({ status: 200, complete: true, rulesets: [] }));
+    await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), missing.transport), "LEDGER_TAG_RULESET_ID_MISSING_OR_AMBIGUOUS");
+    expect(missing.calls).toEqual(["scope", "ruleset"]);
+
+    const duplicate = createFakeTransport();
+    duplicate.setRulesetFactory(() => ({ status: 200, complete: true, rulesets: [tagRuleset(), tagRuleset()] }));
+    await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), duplicate.transport), "LEDGER_TAG_RULESET_ID_MISSING_OR_AMBIGUOUS");
+    expect(duplicate.calls).toEqual(["scope", "ruleset"]);
+
+    const renamed = createFakeTransport();
+    renamed.setRulesetFactory(() => ({
+      status: 200,
+      complete: true,
+      rulesets: [{ ...tagRuleset(), name: "Renamed policy" }],
+    }));
+    await denied(reserveSoloOwnerTicketInTagLedger(policy, claim(), renamed.transport), "LEDGER_TAG_RULESET_REQUIREMENTS_UNMET");
+    expect(renamed.calls).toEqual(["scope", "ruleset"]);
   });
 
   it.each([

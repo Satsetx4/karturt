@@ -42,6 +42,7 @@ export type NeonViewerReadOnlyPreflight = {
   targetProjectId: "super-band-12770762";
   sourceSha: string;
   observedPermission: "VIEWER";
+  observedFreePlan: "free_v2" | "free_v3";
   check: "METADATA_MATCHES_BUT_UNATTESTED";
   principalTokenPersisted: false;
   providerAttested: false;
@@ -89,6 +90,13 @@ export async function checkViewerOnlyNeonProjectGet(
       project.pg_version !== EXPECTED.postgresMajor) {
     throw new NeonViewerProbeRejected("VIEWER_API_TARGET_MISMATCH");
   }
+  if (!isRecord(project.owner) || typeof project.owner.subscription_type !== "string") {
+    throw new NeonViewerProbeRejected("VIEWER_API_PLAN_UNVERIFIED");
+  }
+  const subscriptionType = project.owner.subscription_type;
+  if (subscriptionType !== "free_v2" && subscriptionType !== "free_v3") {
+    throw new NeonViewerProbeRejected("VIEWER_API_FREE_PLAN_REQUIRED");
+  }
   if (project.effective_project_permission !== "VIEWER") {
     // Organization Admin, org Editor, project Editor and unknown are denied,
     // including an organization-wide token scoped to the right project.
@@ -98,6 +106,7 @@ export async function checkViewerOnlyNeonProjectGet(
     targetProjectId: EXPECTED.projectId,
     sourceSha,
     observedPermission: "VIEWER",
+    observedFreePlan: subscriptionType,
     check: "METADATA_MATCHES_BUT_UNATTESTED",
     principalTokenPersisted: false,
     providerAttested: false,
