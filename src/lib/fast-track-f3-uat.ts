@@ -101,6 +101,12 @@ export const F3_UAT_SCENARIOS: readonly F3UatScenario[] = [
     expected: "Receipts and reports stay within the authenticated household or RT scope.",
   },
   {
+    id: "chairman-report-reconciliation",
+    actor: "RT Chairman",
+    action: "Using the deterministic synthetic 2026 report fixture, compare snapshots as of 2026-05-05 (before the 2026-05-10 due date) and 2026-05-20 (after it); reconcile monthly, yearly, due-now, future-unpaid, and arrears totals.",
+    expected: "For both snapshots, due-now is Rp 195.000 and future-unpaid is Rp 840.000; yearly effective target Rp 1.365.000 reconciles to Rp 290.000 received + Rp 40.000 waived + Rp 1.035.000 outstanding. Only outstanding past-date periods appear in arrears: Rp 115.000 across 3 periods before the May due date and Rp 195.000 across 5 periods after it, with 3 households in each snapshot. Monthly totals reconcile to yearly totals, and future unpaid periods stay outside arrears.",
+  },
+  {
     id: "mobile-viewport-smoke",
     actor: "Resident and Treasurer",
     action: "At 360×800, 390×844, and 420×900 CSS-pixel viewports, inspect annual cards, online requests, treasurer cash recording, and receipts using touch input.",

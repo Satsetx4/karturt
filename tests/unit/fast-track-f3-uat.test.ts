@@ -66,6 +66,22 @@ describe("Fast Track F3 rehearsal command", () => {
     expect(mobile?.expected).toContain("44×44 CSS-pixel touch targets");
   });
 
+  it("includes deterministic Chairman report totals and the May due-date boundary", () => {
+    const report = F3_UAT_SCENARIOS.find(({ id }) => id === "chairman-report-reconciliation");
+
+    expect(report?.actor).toBe("RT Chairman");
+    expect(report?.action).toContain("2026-05-05");
+    expect(report?.action).toContain("2026-05-10");
+    expect(report?.action).toContain("2026-05-20");
+    expect(report?.expected).toContain("due-now is Rp 195.000");
+    expect(report?.expected).toContain("future-unpaid is Rp 840.000");
+    expect(report?.expected).toContain("Rp 1.365.000 reconciles to Rp 290.000 received + Rp 40.000 waived + Rp 1.035.000 outstanding");
+    expect(report?.expected).toContain("Rp 115.000 across 3 periods");
+    expect(report?.expected).toContain("Rp 195.000 across 5 periods");
+    expect(report?.expected).toContain("future unpaid periods stay outside arrears");
+    expect(report?.expected).not.toMatch(/resident names|household identifiers/i);
+  });
+
   it("blocks a production-shaped target before any live mode can be selected", () => {
     expect(resolveF3UatCommand(["--execute"], {
       APP_ENV: "production",
