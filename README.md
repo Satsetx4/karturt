@@ -14,7 +14,7 @@ KartuRT is a mobile-first RT dues administration app. Milestone 1 establishes th
 
 1. Use Node.js 22.12 or newer.
 2. Copy `.env.example` to `.env.local`.
-3. Create a **development-only** Neon branch and set `DATABASE_URL` to that branch. Keep the development, staging, and production connection strings separate.
+3. Use a local PostgreSQL database for development and set `DATABASE_URL` to its localhost URL. Runtime guards currently reject remote development and test database URLs. Keep development, staging, and production connection strings separate.
 4. Set `BETTER_AUTH_SECRET` to a unique random value of at least 32 characters.
 5. Keep `APP_ENV` and `DATABASE_ENV` equal (`development`, `staging`, `production`, or `test`). Database commands stop when those labels differ.
 6. Run `npm install`, `npm run db:migrate`, and `npm run db:check`.
