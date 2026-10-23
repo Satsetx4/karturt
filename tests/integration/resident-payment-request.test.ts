@@ -312,6 +312,43 @@ describe("resident payment request transactions", () => {
     await testDatabase.close();
   });
 
+  it("rejects future transfer periods at Jakarta month boundaries without side effects", async () => {
+    const { db } = testDatabase;
+    const resident = await createResident(db, { dues: [
+      { period: "2026-09" },
+      { period: "2026-10" },
+      { period: "2026-11" },
+    ] });
+
+    for (const [period, businessDate] of [
+      ["2026-10", "2026-09-30"],
+      ["2026-11", "2026-10-01"],
+      ["2026-11", "2026-10-31"],
+    ] as const) {
+      await expect(createResidentPaymentRequest(db as never, resident.principal, {
+        period, idempotencyKey: key(),
+      }, businessDate)).rejects.toBeInstanceOf(PaymentRequestPeriodUnavailableError);
+    }
+
+    await expect(db.select().from(paymentRequests).where(eq(paymentRequests.householdId, resident.householdId)))
+      .resolves.toHaveLength(0);
+    await expect(db.select().from(auditEvents).where(and(
+      eq(auditEvents.actorAppAccountId, resident.accountId),
+      eq(auditEvents.action, "payment_request.created"),
+    ))).resolves.toHaveLength(0);
+
+    const accepted = await createResidentPaymentRequest(db as never, resident.principal, {
+      period: "2026-10", idempotencyKey: key(),
+    }, "2026-10-01");
+    expect(accepted).toMatchObject({
+      status: "pending",
+      periods: ["2026-09", "2026-10"],
+      totalAmount: 80000,
+      idempotentReplay: false,
+    });
+    expect(accepted.periods).not.toContain("2026-11");
+  });
+
   it("auto-selects older unpaid months across billing years and keeps due status unchanged", async () => {
     const { db } = testDatabase;
     const resident = await createResident(db, { dues: [
