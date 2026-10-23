@@ -241,6 +241,23 @@ describe("resident card semantics", () => {
     expect(markup).not.toContain("2026-11");
   });
 
+  it("shows a pending request on a future month as pending rather than upcoming", () => {
+    const futurePending = {
+      ...due("unpaid", 11),
+      periodTiming: "future" as const,
+      paymentRequestStatus: "pending" as const,
+    };
+    const text = visibleText(renderToStaticMarkup(createElement(ResidentMonthCard, {
+      name: "November",
+      due: futurePending,
+    })));
+
+    expect(duesSummary([futurePending])).toEqual({ paid: 0, pending: 40000, unpaid: 0 });
+    expect(dueToken(futurePending)).toBe("PENDING");
+    expect(text).toContain("Menunggu konfirmasi");
+    expect(text).not.toContain("Belum jatuh tempo");
+  });
+
   it("separates upcoming unpaid months from arrears and keeps prepaid future months paid", () => {
     const overdue = { ...due("unpaid", 9), periodTiming: "past" as const };
     const currentPending = {

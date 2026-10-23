@@ -69,8 +69,8 @@ export const residentStatusLabels: Record<ResidentStatusToken, string> = {
 };
 
 export function dueToken(due: ResidentDue): ResidentStatusToken {
-  if (due.status === "unpaid" && due.periodTiming === "future") return "UPCOMING";
   if (due.status === "unpaid" && due.paymentRequestStatus === "pending") return "PENDING";
+  if (due.status === "unpaid" && due.periodTiming === "future") return "UPCOMING";
   if (due.status === "unpaid" && due.periodTiming === "past") return "OVERDUE";
   return domainStatusTokens[due.status];
 }
