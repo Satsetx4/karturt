@@ -102,9 +102,7 @@ jobs:
       startsWith(github.ref, 'refs/heads/ci/fast-track-v1-') ||
       startsWith(github.head_ref, 'ci/fast-track-v1-') ||
       startsWith(github.ref, 'refs/heads/codex/fast-track-v1-') ||
-      startsWith(github.head_ref, 'codex/fast-track-v1-') ||
-      contains(github.ref, 'fast-track-f') ||
-      contains(github.head_ref, 'fast-track-f')
+      startsWith(github.head_ref, 'codex/fast-track-v1-')
     name: Launch Safety independent PostgreSQL concurrency
     needs: gate-a
     runs-on: ubuntu-latest
