@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getPublicAppUrl, requireAuthEnvironment, requireDatabaseEnvironment } from "../../src/lib/env";
+import { databaseUrlMatchesTarget, getPublicAppUrl, requireAuthEnvironment, requireDatabaseEnvironment } from "../../src/lib/env";
 
 const variableNames = ["APP_ENV", "DATABASE_ENV", "DATABASE_URL", "BETTER_AUTH_SECRET", "NEXT_PUBLIC_APP_URL"] as const;
 const originalValues = new Map(variableNames.map((name) => [name, process.env[name]]));
@@ -27,6 +27,41 @@ describe("runtime environment guards", () => {
 
     setEnvironment({ DATABASE_URL: "postgresql://local/db" });
     expect(() => requireDatabaseEnvironment()).toThrow("must both be set explicitly");
+  });
+
+  it("fails closed when staging has no approved database target", () => {
+    setEnvironment({
+      APP_ENV: "staging",
+      DATABASE_ENV: "staging",
+      DATABASE_URL: "postgresql://staging-user@ep-unverified.region.aws.neon.tech/karturt",
+    });
+
+    expect(() => requireDatabaseEnvironment()).toThrow("approved staging database target");
+  });
+
+  it("matches a staging target by exact PostgreSQL host, port, and database", () => {
+    const target = {
+      hostname: "ep-approved.region.aws.neon.tech",
+      port: 5432,
+      databaseName: "karturt_staging",
+    };
+
+    expect(databaseUrlMatchesTarget(
+      "postgresql://staging-user@ep-approved.region.aws.neon.tech/karturt_staging?sslmode=require",
+      target,
+    )).toBe(true);
+    expect(databaseUrlMatchesTarget(
+      "postgresql://staging-user@ep-other.region.aws.neon.tech/karturt_staging",
+      target,
+    )).toBe(false);
+    expect(databaseUrlMatchesTarget(
+      "postgresql://staging-user@ep-approved.region.aws.neon.tech/karturt",
+      target,
+    )).toBe(false);
+    expect(databaseUrlMatchesTarget(
+      "postgresql://staging-user@ep-approved.region.aws.neon.tech:5433/karturt_staging",
+      target,
+    )).toBe(false);
   });
 
   it("requires explicit labels before generating deployment metadata", () => {

@@ -2,6 +2,30 @@ import { z } from "zod";
 
 const environment = z.enum(["development", "staging", "production", "test"]);
 
+type StagingDatabaseTarget = {
+  hostname: string;
+  port: number;
+  databaseName: string;
+};
+
+// Keep this empty until an owner confirms a production-independent synthetic staging root.
+const approvedStagingDatabaseTargets: readonly StagingDatabaseTarget[] = [];
+
+export function databaseUrlMatchesTarget(
+  databaseUrl: string,
+  target: StagingDatabaseTarget,
+) {
+  try {
+    const parsed = new URL(databaseUrl);
+    if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") return false;
+    return parsed.hostname.toLowerCase() === target.hostname.toLowerCase() &&
+      Number(parsed.port || "5432") === target.port &&
+      decodeURIComponent(parsed.pathname.slice(1)) === target.databaseName;
+  } catch {
+    return false;
+  }
+}
+
 export function getEnvironment() {
   const inferred = process.env.NODE_ENV === "production" ? "production" : process.env.NODE_ENV === "test" ? "test" : "development";
   const appEnv = environment.parse(process.env.APP_ENV ?? inferred);
@@ -49,13 +73,20 @@ export function getPublicAppUrl() {
 
 export function requireDatabaseEnvironment() {
   const env = requireExplicitEnvironmentLabels();
-  if (!env.databaseUrl) {
+  const databaseUrl = env.databaseUrl;
+  if (!databaseUrl) {
     throw new Error("DATABASE_URL is required for database operations.");
   }
-  if (!/^postgres(?:ql)?:\/\//i.test(env.databaseUrl)) {
+  if (!/^postgres(?:ql)?:\/\//i.test(databaseUrl)) {
     throw new Error("DATABASE_URL must be a PostgreSQL connection string.");
   }
-  return { ...env, databaseUrl: env.databaseUrl };
+  if (
+    env.databaseEnv === "staging" &&
+    !approvedStagingDatabaseTargets.some((target) => databaseUrlMatchesTarget(databaseUrl, target))
+  ) {
+    throw new Error("DATABASE_URL does not match an approved staging database target.");
+  }
+  return { ...env, databaseUrl };
 }
 
 export function requireAuthEnvironment() {
