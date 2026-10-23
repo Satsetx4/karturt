@@ -41,9 +41,21 @@ describe("runtime environment guards", () => {
       APP_ENV: "staging",
       DATABASE_ENV: "staging",
       DATABASE_URL: "postgresql://staging-user@ep-unverified.region.aws.neon.tech/karturt",
+      VERCEL_ENV: "preview",
     });
 
     expect(() => requireDatabaseEnvironment()).toThrow("approved staging database target");
+  });
+
+  it("requires a Vercel Preview marker for staging database operations outside optimized production builds", () => {
+    setEnvironment({
+      APP_ENV: "staging",
+      DATABASE_ENV: "staging",
+      DATABASE_URL: "postgresql://staging-user@ep-unverified.region.aws.neon.tech/karturt?sslmode=verify-full",
+    });
+    setNodeEnvironment("development");
+
+    expect(() => requireDatabaseEnvironment()).toThrow("Staging database operations require VERCEL_ENV=preview");
   });
 
   it("allows local development PostgreSQL but rejects unapproved remote development targets", () => {
@@ -90,7 +102,7 @@ describe("runtime environment guards", () => {
     expect(() => requireDatabaseEnvironment()).toThrow("Vercel Preview deployments require staging");
   });
 
-  it("does not let Vercel Development bypass the development database label", () => {
+  it("rejects staging database operations in a Vercel Development deployment", () => {
     setEnvironment({
       APP_ENV: "staging",
       DATABASE_ENV: "staging",
@@ -98,7 +110,7 @@ describe("runtime environment guards", () => {
       VERCEL_ENV: "development",
     });
 
-    expect(() => requireDatabaseEnvironment()).toThrow("Vercel Development deployments require development");
+    expect(() => requireDatabaseEnvironment()).toThrow("Staging database operations require VERCEL_ENV=preview");
   });
 
   it("rejects development labels in an optimized production build", () => {
@@ -122,7 +134,7 @@ describe("runtime environment guards", () => {
     setNodeEnvironment("production");
 
     expect(() => requireDatabaseEnvironment()).toThrow(
-      "Staging database operations in an optimized production build require VERCEL_ENV=preview",
+      "Staging database operations require VERCEL_ENV=preview",
     );
   });
 
@@ -146,7 +158,7 @@ describe("runtime environment guards", () => {
     expect(() => requireDatabaseEnvironment()).toThrow("Production database operations require NODE_ENV=production and VERCEL_ENV=production");
   });
 
-  it("matches a staging target by exact PostgreSQL host, port, and database", () => {
+  it("matches a staging target only with exact PostgreSQL identity and certificate verification", () => {
     const target = {
       hostname: "ep-approved.region.aws.neon.tech",
       port: 5432,
@@ -155,23 +167,31 @@ describe("runtime environment guards", () => {
     };
 
     expect(databaseUrlMatchesTarget(
-      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech/karturt_staging?sslmode=require",
+      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech/karturt_staging?sslmode=verify-full",
       target,
     )).toBe(true);
     expect(databaseUrlMatchesTarget(
-      "postgresql://karturt_staging_app@ep-other.region.aws.neon.tech/karturt_staging?sslmode=require",
+      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech/karturt_staging?sslmode=require",
       target,
     )).toBe(false);
     expect(databaseUrlMatchesTarget(
-      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech/karturt?sslmode=require",
+      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech/karturt_staging?sslmode=verify-ca",
       target,
     )).toBe(false);
     expect(databaseUrlMatchesTarget(
-      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech:5433/karturt_staging?sslmode=require",
+      "postgresql://karturt_staging_app@ep-other.region.aws.neon.tech/karturt_staging?sslmode=verify-full",
       target,
     )).toBe(false);
     expect(databaseUrlMatchesTarget(
-      "postgresql://other-role@ep-approved.region.aws.neon.tech/karturt_staging?sslmode=require",
+      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech/karturt?sslmode=verify-full",
+      target,
+    )).toBe(false);
+    expect(databaseUrlMatchesTarget(
+      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech:5433/karturt_staging?sslmode=verify-full",
+      target,
+    )).toBe(false);
+    expect(databaseUrlMatchesTarget(
+      "postgresql://other-role@ep-approved.region.aws.neon.tech/karturt_staging?sslmode=verify-full",
       target,
     )).toBe(false);
     expect(databaseUrlMatchesTarget(
@@ -179,15 +199,15 @@ describe("runtime environment guards", () => {
       target,
     )).toBe(false);
     expect(databaseUrlMatchesTarget(
-      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech/karturt_staging?sslmode=require&host=ep-other.region.aws.neon.tech",
+      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech/karturt_staging?sslmode=verify-full&host=ep-other.region.aws.neon.tech",
       target,
     )).toBe(false);
     expect(databaseUrlMatchesTarget(
-      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech/karturt_staging?sslmode=require&channel_binding=require",
+      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech/karturt_staging?sslmode=verify-full&channel_binding=require",
       target,
     )).toBe(false);
     expect(databaseUrlMatchesTarget(
-      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech/karturt_staging#fragment",
+      "postgresql://karturt_staging_app@ep-approved.region.aws.neon.tech/karturt_staging?sslmode=verify-full#fragment",
       target,
     )).toBe(false);
   });

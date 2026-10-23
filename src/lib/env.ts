@@ -22,7 +22,7 @@ export function databaseUrlMatchesTarget(
     const allowedParameters = new Set(["sslmode"]);
     if ([...parsed.searchParams.keys()].some((parameter) => !allowedParameters.has(parameter))) return false;
     const sslModes = parsed.searchParams.getAll("sslmode");
-    if (sslModes.length !== 1 || !["require", "verify-ca", "verify-full"].includes(sslModes[0]!.toLowerCase())) return false;
+    if (sslModes.length !== 1 || sslModes[0]!.toLowerCase() !== "verify-full") return false;
     if (parsed.hash) return false;
     return parsed.hostname.toLowerCase() === target.hostname.toLowerCase() &&
       Number(parsed.port || "5432") === target.port &&
@@ -63,8 +63,8 @@ function requireVercelDatabaseEnvironment(env: ReturnType<typeof getEnvironment>
     throw new Error("APP_ENV must not be development in an optimized production build.");
   }
   const deploymentEnvironment = process.env.VERCEL_ENV;
-  if (env.appEnv === "staging" && process.env.NODE_ENV === "production" && deploymentEnvironment !== "preview") {
-    throw new Error("Staging database operations in an optimized production build require VERCEL_ENV=preview.");
+  if (env.appEnv === "staging" && deploymentEnvironment !== "preview") {
+    throw new Error("Staging database operations require VERCEL_ENV=preview.");
   }
   if (env.appEnv === "production" && (process.env.NODE_ENV !== "production" || deploymentEnvironment !== "production")) {
     throw new Error("Production database operations require NODE_ENV=production and VERCEL_ENV=production.");
