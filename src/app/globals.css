@@ -963,6 +963,14 @@ button { color: inherit; }
 .dark .chairman-report-badge.is-waived { border-color: #6f5682; color: #e0c7f2; background: #33283c; }
 .chairman-report-badge.is-overdue { border-color: #dfaaa3; color: #883c35; background: #fff0ed; }
 .dark .chairman-report-badge.is-overdue { border-color: #804941; color: #f4b5ad; background: #3a2928; }
+.chairman-report-badge.is-no-data { border-color: #aab7c0; color: #475762; background: #eef2f4; }
+.dark .chairman-report-badge.is-no-data { border-color: #50616c; color: #d4e0e4; background: #27353b; }
+.chairman-report-badge.is-current { border-color: #9dc9d1; color: #14515b; background: #e6f4f5; }
+.dark .chairman-report-badge.is-current { border-color: #4f7f87; color: #b7e5e8; background: #233a3e; }
+.chairman-report-badge.is-future { border-color: #aab7c0; color: #475762; background: #eef2f4; }
+.dark .chairman-report-badge.is-future { border-color: #50616c; color: #d4e0e4; background: #27353b; }
+.chairman-report-badge.is-paid-ahead { border-color: #a8d2bd; color: #175e45; background: #eaf6ef; }
+.dark .chairman-report-badge.is-paid-ahead { border-color: #3f725e; color: #b5e6d1; background: #20372f; }
 .chairman-report-metrics--month { margin-top: 12px; }
 .chairman-report-arrears-total { max-width: 52%; color: var(--navy); font-size: clamp(16px, 4.3vw, 21px); font-weight: 800; line-height: 1.3; text-align: right; overflow-wrap: anywhere; }
 .chairman-report-arrears-note { margin: -6px 0 12px; color: var(--muted); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
