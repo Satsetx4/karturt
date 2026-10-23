@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { appAccounts, billingYears, monthlyDues } from "../../src/db/schema";
+import { randomUUID } from "node:crypto";
+import { eq, inArray } from "drizzle-orm";
+import { activeDueSettlements, appAccounts, billingYears, monthlyDues, officialAssignments, paymentAllocations, payments } from "../../src/db/schema";
 import { resolvePrincipalForUser } from "../../src/lib/auth/principal";
+import type { Principal } from "../../src/lib/auth/permissions";
 import { getResidentMonthlyDues } from "../../src/lib/billing/resident-dues";
+import { recordTreasurerCashPayment } from "../../src/lib/billing/treasurer-cash-payments";
 import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase } from "../helpers/database";
 
 describe("resident monthly-dues authorization", () => {
@@ -68,6 +72,60 @@ describe("resident monthly-dues authorization", () => {
         status: "unpaid",
       },
     ]);
+
+    const seedForeignReceipt = async (input: {
+      rtUnitId: string;
+      householdId: string;
+      personId: string;
+    }) => {
+      const user = await createAuthUser(db);
+      const [official] = await db.insert(appAccounts).values({
+        rtUnitId: input.rtUnitId,
+        authUserId: user.id,
+        accountType: "official",
+        loginIdentifier: `receipt-fixture-${randomUUID()}`,
+        personId: input.personId,
+      }).returning({ id: appAccounts.id });
+      await db.insert(officialAssignments).values({
+        rtUnitId: input.rtUnitId,
+        appAccountId: official!.id,
+        role: "treasurer",
+        startsOn: "2020-01-01",
+      });
+      const principal: Principal = {
+        authUserId: user.id,
+        appAccountId: official!.id,
+        role: "treasurer",
+        rtUnitId: input.rtUnitId,
+        householdId: null,
+        personId: input.personId,
+      };
+      const idempotencyKey = randomUUID();
+      await recordTreasurerCashPayment(db as never, principal, {
+        householdId: input.householdId,
+        period: "2026-01",
+        idempotencyKey,
+      }, "2026-06-15");
+      const [payment] = await db.select({ id: payments.id }).from(payments)
+        .where(eq(payments.cashIdempotencyKey, idempotencyKey));
+      return payment!.id;
+    };
+    const foreignPaymentIds = [
+      await seedForeignReceipt({
+        rtUnitId: rtOne,
+        householdId: otherHousehold.householdId,
+        personId: otherHousehold.personId,
+      }),
+      await seedForeignReceipt({
+        rtUnitId: rtTwo,
+        householdId: otherRtHousehold.householdId,
+        personId: otherRtHousehold.personId,
+      }),
+    ];
+    expect(await db.select({ id: paymentAllocations.id }).from(paymentAllocations)
+      .where(inArray(paymentAllocations.paymentId, foreignPaymentIds))).toHaveLength(2);
+    expect(await db.select({ allocationId: activeDueSettlements.allocationId }).from(activeDueSettlements)
+      .where(inArray(activeDueSettlements.paymentId, foreignPaymentIds))).toHaveLength(2);
     const user = await createAuthUser(db);
     await db.insert(appAccounts).values({
       rtUnitId: rtOne,
@@ -104,6 +162,9 @@ describe("resident monthly-dues authorization", () => {
     expect(dues.map((due) => due.paymentRequestStatus)).toEqual([null, null]);
     expect(dues.map((due) => due.periodTiming)).toEqual(["past", "past"]);
     expect(dues.map((due) => due.receipts)).toEqual([[], []]);
+    const foreignReferences = foreignPaymentIds.map((id) => `KRT-${id.replace(/-/g, "").slice(0, 12).toUpperCase()}`);
+    const returnedReferences = dues.flatMap((due) => due.receipts ?? []).map((receipt) => receipt.reference);
+    expect(foreignReferences.some((reference) => returnedReferences.includes(reference))).toBe(false);
     for (const due of dues) {
       expect(due).not.toHaveProperty("id");
       expect(due).not.toHaveProperty("rtUnitId");
