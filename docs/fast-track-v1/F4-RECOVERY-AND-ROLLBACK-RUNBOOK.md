@@ -1,7 +1,7 @@
 # Fast Track V1 F4 Recovery and Rollback Runbook
 
 **Status:** Draft procedure; not executed  
-**Reference candidate:** PR #93, initial F1 SHA 48b21ad3d208c983584fb32618254c9599297c07  
+**Reference candidate:** PR #93, current integrated F1 SHA `b8bc74a4202225d9a54728d2c10be247dec8318f`
 **Release target:** PRODUCTION READY — AWAITING OWNER GO  
 **Scope:** SINGLE-RT, synthetic staging only
 

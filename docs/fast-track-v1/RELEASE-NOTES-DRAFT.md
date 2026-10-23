@@ -1,8 +1,8 @@
 # KartuRT V1 Fast Track — Release Notes Draft
 
-**Status:** Internal draft; not approved for publication or release  
-**Candidate:** PR #93, `48b21ad3d208c983584fb32618254c9599297c07`  
-**Base:** protected `main`, `96c84588ae0c13f68a17cffd997a3e583fb7da82`  
+**Status:** Internal draft; not approved for publication or release
+**Candidate:** PR #93, `b8bc74a4202225d9a54728d2c10be247dec8318f`
+**Base:** protected `main`, `96c84588ae0c13f68a17cffd997a3e583fb7da82`
 **Decision target:** `PRODUCTION READY — AWAITING OWNER GO`, only after F1–F4 evidence passes
 
 This draft describes the application changes in the current integrated F1 candidate. PR #93 remains OPEN/DRAFT and unmerged. These notes are a candidate-diff summary, not evidence of staging readiness, production approval, or deployment.
@@ -15,20 +15,23 @@ This draft describes the application changes in the current integrated F1 candid
 - Chairman reports distinguish amounts due from unpaid future periods so future dues do not inflate arrears.
 - Treasurer cash settlement supports a future target period and allocates from the oldest unpaid period through that target, preserving the existing transaction and idempotency safeguards.
 - Regression coverage exercises authorization, tenant scoping, receipt behavior, payment retries, cash allocation, and report calculations.
+- A request that is already pending remains visibly pending on a future-period card; it is not presented as merely upcoming.
 
-## Candidate evidence recorded at this SHA
+## Candidate evidence
 
-- Exact-head Gate A run [#40019070722](https://github.com/Satsetx4/karturt/actions/runs/40019070722): SUCCESS. Its Gate A verification and disposable PostgreSQL 17 concurrency jobs both passed on the candidate SHA.
-- The candidate PR records a local production build, typecheck, lint, focused billing tests, and browser smoke at 360×800, 390×844, 768×1024, and 1440×900 as passing.
-- The disposable PostgreSQL 17 result is regression evidence. It does not establish PostgreSQL 18 staging concurrency or F3 completion.
-- PR #93’s changed-file list contains application, workflow, and test files; it contains no migration file. Recheck the migration inventory against the final release candidate SHA.
+- PR #93 is OPEN/DRAFT at exact head `b8bc74a4202225d9a54728d2c10be247dec8318f`, based on protected main `96c84588ae0c13f68a17cffd997a3e583fb7da82`.
+- Local full suite: 64/64 files and 411/411 tests passed. Focused resident-card tests: 20/20 passed. Typecheck, build, Drizzle journal/schema checks, constraints, authorization and security-closure checks passed. Lint had zero errors and one existing unrelated warning in `scripts/phase-12-household-browser-smoke.ts:1005`; `git diff --check` passed.
+- Local browser smoke on this head passed at 360×800, 390×844, 768×1024, and 1440×900, with no horizontal overflow and 16px status text.
+- Independent read-only review of the future-pending display fix found no P0/P1/P2 issues. Paid future cards remain paid; overdue and upcoming states retain their separate behavior.
+- Exact-head Gate A run [#40040334501](https://github.com/Satsetx4/karturt/actions/runs/40040334501) is currently **IN_PROGRESS** at job #120709660348, integration/migration step. Lint, typecheck, and unit steps have passed; remaining steps are pending. The dependent disposable PostgreSQL concurrency job has not started. Update this evidence after the run completes; prior-SHA results do not transfer.
+- The integrated candidate diff contains no migration file. Recheck the migration inventory against the final release candidate SHA.
 
 ## Release evidence still required
 
 - Independently verified staging identity, synthetic-only lineage, scoped role, TLS certificate validation, and PostgreSQL 18 session evidence.
 - Approved staging migration and recovery evidence, if required after the final migration inventory.
 - Real staging E2E, role and tenant negative cases, retries, reversals, receipts, mobile smoke, and independent PostgreSQL 18 concurrency.
-- Verified Neon Free and Vercel Hobby plans, a staging-only Preview project, deployment bound to the final candidate SHA, and Preview smoke evidence.
+- Confirmed Neon Free and Vercel Hobby plans, a staging-only Preview project, deployment bound to the final candidate SHA, and Preview smoke evidence.
 - A current-target backup/restore drill, dependency review, exact-head release CI, and a tested rollback path.
 - A completed F4 decision packet and separate owner GO for the exact production candidate and environment.
 
