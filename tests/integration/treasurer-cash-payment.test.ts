@@ -21,6 +21,7 @@ import {
   cancelResidentPaymentRequest,
   rejectTreasurerPaymentRequest,
 } from "@/lib/billing/payment-request-resolution";
+import { reverseTreasurerPayment } from "@/lib/billing/treasurer-payment-reversal";
 import {
   CashPaymentDueConflictError,
   CashPaymentHouseholdNotFoundError,
@@ -247,6 +248,84 @@ describe("Treasurer direct cash payment", () => {
         ["2027-02", "paid"],
         ["2027-03", "paid"],
       ]);
+  });
+
+  it("shows upcoming periods, then returns only active per-month receipts after reversal and repayment", async () => {
+    const scenario = await createScenario();
+    const businessDate = "2026-10-24";
+    const upcomingDues = await getResidentMonthlyDues(database, scenario.residentPrincipal, businessDate);
+
+    expect(upcomingDues.map((due) => [due.billingYear, due.month, due.periodTiming, dueToken(due)])).toEqual([
+      [2026, 11, "future", "UPCOMING"],
+      [2026, 12, "future", "UPCOMING"],
+      [2027, 2, "future", "UPCOMING"],
+    ]);
+    expect(duesSummary(upcomingDues)).toEqual({ paid: 0, pending: 0, unpaid: 0 });
+
+    const originalKey = randomUUID();
+    const originalResult = await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: scenario.householdId,
+      period: "2027-02",
+      idempotencyKey: originalKey,
+    }, businessDate);
+    const [originalPayment] = await testDatabase.db.select({
+      id: payments.id,
+      amount: payments.amount,
+      verifiedAt: payments.verifiedAt,
+    }).from(payments).where(and(
+      eq(payments.rtUnitId, scenario.rtUnitId),
+      eq(payments.cashIdempotencyKey, originalKey),
+    ));
+    expect(originalResult.totalAmount).toBe(120000);
+    expect(originalPayment?.amount).toBe(120000);
+
+    const paidDues = await getResidentMonthlyDues(database, scenario.residentPrincipal, businessDate);
+    expect(paidDues.every((due) => due.status === "paid" && due.periodTiming === "future")).toBe(true);
+    expect(paidDues.every((due) => dueToken(due) === "PAID")).toBe(true);
+    for (const due of paidDues) {
+      expect(due.receipts).toEqual([{
+        allocationAmount: 40000,
+        method: "cash",
+        verifiedAt: originalPayment!.verifiedAt.toISOString(),
+        reference: `KRT-${originalPayment!.id.replace(/-/g, "").slice(0, 12).toUpperCase()}`,
+      }]);
+    }
+
+    await reverseTreasurerPayment(database, scenario.treasurerPrincipal, {
+      paymentId: originalPayment!.id,
+      reason: "Koreksi pencatatan fixture",
+    }, businessDate);
+    const reversedDues = await getResidentMonthlyDues(database, scenario.residentPrincipal, businessDate);
+    expect(reversedDues.every((due) => due.status === "unpaid" && due.receipts?.length === 0)).toBe(true);
+    expect(reversedDues.every((due) => dueToken(due) === "UPCOMING")).toBe(true);
+
+    const replacementKey = randomUUID();
+    await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: scenario.householdId,
+      period: "2027-02",
+      idempotencyKey: replacementKey,
+    }, businessDate);
+    const [replacementPayment] = await testDatabase.db.select({
+      id: payments.id,
+      verifiedAt: payments.verifiedAt,
+    }).from(payments).where(and(
+      eq(payments.rtUnitId, scenario.rtUnitId),
+      eq(payments.cashIdempotencyKey, replacementKey),
+    ));
+    const repaidDues = await getResidentMonthlyDues(database, scenario.residentPrincipal, businessDate);
+    const reversedReference = `KRT-${originalPayment!.id.replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+
+    expect(repaidDues).toHaveLength(3);
+    expect(repaidDues.every((due) => due.status === "paid" && due.periodTiming === "future")).toBe(true);
+    for (const due of repaidDues) {
+      expect(due.receipts).toEqual([{
+        allocationAmount: 40000,
+        method: "cash",
+        verifiedAt: replacementPayment!.verifiedAt.toISOString(),
+        reference: `KRT-${replacementPayment!.id.replace(/-/g, "").slice(0, 12).toUpperCase()}`,
+      }]);
+      expect(due.receipts?.[0]?.reference).not.toBe(reversedReference);
+    }
   });
 
   it("replays the same key and rejects reuse for a different period or household", async () => {
