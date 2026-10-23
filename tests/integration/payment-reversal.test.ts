@@ -25,6 +25,7 @@ import {
   PaymentRequestPeriodUnavailableError,
 } from "@/lib/billing/resident-payment-request";
 import {
+  CashPaymentIdempotencyConflictError,
   CashPaymentDueConflictError,
   recordTreasurerCashPayment,
 } from "@/lib/billing/treasurer-cash-payments";
@@ -200,10 +201,11 @@ describe("Treasurer payment reversal", () => {
 
   it("reverses a multi-month cash payment and permits a new payment with a different idempotency key", async () => {
     const scenario = await createScenario();
+    const originalIdempotencyKey = randomUUID();
     const first = await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
       householdId: scenario.householdId,
       period: "2026-03",
-      idempotencyKey: randomUUID(),
+      idempotencyKey: originalIdempotencyKey,
     }, "2026-10-02");
     const [originalPayment] = await testDatabase.db.select().from(payments)
       .where(and(eq(payments.rtUnitId, scenario.rtUnitId), eq(payments.method, "cash")));
@@ -218,6 +220,15 @@ describe("Treasurer payment reversal", () => {
       .where(inArray(monthlyDues.id, scenario.dueIds));
     expect(newPayment?.status).toBe("unpaid");
     expect((await getResidentPaymentHistory(database, scenario.residentPrincipal)).payments[0]?.lifecycle).toBe("reversed");
+    await expect(recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
+      householdId: scenario.householdId,
+      period: "2026-03",
+      idempotencyKey: originalIdempotencyKey,
+    }, "2026-10-02")).rejects.toBeInstanceOf(CashPaymentIdempotencyConflictError);
+    expect(await testDatabase.db.select().from(payments)
+      .where(eq(payments.id, originalPayment!.id))).toHaveLength(1);
+    expect(await testDatabase.db.select().from(paymentAllocations)
+      .where(eq(paymentAllocations.paymentId, originalPayment!.id))).toEqual(originalAllocations);
 
     const second = await recordTreasurerCashPayment(database, scenario.treasurerPrincipal, {
       householdId: scenario.householdId,
