@@ -5,6 +5,7 @@ import {
   ResidentDuesSummary,
   ResidentDueStatus,
   ResidentMonthCard,
+  ResidentPaymentRequestPanel,
 } from "../../src/components/resident-card";
 import {
   dueToken,
@@ -224,6 +225,20 @@ describe("resident card semantics", () => {
     }));
     expect(visibleText(markup)).toContain("Menunggu konfirmasi");
     expect(pendingDue.status).toBe("unpaid");
+  });
+
+  it("offers online requests only for past and current unpaid periods", () => {
+    const overdue = { ...due("unpaid", 9), periodTiming: "past" as const };
+    const current = { ...due("unpaid", 10), periodTiming: "current" as const };
+    const future = { ...due("unpaid", 11), periodTiming: "future" as const };
+    const markup = renderToStaticMarkup(createElement(ResidentPaymentRequestPanel, {
+      dues: [overdue, current, future],
+      onCreated: () => {},
+    }));
+    const optionValues = [...markup.matchAll(/<option value="([^"]+)"/g)].map((match) => match[1]);
+
+    expect(optionValues).toEqual(["2026-09", "2026-10"]);
+    expect(markup).not.toContain("2026-11");
   });
 
   it("separates upcoming unpaid months from arrears and keeps prepaid future months paid", () => {

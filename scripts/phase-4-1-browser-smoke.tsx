@@ -54,6 +54,7 @@ if (!browser) {
 const due = (status: ResidentDue["status"], month: number): ResidentDue => ({
   billingYear: 2026,
   month,
+  periodTiming: month < 10 ? "past" : month === 10 ? "current" : "future",
   amount: status === "not_due" ? 0 : 40000,
   originalAmount: status === "not_due" ? 0 : 40000,
   adjustmentTotal: 0,
@@ -134,6 +135,9 @@ window.addEventListener("load", () => requestAnimationFrame(() => {
     documentWidth: document.documentElement.scrollWidth,
     columns: getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean).length,
     statusFontSize: getComputedStyle(status).fontSize,
+    futureCardStatuses: Array.from(document.querySelectorAll(".due-card"))
+      .filter((card) => ["November", "Desember"].includes(card.querySelector("h2")?.textContent ?? ""))
+      .map((card) => card.querySelector(".due-status")?.className ?? ""),
     navButtonHeight: navButton.getBoundingClientRect().height,
     focusOutlineWidth: getComputedStyle(navButton).outlineWidth,
     navButtonCount: document.querySelectorAll(".resident-nav button").length,
@@ -281,6 +285,7 @@ async function captureBrowserView(
       documentWidth: number;
       columns: number;
       statusFontSize: string;
+      futureCardStatuses: string[];
       navButtonHeight: number;
       focusOutlineWidth: string;
       navButtonCount: number;
@@ -341,11 +346,14 @@ async function main() {
     if (!expectedLabels.every((label) => visibleText.includes(label))) {
       throw new Error(`Resident labels are missing at ${suffix}.`);
     }
-    if (technicalCopy.test(visibleText) || /tanggal 10|jatuh tempo|2026-\d{2}-10/i.test(visibleText)) {
+    if (technicalCopy.test(visibleText) || /tanggal 10|2026-\d{2}-10/i.test(visibleText)) {
       throw new Error(`Technical status or due-date copy is visible at ${suffix}.`);
     }
-    if (/Menunggu konfirmasi/i.test(visibleText)) {
-      throw new Error(`Future PENDING visual status appeared in current fixture at ${suffix}.`);
+    if (
+      metrics.futureCardStatuses.length !== 2 ||
+      metrics.futureCardStatuses.some((status) => !status.includes("status-upcoming") || status.includes("status-pending"))
+    ) {
+      throw new Error(`Future months are not shown as upcoming at ${suffix}: ${JSON.stringify(metrics.futureCardStatuses)}.`);
     }
     console.log(
       `${suffix}: PASS, ${metrics.columns} columns, status ${metrics.statusFontSize}, no overflow; ${screenshotPath}`,

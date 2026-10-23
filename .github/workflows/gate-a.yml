@@ -97,8 +97,12 @@ jobs:
       github.head_ref == 'fix/launch-safety-security-closure' ||
       github.ref == 'refs/heads/feat/delivery-readiness-single-rt' ||
       github.head_ref == 'feat/delivery-readiness-single-rt' ||
-      contains(github.ref, 'fast-track-v1-') ||
-      contains(github.head_ref, 'fast-track-v1-') ||
+      startsWith(github.ref, 'refs/heads/fix/fast-track-v1-') ||
+      startsWith(github.head_ref, 'fix/fast-track-v1-') ||
+      startsWith(github.ref, 'refs/heads/ci/fast-track-v1-') ||
+      startsWith(github.head_ref, 'ci/fast-track-v1-') ||
+      startsWith(github.ref, 'refs/heads/codex/fast-track-v1-') ||
+      startsWith(github.head_ref, 'codex/fast-track-v1-') ||
       contains(github.ref, 'fast-track-f') ||
       contains(github.head_ref, 'fast-track-f')
     name: Launch Safety independent PostgreSQL concurrency

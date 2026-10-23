@@ -120,7 +120,7 @@ export function ResidentPaymentRequestPanel({
   const cancelInFlight = useRef(false);
   const idempotencyKey = useRef<string | null>(null);
   const requestableDues = dues.filter((due) =>
-    due.status === "unpaid" && due.outstanding > 0 && due.paymentRequestStatus !== "pending",
+    due.status === "unpaid" && due.periodTiming !== "future" && due.outstanding > 0 && due.paymentRequestStatus !== "pending",
   );
   const requestablePeriods = new Set(requestableDues.map(duePeriod));
   const selectedDues = requestableDues.filter((due) =>
