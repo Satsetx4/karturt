@@ -63,8 +63,8 @@ export const F3_UAT_SCENARIOS: readonly F3UatScenario[] = [
   {
     id: "cash-transfer-race",
     actor: "Treasurer and Resident",
-    action: "Race cash verification against an online transfer request for the same due periods.",
-    expected: "Independent PostgreSQL sessions produce one canonical allocation outcome with no duplicate payment or skipped older unpaid period.",
+    action: "Race treasurer cash recording against resident online transfer-request creation for the same due period.",
+    expected: "If cash wins, the due is paid with one cash payment and no request claim; if request creation wins, the due stays unpaid with one pending claim and no cash payment. The losing operation is rejected.",
   },
   {
     id: "receipt-and-report-tenant-isolation",

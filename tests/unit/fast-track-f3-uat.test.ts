@@ -22,6 +22,16 @@ describe("Fast Track F3 rehearsal command", () => {
     expect(renderF3UatPlan(result.scenarios)).not.toContain("must-not-be-printed");
   });
 
+  it("describes the cash versus transfer-request race and both valid outcomes", () => {
+    const scenario = F3_UAT_SCENARIOS.find(({ id }) => id === "cash-transfer-race");
+
+    expect(scenario?.action).toContain("cash recording against resident online transfer-request creation");
+    expect(scenario?.action).not.toContain("cash verification");
+    expect(scenario?.expected).toContain("If cash wins");
+    expect(scenario?.expected).toContain("if request creation wins");
+    expect(scenario?.expected).toContain("no cash payment");
+  });
+
   it("blocks a production-shaped target before any live mode can be selected", () => {
     expect(resolveF3UatCommand(["--execute"], {
       APP_ENV: "production",
