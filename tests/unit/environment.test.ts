@@ -113,6 +113,19 @@ describe("runtime environment guards", () => {
     expect(() => requireDatabaseEnvironment()).toThrow("APP_ENV must not be development in an optimized production build");
   });
 
+  it("requires a Vercel Preview marker for staging database operations in an optimized production build", () => {
+    setEnvironment({
+      APP_ENV: "staging",
+      DATABASE_ENV: "staging",
+      DATABASE_URL: "postgresql://staging-user@ep-unverified.region.aws.neon.tech/karturt?sslmode=require",
+    });
+    setNodeEnvironment("production");
+
+    expect(() => requireDatabaseEnvironment()).toThrow(
+      "Staging database operations in an optimized production build require VERCEL_ENV=preview",
+    );
+  });
+
   it("requires production environment markers for production database operations", () => {
     setEnvironment({
       APP_ENV: "production",

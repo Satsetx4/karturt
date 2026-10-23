@@ -63,6 +63,9 @@ function requireVercelDatabaseEnvironment(env: ReturnType<typeof getEnvironment>
     throw new Error("APP_ENV must not be development in an optimized production build.");
   }
   const deploymentEnvironment = process.env.VERCEL_ENV;
+  if (env.appEnv === "staging" && process.env.NODE_ENV === "production" && deploymentEnvironment !== "preview") {
+    throw new Error("Staging database operations in an optimized production build require VERCEL_ENV=preview.");
+  }
   if (env.appEnv === "production" && (process.env.NODE_ENV !== "production" || deploymentEnvironment !== "production")) {
     throw new Error("Production database operations require NODE_ENV=production and VERCEL_ENV=production.");
   }
