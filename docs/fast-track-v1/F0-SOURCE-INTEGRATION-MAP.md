@@ -59,5 +59,5 @@ Run these in nonoverlapping workstreams when actually supported. All F1 code cha
 ## F0 DoD results (as of this audit)
 
 - Read-only source/PR map: **PASS at evidence/documentation level**.
-- Current staging isolation/lineage: **BLOCKED** (candidate default Neon branch reports `init_source=parent-data`), therefore F2 remains blocked independent of F0.
-- Full F0 phase: **PARTIAL until this document and linked planning PR's exact final head CI are verified and coordinator review closes checklists**; no claim F1 feature completion or live staging PASS.
+- Current staging content provenance: **UNKNOWN**. The canonical branch is root/default with no `parent_id`; official Neon documentation also shows this shape with `init_source=parent-data`, so the marker alone is not evidence of an external parent. F2 remains blocked on content proof and security gates, independent of F0.
+- Full F0 phase: **PASS only for the planning/read-only scope** after the source map and baseline are complete, coordinator review closes its checklist, and exact-head Gate A passes. Issue #79 records the current SHA/run; documentation-only PostgreSQL concurrency may be SKIPPED and does not count as F1/F3 or staging evidence. No claim of F1 feature completion or live staging PASS.
