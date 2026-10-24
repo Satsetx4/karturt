@@ -59,11 +59,11 @@ Owner-approved default password storage does not authorize retrieving or display
 2. Before F2 database use, provide one compact evidence/authorization packet: independent synthetic-only lineage, target identity/isolation, Free/Rp0 evidence, scoped non-admin role, TLS verify-full, backup/restore/rollback readiness, exact candidate SHA, and the exact permitted staging operation. Do not bundle production action.
 3. After F0-F4 pass, request a separate production GO for the exact SHA and proposed action. Production stays locked until then.
 
-## Phase status at current planning evidence
+## Phase status snapshot after exact-head CI (2026-10-24)
 
 | Phase | Status | Evidence boundary / blocker |
 | --- | --- | --- |
-| F0 | **IN PROGRESS — planning amendment** | PR #84 is updated by this decision. Previous run #40071993876 is bound to the old head and cannot validate the amendment; exact-head CI must finish on the new head before F0 is PASS. |
+| F0 | **PASS — planning/read-only baseline at SHA db808781cec7a8299d10b4c02f9a582a861cfa2c** | Exact run #40072769357 completed SUCCESS; Gate A job #120809585178 succeeded. Docs-only independent concurrency job #120811442940 was SKIPPED and is not staging concurrency evidence. This phase row records the exact validated planning head; follow any later PR #84 head/CI in issue #79 and the PR body. |
 | F1 | **PASS — unmerged candidate only** | PR #93 SHA b8bc74a4202225d9a54728d2c10be247dec8318f; run #40040334501 Gate A and disposable PG17 concurrency succeeded. No live staging evidence or protected-main integration. |
 | F2 | **BLOCKED** | flat-cloud is the planning target, but lineage/content, least privilege, TLS verify-full, actual Rp0 cost, and scoped DB readiness remain UNVERIFIED. No DB use/mutation. |
 | F3 | **BLOCKED** | PR #96 SHA 477a0fe199debec67de071376d9338f956f9dc79; run #40070054841 Gate A and disposable PG17 concurrency succeeded. No real isolated PG18 staging E2E/concurrency. |
