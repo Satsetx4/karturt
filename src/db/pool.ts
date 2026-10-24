@@ -19,7 +19,7 @@ function assertStagingTarget(
   url: URL,
   purpose: DatabaseConnectionPurpose,
 ) {
-  const expectedHosts = [stagingDatabaseTarget.directHost];
+  const expectedHosts: string[] = [stagingDatabaseTarget.directHost];
   const expectedRole = purpose === "migration" ? stagingDatabaseTarget.migrationRole : stagingDatabaseTarget.runtimeRole;
   const database = decodeURIComponent(url.pathname.replace(/^\//, ""));
   const role = decodeURIComponent(url.username);
