@@ -123,3 +123,9 @@ For each task: state `TODO/IN_PROGRESS/PASS/BLOCKED/DEFERRED`, owner workstream,
 ## 2026-10-24 owner decision — Functional First
 
 The priority model, non-waivable gates, canonical staging designation, parallel F1B/F1C/F1D microtasks, consolidated owner packet, and current F0-F5 status are governed by [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md). This decision supersedes earlier wording where it suggests relaxing mandatory security or accepting a P0/P1 defect. P2/P3 exceptions may be documented under the linked criteria; mandatory gates remain intact.
+
+## Owner authorization addendum — 2026-10-24 conditional staging scope
+
+The owner's latest explicit authority is recorded in [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md). It is limited to Neon Free `flat-cloud-57657711` / `br-sparkling-flower-azordm9k` / `ep-red-boat-azzqyf45` and the four ordered steps there. F2 is currently **BLOCKED**: provider-created audit-role privileges are excessive and the Neon SQL tool reported `pg_stat_ssl.ssl=false`; `sslmode=verify-full` is not proven. Do not advance to migrations, synthetic seed, UAT, real PG18 concurrency, recovery drills, staging secrets/environment, or Vercel Preview until the complete F2 gate is independently proven.
+
+F0 remains PASS only for the prior planning/read-only baseline; F1 is PASS only for open/draft candidate PR #93; F3 is BLOCKED, F4 NO-GO, and F5 LOCKED for separate production GO. P0/P1/P2/P3 acceptance and the #86/#87/#88 workstream assignments follow the linked decision record. This appendix does not authorize a merge or production action.

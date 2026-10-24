@@ -47,3 +47,11 @@
 ## Subsequent owner decision — 2026-10-24
 
 This file records the earlier read-only baseline. Its status is historical at the captured SHA. The Functional First amendment and current F0-F5 interpretation are in [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md); F0 remains IN PROGRESS until exact-head CI completes on the amended PR #84 head. The canonical planning target is flat-cloud-57657711; steep-heart-48842733 is quarantined and preserved. No provider or database mutation is implied.
+
+## Later owner authorization and metadata checkpoint — 2026-10-24
+
+The owner now conditionally authorizes only the exact Neon Free staging target `flat-cloud-57657711` / `br-sparkling-flower-azordm9k` / `ep-red-boat-azzqyf45`; see [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md) for the complete ordered grant and exclusions.
+
+Current read-only control-plane metadata: Free classification, $0 Free price, zero usage counters, PostgreSQL 18, Singapore region, direct endpoint, one new default/root branch with no parent ID, and project/branch creation timestamps on 2026-10-24. Branch `init_source=parent-data` is not by itself proof of application data provenance. The current branch catalog exposed no application relations/routines in `karturt_staging`, but the query session did not meet the security gate: the tool-created role had `CREATEDB`, `CREATEROLE`, `REPLICATION`, and `BYPASSRLS`, while `pg_stat_ssl.ssl=false`. Do not accept the catalog result as synthetic-only or TLS verify-full proof.
+
+IP Allow was not configured because its availability on Free is not established; no paid feature was used. No migration, fixture, UAT, real PG18 concurrency, backup/restore/rollback, staging secret/environment change, or deployment occurred. F2 is BLOCKED; F3 BLOCKED; F4 NO-GO; F5 LOCKED. No owner password or production resource was accessed.

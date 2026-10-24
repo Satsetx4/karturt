@@ -102,3 +102,11 @@ Next permitted autonomous task:
 Delegate F1 as three bounded parallel microtasks: #86 annual cards/receipts, #87 arrears/reports, and #88 cash/idempotency. Keep branches isolated and avoid overlapping edits; coordinator owns integration and exact-head evidence. QA/Security reviews P0/P1 across the three streams and consolidates findings. Read-only F2 preparation may proceed in parallel; F3 waits for F1/F2 PASS; F4 waits for F3. Record P2/P3 once in the shared exception register using the decision criteria. Keep the owner action packet consolidated and request separate final production GO only after F0-F4 pass.
 
 See [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md) for mandatory gates, canonical project, current evidence, and action boundaries. The existing Neon approval does not authorize SQL, staging mutation, secrets/environment changes, merge, deployment, or production actions.
+
+## Owner-authorized staging execution stop — 2026-10-24
+
+Use only the owner's exact Neon Free target in [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md). The authorization is conditional and ordered. Current F2 stop findings: `karturt_f2_catalog_ro_20261024` was created with `CREATEDB`, `CREATEROLE`, `REPLICATION`, and `BYPASSRLS`; its read-only catalog session reported `pg_stat_ssl.ssl=false`. This does not meet least privilege or `sslmode=verify-full`. Do not run further SQL, alter/delete the role, migrate, seed, perform UAT/concurrency/recovery, configure secrets/environment, or deploy until the owner resolves the role cleanup request and every F2 gate has fresh PASS evidence.
+
+The optional IP allowlist is untouched; do not use a paid plan. Never access the owner password. Leave `steep-heart-48842733` quarantined and untouched. No main merge, production access/change, or production GO. Record the current state as F2 BLOCKED, F3 BLOCKED, F4 NO-GO, F5 LOCKED.
+
+F1 wave ownership remains #86 Application (annual cards/receipts), #87 Reports (arrears), #88 QA/Cash (cash/idempotency). Coordinator integrates the already-PASS candidate PR #93 and controls exact-SHA evidence; QA/Security reviews P0/P1 and accepted P2/P3 exceptions independently. Do not re-run completed lanes without a review finding or new source change.

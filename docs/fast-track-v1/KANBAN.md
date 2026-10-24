@@ -46,3 +46,18 @@ If owner action becomes necessary to unlock F2–F4, bundle the concrete request
 ## 2026-10-24 Functional First snapshot
 
 Current authoritative priorities, parallel microtask lanes, staging designation, consolidated owner actions, exceptions, and F0-F5 status are in [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md). P0 must PASS; P1 must be fixed; P2/P3 may be documented only when they do not waive mandatory gates. Canonical planning target: flat-cloud-57657711. Duplicate steep-heart-48842733: quarantined and preserved. F2 BLOCKED; F3 BLOCKED; F4 NO-GO; F5 LOCKED for separate owner GO. Re-run exact-head CI after this docs change.
+
+## Latest owner authorization and F2 stop checkpoint — 2026-10-24
+
+Owner authorization is limited to the ordered, conditional staging plan in [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md), target `flat-cloud-57657711` / `br-sparkling-flower-azordm9k` / `ep-red-boat-azzqyf45`. It does not authorize changes to another Neon project, production, `main`, production deployment, or paid services. Viewer-token proof and the custom-tag ledger remain V1.1.
+
+| Phase | Current status | Latest evidence and gate |
+|---|---|---|
+| F0 | **PASS — planning/read-only baseline only** | PR #84 SHA `c3c1b07aaf6ba3de7c45efef79a134a3bffb1bc6`; run #40073550071 Gate A SUCCESS. This addendum changes the head; exact-head CI is pending. |
+| F1 | **PASS — candidate only** | Open/draft PR #93 SHA `b8bc74a4202225d9a54728d2c10be247dec8318f`; run #40040334501 Gate A and disposable PG17 concurrency SUCCESS. No merge/staging claim. |
+| F2 | **BLOCKED** | Metadata identifies exact Free target and zero current usage. New root branch has no parent ID, but `init_source=parent-data` remains a provenance caveat. Tool-created role had CREATEDB/CREATEROLE/REPLICATION/BYPASSRLS. Read-only SQL reported `pg_stat_ssl.ssl=false`; verify-full is not proven. No migration/seed. Role cleanup awaits owner input. |
+| F3 | **BLOCKED** | No approved isolated staging UAT or real PG18 concurrency. |
+| F4 | **NO-GO** | No F2/F3 PASS, source-bound Preview, or current-target recovery drill. |
+| F5 | **LOCKED** | Separate owner GO for exact SHA and production environment required. |
+
+**Wave assignment:** #86 Application — annual cards/receipts; #87 Reports — arrears/reporting; #88 QA/Cash — cash/idempotency regressions; coordinator — integrated PR #93 and exact-SHA evidence; QA/Security — independent P0/P1 review and exception register; #81 DB/Staging — stopped at F2; #82 UAT and #83 Release — wait for F2 PASS. P0 must PASS, P1 must be fixed, and P2/P3 are acceptable only if they do not weaken a mandatory gate.

@@ -62,3 +62,11 @@
 ## 2026-10-24 owner decision — Functional First
 
 Use [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md) as the current owner decision and gate interpretation. The sole canonical planning target is flat-cloud-57657711; steep-heart-48842733 is quarantined and preserved. F2 remains blocked pending lineage/content, non-admin role, TLS verify-full, and Rp0 evidence. P0 must pass; P1 must be fixed; only documented noncritical P2/P3 may be accepted. No database use, mutation, merge, deployment, or production action is authorized by this planning amendment.
+
+## 2026-10-24 owner authorization addendum — exact conditional staging grant
+
+The latest owner grant supersedes the earlier blanket statement that no DB use was authorized, but only for the ordered, guarded staging workflow in [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md). Exact target: Free project `flat-cloud-57657711`, branch `br-sparkling-flower-azordm9k`, endpoint `ep-red-boat-azzqyf45`. The grant excludes all other Neon projects and production.
+
+Current gate result: Free/$0 and target identity are verified from current metadata; the branch is a newly-created root with no parent ID, but `init_source=parent-data` requires careful provenance treatment. The tool-created catalog role has `CREATEDB`, `CREATEROLE`, `REPLICATION`, and `BYPASSRLS`; the read-only SQL session reported TLS false. **Privilege and TLS gates fail; F2 stays BLOCKED.** The SQL tool's empty-catalog output is not accepted as synthetic-only provenance proof. Do not perform migrations or any downstream phase. IP Allow remains unchanged because Free availability is not established; do not upgrade.
+
+Owner password was not accessed, displayed, or used. No production, duplicate-project, Vercel environment, deployment, or main-branch action occurred. A separate owner reply is pending before removal of the overprivileged role created in this checkpoint.

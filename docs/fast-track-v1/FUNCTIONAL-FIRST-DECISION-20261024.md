@@ -75,3 +75,41 @@ Owner-approved default password storage does not authorize retrieving or display
 This decision authorizes planning/docs/issues, isolated source microtasks, read-only inspection, and safe staging preparation within its existing bounds. It authorizes no SQL, Neon/staging mutation, password/secret/environment change, merge, deployment, or production action. Keep historical Wave13B.2 F2 failure immutable.
 
 Record each result as PASS, FAIL, BLOCKED, SKIPPED, or UNKNOWN, with repository, full SHA, PR, run/attempt/job, environment identity, and evidence link. A draft PR remains draft until reviewed; CI success is not merge or production authorization.
+
+## Owner authorization addendum — conditional Neon Free staging execution (2026-10-24, Asia/Jakarta)
+
+Ard explicitly authorizes this ordered, conditional scope for **only** Neon Free staging project `flat-cloud-57657711`, branch `br-sparkling-flower-azordm9k`, endpoint `ep-red-boat-azzqyf45`:
+
+1. Verify Free/Rp0 cost, exact project/branch/endpoint identity, isolation from production, and synthetic-only provenance. Do not retrieve, display, or use the Neon owner password.
+2. Only for this exact target, establish a non-admin PostgreSQL role; configure network restrictions only if available on Free; prove TLS with `sslmode=verify-full`; and run read-only catalog SQL to establish data origin and isolation. Stop if cost, provenance, isolation, privilege, or TLS cannot be proven.
+3. **Only after every F2 security gate passes**, apply official staging migrations, load synthetic-only fixtures, perform UAT and actual PostgreSQL 18 concurrency, and complete nonproduction backup/restore/rollback drills.
+4. **Only after F2 PASS**, configure staging-specific secrets/environment safely and deploy a nonproduction Vercel Hobby Preview with smoke tests.
+
+No paid features, production access/change, change to any other Neon project, project deletion, merge to `main`, production deployment, or live production action is authorized. Production GO remains a separate owner decision for an exact SHA and environment. Trusted Neon Viewer-token proof and custom-tag ledger remain **V1.1**.
+
+### F2 read-only evidence and stop checkpoint
+
+- Neon control-plane metadata matched the three owner-designated IDs. Project classification was `free_v3`; usage counters were zero, current storage was below the published 1 GB Free allowance, and current Free pricing is $0. This is current plan/usage evidence, not a future usage guarantee.
+- The project and its single default/root branch were created together on 2026-10-24; branch metadata returned no parent branch ID. The branch is the only branch in the project. `init_source=parent-data` is present, so lineage still requires evidence; do not convert an unverified field into a production-data or synthetic-only claim.
+- The optional IP allowlist remains empty and unchanged. It was not enabled because current plan evidence does not establish IP Allow as a Free feature; no paid upgrade was used.
+- The Neon role-creation tool created `karturt_f2_catalog_ro_20261024`, but a role-scoped read-only catalog query returned `rolcreatedb=true`, `rolcreaterole=true`, `rolreplication=true`, and `rolbypassrls=true`. This is **not** an acceptable least-privilege role.
+- The same query reported PostgreSQL `180006`, no non-system relations or routines in `karturt_staging`, and `pg_stat_ssl.ssl=false`. The SQL tool path therefore does not prove TLS, much less client `sslmode=verify-full`. Treat its empty-catalog observation as unaccepted for the security gate.
+- **Verdict: F2 BLOCKED.** No migration, fixture, UAT, real concurrency, recovery drill, staging secret/environment change, or deployment was performed. A request for owner approval to remove the newly-created overprivileged role is pending; no further role or SQL action is permitted until resolved.
+
+### F0–F5 status at this checkpoint
+
+| Phase | Status | Evidence boundary |
+|---|---|---|
+| F0 | **PASS for planning/read-only baseline only** on PR #84 SHA `c3c1b07aaf6ba3de7c45efef79a134a3bffb1bc6`, run [#40073550071](https://github.com/Satsetx4/karturt/actions/runs/40073550071) Gate A SUCCESS. | This addendum changes the PR head; its own exact-head CI is pending. No staging proof. |
+| F1 | **PASS for candidate only** on open/draft PR #93 SHA `b8bc74a4202225d9a54728d2c10be247dec8318f`, run [#40040334501](https://github.com/Satsetx4/karturt/actions/runs/40040334501), Gate A and disposable PG17 concurrency SUCCESS. | Unmerged candidate evidence; not live PG18, staging, or production evidence. |
+| F2 | **BLOCKED** | Role privilege result and TLS proof fail the required gate; lineage not accepted. |
+| F3 | **BLOCKED** | Requires F2 PASS, real isolated staging UAT, and PostgreSQL 18 concurrency. |
+| F4 | **NO-GO** | Requires F1–F3 PASS, then source-bound Hobby Preview and tested current-target recovery. |
+| F5 | **LOCKED** | Separate production GO for exact SHA/environment required. |
+
+### Parallel work assignments
+
+- Coordinator owns overlap control, the integrated candidate, exact-SHA evidence, and final status synchronization.
+- F1 microtasks: #86 annual cards/receipts (Application); #87 arrears/reports (Reports); #88 cash/idempotency regressions (QA/Cash). PR #93 is the integrated F1 candidate; do not duplicate completed work absent a review finding.
+- QA/Security independently reviews P0/P1 and the exception register. P0 must PASS; every P1 must be fixed; P2/P3 may be accepted only when documented and when no mandatory gate is weakened.
+- Database/Staging #81 is stopped at F2. F3 #82 and Release #83 remain dependent and may not perform staging or deployment work before F2 PASS.
