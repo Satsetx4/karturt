@@ -47,20 +47,26 @@ For the canonical staging target, both `DATABASE_URL` and `DATABASE_MIGRATION_UR
 
 Before a staging migration, the owner must provision separate secure LOGIN credentials for runtime and migrator without sharing them in chat. Both roles must have database `CONNECT` but no effective `CREATE` or `TEMPORARY`; PostgreSQL defaults `TEMPORARY` to `PUBLIC`, so the owner must revoke `TEMP` from `PUBLIC` on this target database and verify the effective denial for both roles. The runner requires `karturt_stg_runtime` to have only the expected non-admin role flags, no membership, public-schema `USAGE`, and no database or schema DDL privilege, and verifies the actual runtime login over verified TLS. Before migrations, it revokes global and `public`-schema default `EXECUTE` grants to both `PUBLIC` and the runtime role, and verifies no such grants remain; any such default in another schema stops preflight. After migration, it checks runtime table `SELECT`/`INSERT`/`UPDATE`/`DELETE` and sequence `USAGE`, confirms no application-object ownership or extra table/sequence privilege, and verifies that runtime cannot use the Drizzle schema or read the journal. Since PostgreSQL defaults `EXECUTE` on functions to `PUBLIC`, the runner revokes `EXECUTE` from `PUBLIC` and runtime on migration-created public routines, then verifies runtime cannot execute any custom routine. The current application source does not invoke custom routines directly; trigger-based integrity behavior still requires real staging UAT. If runtime privilege verification fails, the runner attempts to revoke runtime table and sequence privileges, then checks that runtime has no application-table DML/DDL access, sequence privileges, schema `CREATE`, TEMP privilege, custom routine execution, or Drizzle-journal access. Owner readback remains required.
 
+**Supported credential path, not yet authorized or performed:** Neon documents branch-scoped password reset in the Console; the Console displays the generated password to the owner. The two existing SQL-created roles are `NOLOGIN`, so a password reset alone does not prove login capability: the owner must explicitly authorize and perform the narrowly scoped `LOGIN` attribute change, then verify `LOGIN=true` and all non-admin flags/membership again. Save each generated password directly into an owner-controlled local secret store and inject it only into the exact-SHA local runner environment; never paste it into chat, commit it, or add it to CI/Vercel secrets. Do not create or recreate these limited roles through the Console/API/CLI because Neon grants those roles membership in `neon_superuser`. The candidate migration path is `npm run db:migrate` with staging environment labels and separate direct-endpoint `DATABASE_URL` and `DATABASE_MIGRATION_URL`; the runner must prove the effective runtime and migrator identities itself before any migration. See [Neon role management](https://neon.com/docs/manage/roles) for Console password reset and the role-creation privilege distinction.
+
 Drizzle's PostgreSQL migrator issues `CREATE SCHEMA IF NOT EXISTS` for its journal schema. The owner must create the empty `drizzle` schema and grant `USAGE` and `CREATE` on it directly to the migrator. The migration also requires direct `CREATE` on `public` and a temporary direct `CREATE` grant on `karturt_staging`; do not grant `CREATEDB`, `CREATEROLE`, or role membership. These schema, database `CREATE`, database `TEMP`, and routine default/execute ACL actions require explicit target-bound owner approval bound to the exact candidate SHA; the existing authorization comments do not name them. After the migrations, the runner grants the runtime role `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on application tables and `USAGE` on application sequences, then verifies those privileges. After any staging migration attempt, revoke migrator `CREATE` on both schemas, migrator `USAGE` on `drizzle`, and the temporary database `CREATE` grant; verify database `TEMP` remains revoked from `PUBLIC` and both staging roles; return the migrator to `NOLOGIN`, and verify cleanup. Runtime table and sequence grants are retained only after successful verification. The runner does not perform owner cleanup.
 
 ## R3 — Real staging UAT and concurrency
 
+The executable, bounded scenario matrix and stop rules are in [R3-R4-UAT-AND-CUTOVER-RUNBOOK.md](./R3-R4-UAT-AND-CUTOVER-RUNBOOK.md). Execution status is `NOT RUN` until R2 passes for this exact release SHA and a matching nonproduction Preview is separately authorized.
+
 | Scenario | Status | Expected vs actual, negative-state check, verifier, and evidence |
 |---|---|---|
-| Resident / Treasurer / Chairman / System Admin access and cross-account denial | TODO | TODO |
-| Twelve periods, future-period arrears exclusion, and future-request denial | TODO | TODO |
-| Transfer verification, canonical receipt amount/time, and cash oldest-first allocation | TODO | TODO |
-| Retry idempotency, reversal, and report reconciliation against an independent oracle | TODO | TODO |
-| Conflicting concurrent submits against the approved live PostgreSQL 18 staging target | TODO | TODO |
-| No duplicate payment/allocation/reversal and no unauthorized state change | TODO | TODO |
+| R3-AUTH role access, cross-account and cross-RT denial | TODO | TODO |
+| R3-DUES 12 periods, future arrears exclusion, current/overdue acceptance, future-request denial | TODO | TODO |
+| R3-TRANSFER verified transfer and canonical receipt amount/time | TODO | TODO |
+| R3-CASH oldest-first allocation through selected future target | TODO | TODO |
+| R3-RETRY, R3-REVERSAL, and R3-REPORT independent reconciliation | TODO | TODO |
+| R3-RACE-REQUEST concurrent claim conflict on real PG18 | TODO | TODO |
+| R3-RACE-VERIFY concurrent verification on real PG18 | TODO | TODO |
+| R3-RACE-CASH and R3-RACE-REVERSAL concurrent financial retries on real PG18 | TODO | TODO |
 
-Record the candidate SHA, database target/version, test identity, expected result, observed result, and sanitized evidence for every scenario. Offline and PG17 concurrency results cannot fill the live PG18 row.
+For each row record exact candidate SHA, Actions run ID/attempt, staging target and actual PostgreSQL version, Preview deployment SHA, separate-session proof for concurrency, expected and observed outcome, negative-state readback, sanitized evidence, and independent verifier. Disposable PostgreSQL 17 or offline concurrency is source/CI evidence only and cannot fill a live PG18 row.
 
 ## R4 — Preview, rollback, and release decision
 
@@ -73,6 +79,7 @@ Record the candidate SHA, database target/version, test identity, expected resul
 | Database reset/restore procedure is target-bound, available on-plan, and validated | TODO | TODO |
 | Rollback triggers, operator steps, and post-rollback checks recorded | TODO | TODO |
 | Cost evidence and known exceptions recorded without unsupported $0 claims | TODO | TODO |
+| Proposed cutover target, ordered actions, operator, independent verifier, and stop criteria | TODO | TODO |
 
 Do not assume application rollback reverses database writes. Never run destructive down migrations or in-place restores without separate approval naming the exact staging target and action. If the target is first-use, document its synthetic-only disposable reset path and authorization before writes. Keep the existing production environment, credentials, domain, and deployment outside this packet's execution scope.
 
@@ -85,6 +92,8 @@ Do not assume application rollback reverses database writes. Never run destructi
 5. If there is no supported Free-plan recovery point, no known-good Preview, or no approved target for a reset, keep the release at `NO-GO` and stop. Do not upgrade the plan or silently substitute another project.
 
 The procedure above is not evidence that rollback is available or has been tested. Mark recovery `UNKNOWN` until the selected plan, target, and restore/reset path have current evidence.
+
+Complete the proposed cutover and separate owner decision fields in [R3-R4-UAT-AND-CUTOVER-RUNBOOK.md](./R3-R4-UAT-AND-CUTOVER-RUNBOOK.md). The historical `docs/backup-restore-drill.md` references a different quarantined Neon project; it is not recovery evidence for this canonical target. The historical `docs/staging-uat-plan.md` is not the active R3 run sheet.
 
 ## Verdict
 

@@ -1,5 +1,7 @@
 # Staging UAT Plan
 
+> **Historical plan:** this Fase 3 runbook is retained for context. It is not the active RELEASE FIRST V1 R3 procedure and its target, branch, “no 0014” assumption, or test coverage must not be used as current evidence. Use [`docs/release-first-v1/R3-R4-UAT-AND-CUTOVER-RUNBOOK.md`](./release-first-v1/R3-R4-UAT-AND-CUTOVER-RUNBOOK.md) after the exact-SHA R2 and Preview entry gates pass.
+
 ## Objective and limits
 
 Exercise Fase 3 against the real HTTPS staging deployment on the exact F3 branch, using only synthetic staging accounts and data. This plan is SINGLE-RT: no RT selector, tenant switching, multi-RT onboarding, or multi-RT browser tests. Production accounts, domains, databases, and secrets are out of scope. Do not save passwords, PINs, TOTP seeds, recovery codes, cookies, or resident PII in screenshots or evidence.
