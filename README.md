@@ -14,7 +14,7 @@ KartuRT is a mobile-first RT dues administration app. Milestone 1 establishes th
 
 1. Use Node.js 22.12 or newer.
 2. Copy `.env.example` to `.env.local`.
-3. Use a local PostgreSQL database for development and set `DATABASE_URL` to its localhost URL. Runtime guards currently reject remote development and test database URLs. Keep development, staging, and production connection strings separate.
+3. Use a local PostgreSQL database for development and set `DATABASE_URL` to its localhost URL. Runtime guards currently reject remote development and test database URLs. Staging and production database operations also require an exact owner-approved target in the source allowlist; the lists remain empty until those identities are reviewed. Keep development, staging, and production connection strings separate.
 4. Set `BETTER_AUTH_SECRET` to a unique random value of at least 32 characters.
 5. Keep `APP_ENV` and `DATABASE_ENV` equal (`development`, `staging`, `production`, or `test`). Database commands stop when those labels differ.
 6. Run `npm install`, `npm run db:migrate`, and `npm run db:check`.
@@ -54,7 +54,7 @@ npm run db:migrate   # apply reviewed migrations to the configured database
 npm run db:check     # verify the active connection with SELECT 1
 ```
 
-Never run development commands with production Neon credentials. Runtime and CLI checks require matching `APP_ENV` and `DATABASE_ENV`. Production secrets belong in the deployment secret store, not Git.
+Never run development commands with production Neon credentials. Runtime and CLI checks require matching `APP_ENV` and `DATABASE_ENV`, and database URLs must match an exact approved target for staging or production. Production secrets belong in the deployment secret store, not Git.
 
 ## Quality gates
 

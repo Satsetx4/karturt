@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const environment = z.enum(["development", "staging", "production", "test"]);
 
-type StagingDatabaseTarget = {
+type DatabaseTarget = {
   hostname: string;
   port: number;
   databaseName: string;
@@ -10,11 +10,14 @@ type StagingDatabaseTarget = {
 };
 
 // Keep this empty until an owner confirms a production-independent synthetic staging root.
-const approvedStagingDatabaseTargets: readonly StagingDatabaseTarget[] = [];
+const approvedStagingDatabaseTargets: readonly DatabaseTarget[] = [];
+
+// Keep this empty until an owner approves the exact non-secret production database identity.
+const approvedProductionDatabaseTargets: readonly DatabaseTarget[] = [];
 
 export function databaseUrlMatchesTarget(
   databaseUrl: string,
-  target: StagingDatabaseTarget,
+  target: DatabaseTarget,
 ) {
   try {
     const parsed = new URL(databaseUrl);
@@ -139,6 +142,12 @@ export function requireDatabaseEnvironment() {
     !approvedStagingDatabaseTargets.some((target) => databaseUrlMatchesTarget(databaseUrl, target))
   ) {
     throw new Error("DATABASE_URL does not match an approved staging database target.");
+  }
+  if (
+    env.databaseEnv === "production" &&
+    !approvedProductionDatabaseTargets.some((target) => databaseUrlMatchesTarget(databaseUrl, target))
+  ) {
+    throw new Error("DATABASE_URL does not match an approved production database target.");
   }
   return { ...env, databaseUrl };
 }

@@ -158,6 +158,18 @@ describe("runtime environment guards", () => {
     expect(() => requireDatabaseEnvironment()).toThrow("Production database operations require NODE_ENV=production and VERCEL_ENV=production");
   });
 
+  it("fails closed when a production URL does not match an approved database target", () => {
+    setEnvironment({
+      APP_ENV: "production",
+      DATABASE_ENV: "production",
+      DATABASE_URL: "postgresql://prod-user@ep-unapproved.region.aws.neon.tech/karturt?sslmode=verify-full",
+      VERCEL_ENV: "production",
+    });
+    setNodeEnvironment("production");
+
+    expect(() => requireDatabaseEnvironment()).toThrow("approved production database target");
+  });
+
   it("matches a staging target only with exact PostgreSQL identity and certificate verification", () => {
     const target = {
       hostname: "ep-approved.region.aws.neon.tech",
