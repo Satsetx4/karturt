@@ -1,0 +1,267 @@
+export type F3UatScenario = {
+  id: string;
+  actor: string;
+  action: string;
+  expected: string;
+};
+
+export const F3_UAT_EVIDENCE_FIELDS = [
+  { id: "candidate-sha", label: "Candidate commit SHA", value: "<full 40-character Git SHA>" },
+  {
+    id: "preview-source-sha",
+    label: "Preview deployment source SHA",
+    value: "<full 40-character deployed Git SHA; it must equal the candidate commit SHA>",
+  },
+  {
+    id: "deployment-target-identity",
+    label: "Deployment / staging target identity",
+    value: "<Vercel Preview deployment ID and environment; Neon project ID, root branch ID, and endpoint ID>",
+  },
+  {
+    id: "f2-approved-target-evidence",
+    label: "F2 approved staging target evidence",
+    value: "<owner approval and verified evidence reference binding the target identity, lineage, and synthetic-only classification>",
+  },
+  {
+    id: "postgres-major-version",
+    label: "Staging PostgreSQL major version",
+    value: "<must be 18, with a sanitized server identity evidence reference>",
+  },
+  {
+    id: "https-full-regression",
+    label: "HTTPS full-regression result",
+    value: "<PASS, FAIL, or NOT RUN; Preview URL origin and sanitized smoke evidence reference>",
+  },
+  { id: "observed-at", label: "Observation time", value: "<ISO 8601 timestamp with timezone>" },
+  { id: "verified-by", label: "Verifier", value: "<authorized verifier role or non-personal reviewer ID>" },
+  {
+    id: "scenario-results",
+    label: "Scenario results",
+    value: "<PASS, FAIL, or NOT RUN per scenario, with a sanitized evidence reference>",
+  },
+] as const;
+
+export const F3_UAT_SCENARIOS: readonly F3UatScenario[] = [
+  {
+    id: "authentication-session-boundary",
+    actor: "Synthetic Resident; unauthenticated and expired-session clients",
+    action: "Sign in with the approved synthetic resident account and open a protected route; repeat the protected request with no session and with an expired session.",
+    expected: "A valid login establishes only the resident's authorized household scope. Missing or expired sessions are denied with an authentication response or login redirect and cause no database mutation.",
+  },
+  {
+    id: "annual-period-status",
+    actor: "Resident",
+    action: "Review all twelve annual billing cards.",
+    expected: "Future unpaid periods remain not due and do not appear as arrears.",
+  },
+  {
+    id: "online-current-and-overdue",
+    actor: "Resident",
+    action: "Request online payment for current and overdue periods.",
+    expected: "Only current and overdue periods can be requested.",
+  },
+  {
+    id: "online-future-period-denied",
+    actor: "Resident",
+    action: "Attempt an online payment request for a future period.",
+    expected: "The request is denied without payment, claim, or due-status changes.",
+  },
+  {
+    id: "resident-household-scope",
+    actor: "Resident",
+    action: "Open annual cards, receipts, and payment history.",
+    expected: "Only the resident's own household is visible; other-household and other-RT reads are denied.",
+  },
+  {
+    id: "treasurer-future-cash",
+    actor: "Treasurer",
+    action: "Record and verify cash collected for a future period.",
+    expected: "The future cash payment is accepted only through the treasurer verification flow.",
+  },
+  {
+    id: "cash-oldest-first-through-target",
+    actor: "Treasurer",
+    action: "Record cash through future target 2027-03 using periods 2026-11 through 2027-03, crossing the December–January boundary.",
+    expected: "Oldest unpaid periods across the year boundary are allocated first; paid, waived, and not-due periods are skipped; later periods are untouched.",
+  },
+  {
+    id: "payment-request-role-and-rt-boundary",
+    actor: "Treasurer, Resident, RT Chairman, and System Admin",
+    action: "Verify a resident online payment request from active, inactive, and cross-RT accounts.",
+    expected: "Only an active treasurer assigned to the same RT can verify the request.",
+  },
+  {
+    id: "receipt-active-allocation",
+    actor: "Resident and Treasurer",
+    action: "Review a paid month card after cash and online payment verification.",
+    expected: "The receipt shows the canonical allocated amount, payment method, and Jakarta verification time; reversed allocations are excluded.",
+  },
+  {
+    id: "payment-retry-idempotency",
+    actor: "Treasurer",
+    action: "Retry the same cash submission and reuse its idempotency key with a different payload.",
+    expected: "An identical retry returns the original result; a changed payload conflicts without creating a second payment.",
+  },
+  {
+    id: "concurrent-cash-idempotent-submit",
+    actor: "Treasurer",
+    action: "Submit the same cash payload concurrently from two sessions with the same idempotency key.",
+    expected: "Both responses identify the same payment and allocations; one reports replayed=false and the other replayed=true. Exactly one payment, one allocation set, and one audit event are created.",
+  },
+  {
+    id: "concurrent-resident-transfer-request",
+    actor: "Resident",
+    action: "Submit concurrent transfer requests for the same eligible due using distinct idempotency keys, then retry the winning request with its original key.",
+    expected: "Only one pending request owns the due claim; the competing request is rejected without a second request or claim, and retrying the winning request's key returns that same request without a second creation audit.",
+  },
+  {
+    id: "concurrent-treasurer-payment-verification",
+    actor: "Two active Treasurers assigned to the same RT (distinct-actor UAT case)",
+    action: "Concurrently verify the same pending resident transfer request; this distinct-actor check extends the current same-principal concurrency regression.",
+    expected: "Exactly one verification succeeds; the other is rejected as already processed. One verified request, one payment with its canonical allocations, one verification audit, and no open claims remain.",
+  },
+  {
+    id: "concurrent-payment-reversal",
+    actor: "Two active Treasurers assigned to the same RT (distinct-actor UAT case)",
+    action: "Concurrently reverse the same synthetic verified payment; this distinct-actor check extends the current same-principal concurrency regression.",
+    expected: "Exactly one reversal succeeds; the other is rejected as already reversed. One reversal and audit remain, active settlements are released, and the due returns to unpaid when no other active payment covers it.",
+  },
+  {
+    id: "financial-transaction-rollback",
+    actor: "Treasurer and approved PostgreSQL failure-injection harness",
+    action: "Using synthetic fixtures and the approved PostgreSQL failure-injection harness, verify cash rollback at audit-write failure and transfer-verification rollback at allocation, due-status, request-status, and audit-write failures. Keep additional cash failure stages planned-only until tested.",
+    expected: "Each failed transaction leaves no partial payment, allocation, due-status, request-status, claim, or audit changes; the pre-operation state remains intact.",
+  },
+  {
+    id: "payment-request-cancellation",
+    actor: "Resident",
+    action: "Cancel the resident's own pending online transfer request, then attempt cancellation using another household or RT request identity.",
+    expected: "Only the active resident who owns the request can cancel it; cancellation releases its claims, leaves dues unpaid, creates no payment or allocation, and records one audit event. A foreign request is denied without disclosure or mutation.",
+  },
+  {
+    id: "payment-reversal-and-repayment",
+    actor: "Treasurer and Resident",
+    action: "Reverse an active verified cash or transfer payment, review the due and receipt, then repay with a fresh idempotency key; also retry reversal and attempt it as a resident or another RT's treasurer.",
+    expected: "Only an active treasurer assigned to the same RT can reverse; a pending request blocks reversal. A successful reversal preserves payment history, releases its active settlements, and removes its active receipt; each affected due returns to unpaid when the reversal leaves an outstanding balance. A second reversal is rejected. A replacement payment uses a fresh key and creates one active receipt; unauthorized attempts do not mutate state.",
+  },
+  {
+    id: "cash-transfer-race",
+    actor: "Treasurer and Resident",
+    action: "Race treasurer cash recording against resident online transfer-request creation for the same due period.",
+    expected: "If cash wins, the due is paid with one cash payment and no request claim; if request creation wins, the due stays unpaid with one pending claim and no cash payment. The losing operation is rejected.",
+  },
+  {
+    id: "receipt-and-report-tenant-isolation",
+    actor: "Resident, Treasurer, and RT Chairman",
+    action: "Read receipts and RT reports while presenting another household or RT identifier.",
+    expected: "Receipts and reports stay within the authenticated household or RT scope.",
+  },
+  {
+    id: "chairman-report-reconciliation",
+    actor: "RT Chairman",
+    action: "Using the deterministic synthetic 2026 report fixture, compare snapshots as of 2026-05-05 (before the 2026-05-10 due date) and 2026-05-20 (after it); reconcile monthly, yearly, due-now, future-unpaid, and arrears totals. Also evaluate a December 10 due date as of 2026-12-09, 2026-12-11, and 2027-01-01 using Jakarta business dates.",
+    expected: "For both May snapshots, due-now is Rp 195.000 and future-unpaid is Rp 840.000; yearly effective target Rp 1.365.000 reconciles to Rp 290.000 received + Rp 40.000 waived + Rp 1.035.000 outstanding, including the +Rp 10.000 February adjustment and −Rp 5.000 March adjustment. The reversed Rp 80.000 cash payment is excluded from active receipts. Only outstanding past-date periods appear in arrears: Rp 115.000 across 3 periods before the May due date and Rp 195.000 across 5 periods after it, with 3 households in each snapshot. Monthly totals reconcile to yearly totals, and future unpaid periods stay outside arrears. A December 10 due remains Rp 40.000 due-now and not overdue on 2026-12-09, becomes Rp 40.000 arrears on 2026-12-11, and remains Rp 40.000 arrears on 2027-01-01.",
+  },
+  {
+    id: "mobile-viewport-smoke",
+    actor: "Resident and Treasurer",
+    action: "At 360×800, 390×844, and 420×900 CSS-pixel viewports, inspect annual cards, online requests, treasurer cash recording, and receipts using touch input.",
+    expected: "No horizontal overflow or obscured controls; period status and receipt details remain readable; primary controls are reachable and have at least 44×44 CSS-pixel touch targets.",
+  },
+] as const;
+
+export type F3UatEnvironment = Readonly<Record<string, string | undefined>>;
+
+type F3UatBlocker = {
+  kind: "blocked";
+  code:
+    | "F3_PRODUCTION_TARGET_FORBIDDEN"
+    | "F3_STAGING_PREVIEW_LABELS_REQUIRED"
+    | "F3_STAGING_TARGET_IDENTITY_INCOMPLETE"
+    | "F3_STAGING_TARGET_NOT_VERIFIED";
+  message: string;
+};
+
+export type F3UatCommandResult =
+  | { kind: "plan"; scenarios: typeof F3_UAT_SCENARIOS }
+  | F3UatBlocker
+  | { kind: "usage"; code: "F3_USAGE"; message: string };
+
+function normalized(value: string | undefined) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function getLiveExecutionBlocker(environment: F3UatEnvironment): F3UatBlocker {
+  const appEnvironment = normalized(environment.APP_ENV);
+  const databaseEnvironment = normalized(environment.DATABASE_ENV);
+  const vercelEnvironment = normalized(environment.VERCEL_ENV);
+
+  if ([appEnvironment, databaseEnvironment, vercelEnvironment].includes("production")) {
+    return {
+      kind: "blocked",
+      code: "F3_PRODUCTION_TARGET_FORBIDDEN",
+      message: "Production-shaped targets are forbidden for the Fast Track F3 runner.",
+    };
+  }
+
+  if (appEnvironment !== "staging" || databaseEnvironment !== "staging" || vercelEnvironment !== "preview") {
+    return {
+      kind: "blocked",
+      code: "F3_STAGING_PREVIEW_LABELS_REQUIRED",
+      message: "Live F3 requires APP_ENV=staging, DATABASE_ENV=staging, and VERCEL_ENV=preview.",
+    };
+  }
+
+  const targetIdentifiers = [
+    environment.F3_STAGING_PROJECT_ID,
+    environment.F3_STAGING_ROOT_BRANCH_ID,
+    environment.F3_STAGING_ENDPOINT_ID,
+  ];
+  if (targetIdentifiers.some((identifier) => !identifier?.trim())) {
+    return {
+      kind: "blocked",
+      code: "F3_STAGING_TARGET_IDENTITY_INCOMPLETE",
+      message: "Live F3 requires project, root-branch, and endpoint identifiers for the approved staging target.",
+    };
+  }
+
+  return {
+    kind: "blocked",
+    code: "F3_STAGING_TARGET_NOT_VERIFIED",
+    message: "No F2-approved synthetic-only staging target is allowlisted; live F3 remains disabled.",
+  };
+}
+
+export function resolveF3UatCommand(args: readonly string[], environment: F3UatEnvironment): F3UatCommandResult {
+  if (args.length === 1 && args[0] === "--plan-only") {
+    return { kind: "plan", scenarios: F3_UAT_SCENARIOS };
+  }
+
+  if (args.length === 1 && args[0] === "--execute") {
+    return getLiveExecutionBlocker(environment);
+  }
+
+  return {
+    kind: "usage",
+    code: "F3_USAGE",
+    message: "Use --plan-only. Live execution is disabled until F2 proves and approves an isolated synthetic staging target.",
+  };
+}
+
+export function renderF3UatPlan(scenarios: readonly F3UatScenario[] = F3_UAT_SCENARIOS) {
+  const rows = scenarios.map((scenario, index) =>
+    `${index + 1}. [${scenario.id}] ${scenario.actor}: ${scenario.action} Expected: ${scenario.expected}`,
+  );
+  const evidenceFields = F3_UAT_EVIDENCE_FIELDS.map(({ id, label, value }) => `- ${label} (${id}): ${value}`);
+
+  return [
+    "KartuRT V1 F3 UAT plan — offline rehearsal only",
+    "This command prints a static scenario list. It does not load database clients, call provider APIs, or start an app server.",
+    "Live execution remains disabled until F2 independently verifies an isolated synthetic-only staging target.",
+    ...rows,
+    "",
+    "Sanitized evidence fields — fill only during separately authorized staging UAT:",
+    ...evidenceFields,
+    "Record evidence without secrets, connection strings, resident personal data, or raw database catalog contents.",
+  ].join("\n");
+}
