@@ -46,6 +46,17 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify source checkout
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$actual_sha" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "Expected source SHA $EXPECTED_SOURCE_SHA but checked out $actual_sha."
+            exit 1
+          fi
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -127,6 +138,17 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify source checkout
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$actual_sha" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "Expected source SHA $EXPECTED_SOURCE_SHA but checked out $actual_sha."
+            exit 1
+          fi
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -142,7 +164,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: launch-safety-postgres-concurrency-${{ github.sha }}
+          name: launch-safety-postgres-concurrency-${{ github.event.pull_request.head.sha || github.sha }}
           path: docs/launch-safety-evidence/postgres-independent-concurrency.json
           if-no-files-found: ignore
           retention-days: 14
