@@ -8,6 +8,8 @@ The repository does not currently provide a complete, staging-safe app-native pa
 
 The older phase smoke scripts seed fixtures with direct Drizzle writes and are hard-bound to a different development Neon target. `db:bootstrap-rt`, `account:provision`, and other development smoke scripts are also direct database setup paths and do not enforce the RELEASE FIRST target tuple. Do not repoint or reuse them on staging. Do not substitute ad hoc SQL/ORM writes, Neon control-plane role creation, or a migration run as the database owner.
 
+The generic `db:bootstrap-rt` and `account:provision` commands now reject staging and production labels. The tested `r2-bootstrap-policy.ts` parser is only an offline input guard; it does not verify the contents of GitHub/provider evidence, open a connection, or create fixtures. Neither change closes the complete bootstrap gate.
+
 Until a candidate-bound fixture bootstrap path is implemented, reviewed, and exact-head CI passes, record `R2 fixture bootstrap path = BLOCKED` and keep R2 below `PASS`. A future path must use only synthetic identifiers, verify the exact target and effective runtime identity before each write, require target-bound authorization, and provide sanitized post-write counts and integrity results. Do not create or seed anything while this gate is blocked.
 
 ## Run identity

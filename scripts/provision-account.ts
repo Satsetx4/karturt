@@ -4,6 +4,7 @@ import { hashPassword } from "better-auth/crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { closeDb, getDb } from "@/db/client";
+import { assertDevelopmentProvisioningEnvironment } from "@/db/development-provisioning-guard";
 import { appAccounts, authAccount, authUser, officialAssignments, people } from "@/db/schema";
 import { resolveResidentProvisioningTarget } from "@/lib/accounts/resident-provisioning";
 import { isValidAccountPassword } from "@/lib/auth/account-password";
@@ -33,7 +34,8 @@ function todayInJakarta() {
 
 async function main() {
   loadEnvConfig(process.cwd());
-  requireDatabaseEnvironment();
+  const environment = requireDatabaseEnvironment();
+  assertDevelopmentProvisioningEnvironment(environment);
   const parsed = inputSchema.safeParse({
     type: envValue("KARTURT_ACCOUNT_TYPE"),
     identifier: envValue("KARTURT_LOGIN_IDENTIFIER")?.trim() || undefined,
