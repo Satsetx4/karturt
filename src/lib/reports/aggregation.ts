@@ -48,6 +48,12 @@ export type ArrearsHousehold = {
 export type RtFinancialReportResponse = {
   year: number;
   availableYears: number[];
+  asOf: {
+    businessDate: string;
+    period: string;
+  };
+  dueNowOutstanding: number;
+  futureUnpaidOutstanding: number;
   yearly: ReportTotals;
   monthly: MonthlyReportTotals[];
   arrears: {
@@ -137,6 +143,10 @@ function validDate(value: string) {
 
 function emptyTotals(): ReportTotals {
   return { ...ZERO_TOTALS };
+}
+
+function periodKey(year: number, month: number) {
+  return `${year}-${String(month).padStart(2, "0")}`;
 }
 
 function isOverdue(outstanding: number, dueDate: string, businessDate: string) {
@@ -285,6 +295,9 @@ export function aggregateRtFinancialReport(
   const arrearsByHousehold = new Map<string, ArrearsHousehold & { householdId: string; rtUnitId: string }>();
   const yearlyFromMonths = emptyTotals();
   const yearlyFromDues = emptyTotals();
+  const businessPeriod = input.businessDate.slice(0, 7);
+  let dueNowOutstanding = 0;
+  let futureUnpaidOutstanding = 0;
   let arrearsTotalOutstanding = 0;
   let arrearsCount = 0;
 
@@ -303,6 +316,11 @@ export function aggregateRtFinancialReport(
     if (!month) throw new ReportInvariantError("A monthly bucket was not created.");
     addTotals(month, summary);
     addTotals(yearlyFromDues, summary);
+    if (periodKey(due.year, due.month) <= businessPeriod) {
+      dueNowOutstanding = add(dueNowOutstanding, summary.outstanding, "due-now outstanding total");
+    } else {
+      futureUnpaidOutstanding = add(futureUnpaidOutstanding, summary.outstanding, "future unpaid total");
+    }
 
     if (summary.overdueCount === 0) continue;
     const identity = due.household;
@@ -336,6 +354,9 @@ export function aggregateRtFinancialReport(
   if (!sameTotals(yearlyFromMonths, yearlyFromDues)) {
     throw new ReportInvariantError("Monthly totals do not reconcile to the yearly report.");
   }
+  if (add(dueNowOutstanding, futureUnpaidOutstanding, "timed outstanding total") !== yearlyFromMonths.outstanding) {
+    throw new ReportInvariantError("Due-now and future unpaid amounts do not reconcile to the yearly report.");
+  }
 
   const households = [...arrearsByHousehold.values()]
     .sort((left, right) => left.houseNumber.localeCompare(right.houseNumber) || left.startsOn.localeCompare(right.startsOn) || left.householdId.localeCompare(right.householdId))
@@ -352,6 +373,9 @@ export function aggregateRtFinancialReport(
   const result: RtFinancialReportResponse = {
     year: input.year,
     availableYears: [...input.availableYears],
+    asOf: { businessDate: input.businessDate, period: businessPeriod },
+    dueNowOutstanding,
+    futureUnpaidOutstanding,
     yearly: yearlyFromMonths,
     monthly,
     arrears: {

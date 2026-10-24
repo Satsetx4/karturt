@@ -5,6 +5,7 @@ import {
   ResidentDuesSummary,
   ResidentDueStatus,
   ResidentMonthCard,
+  ResidentPaymentRequestPanel,
 } from "../../src/components/resident-card";
 import {
   dueToken,
@@ -48,6 +49,8 @@ describe("resident card semantics", () => {
       "UNPAID",
       "WAIVED",
       "NOT_DUE",
+      "UPCOMING",
+      "OVERDUE",
       "PENDING",
     ];
     const markup = tokens
@@ -60,14 +63,16 @@ describe("resident card semantics", () => {
     const text = visibleText(markup);
 
     expect(text).toBe(
-      "Sudah bayarBelum bayarDibebaskanTidak perlu bayarMenunggu konfirmasi",
+      "Sudah bayarBelum bayarDibebaskanTidak perlu bayarBelum jatuh tempoMenunggakMenunggu konfirmasi",
     );
-    expect(text).not.toMatch(/\b(PAID|UNPAID|WAIVED|NOT_DUE|PENDING)\b/i);
+    expect(text).not.toMatch(/\b(PAID|UNPAID|WAIVED|NOT_DUE|UPCOMING|OVERDUE|PENDING)\b/i);
     expect(residentStatusLabels).toEqual({
       PAID: "Sudah bayar",
       UNPAID: "Belum bayar",
       WAIVED: "Dibebaskan",
       NOT_DUE: "Tidak perlu bayar",
+      UPCOMING: "Belum jatuh tempo",
+      OVERDUE: "Menunggak",
       PENDING: "Menunggu konfirmasi",
     });
   });
@@ -221,8 +226,106 @@ describe("resident card semantics", () => {
     expect(visibleText(markup)).toContain("Menunggu konfirmasi");
     expect(pendingDue.status).toBe("unpaid");
   });
+
+  it("offers online requests only for past and current unpaid periods", () => {
+    const overdue = { ...due("unpaid", 9), periodTiming: "past" as const };
+    const current = { ...due("unpaid", 10), periodTiming: "current" as const };
+    const future = { ...due("unpaid", 11), periodTiming: "future" as const };
+    const markup = renderToStaticMarkup(createElement(ResidentPaymentRequestPanel, {
+      dues: [overdue, current, future],
+      onCreated: () => {},
+    }));
+    const optionValues = [...markup.matchAll(/<option value="([^"]+)"/g)].map((match) => match[1]);
+
+    expect(optionValues).toEqual(["2026-09", "2026-10"]);
+    expect(markup).not.toContain("2026-11");
+  });
+
+  it("shows a pending request on a future month as pending rather than upcoming", () => {
+    const futurePending = {
+      ...due("unpaid", 11),
+      periodTiming: "future" as const,
+      paymentRequestStatus: "pending" as const,
+    };
+    const text = visibleText(renderToStaticMarkup(createElement(ResidentMonthCard, {
+      name: "November",
+      due: futurePending,
+    })));
+
+    expect(duesSummary([futurePending])).toEqual({ paid: 0, pending: 40000, unpaid: 0 });
+    expect(dueToken(futurePending)).toBe("PENDING");
+    expect(text).toContain("Menunggu konfirmasi");
+    expect(text).not.toContain("Belum jatuh tempo");
+  });
+
+  it("separates upcoming unpaid months from arrears and keeps prepaid future months paid", () => {
+    const overdue = { ...due("unpaid", 9), periodTiming: "past" as const };
+    const currentPending = {
+      ...due("unpaid", 10),
+      periodTiming: "current" as const,
+      paymentRequestStatus: "pending" as const,
+    };
+    const upcoming = { ...due("unpaid", 11), periodTiming: "future" as const };
+    const prepaidFuture = { ...due("paid", 12), periodTiming: "future" as const };
+
+    expect(dueToken(overdue)).toBe("OVERDUE");
+    expect(dueToken(currentPending)).toBe("PENDING");
+    expect(dueToken(upcoming)).toBe("UPCOMING");
+    expect(dueToken(prepaidFuture)).toBe("PAID");
+    expect(duesSummary([overdue, currentPending, upcoming, prepaidFuture])).toEqual({
+      paid: 40000,
+      pending: 40000,
+      unpaid: 40000,
+    });
+    expect(overdue.status).toBe("unpaid");
+    expect(upcoming.status).toBe("unpaid");
+
+    const upcomingText = visibleText(renderToStaticMarkup(createElement(ResidentMonthCard, {
+      name: "November",
+      due: upcoming,
+    })));
+    expect(upcomingText).toContain("Belum jatuh tempo");
+    expect(upcomingText).not.toContain("Rp 40.000");
+    expect(visibleText(renderToStaticMarkup(createElement(ResidentMonthCard, {
+      name: "September",
+      due: overdue,
+    })))).toContain("Menunggak");
+  });
+
+  it("shows each paid-month allocation with its verified Jakarta date and canonical reference", () => {
+    const receiptDate = "2026-10-24T12:30:00.000Z";
+    const paidDue: ResidentDue = {
+      ...due("paid", 10),
+      amount: 80000,
+      effectiveTarget: 80000,
+      activeReceived: 80000,
+      periodTiming: "current",
+      receipts: [
+        { allocationAmount: 40000, method: "cash", verifiedAt: receiptDate, reference: "KRT-ABCDEF123456" },
+        { allocationAmount: 40000, method: "transfer", verifiedAt: receiptDate, reference: "KRT-123456ABCDEF" },
+      ],
+    };
+    const markup = renderToStaticMarkup(createElement(ResidentMonthCard, {
+      name: "Oktober",
+      due: paidDue,
+    }));
+    const text = visibleText(markup).replace(/\u00a0/g, " ");
+
+    expect(markup).toContain("<details class=\"due-receipt\">");
+    expect(text).toContain("Sudah bayar");
+    expect(text).toContain("Ketuk untuk lihat kuitansi");
+    expect(text).toContain("Tunai");
+    expect(text).toContain("Transfer");
+    expect(text.match(/Rp 40\.000/g)).toHaveLength(2);
+    expect(text).toContain("Diverifikasi 24 Okt 2026, 19.30 WIB");
+    expect(text).toContain("KRT-ABCDEF123456");
+    expect(text).toContain("Nominal di atas adalah alokasi untuk bulan ini, bukan total satu transaksi lintas bulan.");
+    expect(markup).toContain(`dateTime=\"${receiptDate}\"`);
+  });
+
   it("renders Jan-Dec in order and preserves missing records without assigning NOT_DUE", () => {
     const months = yearMonths([due("unpaid", 12), due("paid", 1)], 2026);
+    expect(months).toHaveLength(12);
     expect(months.map((m) => m.month)).toEqual([
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
     ]);
