@@ -1,21 +1,22 @@
 # KartuRT V1 Fast Track — Current Release Decision Packet
 
 **Decision date:** 2026-10-24 (Asia/Bangkok)  
-**Verdict:** **NO-GO — remediation and staging evidence remain outstanding**  
+**Verdict:** **NO-GO — staging and integrated release evidence remain outstanding**
 **Release target after all gates pass:** `PRODUCTION READY — AWAITING OWNER GO`
 
-This is the current evidence-based decision packet. It records work completed and blockers found; it does not authorize a production action. Fast Track PRs #84, #85, and #93–#96 remain OPEN/DRAFT. `main` remains unchanged at `96c84588ae0c13f68a17cffd997a3e583fb7da82`.
+This is the current evidence-based decision packet. It records work completed and blockers found; it does not authorize a production action. Fast Track PRs #84, #85, and #93–#97 remain OPEN/DRAFT. `main` remains unchanged at `96c84588ae0c13f68a17cffd997a3e583fb7da82`.
 
 ## 1. Candidate identity and source evidence
 
-There is **no combined F1–F4 release candidate**. The application candidate below is verified as an unmerged source candidate only. F2 is not cleared, F3 has no real staging UAT, dependencies have unresolved advisories, and no Preview or recovery drill exists.
+There is **no verified or promotable F1–F4 release candidate**. PR #95 carries the F4 packet over the unmerged F1 candidate and dependency patch, but its combined source needs its own exact-head verification. F2 is not cleared, F3 has no real staging UAT, and no verified Preview or recovery drill exists. Dependency advisories are resolved on unmerged candidate PR #97.
 
 | Item | Current evidence |
 |---|---|
 | Application candidate | [PR #93](https://github.com/Satsetx4/karturt/pull/93), OPEN/DRAFT, exact head `b8bc74a4202225d9a54728d2c10be247dec8318f`, based on protected `main` `96c84588ae0c13f68a17cffd997a3e583fb7da82` |
 | F2 source-guard candidate | [PR #94](https://github.com/Satsetx4/karturt/pull/94), OPEN/DRAFT, exact head `2882b177e674fe577643b792e0ca3566d52ef754`; based on protected `main` |
 | F3 offline rehearsal | [PR #96](https://github.com/Satsetx4/karturt/pull/96), OPEN/DRAFT, exact head `ef9fc2377d1f183cec8576b5b2d0996f3a56101a`; based on PR #93 head `b8bc74a…` |
-| F4 documents and this packet | [PR #95](https://github.com/Satsetx4/karturt/pull/95), OPEN/DRAFT. Historical packet head `b68335f7bd1a670b6a1d34fd08a4ef89b785ea28` passed run #40047461528; those checks do not transfer to later revisions. Current source SHA, exact-head CI and review are tracked on PR #95 and issue #83. |
+| Dependency remediation | [PR #97](https://github.com/Satsetx4/karturt/pull/97), OPEN/DRAFT, exact head `6b39d13da0d5217e01f91d2697c68e1cf73ffa87`; dependency-only candidate based on PR #93 |
+| F4 documents and this packet | [PR #95](https://github.com/Satsetx4/karturt/pull/95), OPEN/DRAFT; carries the dependency patch from PR #97. Its current source SHA, exact-head CI and review are tracked on PR #95 and issue #83. |
 | Planning/Kanban | [PR #84](https://github.com/Satsetx4/karturt/pull/84), OPEN/DRAFT, exact head `468ed839041fc83481e21eb61eebbb055b1d88f5`; Gate A run #40048183786 attempt 2 passed and documentation-branch concurrency was skipped |
 | Candidate migration files | PR #93 adds no migration file. Provider schema and migration state were not inspected through a database session. |
 | Independent review | PR #93 exact head: no P0/P1/P2 findings. Review of the historical PR #95 head `b68335f7bd1a670b6a1d34fd08a4ef89b785ea28` found no P0/P1/P2 findings. Current-head review is tracked on PR #95 and issue #83. |
@@ -27,6 +28,7 @@ There is **no combined F1–F4 release candidate**. The application candidate be
 | PR #93 `b8bc74a…` | [#40040334501](https://github.com/Satsetx4/karturt/actions/runs/40040334501), attempt 1 | #120709660348 SUCCESS | #120712264849 SUCCESS, disposable PG17 | F1 candidate CI only; not staging PG18 |
 | PR #94 `2882b17…` | [#40037337893](https://github.com/Satsetx4/karturt/actions/runs/40037337893), attempt 2 | #120701070602 SUCCESS | #120704030518 SKIPPED | Source guard checks only; concurrency unverified |
 | PR #96 `ef9fc23…` | [#40050978509](https://github.com/Satsetx4/karturt/actions/runs/40050978509), attempt 1 | #120743357702 SUCCESS | #120745434142 SUCCESS, disposable PG17 | 19 offline scenarios and source regression evidence only; not real staging PG18 |
+| PR #97 `6b39d13…` | [#40056147121](https://github.com/Satsetx4/karturt/actions/runs/40056147121), attempt 1 | #120759456983 SUCCESS | #120761361103 SUCCESS, disposable PG17 | Dependency candidate only; not combined F4 packet or staging PG18 |
 | PR #95 previous head `2f7ab4e…` | [#40041547299](https://github.com/Satsetx4/karturt/actions/runs/40041547299), retry attempt 2 | #120714648846 SUCCESS | #120717077129 SUCCESS, disposable PG17 | F4 docs head before this packet edit |
 | PR #95 packet head `a93625f…` | [#40044385581](https://github.com/Satsetx4/karturt/actions/runs/40044385581), attempt 1 | #120722617994 SUCCESS | #120724424270 SUCCESS, disposable PG17 | Packet head before the evidence-link correction in this revision |
 | PR #95 historical head `b68335f…` | [#40047461528](https://github.com/Satsetx4/karturt/actions/runs/40047461528), attempt 1 | #120732350539 SUCCESS | #120734614250 SUCCESS, disposable PG17 | Historical source checks only; they do not transfer to later packet SHAs |
@@ -52,17 +54,17 @@ F1 is **not merged**. Its PG17 CI job is not proof of F3 PostgreSQL 18 staging b
 
 ## 3. F2 staging identity, isolation, and recovery — BLOCKED
 
-Latest read-only control-plane evidence is on [issue #81 comment #6378492571](https://github.com/Satsetx4/karturt/issues/81#issuecomment-6378492571); the `parent-data` interpretation is clarified in [comment #6378531717](https://github.com/Satsetx4/karturt/issues/81#issuecomment-6378531717). All six project/root-branch candidates were re-read. No database connection, SQL, migration, seed, backup, restore, or provider mutation was performed.
+Latest read-only control-plane evidence is on [issue #81 comment #6379021627](https://github.com/Satsetx4/karturt/issues/81#issuecomment-6379021627); the `parent-data` interpretation is clarified in [comment #6378531717](https://github.com/Satsetx4/karturt/issues/81#issuecomment-6378531717). All six project/root-branch candidates were re-read. No database connection, SQL, migration, seed, backup, restore, or provider mutation was performed.
 
 | Evidence | Status | Current readback / gap |
 |---|---|---|
-| Neon project/branch and Free plan | PARTIAL | Read-only metadata identifies six PG18 projects in `aws-ap-southeast-1` with owner `subscription_type=free_v3`. The new Fast Track project `ancient-sound-84300774` / `karturt-v1-fast-track-staging-20261024` has root `br-young-bonus-ao4jqzo3` / `karturt-staging-root-20261024`; it is not yet an approved connection target. The five other project/branch IDs and names are listed in issue #81 comment #6378492571. Provider metadata alone does not prove environment isolation. |
+| Neon project/branch and Free plan | PARTIAL | Fresh read-only metadata confirms the `satset` organization is Free and identifies six PG18 projects in `aws-ap-southeast-1`. The Fast Track project `ancient-sound-84300774` / `karturt-v1-fast-track-staging-20261024` has root `br-young-bonus-ao4jqzo3` / `karturt-staging-root-20261024`; it is not an approved connection target. Project access is ADMIN. All six root IDs are listed in issue #81 comment #6379021627. Provider metadata alone does not prove environment isolation. |
 | Production separation and synthetic-only lineage | UNKNOWN | All six roots report `init_source=parent-data`, which Neon [documents as copying schema and data from a parent branch](https://neon.com/docs/reference/api/branches/create-project-branch). Branch-list responses omit `parent_id`, so the specific parent is unknown; nothing establishes whether it was synthetic-only or production-derived. The matching 31,686,656-byte logical-size metadata does not classify contents. Do not infer emptiness or choose a target by project name. |
 | Effective least-privilege staging identity | BLOCKED | Current readbacks show effective connector permission `ADMIN` on all six projects; no target-scoped non-admin UAT runner or effective grants are proven. |
 | Network/TLS identity | UNKNOWN | Public connections are enabled and IP allowlists are empty on all six projects. No target-bound TLS certificate/hostname verification evidence exists. |
 | Schema/journal/migration result | PARTIAL | Source CI verifies Drizzle journal/schema consistency on PR #93. No connection was made to compare the provider schema or run an authorized migration. |
 | Backup/restore and recovery | NOT RUN | No verified target exists for an approved current-target backup/restore drill. |
-| Vercel Hobby and Preview | UNKNOWN | Latest [issue #83 control-plane recheck](https://github.com/Satsetx4/karturt/issues/83#issuecomment-6378657291) for `karturt-review-staging-20261012` (`prj_Mv4rABJvDNAvSD78SVt5WbjFakEq`, team `sekawan`) reports `live=false`, `latestDeployment=null`, `domains=[]`, and 0 deployments; team metadata has no plan/tier field. The dedicated domain endpoint lists one verified `karturt-review-staging-20261012.vercel.app` domain with no branch/custom-environment binding. Project SSO protection is enabled for all deployment types. Hobby eligibility, a Preview target and smoke remain UNKNOWN/NOT RUN. |
+| Vercel Hobby and Preview | UNKNOWN | Latest [issue #83 provider recheck](https://github.com/Satsetx4/karturt/issues/83#issuecomment-6379098182) for `karturt-review-staging-20261012` (`prj_Mv4rABJvDNAvSD78SVt5WbjFakEq`, team `sekawan`) reports `live=false`, `latestDeployment=null`, and 0 deployments. The dedicated domain endpoint lists one verified default domain with no branch/custom-environment binding; custom-environment listing is empty. Team metadata has no plan/tier field. Hobby eligibility, a Preview target and smoke remain UNKNOWN/NOT RUN. |
 
 The source guard PR #94 has an empty target allowlist. Its Gate A passed; the independent concurrency job was skipped. Source guards do not prove provider identity or data provenance.
 
@@ -84,22 +86,21 @@ PR #96 contains 19 offline scenarios and passed exact-head Gate A plus disposabl
 | Requirement | Status | Evidence / limitation |
 |---|---|---|
 | Release notes reviewed against candidate diff | PASS — internal draft | PR #95; exact F1 SHA/results recorded; not approved for publication |
-| Exact-head docs CI and production build | Current revision: see PR #95 / issue #83 | Historical PR #95 source `b68335f7bd1a670b6a1d34fd08a4ef89b785ea28`; run #40047461528 attempt 1, Gate A #120732350539 and disposable PG17 job #120734614250 passed. Historical checks do not transfer to the current packet revision. |
-| Dependency risk review | FAIL / BLOCKER | [Issue #83 audit evidence](https://github.com/Satsetx4/karturt/issues/83#issuecomment-6377426252): current read-only `npm audit` on the lockfile matching PR #93 SHA `b8bc74a…`: 7 findings (2 moderate, 4 high, 1 critical). Locked versions: Next.js 16.3.6 (direct, critical), Zod 4.6.5 (direct, high), Vitest 5.0.1 (direct, moderate), Vite 8.3.1, sharp 0.35.4, source-map-js 1.2.1, and @vitest/mocker 5.0.1. Audit reports fixes available, including Next.js 16.4.3. |
-| Dependency remediation route | BLOCKED by package policy | [Issue #83 audit evidence](https://github.com/Satsetx4/karturt/issues/83#issuecomment-6377426252): `npm audit fix --dry-run --json` returned `EALLOWREMOTE`: remote package fetches are disabled and it refused the `@tailwindcss/oxide-wasm32-wasi@4.3.3` tarball. No lockfile change was made and no policy bypass was attempted. An approved local/internal artifact route or policy decision is required before remediation. |
+| Exact-head docs CI and production build | TRACKED PER SHA on PR #95 / issue #83 | Prior PR #95 run [#40053671307](https://github.com/Satsetx4/karturt/actions/runs/40053671307) belongs to SHA `3dd360b51a91260783250d81eff42e94a6f0d461`. Dependency PR #97 run [#40056147121](https://github.com/Satsetx4/karturt/actions/runs/40056147121) belongs to SHA `6b39d13da0d5217e01f91d2697c68e1cf73ffa87`. Neither result transfers to the combined PR #95 head. Use the latest PR #95 head and its own completed checks; record the exact SHA and run/job IDs on issue #83 before assigning PASS. |
+| Dependency risk review | PASS — PR #97 candidate only | The PR #93 baseline lockfile reported 7 findings (2 moderate, 4 high, 1 critical). PR #97 updates Next/eslint-config-next to 16.4.3, Zod to 4.6.6, Vitest to 5.0.5, and patched transitive Vite/Sharp/source-map-js packages. Fresh `npm audit --json` after clean install reports 0 findings. The direct audit and local-suite evidence is in [PR #97 comment #6379091869](https://github.com/Satsetx4/karturt/pull/97#issuecomment-6379091869). Exact dependency-candidate CI [#40056147121](https://github.com/Satsetx4/karturt/actions/runs/40056147121) passed Gate A and disposable PG17 concurrency on PR #97 SHA `6b39d13da0d5217e01f91d2697c68e1cf73ffa87`; this does not verify the combined PR #95 candidate. PR #97 remains open and unmerged. |
+| Dependency artifact route | UNVERIFIED — package-policy decision pending | npm 12 retained `allow-remote=none`; its `--package-lock-only` attempt returned `EALLOWREMOTE`. A temporary npm 11.19.0 CLI was installed through the ordinary npm registry path and used to generate the candidate lockfile. No explicit `allow-remote` override or persistent npm configuration change was made. Clean `npm ci` passed locally and in CI on Node 24, with lockfile registry hosts at `registry.npmjs.org`. These facts do not establish that using another CLI after the npm 12 policy rejection is approved; owner confirmation or an approved artifact route is still required. |
 | Preview workflow/deployment/smoke | NOT RUN | The Vercel project/domain exist, but team plan and Preview target/deployment are unproven; no smoke ran |
 | Production-scoped credentials or secrets | NOT USED | No production credential, database connection, or deployment occurred. This is an activity record, not a separate secrets-scanner attestation. |
 | Current-target backup/restore and rollback | NOT RUN | Runbook describes the required steps, but no verified staging target or recovery drill exists. |
 | Release scope/migration compatibility | PARTIAL | PR #93 has no migration file and Drizzle source checks pass; provider schema/backup compatibility remain unverified. |
 
-The package audit advisories include [Next.js critical advisory GHSA-2464-fhr4-w9xw](https://github.com/advisories/GHSA-2464-fhr4-w9xw), [Zod high advisory GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), and [Vitest advisory GHSA-qxg6-89mg-rqv8](https://github.com/advisories/GHSA-qxg6-89mg-rqv8). The [issue #83 audit record](https://github.com/Satsetx4/karturt/issues/83#issuecomment-6377426252) contains the current report summary; no package artifact was fetched or installed for remediation.
+The [issue #83 provider recheck](https://github.com/Satsetx4/karturt/issues/83#issuecomment-6379098182) records Vercel metadata. The dependency audit and local-suite evidence is in [PR #97 comment #6379091869](https://github.com/Satsetx4/karturt/pull/97#issuecomment-6379091869). The listed advisories applied to the PR #93 baseline; the unmerged PR #97 candidate's fresh audit reports zero findings on its own source. The npm artifact route remains unverified, and no evidence transfers to the integrated PR #95 head.
 
 ## 6. Open risks and limitations
 
 | Risk / severity | Evidence | Mitigation | Residual risk / owner |
 |---|---|---|---|
-| Critical direct dependency advisory | Next.js 16.3.6 is in the affected range; npm audit marks `next` critical | Keep production release NO-GO; remediate only through a policy-approved artifact path and rerun exact-head checks | Unresolved; package/artifact policy owner |
-| Additional dependency advisories | npm audit reports 4 high and 2 moderate across direct/transitive dependencies | No dependency changes until approved fetch route; then review exact diff and run Gate A | Unresolved; package/artifact policy owner |
+| Dependency advisories on PR #93 baseline | Baseline audit reported 7 findings | PR #97 is an unmerged candidate with 0 audit findings and exact Gate A/concurrency pass on its own SHA; do not transfer candidate status to another SHA | PR #97 candidate only; artifact route decision and combined PR #95 verification remain open; protected `main` unchanged |
 | Staging provenance/content unknown | All six roots say `parent-data` (schema/data copied from a parent); branch metadata omits `parent_id`; effective connector permission is ADMIN | No database session; identify the parent and independently prove production separation and synthetic-only lineage, then establish scoped identity | Unresolved; Neon/project owner |
 | TLS/least privilege unknown | No scoped UAT runner or certificate identity evidence; public connections enabled | Establish a target-bound non-admin identity and validated TLS before access | Unresolved; staging owner |
 | No real staging UAT/concurrency | No verified PG18 target; offline PG17 is not equivalent | Run F3 only after F2 evidence and authorization pass | Unresolved; staging/QA owners |
@@ -110,7 +111,7 @@ The package audit advisories include [Next.js critical advisory GHSA-2464-fhr4-w
 - **F1 verdict:** `PASS — integrated unmerged candidate only` at PR #93 SHA `b8bc74a4202225d9a54728d2c10be247dec8318f`.
 - **F2 verdict:** `BLOCKED — do not connect or mutate`.
 - **F3 verdict:** `BLOCKED — offline preparation only; no real PG18 UAT`.
-- **F4 verdict:** `NO-GO — dependency remediation, Preview, recovery, and real staging evidence incomplete`.
+- **F4 verdict:** `NO-GO — F2/F3 staging evidence, Preview smoke, recovery drill, package-policy decision, and combined candidate verification incomplete`.
 - **Overall release verdict:** **NO-GO**. No combined promotable release candidate exists.
 - **Owner production GO:** `NOT GIVEN` and not requested until F1–F4 objectively pass on a recorded candidate/environment.
 - **Production deployment, credentials, database writes, migration, backup/restore, and cutover:** `NOT AUTHORIZED`.
@@ -120,6 +121,5 @@ The package audit advisories include [Next.js critical advisory GHSA-2464-fhr4-w
 1. Identify the parent behind each selected `parent-data` root, then prove exact project/root-branch provenance, production separation, and synthetic-only contents before any session. `parent_id` is omitted from the current branch readbacks, so this identity is unresolved.
 2. Establish target-scoped non-admin staging access and validate PostgreSQL 18 TLS/certificate identity for the exact resource before any session.
 3. Confirm Vercel Hobby eligibility and the staging-only Preview project/deployment target.
-4. Provide an approved local/internal npm artifact route or explicit package-policy decision that permits remediation without bypassing `EALLOWREMOTE`.
-
+4. Confirm that the temporary npm 11.19.0 lock-generation route is allowed after npm 12 returned `EALLOWREMOTE`, or identify an approved artifact route.
 Do not provide secrets or raw catalogs in this packet. Historical failures and skipped checks remain visible and do not inherit a passing result from another SHA, resource, or environment.
