@@ -73,37 +73,43 @@ describe("resident monthly-dues authorization", () => {
       },
     ]);
 
-    const seedForeignReceipt = async (input: {
+    const treasurerPrincipals = new Map<string, Principal>();
+    const seedCashReceipt = async (input: {
       rtUnitId: string;
       householdId: string;
       personId: string;
+      period: string;
     }) => {
-      const user = await createAuthUser(db);
-      const [official] = await db.insert(appAccounts).values({
-        rtUnitId: input.rtUnitId,
-        authUserId: user.id,
-        accountType: "official",
-        loginIdentifier: `receipt-fixture-${randomUUID()}`,
-        personId: input.personId,
-      }).returning({ id: appAccounts.id });
-      await db.insert(officialAssignments).values({
-        rtUnitId: input.rtUnitId,
-        appAccountId: official!.id,
-        role: "treasurer",
-        startsOn: "2020-01-01",
-      });
-      const principal: Principal = {
-        authUserId: user.id,
-        appAccountId: official!.id,
-        role: "treasurer",
-        rtUnitId: input.rtUnitId,
-        householdId: null,
-        personId: input.personId,
-      };
+      let principal = treasurerPrincipals.get(input.rtUnitId);
+      if (!principal) {
+        const user = await createAuthUser(db);
+        const [official] = await db.insert(appAccounts).values({
+          rtUnitId: input.rtUnitId,
+          authUserId: user.id,
+          accountType: "official",
+          loginIdentifier: `receipt-fixture-${randomUUID()}`,
+          personId: input.personId,
+        }).returning({ id: appAccounts.id });
+        await db.insert(officialAssignments).values({
+          rtUnitId: input.rtUnitId,
+          appAccountId: official!.id,
+          role: "treasurer",
+          startsOn: "2020-01-01",
+        });
+        principal = {
+          authUserId: user.id,
+          appAccountId: official!.id,
+          role: "treasurer",
+          rtUnitId: input.rtUnitId,
+          householdId: null,
+          personId: input.personId,
+        };
+        treasurerPrincipals.set(input.rtUnitId, principal);
+      }
       const idempotencyKey = randomUUID();
       await recordTreasurerCashPayment(db as never, principal, {
         householdId: input.householdId,
-        period: "2026-01",
+        period: input.period,
         idempotencyKey,
       }, "2026-06-15");
       const [payment] = await db.select({ id: payments.id }).from(payments)
@@ -111,17 +117,25 @@ describe("resident monthly-dues authorization", () => {
       return payment!.id;
     };
     const foreignPaymentIds = [
-      await seedForeignReceipt({
+      await seedCashReceipt({
         rtUnitId: rtOne,
         householdId: otherHousehold.householdId,
         personId: otherHousehold.personId,
+        period: "2026-01",
       }),
-      await seedForeignReceipt({
+      await seedCashReceipt({
         rtUnitId: rtTwo,
         householdId: otherRtHousehold.householdId,
         personId: otherRtHousehold.personId,
+        period: "2026-01",
       }),
     ];
+    const residentPaymentId = await seedCashReceipt({
+      rtUnitId: rtOne,
+      householdId: residentHousehold.householdId,
+      personId: residentHousehold.personId,
+      period: "2026-05",
+    });
     expect(await db.select({ id: paymentAllocations.id }).from(paymentAllocations)
       .where(inArray(paymentAllocations.paymentId, foreignPaymentIds))).toHaveLength(2);
     expect(await db.select({ allocationId: activeDueSettlements.allocationId }).from(activeDueSettlements)
@@ -142,7 +156,7 @@ describe("resident monthly-dues authorization", () => {
     expect(dues).toHaveLength(2);
     expect(dues.map((due) => [due.billingYear, due.month, due.status])).toEqual([
       [2026, 1, "not_due"],
-      [2026, 5, "unpaid"],
+      [2026, 5, "paid"],
     ]);
     expect(Object.keys(dues[0]).sort()).toEqual([
       "activeReceived",
@@ -161,9 +175,21 @@ describe("resident monthly-dues authorization", () => {
     ]);
     expect(dues.map((due) => due.paymentRequestStatus)).toEqual([null, null]);
     expect(dues.map((due) => due.periodTiming)).toEqual(["past", "past"]);
-    expect(dues.map((due) => due.receipts)).toEqual([[], []]);
+    const residentReceiptReference = `KRT-${residentPaymentId.replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+    expect(dues.map((due) => due.receipts)).toEqual([
+      [],
+      [{
+        allocationAmount: 40_000,
+        method: "cash",
+        verifiedAt: expect.any(String),
+        reference: residentReceiptReference,
+      }],
+    ]);
+    const residentReceipt = dues[1]?.receipts?.[0];
+    expect(Number.isNaN(Date.parse(residentReceipt?.verifiedAt ?? ""))).toBe(false);
     const foreignReferences = foreignPaymentIds.map((id) => `KRT-${id.replace(/-/g, "").slice(0, 12).toUpperCase()}`);
     const returnedReferences = dues.flatMap((due) => due.receipts ?? []).map((receipt) => receipt.reference);
+    expect(returnedReferences).toEqual([residentReceiptReference]);
     expect(foreignReferences.some((reference) => returnedReferences.includes(reference))).toBe(false);
     for (const due of dues) {
       expect(due).not.toHaveProperty("id");
