@@ -53,7 +53,7 @@ Drizzle's PostgreSQL migrator issues `CREATE SCHEMA IF NOT EXISTS` for its journ
 
 ## R3 — Real staging UAT and concurrency
 
-The executable, bounded scenario matrix and stop rules are in [R3-R4-UAT-AND-CUTOVER-RUNBOOK.md](./R3-R4-UAT-AND-CUTOVER-RUNBOOK.md). Execution status is `NOT RUN` until R2 passes for this exact release SHA and a matching nonproduction Preview is separately authorized.
+The executable, bounded scenario matrix and stop rules are in [R3-R4-UAT-AND-CUTOVER-RUNBOOK.md](./R3-R4-UAT-AND-CUTOVER-RUNBOOK.md). Execution status is `NOT RUN` until R2 passes for this exact release SHA, an app instance at the same SHA is authorized for staging UAT, and the required concurrency verifier is reviewed and authorized. A Preview requires separate exact-SHA deployment authorization; Preview smoke is recorded in R4.
 
 | Scenario | Status | Expected vs actual, negative-state check, verifier, and evidence |
 |---|---|---|
@@ -66,20 +66,22 @@ The executable, bounded scenario matrix and stop rules are in [R3-R4-UAT-AND-CUT
 | R3-RACE-VERIFY concurrent verification on real PG18 | TODO | TODO |
 | R3-RACE-CASH and R3-RACE-REVERSAL concurrent financial retries on real PG18 | TODO | TODO |
 
-For each row record exact candidate SHA, Actions run ID/attempt, staging target and actual PostgreSQL version, Preview deployment SHA, separate-session proof for concurrency, expected and observed outcome, negative-state readback, sanitized evidence, and independent verifier. Disposable PostgreSQL 17 or offline concurrency is source/CI evidence only and cannot fill a live PG18 row.
+For each row record exact candidate SHA, Actions run ID/attempt, staging target and actual PostgreSQL version, app-instance SHA/mode/origin, separate-session proof for concurrency, expected and observed outcome, negative-state readback, sanitized evidence, and independent verifier. Disposable PostgreSQL 17 or offline concurrency is source/CI evidence only and cannot fill a live PG18 row.
 
 ## R4 — Preview, rollback, and release decision
 
 | Requirement | Status | Exact-SHA / environment evidence |
 |---|---|---|
-| Nonproduction Preview separately authorized and bound to the exact release SHA | TODO | TODO |
-| HTTPS and mobile/tablet/desktop smoke at 360–420px, tablet, and desktop | TODO | TODO |
+| Nonproduction Preview separately authorized and bound to the exact release SHA, if authorized | NOT AUTHORIZED / NOT RUN unless separately approved | TODO |
+| Preview HTTPS and mobile/tablet/desktop smoke at 360–420px, tablet, and desktop, if authorized | NOT AUTHORIZED / NOT RUN unless separately approved | TODO |
 | Staging-only credentials and environment classification verified | TODO | TODO |
 | Previous known-good Preview deployment and SHA recorded, or first-use recovery path documented | TODO | TODO |
 | Database reset/restore procedure is target-bound, available on-plan, and validated | TODO | TODO |
 | Rollback triggers, operator steps, and post-rollback checks recorded | TODO | TODO |
 | Cost evidence and known exceptions recorded without unsupported $0 claims | TODO | TODO |
 | Proposed cutover target, ordered actions, operator, independent verifier, and stop criteria | TODO | TODO |
+
+Preview deployment and smoke require separate exact-SHA authorization. Without it, record `NOT AUTHORIZED / NOT RUN`; do not infer Preview evidence from local R3 HTTPS testing. Before using the overall verdict `PRODUCTION READY — AWAITING OWNER GO`, explicitly classify Preview smoke as required or optional for this release scope. If required, its rows must pass; if optional, record that scope decision and retain the rows as not run.
 
 Do not assume application rollback reverses database writes. Never run destructive down migrations or in-place restores without separate approval naming the exact staging target and action. If the target is first-use, document its synthetic-only disposable reset path and authorization before writes. Keep the existing production environment, credentials, domain, and deployment outside this packet's execution scope.
 
@@ -101,7 +103,7 @@ Complete the proposed cutover and separate owner decision fields in [R3-R4-UAT-A
 - R2: `TODO`
 - R3: `TODO`
 - R4: `TODO`
-- Overall: `NO-GO` until every required R1–R4 item has current exact-SHA evidence; only then `PRODUCTION READY — AWAITING OWNER GO`.
+- Overall: `NO-GO` until every required R1–R4 item has current exact-SHA evidence and the Preview-smoke scope is explicitly classified; only then `PRODUCTION READY — AWAITING OWNER GO`.
 - Separate production GO: `NOT GIVEN` until the owner approves the exact production SHA, environment, and proposed action.
 - Owner decision reference and timestamp: `TODO`
 

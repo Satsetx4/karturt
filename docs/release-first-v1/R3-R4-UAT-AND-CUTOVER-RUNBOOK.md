@@ -1,6 +1,6 @@
 # RELEASE FIRST V1 — R3 UAT and R4 cutover runbook
 
-**Execution status: NOT RUN.** This is a bounded procedure, not evidence or authorization. R3 may start only after R2 is `PASS` for this exact release SHA and the nonproduction app deployment has separate exact-SHA authorization. R4 remains preparation only until its own gates pass.
+**Execution status: NOT RUN.** This is a bounded procedure, not evidence or authorization. R3 may start only after R2 is `PASS` for this exact release SHA and an app instance running that same SHA is authorized for staging UAT. That instance may be an owner-approved local HTTPS process with securely provisioned runtime credentials, or a Preview with separate exact-SHA deployment authorization. R2 or R3 authorization does not authorize a Preview deployment. R4 remains preparation only until its own gates pass.
 
 ## Evidence identity
 
@@ -12,7 +12,7 @@ Before each run, fill these fields in the release decision packet:
 | CI run / attempt and required job IDs | Every required check must be for that same SHA |
 | Staging project / branch / endpoint / database | `flat-cloud-57657711` / `br-sparkling-flower-azordm9k` / `ep-red-boat-azzqyf45` / `karturt_staging` |
 | Database version / region / plan | Actual readback, including PostgreSQL 18 and Singapore; do not infer from project labels |
-| App URL / deployment SHA / environment | Exact authorized nonproduction Preview and confirmed staging-only environment |
+| App origin / exact app-instance SHA / mode / authorization reference | Owner-authorized staging app instance and confirmed staging-only environment |
 | Effective app identity / TLS result | Runtime login identity, target, verified certificate and hostname, and encrypted session |
 | Run time / timezone / executor / independent verifier | Named synthetic test aliases only; no account secrets or resident details |
 
@@ -21,7 +21,7 @@ If any identity, target, version, role, TLS, isolation, or authorization value i
 ## R3 entry gate and execution rules
 
 - R2 must have a current `PASS` at the exact candidate SHA: authenticated effective runtime and migrator identities; least-privilege readback; verified driver TLS; official migrations `0000`–`0013`; synthetic-only target evidence; integrity and negative checks; and owner-confirmed recovery/reset basis.
-- Use only the approved staging target and an authorized nonproduction Preview bound to the same SHA. Use synthetic accounts in separate clean browser profiles and a fixed business date recorded in the evidence.
+- Use only the approved staging target and an app instance bound to the same SHA. A local HTTPS process must satisfy the app's staging origin requirements and use securely provisioned runtime credentials; a Preview requires separate exact-SHA deployment authorization. Record the app mode, origin, and authorization reference. Use synthetic accounts in separate clean browser profiles and a fixed business date recorded in the evidence.
 - Exercise product flows through the app. Do not run SQL, DDL, direct database writes, legacy F2, data export, or cleanup as part of this runbook. Keep raw catalog and row contents owner-only. A separately authorized verifier may return only sanitized booleans, counts, aggregate amounts, and generated test IDs needed by the packet.
 - Freeze the fixture ledger and expected outcomes before running the app flows. Calculate the independent financial oracle from that fixture ledger and the recorded operations, not from the app report being checked.
 - Do not reset, delete, truncate, restore, or reseed the canonical target without a separate approval naming the exact target and action. Stop on any non-synthetic content, target drift, privilege drift, certificate failure, unexpected side effect, or unexplained result.
@@ -42,11 +42,11 @@ If any identity, target, version, role, TLS, isolation, or authorization value i
 | R3-RACE-CASH | Submit the same cash operation concurrently from two independent sessions for the same synthetic Treasurer account, household, target period, key, and payload. | One result is original and one is a replay of the same result. | One payment, one allocation set, and one cash audit event persist; totals match the fixture oracle. |
 | R3-RACE-REVERSAL | Use the same synthetic Treasurer account in two independent sessions to attempt the same reversal concurrently. | One reversal succeeds; the other is rejected as already reversed. | Exactly one reversal row/event and no duplicate active repayment or allocation. |
 
-For the four race cases, prove the requests overlapped, used separate application workers/pools, and reached separate PostgreSQL 18 backend sessions. A dedicated owner-controlled read-only verifier may report only sanitized role/TLS/session-distinct booleans, generated test IDs, status values, counts, and aggregate amounts; it must use an approved identity, a read-only transaction, reviewed source bound to the candidate SHA, and an explicit target-scoped authorization reference. Do not expose raw rows/catalog data or add database triggers/functions to force contention. No such R3 verifier has been reviewed for this candidate yet; until one is included in exact-head CI and authorized for a run, mark persisted-state/session proof `UNVERIFIED` and do not claim an R3 race PASS.
+For the four race cases, prove the requests overlapped, used separate application workers/pools, and reached separate PostgreSQL 18 backend sessions. A local setup must use two same-SHA app processes with distinguishable pool identities; two browser profiles against one process do not prove worker or pool separation. If that cannot be shown, mark the worker/session proof `UNVERIFIED`. A dedicated owner-controlled read-only verifier may report only sanitized `overlapObserved`, `lockWaitObserved`, `applicationWorkerDistinct`, `applicationPoolDistinct`, role/TLS/session-distinct booleans, generated test IDs, status values, counts, and aggregate amounts; it must use an approved identity, a read-only transaction, reviewed source bound to the candidate SHA, and an explicit target-scoped authorization reference. Do not expose raw rows/catalog data or add database triggers/functions to force contention. No such R3 verifier has been reviewed for this candidate yet; until one is included in exact-head CI and authorized for a run, mark persisted-state/session proof `UNVERIFIED` and do not claim an R3 race PASS.
 
 ## R3 evidence and stop rules
 
-For every row, record: exact release SHA; Actions run ID and attempt; staging resource IDs and PG18 readback; app deployment SHA; synthetic actor alias; fixed business date; expected and observed outcome; sanitized request/payment/allocation/reversal/audit counts and IDs; independent verifier; and evidence reference. Never include credentials, session tokens, real names, addresses, phone numbers, raw database rows, or uncurated screenshots.
+For every row, record: exact release SHA; Actions run ID and attempt; staging resource IDs and PG18 readback; app-instance SHA, mode, and origin; synthetic actor alias; fixed business date; expected and observed outcome; sanitized request/payment/allocation/reversal/audit counts and IDs; independent verifier; and evidence reference. Never include credentials, session tokens, real names, addresses, phone numbers, raw database rows, or uncurated screenshots.
 
 Stop immediately and mark the affected case `FAIL` or `UNVERIFIED` if a negative action mutates state, a duplicate financial effect appears, a role crosses its boundary, the actual database is not PG18, sessions are not independent for a race, a report differs from the independent oracle, or any result cannot be tied to the exact SHA and target. A source-level/disposable PostgreSQL 17 concurrency PASS is not a substitute for these live PostgreSQL 18 cases.
 
@@ -59,8 +59,8 @@ Complete this section before asking for a separate production GO. It proposes st
 | Release SHA and candidate PR | Exact full SHA and current PR state |
 | Main/base SHA and exact-head CI | Protected base SHA plus run ID/attempt and required job conclusions |
 | R1 / R2 / R3 verdicts | All `PASS` with evidence bound to this release SHA; otherwise `NO-GO` |
-| Preview authorization / deployment | Separate approval reference, deployment ID, URL, SHA, staging-only env identity |
-| Preview smoke | HTTPS certificate/hostname, authentication/authorization, payment/report core flows, and viewport results for 360–420px, tablet, and desktop |
+| Preview authorization / deployment | Conditional on separate approval; otherwise `NOT AUTHORIZED / NOT RUN`. If authorized, record reference, deployment ID, URL, SHA, and staging-only env identity |
+| Preview smoke | Conditional on separate approval; otherwise `NOT AUTHORIZED / NOT RUN`. If authorized, record HTTPS certificate/hostname, authentication/authorization, payment/report core flows, and viewport results for 360–420px, tablet, and desktop |
 | Proposed production target and action sequence | Exact project/environment, merge/deploy sequence, migration behavior, and expected user-visible impact; no production secret values |
 | Operator / independent verifier | Named accountable operator and separate verifier |
 | Stop conditions | Target/SHA drift, CI failure, auth/TLS/financial mismatch, non-synthetic leakage, unavailable recovery, or any unexpected mutation |
@@ -69,6 +69,6 @@ Complete this section before asking for a separate production GO. It proposes st
 | Cost and known exceptions | Current plan/usage evidence and bounded exceptions; do not claim an invoice total from plan metadata |
 | Owner decision | `NOT GIVEN` until explicit approval names the exact production SHA, environment, and proposed action |
 
-The existing `docs/backup-restore-drill.md` concerns a different, quarantined Neon project and is not evidence for the canonical RELEASE FIRST target. The older `docs/staging-uat-plan.md` is a historical Fase 3 plan, not this R3 run sheet. No historical, offline, PG17, Preview, or other-target result fills a current R2–R4 evidence row.
+The existing `docs/backup-restore-drill.md` concerns a different, quarantined Neon project and is not evidence for the canonical RELEASE FIRST target. The older `docs/staging-uat-plan.md` is a historical Fase 3 plan, not this R3 run sheet. No historical, other-SHA, other-target, offline, or PG17 result fills a current R2–R4 evidence row. Only a Preview at this exact SHA with separate authorization may fill the R4 Preview rows.
 
-The final verdict may read `PRODUCTION READY — AWAITING OWNER GO` only after R1–R4 evidence passes at the exact release SHA and the proposed production action is reviewable. The production action itself remains locked until separate explicit owner authorization.
+The final verdict may read `PRODUCTION READY — AWAITING OWNER GO` only after all mandatory R1–R4 evidence passes at the exact release SHA and the proposed production action is reviewable. If Preview smoke lacks separate authorization, retain `NOT AUTHORIZED / NOT RUN`; the packet must explicitly classify it as optional for this release scope before claiming readiness. The production action itself remains locked until separate explicit owner authorization.
