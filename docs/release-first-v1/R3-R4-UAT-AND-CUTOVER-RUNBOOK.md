@@ -24,6 +24,7 @@ If any identity, target, version, role, TLS, isolation, or authorization value i
 - Use only the approved staging target and an app instance bound to the same SHA. A local HTTPS process must satisfy the app's staging origin requirements and use securely provisioned runtime credentials; a Preview requires separate exact-SHA deployment authorization. Record the app mode, origin, and authorization reference. Use synthetic accounts in separate clean browser profiles and a fixed business date recorded in the evidence.
 - Exercise product flows through the app. Operators must not run manual SQL, DDL, direct database writes, legacy F2, data export, or cleanup as part of this runbook. The only direct database access allowed by the R3 procedure is the reviewed observer described below; it runs read-only transactions and selects only session status fields, never query text or business rows. Keep raw catalog and row contents owner-only.
 - Freeze the fixture ledger and expected outcomes before running the app flows. Calculate the independent financial oracle from that fixture ledger and the recorded operations, not from the app report being checked.
+- Use the blank [R2 synthetic fixture and integrity worksheet](./R2-SYNTHETIC-FIXTURE-AND-INTEGRITY-WORKSHEET.md) and [R3 concurrency evidence worksheet](./R3-CONCURRENCY-EVIDENCE-WORKSHEET.md) to bind the fixture oracle and each race operation to exact-SHA evidence. The R2 worksheet currently marks the complete staging-safe bootstrap path `BLOCKED`; do not begin fixture writes until that path is implemented, reviewed, and CI-verified at the exact candidate SHA.
 - Do not reset, delete, truncate, restore, or reseed the canonical target without a separate approval naming the exact target and action. Stop on any non-synthetic content, target drift, privilege drift, certificate failure, unexpected side effect, or unexplained result.
 
 ## Required scenario matrix
@@ -51,6 +52,8 @@ Each worker's production build embeds its Git SHA and rejects a dirty source tre
 ## R3 evidence and stop rules
 
 For every row, record: exact release SHA; Actions run ID and attempt; staging resource IDs and PG18 readback; app-instance SHA, mode, and origin; synthetic actor alias; fixed business date; expected and observed outcome; sanitized request/payment/allocation/reversal/audit counts and IDs; independent verifier; and evidence reference. Never include credentials, session tokens, real names, addresses, phone numbers, raw database rows, or uncurated screenshots.
+
+For each of the four race cases, also complete the [R3 concurrency evidence worksheet](./R3-CONCURRENCY-EVIDENCE-WORKSHEET.md). A structural observer sample is not enough: the app action, persisted outcome, session sample, and independent verifier must share the same unique run/scenario ID. Missing operation correlation keeps the result `UNVERIFIED`.
 
 Stop immediately and mark the affected case `FAIL` or `UNVERIFIED` if a negative action mutates state, a duplicate financial effect appears, a role crosses its boundary, the actual database is not PG18, sessions are not independent for a race, a report differs from the independent oracle, or any result cannot be tied to the exact SHA and target. A source-level/disposable PostgreSQL 17 concurrency PASS is not a substitute for these live PostgreSQL 18 cases.
 
