@@ -50,13 +50,18 @@ describe("Fast Track F3 rehearsal command", () => {
 
     expect(request?.action).toContain("concurrent transfer requests");
     expect(request?.expected).toContain("Only one pending request owns the due claim");
-    expect(request?.expected).toContain("same-key retry returns the original request");
-    expect(verification?.actor).toContain("Two active Treasurers");
+    expect(request?.action).toContain("retry the winning request with its original key");
+    expect(request?.expected).toContain("retrying the winning request's key returns that same request");
+    expect(verification?.actor).toContain("distinct-actor UAT case");
+    expect(verification?.action).toContain("extends the current same-principal concurrency regression");
     expect(verification?.expected).toContain("Exactly one verification succeeds");
     expect(verification?.expected).toContain("one verification audit");
+    expect(reversal?.actor).toContain("distinct-actor UAT case");
+    expect(reversal?.action).toContain("extends the current same-principal concurrency regression");
     expect(reversal?.expected).toContain("Exactly one reversal succeeds");
     expect(reversal?.expected).toContain("active settlements are released");
-    expect(rollback?.action).toContain("approved test harness");
+    expect(rollback?.action).toContain("approved PostgreSQL failure-injection harness");
+    expect(rollback?.action).toContain("additional cash failure stages planned-only until tested");
     expect(rollback?.expected).toContain("leaves no partial payment");
     expect(rollback?.expected).toContain("pre-operation state remains intact");
   });
