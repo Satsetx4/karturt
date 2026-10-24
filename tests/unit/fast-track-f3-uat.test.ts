@@ -71,8 +71,10 @@ describe("Fast Track F3 rehearsal command", () => {
 
     expect(cashRetry?.action).toContain("Submit the same cash payload concurrently");
     expect(cashRetry?.action).toContain("same idempotency key");
-    expect(cashRetry?.expected).toContain("exactly one payment");
-    expect(cashRetry?.expected).toContain("same original result");
+    expect(cashRetry?.expected).toContain("Exactly one payment");
+    expect(cashRetry?.expected).toContain("same payment and allocations");
+    expect(cashRetry?.expected).toContain("replayed=false");
+    expect(cashRetry?.expected).toContain("replayed=true");
     expect(cashRetry?.expected).toContain("one allocation set");
     expect(cashRetry?.expected).toContain("one audit event");
   });
@@ -116,11 +118,18 @@ describe("Fast Track F3 rehearsal command", () => {
     expect(report?.action).toContain("2026-05-05");
     expect(report?.action).toContain("2026-05-10");
     expect(report?.action).toContain("2026-05-20");
+    expect(report?.action).toContain("2026-12-09");
+    expect(report?.action).toContain("2026-12-11");
+    expect(report?.action).toContain("2027-01-01");
     expect(report?.expected).toContain("due-now is Rp 195.000");
     expect(report?.expected).toContain("future-unpaid is Rp 840.000");
     expect(report?.expected).toContain("Rp 1.365.000 reconciles to Rp 290.000 received + Rp 40.000 waived + Rp 1.035.000 outstanding");
     expect(report?.expected).toContain("Rp 115.000 across 3 periods");
     expect(report?.expected).toContain("Rp 195.000 across 5 periods");
+    expect(report?.expected).toContain("+Rp 10.000 February adjustment and −Rp 5.000 March adjustment");
+    expect(report?.expected).toContain("reversed Rp 80.000 cash payment is excluded from active receipts");
+    expect(report?.expected).toContain("not overdue on 2026-12-09, becomes Rp 40.000 arrears on 2026-12-11");
+    expect(report?.expected).toContain("remains Rp 40.000 arrears on 2027-01-01");
     expect(report?.expected).toContain("future unpaid periods stay outside arrears");
     expect(report?.expected).not.toMatch(/resident names|household identifiers/i);
   });

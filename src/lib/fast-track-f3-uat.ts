@@ -80,7 +80,7 @@ export const F3_UAT_SCENARIOS: readonly F3UatScenario[] = [
     id: "concurrent-cash-idempotent-submit",
     actor: "Treasurer",
     action: "Submit the same cash payload concurrently from two sessions with the same idempotency key.",
-    expected: "Both calls converge on the same original result; exactly one payment, one allocation set, and one audit event are created.",
+    expected: "Both responses identify the same payment and allocations; one reports replayed=false and the other replayed=true. Exactly one payment, one allocation set, and one audit event are created.",
   },
   {
     id: "concurrent-resident-transfer-request",
@@ -133,8 +133,8 @@ export const F3_UAT_SCENARIOS: readonly F3UatScenario[] = [
   {
     id: "chairman-report-reconciliation",
     actor: "RT Chairman",
-    action: "Using the deterministic synthetic 2026 report fixture, compare snapshots as of 2026-05-05 (before the 2026-05-10 due date) and 2026-05-20 (after it); reconcile monthly, yearly, due-now, future-unpaid, and arrears totals.",
-    expected: "For both snapshots, due-now is Rp 195.000 and future-unpaid is Rp 840.000; yearly effective target Rp 1.365.000 reconciles to Rp 290.000 received + Rp 40.000 waived + Rp 1.035.000 outstanding. Only outstanding past-date periods appear in arrears: Rp 115.000 across 3 periods before the May due date and Rp 195.000 across 5 periods after it, with 3 households in each snapshot. Monthly totals reconcile to yearly totals, and future unpaid periods stay outside arrears.",
+    action: "Using the deterministic synthetic 2026 report fixture, compare snapshots as of 2026-05-05 (before the 2026-05-10 due date) and 2026-05-20 (after it); reconcile monthly, yearly, due-now, future-unpaid, and arrears totals. Also evaluate a December 10 due date as of 2026-12-09, 2026-12-11, and 2027-01-01 using Jakarta business dates.",
+    expected: "For both May snapshots, due-now is Rp 195.000 and future-unpaid is Rp 840.000; yearly effective target Rp 1.365.000 reconciles to Rp 290.000 received + Rp 40.000 waived + Rp 1.035.000 outstanding, including the +Rp 10.000 February adjustment and −Rp 5.000 March adjustment. The reversed Rp 80.000 cash payment is excluded from active receipts. Only outstanding past-date periods appear in arrears: Rp 115.000 across 3 periods before the May due date and Rp 195.000 across 5 periods after it, with 3 households in each snapshot. Monthly totals reconcile to yearly totals, and future unpaid periods stay outside arrears. A December 10 due remains Rp 40.000 due-now and not overdue on 2026-12-09, becomes Rp 40.000 arrears on 2026-12-11, and remains Rp 40.000 arrears on 2027-01-01.",
   },
   {
     id: "mobile-viewport-smoke",
