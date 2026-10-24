@@ -65,3 +65,7 @@ Owner authorization is limited to the ordered, conditional staging plan in [FUNC
 | F5 | **LOCKED** | Separate owner GO for exact SHA and production environment required. |
 
 **Wave assignment:** #86 Application — annual cards/receipts; #87 Reports — arrears/reporting; #88 QA/Cash — cash/idempotency regressions; coordinator — integrated PR #93 and exact-SHA evidence; QA/Security — independent P0/P1 review and exception register; #81 DB/Staging — stopped at F2; #82 UAT and #83 Release — wait for F2 PASS. P0 must PASS, P1 must be fixed, and P2/P3 are acceptable only if they do not weaken a mandatory gate.
+
+## Owner-authorized role cleanup outcome — 2026-10-24
+
+The owner explicitly approved deleting only `karturt_f2_catalog_ro_20261024`. After confirming it existed on the exact target branch, that role was deleted from project `flat-cloud-57657711` / branch `br-sparkling-flower-azordm9k`; a subsequent role listing confirmed it was absent and showed only the pre-existing `karturt_staging_owner`. This cleanup does not satisfy F2: the earlier role privilege result and `pg_stat_ssl.ssl=false` remain recorded as failed security evidence, data provenance is still unproven, and no further SQL or staging work is authorized by that cleanup. F2 remains BLOCKED; F3 BLOCKED; F4 NO-GO; F5 LOCKED. No owner password was accessed, displayed, or used.

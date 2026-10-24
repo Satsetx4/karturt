@@ -110,3 +110,7 @@ Use only the owner's exact Neon Free target in [FUNCTIONAL-FIRST-DECISION-202610
 The optional IP allowlist is untouched; do not use a paid plan. Never access the owner password. Leave `steep-heart-48842733` quarantined and untouched. No main merge, production access/change, or production GO. Record the current state as F2 BLOCKED, F3 BLOCKED, F4 NO-GO, F5 LOCKED.
 
 F1 wave ownership remains #86 Application (annual cards/receipts), #87 Reports (arrears), #88 QA/Cash (cash/idempotency). Coordinator integrates the already-PASS candidate PR #93 and controls exact-SHA evidence; QA/Security reviews P0/P1 and accepted P2/P3 exceptions independently. Do not re-run completed lanes without a review finding or new source change.
+
+## Owner-authorized role cleanup outcome — 2026-10-24
+
+The owner explicitly approved deleting only `karturt_f2_catalog_ro_20261024`. After confirming it existed on the exact target branch, that role was deleted from project `flat-cloud-57657711` / branch `br-sparkling-flower-azordm9k`; a subsequent role listing confirmed it was absent and showed only the pre-existing `karturt_staging_owner`. This cleanup does not satisfy F2: the earlier role privilege result and `pg_stat_ssl.ssl=false` remain recorded as failed security evidence, data provenance is still unproven, and no further SQL or staging work is authorized by that cleanup. F2 remains BLOCKED; F3 BLOCKED; F4 NO-GO; F5 LOCKED. No owner password was accessed, displayed, or used.
