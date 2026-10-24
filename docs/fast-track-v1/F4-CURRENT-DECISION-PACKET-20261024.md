@@ -107,7 +107,7 @@ Current Vercel and Neon metadata are recorded in [issue #83 comment #6380051907]
 | Staging provenance/content unknown | New project `flat-cloud-57657711` is a separate owner-approved Free PG18 project; creation record says no existing project source/copy was supplied. Catalog contents and production separation remain unverified; root field `init_source=parent-data` is not conclusive. Effective access is ADMIN. | Obtain target-scoped approval for any catalog/provenance check and role/network change; preserve no-owner-password handling | Unresolved; Neon/project owner |
 | TLS/least privilege unknown | Only owner role exists; public connections enabled, allowlist empty; no certificate identity proof | Obtain a scoped non-admin identity and prove `verify-full` TLS before any session | Unresolved; staging owner |
 | No real staging UAT/concurrency | No verified PG18 target; offline PG17 is not equivalent | Run F3 only after F2 evidence and authorization pass | Unresolved; staging/QA owners |
-| No Preview or verified recovery drill | Vercel Hobby entitlement and branch/environment binding are not exposed by current metadata; no Preview deployment or current-target recovery drill exists | Verify the owner-selected project scope and recovery target after F2 | Unresolved; release/platform owner |
+| No Preview or verified recovery drill | Vercel Hobby entitlement and team ownership are confirmed, but branch/source binding, a Preview deployment, and a current-target recovery drill are not established | Verify the owner-selected project scope and recovery target after F2 | Unresolved; release/platform owner |
 
 ## 7. Verdict and owner decision
 
