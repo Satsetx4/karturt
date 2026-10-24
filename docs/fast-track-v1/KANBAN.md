@@ -41,3 +41,8 @@ If owner action becomes necessary to unlock F2–F4, bundle the concrete request
 - Advance F1→F2→F3→F4 only on objective phase evidence. Continue independent safe work while a phase is blocked.
 - No multi-RT UI, AI scope, paid service, production credential, DB session/SQL on an unverified target, protected-main merge, deployment, cutover, or production mutation.
 - Update this snapshot after material gate changes; do not treat it as live provider evidence.
+
+
+## 2026-10-24 Functional First snapshot
+
+Current authoritative priorities, parallel microtask lanes, staging designation, consolidated owner actions, exceptions, and F0-F5 status are in [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md). P0 must PASS; P1 must be fixed; P2/P3 may be documented only when they do not waive mandatory gates. Canonical planning target: flat-cloud-57657711. Duplicate steep-heart-48842733: quarantined and preserved. F2 BLOCKED; F3 BLOCKED; F4 NO-GO; F5 LOCKED for separate owner GO. Re-run exact-head CI after this docs change.

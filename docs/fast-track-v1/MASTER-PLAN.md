@@ -118,3 +118,8 @@ For each task: state `TODO/IN_PROGRESS/PASS/BLOCKED/DEFERRED`, owner workstream,
 - Ledger App/Ruleset/issue #75/#77 evidence kept as deferred for V1, not destroyed or silently activated.
 
 **Master tracking issue:** [#78](https://github.com/Satsetx4/karturt/issues/78). **Phase issues:** [F0 #79](https://github.com/Satsetx4/karturt/issues/79), [F1 #80](https://github.com/Satsetx4/karturt/issues/80), [F2 #81](https://github.com/Satsetx4/karturt/issues/81), [F3 #82](https://github.com/Satsetx4/karturt/issues/82), [F4 #83](https://github.com/Satsetx4/karturt/issues/83). **Draft planning PR:** [#84](https://github.com/Satsetx4/karturt/pull/84). **This plan's PR must be reviewed/merged before being treated as protected-main instructions; use owner-approved policy as the interim mandate.**
+
+
+## 2026-10-24 owner decision — Functional First
+
+The priority model, non-waivable gates, canonical staging designation, parallel F1B/F1C/F1D microtasks, consolidated owner packet, and current F0-F5 status are governed by [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md). This decision supersedes earlier wording where it suggests relaxing mandatory security or accepting a P0/P1 defect. P2/P3 exceptions may be documented under the linked criteria; mandatory gates remain intact.

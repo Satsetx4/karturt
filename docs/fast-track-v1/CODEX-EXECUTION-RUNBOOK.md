@@ -95,3 +95,10 @@ Next permitted autonomous task:
 ```
 
 **Exit:** F0–F4 PASS by evidence and exact candidate `PRODUCTION READY — AWAITING OWNER GO`. If platform permissions prevent reaching that state, accurately report remaining tasks and STOP only the restricted operation.
+
+
+## 2026-10-24 execution adjustment — Functional First
+
+Delegate F1 as three bounded parallel microtasks: #86 annual cards/receipts, #87 arrears/reports, and #88 cash/idempotency. Keep branches isolated and avoid overlapping edits; coordinator owns integration and exact-head evidence. QA/Security reviews P0/P1 across the three streams and consolidates findings. Read-only F2 preparation may proceed in parallel; F3 waits for F1/F2 PASS; F4 waits for F3. Record P2/P3 once in the shared exception register using the decision criteria. Keep the owner action packet consolidated and request separate final production GO only after F0-F4 pass.
+
+See [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md) for mandatory gates, canonical project, current evidence, and action boundaries. The existing Neon approval does not authorize SQL, staging mutation, secrets/environment changes, merge, deployment, or production actions.

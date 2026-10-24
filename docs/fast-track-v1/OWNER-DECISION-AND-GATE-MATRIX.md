@@ -57,3 +57,8 @@
 ## Decision acknowledgment
 
 **Owner approved policy change and requested execution of work before eventual Codex delegation.** Planning branch / draft PR are to be treated as the portable handoff until formally reviewed and merged. Do not overwrite historical issues with unqualified PASS or close them as completed without proper technical evidence.
+
+
+## 2026-10-24 owner decision — Functional First
+
+Use [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md) as the current owner decision and gate interpretation. The sole canonical planning target is flat-cloud-57657711; steep-heart-48842733 is quarantined and preserved. F2 remains blocked pending lineage/content, non-admin role, TLS verify-full, and Rp0 evidence. P0 must pass; P1 must be fixed; only documented noncritical P2/P3 may be accepted. No database use, mutation, merge, deployment, or production action is authorized by this planning amendment.

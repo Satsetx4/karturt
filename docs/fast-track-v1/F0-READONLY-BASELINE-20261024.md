@@ -42,3 +42,8 @@
 6. Preview/Production: NO-GO until F4 evidence, production owner GO.
 
 **No phase F0–F4 PASS is claimed in this initial snapshot.**
+
+
+## Subsequent owner decision — 2026-10-24
+
+This file records the earlier read-only baseline. Its status is historical at the captured SHA. The Functional First amendment and current F0-F5 interpretation are in [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md); F0 remains IN PROGRESS until exact-head CI completes on the amended PR #84 head. The canonical planning target is flat-cloud-57657711; steep-heart-48842733 is quarantined and preserved. No provider or database mutation is implied.
