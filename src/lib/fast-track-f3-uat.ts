@@ -55,8 +55,8 @@ export const F3_UAT_SCENARIOS: readonly F3UatScenario[] = [
   {
     id: "cash-oldest-first-through-target",
     actor: "Treasurer",
-    action: "Record cash through a selected future target period.",
-    expected: "Oldest unpaid periods through the target are allocated first; paid, waived, and not-due periods are skipped; later periods are untouched.",
+    action: "Record cash through future target 2027-03 using periods 2026-11 through 2027-03, crossing the December–January boundary.",
+    expected: "Oldest unpaid periods across the year boundary are allocated first; paid, waived, and not-due periods are skipped; later periods are untouched.",
   },
   {
     id: "payment-request-role-and-rt-boundary",
@@ -75,6 +75,12 @@ export const F3_UAT_SCENARIOS: readonly F3UatScenario[] = [
     actor: "Treasurer",
     action: "Retry the same cash submission and reuse its idempotency key with a different payload.",
     expected: "An identical retry returns the original result; a changed payload conflicts without creating a second payment.",
+  },
+  {
+    id: "concurrent-cash-idempotent-submit",
+    actor: "Treasurer",
+    action: "Submit the same cash payload concurrently from two sessions with the same idempotency key.",
+    expected: "Both calls converge on the same original result; exactly one payment, one allocation set, and one audit event are created.",
   },
   {
     id: "concurrent-resident-transfer-request",

@@ -66,6 +66,25 @@ describe("Fast Track F3 rehearsal command", () => {
     expect(rollback?.expected).toContain("pre-operation state remains intact");
   });
 
+  it("requires concurrent identical cash submissions to converge on one payment", () => {
+    const cashRetry = F3_UAT_SCENARIOS.find(({ id }) => id === "concurrent-cash-idempotent-submit");
+
+    expect(cashRetry?.action).toContain("Submit the same cash payload concurrently");
+    expect(cashRetry?.action).toContain("same idempotency key");
+    expect(cashRetry?.expected).toContain("exactly one payment");
+    expect(cashRetry?.expected).toContain("same original result");
+    expect(cashRetry?.expected).toContain("one allocation set");
+    expect(cashRetry?.expected).toContain("one audit event");
+  });
+
+  it("requires the oldest-first cash allocation rehearsal to cross December and January", () => {
+    const cashAllocation = F3_UAT_SCENARIOS.find(({ id }) => id === "cash-oldest-first-through-target");
+
+    expect(cashAllocation?.action).toContain("December–January boundary");
+    expect(cashAllocation?.action).toContain("2026-11 through 2027-03");
+    expect(cashAllocation?.expected).toContain("Oldest unpaid periods across the year boundary");
+  });
+
   it("includes cancellation and reversal outcomes with role and household boundaries", () => {
     const cancellation = F3_UAT_SCENARIOS.find(({ id }) => id === "payment-request-cancellation");
     const reversal = F3_UAT_SCENARIOS.find(({ id }) => id === "payment-reversal-and-repayment");
