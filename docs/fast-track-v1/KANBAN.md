@@ -21,7 +21,7 @@
 | PASS — candidate only | [#88 Cash + idempotency](https://github.com/Satsetx4/karturt/issues/88) | PR #93 exact head; Gate A and disposable PG17 concurrency passed. Existing oldest-first allocation, transaction locks, and idempotency were preserved and exercised in candidate CI. |
 | BLOCKED | [#81 Staging identity + isolation](https://github.com/Satsetx4/karturt/issues/81) | Two newer Neon Free PG18 project roots and the historical candidate report `parent-data`, without parent IDs. No independent lineage/content proof, scoped non-admin runtime identity, network restriction, or TLS certificate proof. |
 | BLOCKED | [#82 Real staging E2E/UAT](https://github.com/Satsetx4/karturt/issues/82) | No approved synthetic-only staging target, real PG18 concurrency/UAT, or Preview smoke. |
-| NO-GO | [#83 Release readiness] (https://github.com/Satsetx4/karturt/issues/83) | PR #95 exact-head CI is still running. Current Vercel readback confirms Hobby, no deployments, one default verified `vercel.app` domain, no custom domain, and SSO protection. No branch-bound Preview or recovery drill. |
+| NO-GO | [#83 Release readiness](https://github.com/Satsetx4/karturt/issues/83) | PR #95 exact-head CI is still running. Current Vercel readback confirms Hobby, no deployments, one default verified `vercel.app` domain, no custom domain, and SSO protection. No branch-bound Preview or recovery drill. |
 
 ## Current staging and release evidence
 
