@@ -109,7 +109,7 @@ No paid features, production access/change, change to any other Neon project, pr
 
 | Phase | Status | Evidence boundary |
 |---|---|---|
-| F0 | **PASS for planning/read-only baseline only** on current PR #84 SHA `7916a2550271266823c6a0687a415fa5dc112213`, exact run [#40082393734](https://github.com/Satsetx4/karturt/actions/runs/40082393734), attempt 1, Gate A #120838442407 SUCCESS. | Independent PostgreSQL concurrency #120840174508 was SKIPPED. This is planning/read-only evidence only; no staging proof. |
+| F0 | **PASS for planning/read-only baseline only** on PR #84 SHA `c16678fd0280c6c6065d2960dde4c97a40231c49`, exact run [#40083942970](https://github.com/Satsetx4/karturt/actions/runs/40083942970), attempt 1, Gate A #120842938839 SUCCESS. | Independent PostgreSQL concurrency #120844630491 was SKIPPED. Full test suite, Drizzle journal/schema checks, and production build all passed in Gate A; this remains planning/read-only evidence, not staging proof. |
 | F1 | **PASS for candidate only** on open/draft PR #93 SHA `b8bc74a4202225d9a54728d2c10be247dec8318f`, run [#40040334501](https://github.com/Satsetx4/karturt/actions/runs/40040334501), Gate A and disposable PG17 concurrency SUCCESS. | Unmerged candidate evidence; not live PG18, staging, or production evidence. |
 | F2 | **STOP/BLOCKED** | New owner-authorized Free PG18 candidate `little-bread-45461401` has a root/default branch with no parent, but content has not been inspected. ADMIN permission, public connections/unrestricted IPs, client `sslmode=verify-full`, safe non-admin identity, and actual Rp0 billing remain unproven. No database use or further mutation is authorized. |
 | F3 | **BLOCKED** | Requires F2 PASS, real isolated staging UAT, and PostgreSQL 18 concurrency. |

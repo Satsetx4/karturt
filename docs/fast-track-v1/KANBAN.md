@@ -57,7 +57,7 @@ The latest owner authorization permitted one Neon Free project creation with def
 
 | Phase | Current status | Latest evidence and gate |
 |---|---|---|
-| F0 | **PASS — planning/read-only baseline only** | Current PR #84 SHA 7916a2550271266823c6a0687a415fa5dc112213; exact run #40082393734 attempt 1, Gate A #120838442407 SUCCESS. Independent PostgreSQL concurrency #120840174508 was SKIPPED. No staging proof. |
+| F0 | **PASS — planning/read-only baseline only** | PR #84 SHA `c16678fd0280c6c6065d2960dde4c97a40231c49`; exact run #40083942970 attempt 1, Gate A #120842938839 SUCCESS. Full test suite, Drizzle journal/schema checks, and production build passed. Independent PostgreSQL concurrency #120844630491 was SKIPPED. No staging proof. |
 | F1 | **PASS — candidate only** | Open/draft PR #93 SHA `b8bc74a4202225d9a54728d2c10be247dec8318f`; run #40040334501 Gate A and disposable PG17 concurrency SUCCESS. No merge/staging claim. |
 | F2 | **STOP/BLOCKED** | New Free PG18 provisioning candidate little-bread-45461401 has a root/default branch with no parent. Database contents are not inspected; project permission ADMIN, public connections unblocked, and empty IP allowlist remain blockers. Non-admin role, client sslmode=verify-full, and actual Rp0 cost are unproven. No database use is authorized. |
 | F3 | **BLOCKED** | No approved isolated staging UAT or real PG18 concurrency. |
