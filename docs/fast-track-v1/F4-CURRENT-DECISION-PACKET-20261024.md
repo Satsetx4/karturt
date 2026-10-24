@@ -62,7 +62,7 @@ Latest read-only control-plane evidence is on [issue #81 comment #6378492571](ht
 | Network/TLS identity | UNKNOWN | Public connections are enabled and IP allowlists are empty on all six projects. No target-bound TLS certificate/hostname verification evidence exists. |
 | Schema/journal/migration result | PARTIAL | Source CI verifies Drizzle journal/schema consistency on PR #93. No connection was made to compare the provider schema or run an authorized migration. |
 | Backup/restore and recovery | NOT RUN | No verified target exists for an approved current-target backup/restore drill. |
-| Vercel Hobby and Preview | UNKNOWN | Current [issue #83 readback](https://github.com/Satsetx4/karturt/issues/83#issuecomment-6378508336) for `karturt-review-staging-20261012` (`prj_Mv4rABJvDNAvSD78SVt5WbjFakEq`, team `sekawan`) reports `live=false`, `latestDeployment=null`, 0 deployments and 0 project domains. Team metadata does not expose a plan. Hobby eligibility, a Preview target and smoke remain UNKNOWN/NOT RUN. |
+| Vercel Hobby and Preview | UNKNOWN | Current [issue #83 readback](https://github.com/Satsetx4/karturt/issues/83#issuecomment-6378508336) for `karturt-review-staging-20261012` (`prj_Mv4rABJvDNAvSD78SVt5WbjFakEq`, team `sekawan`) reports `live=false`, `latestDeployment=null` and 0 deployment records; team metadata does not expose a plan. A separate [domain endpoint readback](https://github.com/Satsetx4/karturt/issues/83#issuecomment-6378554082) lists one verified `karturt-review-staging-20261012.vercel.app` domain with no branch/custom-environment binding. Hobby eligibility, a Preview target and smoke remain UNKNOWN/NOT RUN. |
 
 The source guard PR #94 has an empty target allowlist. Its Gate A passed; the independent concurrency job was skipped. Source guards do not prove provider identity or data provenance.
 
@@ -77,7 +77,7 @@ PR #96 contains 19 offline scenarios and passed exact-head Gate A plus disposabl
 | Treasurer future cash, oldest-first allocation, idempotent retry | NOT RUN on staging | No approved isolated target |
 | Role/tenant denial, duplicate/reversal, financial integrity | NOT RUN on staging | No approved isolated target |
 | Real PostgreSQL 18 session concurrency | NOT RUN | PG17 disposable CI is separate evidence |
-| Candidate Preview HTTPS smoke | NOT RUN | Vercel Hobby/Preview project and deployment not proven |
+| Candidate Preview HTTPS smoke | NOT RUN | No confirmed Hobby-eligible Preview deployment or smoke result |
 
 ## 5. F4 release and recovery — NO-GO
 
@@ -87,7 +87,7 @@ PR #96 contains 19 offline scenarios and passed exact-head Gate A plus disposabl
 | Exact-head docs CI and production build | PASS — on immediately previous head only | PR #95 source `b68335f7bd1a670b6a1d34fd08a4ef89b785ea28`; run #40047461528 attempt 1, Gate A #120732350539 and disposable PG17 job #120734614250 passed. This packet edit creates a new source head; its exact-head results and fresh review must be read from PR #95 and issue #83 before treating this revision as verified. |
 | Dependency risk review | FAIL / BLOCKER | [Issue #83 audit evidence](https://github.com/Satsetx4/karturt/issues/83#issuecomment-6377426252): current read-only `npm audit` on the lockfile matching PR #93 SHA `b8bc74a…`: 7 findings (2 moderate, 4 high, 1 critical). Locked versions: Next.js 16.3.6 (direct, critical), Zod 4.6.5 (direct, high), Vitest 5.0.1 (direct, moderate), Vite 8.3.1, sharp 0.35.4, source-map-js 1.2.1, and @vitest/mocker 5.0.1. Audit reports fixes available, including Next.js 16.4.3. |
 | Dependency remediation route | BLOCKED by package policy | [Issue #83 audit evidence](https://github.com/Satsetx4/karturt/issues/83#issuecomment-6377426252): `npm audit fix --dry-run --json` returned `EALLOWREMOTE`: remote package fetches are disabled and it refused the `@tailwindcss/oxide-wasm32-wasi@4.3.3` tarball. No lockfile change was made and no policy bypass was attempted. An approved local/internal artifact route or policy decision is required before remediation. |
-| Preview workflow/deployment/smoke | NOT RUN | No confirmed Vercel Hobby project/deployment or Preview smoke |
+| Preview workflow/deployment/smoke | NOT RUN | The Vercel project/domain exist, but team plan and Preview target/deployment are unproven; no smoke ran |
 | Production-scoped credentials or secrets | NOT USED | No production credential, database connection, or deployment occurred. This is an activity record, not a separate secrets-scanner attestation. |
 | Current-target backup/restore and rollback | NOT RUN | Runbook describes the required steps, but no verified staging target or recovery drill exists. |
 | Release scope/migration compatibility | PARTIAL | PR #93 has no migration file and Drizzle source checks pass; provider schema/backup compatibility remain unverified. |
