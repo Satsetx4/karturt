@@ -1,11 +1,11 @@
-import { Pool } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-serverless";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { relationalSchema } from "@/db/schema";
 import { requireDatabaseEnvironment } from "@/lib/env";
+import { createDatabasePool } from "@/db/pool";
 
 function createConnection() {
   const env = requireDatabaseEnvironment();
-  const pool = new Pool({ connectionString: env.databaseUrl, max: 5, connectionTimeoutMillis: 10_000 });
+  const pool = createDatabasePool(env.databaseUrl, env.databaseEnv, "runtime");
   return { pool, db: drizzle({ client: pool, schema: relationalSchema }) };
 }
 
