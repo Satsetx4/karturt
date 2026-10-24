@@ -8,6 +8,10 @@ import { resolve } from "node:path";
 import { createDatabasePool } from "@/db/pool";
 import { relationalSchema } from "@/db/schema";
 import { stagingDatabaseTarget } from "@/db/staging-target";
+import {
+  hasNoStagingMigrationGrantOptions,
+  hasRequiredMigrationPublicSchemaPrivileges,
+} from "@/db/migration-role-policy";
 import { requireDatabaseEnvironment } from "@/lib/env";
 
 function safeErrorSummary(error: unknown) {
@@ -204,9 +208,11 @@ async function assertStagingMigrationPreflight(
     database_temp_public: boolean;
     database_temp_effective: boolean;
     public_owned_by_migrator: boolean;
+    public_usage_effective: boolean;
     public_create_direct: boolean;
     public_create_public: boolean;
     public_create_effective: boolean;
+    staging_role_grant_option_count: number;
     drizzle_schema_exists: boolean;
     drizzle_owned_by_migrator: boolean;
     drizzle_usage_direct: boolean;
@@ -307,7 +313,29 @@ async function assertStagingMigrationPreflight(
           AND acl.grantee = 0
           AND acl.privilege_type = 'CREATE'
       ) AS public_create_public,
+      pg_catalog.has_schema_privilege(role.oid, 'public', 'USAGE') AS public_usage_effective,
       pg_catalog.has_schema_privilege(role.oid, 'public', 'CREATE') AS public_create_effective,
+      (
+        SELECT count(*)::int
+        FROM (
+          SELECT acl.is_grantable
+          FROM pg_catalog.pg_database AS database
+          CROSS JOIN LATERAL pg_catalog.aclexplode(
+            COALESCE(database.datacl, pg_catalog.acldefault('d', database.datdba))
+          ) AS acl
+          WHERE database.datname = current_database()
+            AND acl.grantee IN (role.oid, 0)
+          UNION ALL
+          SELECT acl.is_grantable
+          FROM pg_catalog.pg_namespace AS schema
+          CROSS JOIN LATERAL pg_catalog.aclexplode(
+            COALESCE(schema.nspacl, pg_catalog.acldefault('n', schema.nspowner))
+          ) AS acl
+          WHERE schema.nspname IN ('public', 'drizzle')
+            AND acl.grantee IN (role.oid, 0)
+        ) AS migration_acl
+        WHERE migration_acl.is_grantable
+      ) AS staging_role_grant_option_count,
       EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = 'drizzle') AS drizzle_schema_exists,
       EXISTS (
         SELECT 1 FROM pg_catalog.pg_namespace AS schema
@@ -479,7 +507,11 @@ async function assertStagingMigrationPreflight(
     row.public_owned_by_migrator ||
     !row.public_create_direct ||
     row.public_create_public ||
-    !row.public_create_effective ||
+    !hasRequiredMigrationPublicSchemaPrivileges({
+      usage: row.public_usage_effective,
+      create: row.public_create_effective,
+    }) ||
+    !hasNoStagingMigrationGrantOptions(row.staging_role_grant_option_count) ||
     !row.drizzle_schema_exists ||
     row.drizzle_owned_by_migrator ||
     !row.drizzle_usage_direct ||

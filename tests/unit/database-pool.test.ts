@@ -45,6 +45,26 @@ describe("database pool security configuration", () => {
     }));
   });
 
+  it("binds a bounded R3 worker application name to one staging runtime connection", () => {
+    const config = createDatabasePoolConfig(
+      `postgresql://${stagingDatabaseTarget.runtimeRole}:test-only@${stagingDatabaseTarget.directHost}/${stagingDatabaseTarget.database}`,
+      "staging",
+      "runtime",
+      1,
+      "krt-r3-r3run20261025-R3-RACE-VERIFY-a",
+    );
+
+    expect(config.application_name).toBe("krt-r3-r3run20261025-R3-RACE-VERIFY-a");
+    expect(config.max).toBe(1);
+    expect(() => createDatabasePoolConfig(
+      `postgresql://${stagingDatabaseTarget.migrationRole}:test-only@${stagingDatabaseTarget.directHost}/${stagingDatabaseTarget.database}`,
+      "staging",
+      "migration",
+      1,
+      "krt-r3-r3run20261025-R3-RACE-VERIFY-a",
+    )).toThrow("R3 application name is allowed only for a bounded staging runtime worker.");
+  });
+
   it("uses trusted Node.js roots and rejects custom CA paths for staging", () => {
     const systemRootsConfig = createDatabasePoolConfig(
       `postgresql://${stagingDatabaseTarget.runtimeRole}:test-only@${stagingDatabaseTarget.directHost}/${stagingDatabaseTarget.database}?sslrootcert=system`,

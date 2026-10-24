@@ -6,6 +6,18 @@ import { stagingDatabaseTarget } from "@/db/staging-target";
 export type DatabaseEnvironment = "development" | "staging" | "production" | "test";
 export type DatabaseConnectionPurpose = "runtime" | "migration";
 
+function validateApplicationName(applicationName: string, databaseEnvironment: DatabaseEnvironment, purpose: DatabaseConnectionPurpose) {
+  const r3ApplicationName = /^krt-r3-[a-z0-9]{8,20}-R3-RACE-(REQUEST|VERIFY|CASH|REVERSAL)-(a|b)$/;
+  if (
+    databaseEnvironment !== "staging" ||
+    purpose !== "runtime" ||
+    applicationName.length > 63 ||
+    !r3ApplicationName.test(applicationName)
+  ) {
+    throw new Error("R3 application name is allowed only for a bounded staging runtime worker.");
+  }
+}
+
 const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1"]);
 const allowedConnectionParameters = new Set([
   "sslmode",
@@ -40,6 +52,7 @@ export function createDatabasePoolConfig(
   databaseEnvironment: DatabaseEnvironment,
   purpose: DatabaseConnectionPurpose,
   max = purpose === "migration" ? 1 : 5,
+  applicationNameOverride?: string,
 ): PoolConfig {
   let url: URL;
   try {
@@ -103,7 +116,8 @@ export function createDatabasePoolConfig(
     throw new Error("Database connection URL must not include a fragment.");
   }
 
-  const applicationName = url.searchParams.get("application_name") ?? undefined;
+  if (applicationNameOverride) validateApplicationName(applicationNameOverride, databaseEnvironment, purpose);
+  const applicationName = applicationNameOverride ?? url.searchParams.get("application_name") ?? undefined;
   const userName = decodeURIComponent(url.username);
   const password = decodeURIComponent(url.password);
 
@@ -146,6 +160,7 @@ export function createDatabasePool(
   databaseEnvironment: DatabaseEnvironment,
   purpose: DatabaseConnectionPurpose,
   max?: number,
+  applicationNameOverride?: string,
 ) {
-  return new Pool(createDatabasePoolConfig(connectionString, databaseEnvironment, purpose, max));
+  return new Pool(createDatabasePoolConfig(connectionString, databaseEnvironment, purpose, max, applicationNameOverride));
 }
