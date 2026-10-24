@@ -32,6 +32,22 @@ describe("Fast Track F3 rehearsal command", () => {
     expect(renderF3UatPlan(result.scenarios)).not.toContain("postgresql://");
   });
 
+  it("requires authentication and binds evidence to the approved HTTPS PG18 Preview target", () => {
+    const authentication = F3_UAT_SCENARIOS.find(({ id }) => id === "authentication-session-boundary");
+    const fieldIds = F3_UAT_EVIDENCE_FIELDS.map(({ id }) => id);
+
+    expect(authentication?.action).toContain("Sign in with the approved synthetic resident account");
+    expect(authentication?.action).toContain("no session");
+    expect(authentication?.action).toContain("expired session");
+    expect(authentication?.expected).toContain("no database mutation");
+    expect(fieldIds).toContain("preview-source-sha");
+    expect(fieldIds).toContain("f2-approved-target-evidence");
+    expect(fieldIds).toContain("postgres-major-version");
+    expect(fieldIds).toContain("https-full-regression");
+    expect(F3_UAT_EVIDENCE_FIELDS.find(({ id }) => id === "preview-source-sha")?.value).toContain("must equal the candidate commit SHA");
+    expect(F3_UAT_EVIDENCE_FIELDS.find(({ id }) => id === "postgres-major-version")?.value).toContain("must be 18");
+  });
+
   it("describes the cash versus transfer-request race and both valid outcomes", () => {
     const scenario = F3_UAT_SCENARIOS.find(({ id }) => id === "cash-transfer-race");
 

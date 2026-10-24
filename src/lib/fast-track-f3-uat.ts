@@ -8,9 +8,29 @@ export type F3UatScenario = {
 export const F3_UAT_EVIDENCE_FIELDS = [
   { id: "candidate-sha", label: "Candidate commit SHA", value: "<full 40-character Git SHA>" },
   {
+    id: "preview-source-sha",
+    label: "Preview deployment source SHA",
+    value: "<full 40-character deployed Git SHA; it must equal the candidate commit SHA>",
+  },
+  {
     id: "deployment-target-identity",
     label: "Deployment / staging target identity",
     value: "<Vercel Preview deployment ID and environment; Neon project ID, root branch ID, and endpoint ID>",
+  },
+  {
+    id: "f2-approved-target-evidence",
+    label: "F2 approved staging target evidence",
+    value: "<owner approval and verified evidence reference binding the target identity, lineage, and synthetic-only classification>",
+  },
+  {
+    id: "postgres-major-version",
+    label: "Staging PostgreSQL major version",
+    value: "<must be 18, with a sanitized server identity evidence reference>",
+  },
+  {
+    id: "https-full-regression",
+    label: "HTTPS full-regression result",
+    value: "<PASS, FAIL, or NOT RUN; Preview URL origin and sanitized smoke evidence reference>",
   },
   { id: "observed-at", label: "Observation time", value: "<ISO 8601 timestamp with timezone>" },
   { id: "verified-by", label: "Verifier", value: "<authorized verifier role or non-personal reviewer ID>" },
@@ -22,6 +42,12 @@ export const F3_UAT_EVIDENCE_FIELDS = [
 ] as const;
 
 export const F3_UAT_SCENARIOS: readonly F3UatScenario[] = [
+  {
+    id: "authentication-session-boundary",
+    actor: "Synthetic Resident; unauthenticated and expired-session clients",
+    action: "Sign in with the approved synthetic resident account and open a protected route; repeat the protected request with no session and with an expired session.",
+    expected: "A valid login establishes only the resident's authorized household scope. Missing or expired sessions are denied with an authentication response or login redirect and cause no database mutation.",
+  },
   {
     id: "annual-period-status",
     actor: "Resident",
