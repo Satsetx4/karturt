@@ -80,7 +80,7 @@ Record each result as PASS, FAIL, BLOCKED, SKIPPED, or UNKNOWN, with repository,
 
 Ard explicitly authorizes this ordered, conditional scope for **only** Neon Free staging project `flat-cloud-57657711`, branch `br-sparkling-flower-azordm9k`, endpoint `ep-red-boat-azzqyf45`:
 
-1. Verify Free/Rp0 cost, exact project/branch/endpoint identity, isolation from production, and synthetic-only provenance. Do not retrieve, display, or use the Neon owner password.
+1. Verify Free/Rp0 cost, exact project/branch/endpoint identity, isolation from production, and synthetic-only provenance. The owner explicitly approves Neon’s default password-storage behavior (`store_passwords=true`) for the canonical project; do not retrieve, display, or use the Neon owner password.
 2. Only for this exact target, establish a non-admin PostgreSQL role; configure network restrictions only if available on Free; prove TLS with `sslmode=verify-full`; and run read-only catalog SQL to establish data origin and isolation. Stop if cost, provenance, isolation, privilege, or TLS cannot be proven.
 3. **Only after every F2 security gate passes**, apply official staging migrations, load synthetic-only fixtures, perform UAT and actual PostgreSQL 18 concurrency, and complete nonproduction backup/restore/rollback drills.
 4. **Only after F2 PASS**, configure staging-specific secrets/environment safely and deploy a nonproduction Vercel Hobby Preview with smoke tests.
@@ -94,7 +94,7 @@ No paid features, production access/change, change to any other Neon project, pr
 - The optional IP allowlist remains empty and unchanged. It was not enabled because current plan evidence does not establish IP Allow as a Free feature; no paid upgrade was used.
 - The Neon role-creation tool created `karturt_f2_catalog_ro_20261024`, but a role-scoped read-only catalog query returned `rolcreatedb=true`, `rolcreaterole=true`, `rolreplication=true`, and `rolbypassrls=true`. This is **not** an acceptable least-privilege role.
 - The same query reported PostgreSQL `180006`, no non-system relations or routines in `karturt_staging`, and `pg_stat_ssl.ssl=false`. The SQL tool path therefore does not prove TLS, much less client `sslmode=verify-full`. Treat its empty-catalog observation as unaccepted for the security gate.
-- **Verdict: F2 BLOCKED.** No migration, fixture, UAT, real concurrency, recovery drill, staging secret/environment change, or deployment was performed. A request for owner approval to remove the newly-created overprivileged role is pending; no further role or SQL action is permitted until resolved.
+- **Verdict: F2 STOP/BLOCKED.** The owner explicitly approved deleting only `karturt_f2_catalog_ro_20261024`; deletion on the exact target was followed by a fresh role listing that confirmed it absent. The original role privilege result, `pg_stat_ssl.ssl=false`, and `init_source=parent-data` remain adverse or unresolved evidence; `sslmode=verify-full` and synthetic-only lineage are not proven. No further SQL/role work, migration, seed, UAT, real concurrency, backup/restore, staging secrets/environment, Preview, or deployment is authorized until every F2 gate has fresh PASS evidence and the owner directly authorizes resumption.
 
 ### F0–F5 status at this checkpoint
 
