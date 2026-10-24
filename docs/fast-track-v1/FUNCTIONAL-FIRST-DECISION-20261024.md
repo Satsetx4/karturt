@@ -2,6 +2,12 @@
 
 Date: 2026-10-24 (Asia/Jakarta). Authority: owner instruction in this Codex task, read with the existing one-project Neon Free staging approval and its explicit action limits.
 
+## Current owner update — Neon provisioning authorization (2026-10-24)
+
+The owner explicitly authorized creating one Neon Free staging project while allowing Neon to store the generated owner password by default (`store_passwords=true`). The project was created as `little-bread-45461401` (`karturt-v1-fast-track-staging-candidate-20261024`) in the verified Free organization, PostgreSQL 18, Singapore, at `2026-10-24T09:50:08Z`. Its `main` branch `br-damp-forest-aop2zfwf` is root/default with `parent_id=null`, `init_source=parent-data`, and zero reported branch writes/transfers. The password was not retrieved, displayed, or used. No SQL, database connection, role change, migration, seed, network change, UAT, backup/restore, Vercel change, or deployment followed.
+
+This is a newly provisioned candidate with no parent branch; it is not yet accepted as a clean or usable staging database because its contents have not been independently inspected. Effective project permission is ADMIN, public connections are unblocked, and the IP allowlist is empty. F2 remains **STOP/BLOCKED** pending content verification, a least-privilege runtime identity, safe network/TLS proof including client `sslmode=verify-full`, and actual Rp0 cost evidence. The owner’s storage approval authorizes this project creation only and does not resume database operations.
+
 ## Decision and priority rules
 
 Execute V1 as Functional First with parallel, bounded microtasks. This changes prioritization and coordination; it does not waive mandatory gates.
@@ -40,26 +46,29 @@ These are candidate-only findings, not protected-main integration or staging evi
 - **#88:** PR #93 candidate payment/auth paths identified no P0/P1 defect; same exact run and PG17-only scope apply. **P2 accepted for V1:** cash may settle existing historic unpaid dues for an inactive household while remaining RT/household-scoped and creating no new dues. Revisit if product policy requires active-household-only collection. **P3 accepted:** one unrelated lint warning at scripts/phase-12-household-browser-smoke.ts:1005; zero lint errors reported.
 - These findings do not close live allocations, isolated PG18, TLS, staging concurrency, recovery, Preview, or production gates.
 
-## Staging project audit and canonical planning target
+## Earlier staging project audit and planning target
 
-Read-only Neon control-plane metadata on 2026-10-24 found two staging projects in Free organization org-ancient-boat-57106549. The owner requested one canonical target and no deletion.
+The earlier read-only Neon control-plane audit on 2026-10-24 found two staging projects in Free organization org-ancient-boat-57106549. At that checkpoint the owner had requested one canonical target and no deletion; the later owner-authorized provisioning update above supersedes the planning designation without authorizing database use.
 
 | Project | Metadata observed | Decision |
 | --- | --- | --- |
-| flat-cloud-57657711, karturt-v1-f2-clean-isolated-20261024 | Created 04:43:20Z; PG18; Singapore aws-ap-southeast-1; root br-sparkling-flower-azordm9k, karturt-staging-root-20261024 | **Canonical planning target**, matching owner direction in issue #81 comment 6380981840. Database use/mutation is not authorized. |
+| flat-cloud-57657711, karturt-v1-f2-clean-isolated-20261024 | Created 04:43:20Z; PG18; Singapore aws-ap-southeast-1; root br-sparkling-flower-azordm9k, karturt-staging-root-20261024 | **Previous canonical planning target**, superseded for provisioning by the later owner-authorized candidate above. No database use/mutation. |
 | steep-heart-48842733, karturt-v1-fast-track-clean-staging-20261024 | Created 06:35:32Z; PG18; Singapore aws-ap-southeast-1; root br-royal-grass-azyozaxi, main | **Duplicate, quarantined from use and preserved.** No deletion, settings change, or fallback use. |
+| little-bread-45461401, karturt-v1-fast-track-staging-candidate-20261024 | Created 09:50:08Z by the owner-authorized Neon project-creation operation; PG18; Singapore aws-ap-southeast-1; root/default br-damp-forest-aop2zfwf, main; no parent; zero reported writes/transfers. | **Current provisioning candidate only.** Password storage by default was authorized; no password access or database use. Contents and security gates remain unverified. |
 
-Fresh read-only control-plane metadata confirms both projects are on Neon Free (`subscription_type=free_v3`), PostgreSQL 18/Singapore, and use 0.25 CU with `store_passwords=true`; owner accepted default password storage, but the password was not retrieved or used. Each has one root/default branch with no `parent_id`. Neon’s [Manage branches documentation](https://neon.com/docs/manage/branches) shows a root/default branch with no `parent_id` that reports `init_source=parent-data`; the marker is compatible with ordinary root/default metadata and does not identify a production parent. The canonical project and its sole branch were created together by Neon MCP at `2026-10-24T04:43:20Z`; current branch metadata reports `written_data_bytes=0` and `data_transfer_bytes=0`. This confirms no Neon parent branch and no observed branch writes/transfers since creation, but does not attest to all database contents. Root/no-parent topology is verified; synthetic-only content provenance remains **UNKNOWN** ([branch details](https://api-docs.neon.tech/reference/getprojectbranch)). The canonical project still has effective project permission ADMIN, public connections unblocked, and an empty IP allowlist. Free tier is verified; usage telemetry is not billing evidence, so actual Rp0 billing remains **UNVERIFIED**. Both projects remain BLOCKED for database use until content provenance, least-privilege/network, verify-full TLS, and cost evidence are resolved; the duplicate remains quarantined and untouched.
+At the earlier audit, both existing projects were on Neon Free (`subscription_type=free_v3`), PostgreSQL 18/Singapore, and used 0.25 CU with `store_passwords=true`. Neon’s [Manage branches documentation](https://neon.com/docs/manage/branches) and [official API example](https://github.com/neondatabase/website/blob/main/content/docs/manage/branches.md#L444-L465) show a root/default branch without `parent_id` can report `init_source=parent-data`; that marker alone does not identify a production parent. The earlier canonical project’s root/no-parent topology and zero reported writes/transfers did not attest to its full contents; its synthetic-only provenance remains **UNKNOWN**. That project had effective permission ADMIN, public connections unblocked, and an empty IP allowlist. Free plan metadata and usage telemetry are not actual billing proof. The `steep-heart` project remains quarantined and preserved.
 
-Owner-approved default password storage does not authorize retrieving or displaying the owner password. This audit used control-plane metadata only: no database connection, password retrieval, SQL, migration, seeding, role/network/settings change, or provider mutation occurred.
+For the new candidate, the Neon organization is currently classified Free and the project creation response confirms PostgreSQL 18/Singapore and `store_passwords=true`. Its root/default branch was created with the project, with no parent and zero reported writes/transfers. This is provider lineage evidence for a newly created project, but no database contents were queried; do not mark the synthetic-content gate PASS. The project also reports effective permission ADMIN, public connections unblocked, and an empty IP allowlist. Actual Rp0 billing, safe runtime access, and client TLS verification remain **UNVERIFIED**.
+
+The owner-approved default storage behavior does not authorize retrieving, displaying, or using the owner password. The earlier audit used control-plane metadata only. The later owner explicitly authorized and the coordinator completed one new project creation; no database connection, SQL, migration, seeding, role/network/settings change, or deployment occurred before or after that creation.
 
 ## Consolidated owner actions
 
-1. No further owner action is needed for the planning designation: flat-cloud is the sole canonical planning target; steep-heart is quarantined and preserved.
+1. The owner-authorized project creation is complete. `little-bread-45461401` is the current provisioning candidate; `flat-cloud-57657711` is the previous planning target and `steep-heart-48842733` remains quarantined and preserved. No owner action is needed to create another project.
 2. Before F2 database use, provide one compact evidence/authorization packet: independent synthetic-only lineage, target identity/isolation, Free/Rp0 evidence, scoped non-admin role, TLS verify-full, backup/restore/rollback readiness, exact candidate SHA, and the exact permitted staging operation. Do not bundle production action.
 3. After F0-F4 pass, request a separate production GO for the exact SHA and proposed action. Production stays locked until then.
 
-## Phase status snapshot after exact-head CI (2026-10-24)
+## Historical phase status snapshot (2026-10-24; superseded by the current owner update)
 
 | Phase | Status | Evidence boundary / blocker |
 | --- | --- | --- |
@@ -67,18 +76,18 @@ Owner-approved default password storage does not authorize retrieving or display
 | F1 | **PASS — unmerged candidate only** | PR #93 SHA b8bc74a4202225d9a54728d2c10be247dec8318f; run #40040334501 Gate A and disposable PG17 concurrency succeeded. No live staging evidence or protected-main integration. |
 | F2 | **BLOCKED** | flat-cloud is the planning target, but lineage/content, least privilege, TLS verify-full, actual Rp0 cost, and scoped DB readiness remain UNVERIFIED. No DB use/mutation. |
 | F3 | **BLOCKED** | PR #96 SHA 477a0fe199debec67de071376d9338f956f9dc79; run #40070054841 Gate A and disposable PG17 concurrency succeeded. No real isolated PG18 staging E2E/concurrency. |
-| F4 | **NO-GO** | PR #95 SHA 5ac931b48efb781d3e7a10b1a360496beabbbafe; exact run #40071118229 Gate A job #120804565777 and independent PostgreSQL concurrency job #120805614522 both SUCCESS (disposable PG17). No verified staging Preview or tested current-target restore/rollback. |
+| F4 | **NO-GO** | This historical row records PR #95 SHA 5ac931b48efb781d3e7a10b1a360496beabbbafe and run #40071118229 only. Current exact-head evidence is recorded in the latest F0–F5 table below; no verified staging Preview or tested current-target restore/rollback exists. |
 | F5 | **LOCKED — separate owner GO required** | No production authorization is included here. |
 
 ## Non-actions and evidence rules
 
-This decision authorizes planning/docs/issues, isolated source microtasks, read-only inspection, and safe staging preparation within its existing bounds. It authorizes no SQL, Neon/staging mutation, password/secret/environment change, merge, deployment, or production action. Keep historical Wave13B.2 F2 failure immutable.
+This decision authorizes planning/docs/issues, isolated source microtasks, read-only inspection, and safe staging preparation within its existing bounds. A later owner reply separately authorized and completed one Neon Free project creation using default password storage; that is the only new provider mutation authorized. No password retrieval/use, SQL, further Neon/staging mutation, secret/environment change, merge, deployment, or production action is authorized. Keep historical Wave13B.2 F2 failure immutable.
 
 Record each result as PASS, FAIL, BLOCKED, SKIPPED, or UNKNOWN, with repository, full SHA, PR, run/attempt/job, environment identity, and evidence link. A draft PR remains draft until reviewed; CI success is not merge or production authorization.
 
 ## Owner authorization addendum — conditional Neon Free staging scope (2026-10-24, Asia/Jakarta; suspended by the later F2 stop)
 
-The owner initially conditionally authorized an ordered scope for only Neon Free project `flat-cloud-57657711`, branch `br-sparkling-flower-azordm9k`, endpoint `ep-red-boat-azzqyf45`. A later F2 stop supersedes any pending database/role operation: do not resume SQL, role changes, migrations, seed, UAT, recovery, staging secrets, Preview, or deployment until all F2 gates have fresh PASS evidence and the owner directly authorizes resumption. The latest owner reply permits Neon’s default password storage only (`store_passwords=true`); do not retrieve, display, or use the owner password. The following list records the original conditional scope and is not currently executable:
+The owner initially conditionally authorized an ordered scope for only Neon Free project `flat-cloud-57657711`, branch `br-sparkling-flower-azordm9k`, endpoint `ep-red-boat-azzqyf45`. A later F2 stop superseded all pending database/role operations. The latest owner reply specifically authorized creating one additional Neon Free PG18 project with Neon’s default password storage (`store_passwords=true`); `little-bread-45461401` was created and its password was not retrieved, displayed, or used. This narrow creation approval does not resume SQL, role changes, migrations, seed, UAT, recovery, staging secrets, Preview, or deployment. The following list records the original conditional scope and is not currently executable:
 
 1. Verify Free/Rp0 cost, exact project/branch/endpoint identity, isolation from production, and synthetic-only provenance. The owner explicitly approves Neon’s default password-storage behavior (`store_passwords=true`) for the canonical project; do not retrieve, display, or use the Neon owner password.
 2. Original intended scope: on this exact target, establish a non-admin PostgreSQL role; configure network restrictions only if available on Free; prove TLS with `sslmode=verify-full`; then run read-only catalog SQL to establish data origin and isolation. This step is currently suspended by the later stop. Stop if cost, provenance, isolation, privilege, or TLS cannot be proven.
@@ -100,11 +109,11 @@ No paid features, production access/change, change to any other Neon project, pr
 
 | Phase | Status | Evidence boundary |
 |---|---|---|
-| F0 | **PASS for planning/read-only baseline only** on PR #84 SHA `c3c1b07aaf6ba3de7c45efef79a134a3bffb1bc6`, run [#40073550071](https://github.com/Satsetx4/karturt/actions/runs/40073550071) Gate A SUCCESS. | This addendum changes the PR head; its own exact-head CI is pending. No staging proof. |
+| F0 | **PASS for planning/read-only baseline only** on current PR #84 SHA `7916a2550271266823c6a0687a415fa5dc112213`, exact run [#40082393734](https://github.com/Satsetx4/karturt/actions/runs/40082393734), attempt 1, Gate A #120838442407 SUCCESS. | Independent PostgreSQL concurrency #120840174508 was SKIPPED. This is planning/read-only evidence only; no staging proof. |
 | F1 | **PASS for candidate only** on open/draft PR #93 SHA `b8bc74a4202225d9a54728d2c10be247dec8318f`, run [#40040334501](https://github.com/Satsetx4/karturt/actions/runs/40040334501), Gate A and disposable PG17 concurrency SUCCESS. | Unmerged candidate evidence; not live PG18, staging, or production evidence. |
-| F2 | **BLOCKED** | Role privilege result and TLS proof fail the required gate; lineage not accepted. |
+| F2 | **STOP/BLOCKED** | New owner-authorized Free PG18 candidate `little-bread-45461401` has a root/default branch with no parent, but content has not been inspected. ADMIN permission, public connections/unrestricted IPs, client `sslmode=verify-full`, safe non-admin identity, and actual Rp0 billing remain unproven. No database use or further mutation is authorized. |
 | F3 | **BLOCKED** | Requires F2 PASS, real isolated staging UAT, and PostgreSQL 18 concurrency. |
-| F4 | **NO-GO** | Requires F1–F3 PASS, then source-bound Hobby Preview and tested current-target recovery. |
+| F4 | **NO-GO** | Current PR #95 SHA `560aa9f408de757ad3eca4d83aacb6a1a67defcb`, exact run [#40078932771](https://github.com/Satsetx4/karturt/actions/runs/40078932771): Gate A and disposable PostgreSQL 17 concurrency succeeded on that candidate SHA. No F2/F3 PASS, source-bound Hobby Preview, or current-target recovery drill. |
 | F5 | **LOCKED** | Separate production GO for exact SHA/environment required. |
 
 ### Parallel work assignments

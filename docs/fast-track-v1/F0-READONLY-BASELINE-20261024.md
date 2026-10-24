@@ -46,7 +46,7 @@
 
 ## Subsequent owner decision — 2026-10-24
 
-This file records the earlier read-only baseline. Its status is historical at the captured SHA. The Functional First amendment and current F0-F5 interpretation are in [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md); F0 remains IN PROGRESS until exact-head CI completes on the amended PR #84 head. The canonical planning target is flat-cloud-57657711; steep-heart-48842733 is quarantined and preserved. No provider or database mutation is implied.
+This file records the earlier read-only baseline. Its status is historical at the captured SHA. At capture, F0 was IN PROGRESS pending exact-head CI on the then-current PR #84 head. The Functional First amendment and current F0-F5 interpretation are in [FUNCTIONAL-FIRST-DECISION-20261024.md](FUNCTIONAL-FIRST-DECISION-20261024.md). The previous planning target was flat-cloud-57657711; steep-heart-48842733 is quarantined and preserved. No provider or database mutation was implied by that earlier baseline.
 
 ## Later owner authorization and metadata checkpoint — 2026-10-24
 
