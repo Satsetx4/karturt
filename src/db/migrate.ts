@@ -11,6 +11,7 @@ import { stagingDatabaseTarget } from "@/db/staging-target";
 import {
   hasNoStagingMigrationGrantOptions,
   hasRequiredMigrationPublicSchemaPrivileges,
+  parseStagingMigrationAuthorization,
 } from "@/db/migration-role-policy";
 import { requireDatabaseEnvironment } from "@/lib/env";
 
@@ -886,6 +887,7 @@ async function main() {
   ) {
     throw new Error("Staging migration requires an exact release SHA and the frozen 0000–0013 migration chain.");
   }
+  if (staging) parseStagingMigrationAuthorization(process.env, checkedOutReleaseSha!);
 
   const expectedHeadHash = migrationEntries.at(-1)?.hash;
   if (!expectedHeadHash) throw new Error("Migration chain is empty.");

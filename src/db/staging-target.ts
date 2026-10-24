@@ -25,3 +25,5 @@ export const stagingDatabaseTarget = {
   migrationCount: 14,
   migrationHeadTag: "0013_phase_12_household_management",
 } as const;
+
+export const stagingDatabaseTargetReference = `${stagingDatabaseTarget.projectId}/${stagingDatabaseTarget.branchId}/${stagingDatabaseTarget.endpointId}/${stagingDatabaseTarget.database}`;

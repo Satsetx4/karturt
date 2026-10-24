@@ -23,6 +23,7 @@ import {
   listChairmanFeeRates,
 } from "@/lib/billing/chairman-fee-rates";
 import { generateHouseholdDues } from "@/lib/billing/generator";
+import { activateBillingYear } from "@/lib/billing/activation";
 import { createResidentPaymentRequest } from "@/lib/billing/resident-payment-request";
 import { recordTreasurerCashPayment } from "@/lib/billing/treasurer-cash-payments";
 import { createAuthUser, createFeeRateFixture, createHousehold, createRt, createTestDatabase } from "../helpers/database";
@@ -208,6 +209,29 @@ describe("Chairman fee rate read/write service", () => {
       idempotencyKey: randomUUID(),
     }, businessDate)).rejects.toBeInstanceOf(ChairmanFeeRateConflictError);
     expect(await testDatabase.db.select().from(feeRates).where(eq(feeRates.rtUnitId, fixture.rtUnitId))).toHaveLength(1);
+  });
+
+  it("allows the audited January baseline on a draft year before opening it", async () => {
+    const fixture = await createChairmanFixture();
+    const [year] = await testDatabase.db.insert(billingYears).values({
+      rtUnitId: fixture.rtUnitId,
+      year: 2027,
+      status: "draft",
+    }).returning({ id: billingYears.id });
+
+    const rate = await createChairmanFeeRate(database, fixture.chairman, {
+      billingYearId: year!.id,
+      effectiveMonth: 1,
+      monthlyAmount: 50000,
+      idempotencyKey: randomUUID(),
+    }, businessDate);
+    const activated = await activateBillingYear(database, fixture.chairman, { billingYearId: year!.id });
+    const audit = await testDatabase.db.select({ id: auditEvents.id }).from(auditEvents)
+      .where(and(eq(auditEvents.action, "fee_rate.created"), eq(auditEvents.entityId, rate.id)));
+
+    expect(rate).toMatchObject({ billingYearId: year!.id, effectiveMonth: 1, monthlyAmount: 50000 });
+    expect(activated).toEqual({ id: year!.id, status: "open" });
+    expect(audit).toHaveLength(1);
   });
 
   it("keeps a paid due and payment at the old snapshot while a not-yet-generated due uses the new tariff", async () => {

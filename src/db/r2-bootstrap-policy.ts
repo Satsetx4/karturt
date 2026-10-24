@@ -1,12 +1,15 @@
-import { stagingDatabaseTarget } from "@/db/staging-target";
+import { stagingDatabaseTarget, stagingDatabaseTargetReference } from "@/db/staging-target";
 
 export type R2BootstrapMode = "plan" | "apply";
 
 export type R2BootstrapInputs = {
   releaseSha: string;
+  ciHeadSha: string;
   ciRunId: string;
   ciAttempt: string;
   authorizationRef: string;
+  authorizedTarget: string;
+  authorizedOperation: "synthetic-fixture-create";
   migrationEvidenceRef: string;
   isolationEvidenceRef: string;
   mode: R2BootstrapMode;
@@ -87,9 +90,19 @@ export function parseR2BootstrapInputs(
   if (required(environment, "KARTURT_R2_MIGRATION_PASS_SHA") !== actualHeadSha) {
     throw new Error("R2 migration evidence must match current Git HEAD.");
   }
+  if (required(environment, "KARTURT_R2_FIXTURE_AUTHORIZED_TARGET") !== stagingDatabaseTargetReference) {
+    throw new Error("R2 fixture authorization must name the canonical staging target.");
+  }
+  if (required(environment, "KARTURT_R2_FIXTURE_AUTHORIZED_OPERATION") !== "synthetic-fixture-create") {
+    throw new Error("R2 fixture authorization must explicitly allow synthetic-fixture-create.");
+  }
 
   const ciRunId = required(environment, "KARTURT_R2_CI_RUN_ID");
   const ciAttempt = required(environment, "KARTURT_R2_CI_ATTEMPT");
+  const ciHeadSha = required(environment, "KARTURT_R2_CI_HEAD_SHA").toLowerCase();
+  if (ciHeadSha !== actualHeadSha) {
+    throw new Error("R2 fixture bootstrap requires exact-head CI evidence for the checked-out release SHA.");
+  }
   if (!/^\d+$/.test(ciRunId) || !/^\d+$/.test(ciAttempt)) {
     throw new Error("R2 exact-head CI run ID and attempt must be numeric.");
   }
@@ -97,12 +110,15 @@ export function parseR2BootstrapInputs(
 
   return {
     releaseSha: actualHeadSha,
+    ciHeadSha,
     ciRunId,
     ciAttempt,
     authorizationRef: evidenceRef(environment, "KARTURT_R2_FIXTURE_AUTHORIZATION_REF"),
     migrationEvidenceRef: evidenceRef(environment, "KARTURT_R2_MIGRATION_EVIDENCE_REF"),
     isolationEvidenceRef: evidenceRef(environment, "KARTURT_R2_ISOLATION_EVIDENCE_REF"),
     mode,
-    target: `${stagingDatabaseTarget.projectId}/${stagingDatabaseTarget.branchId}/${stagingDatabaseTarget.endpointId}/${stagingDatabaseTarget.database}`,
+    target: stagingDatabaseTargetReference,
+    authorizedTarget: stagingDatabaseTargetReference,
+    authorizedOperation: "synthetic-fixture-create",
   };
 }
