@@ -42,6 +42,25 @@ describe("Fast Track F3 rehearsal command", () => {
     expect(scenario?.expected).toContain("no cash payment");
   });
 
+  it("includes concurrent duplicate, verification, reversal, and rollback outcomes", () => {
+    const request = F3_UAT_SCENARIOS.find(({ id }) => id === "concurrent-resident-transfer-request");
+    const verification = F3_UAT_SCENARIOS.find(({ id }) => id === "concurrent-treasurer-payment-verification");
+    const reversal = F3_UAT_SCENARIOS.find(({ id }) => id === "concurrent-payment-reversal");
+    const rollback = F3_UAT_SCENARIOS.find(({ id }) => id === "financial-transaction-rollback");
+
+    expect(request?.action).toContain("concurrent transfer requests");
+    expect(request?.expected).toContain("Only one pending request owns the due claim");
+    expect(request?.expected).toContain("same-key retry returns the original request");
+    expect(verification?.actor).toContain("Two active Treasurers");
+    expect(verification?.expected).toContain("Exactly one verification succeeds");
+    expect(verification?.expected).toContain("one verification audit");
+    expect(reversal?.expected).toContain("Exactly one reversal succeeds");
+    expect(reversal?.expected).toContain("active settlements are released");
+    expect(rollback?.action).toContain("approved test harness");
+    expect(rollback?.expected).toContain("leaves no partial payment");
+    expect(rollback?.expected).toContain("pre-operation state remains intact");
+  });
+
   it("includes cancellation and reversal outcomes with role and household boundaries", () => {
     const cancellation = F3_UAT_SCENARIOS.find(({ id }) => id === "payment-request-cancellation");
     const reversal = F3_UAT_SCENARIOS.find(({ id }) => id === "payment-reversal-and-repayment");

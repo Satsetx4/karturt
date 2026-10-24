@@ -77,6 +77,30 @@ export const F3_UAT_SCENARIOS: readonly F3UatScenario[] = [
     expected: "An identical retry returns the original result; a changed payload conflicts without creating a second payment.",
   },
   {
+    id: "concurrent-resident-transfer-request",
+    actor: "Resident",
+    action: "Submit concurrent transfer requests for the same eligible due using distinct idempotency keys, then retry one request with its original key.",
+    expected: "Only one pending request owns the due claim; the competing request is rejected without a second request or claim, and the same-key retry returns the original request without a second creation audit.",
+  },
+  {
+    id: "concurrent-treasurer-payment-verification",
+    actor: "Two active Treasurers assigned to the same RT",
+    action: "Concurrently verify the same pending resident transfer request.",
+    expected: "Exactly one verification succeeds; the other is rejected as already processed. One verified request, one payment with its canonical allocations, one verification audit, and no open claims remain.",
+  },
+  {
+    id: "concurrent-payment-reversal",
+    actor: "Two active Treasurers assigned to the same RT",
+    action: "Concurrently reverse the same synthetic verified payment.",
+    expected: "Exactly one reversal succeeds; the other is rejected as already reversed. One reversal and audit remain, active settlements are released, and the due returns to unpaid when no other active payment covers it.",
+  },
+  {
+    id: "financial-transaction-rollback",
+    actor: "Treasurer and approved PostgreSQL failure-injection harness",
+    action: "Force a synthetic cash recording and transfer verification to fail during allocation, due/request, or audit writes using the approved test harness.",
+    expected: "Each failed transaction leaves no partial payment, allocation, due-status, request-status, claim, or audit changes; the pre-operation state remains intact.",
+  },
+  {
     id: "payment-request-cancellation",
     actor: "Resident",
     action: "Cancel the resident's own pending online transfer request, then attempt cancellation using another household or RT request identity.",
