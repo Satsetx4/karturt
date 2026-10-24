@@ -70,6 +70,16 @@ Record the candidate SHA, database target/version, test identity, expected resul
 
 Do not assume application rollback reverses database writes. Never run destructive down migrations or in-place restores without separate approval naming the exact staging target and action. If the target is first-use, document its synthetic-only disposable reset path and authorization before writes. Keep the existing production environment, credentials, domain, and deployment outside this packet's execution scope.
 
+### Recovery order — plan only until validated
+
+1. Before any Preview deployment or staging write, record the approved target, candidate SHA, and known-good Preview deployment/SHA. If there is no previous deployment, mark this as first use and record the approved way to disable or reset that nonproduction deployment.
+2. For an application-only failure with no database change, stop UAT and return the Preview to the recorded known-good nonproduction deployment using a provider-supported rollback that has been verified for the selected plan. Recheck HTTPS, login, authorization, and payment/report smoke before resuming.
+3. For a migration, data, or integrity failure, stop database writes and preserve sanitized evidence. Do not assume a code rollback undoes database changes; do not run a down migration or in-place restore. Use only a verified Free-plan recovery point and a disposable staging-only restore target. A new branch/target or destructive reset requires separate owner approval naming that exact resource and action.
+4. Compare the recovered target's Drizzle journal and independent payment/allocation/report invariants with the recorded pre-failure expectations. Record the target ID, release SHA, recovery action, verifier, and exact post-recovery checks before reopening UAT.
+5. If there is no supported Free-plan recovery point, no known-good Preview, or no approved target for a reset, keep the release at `NO-GO` and stop. Do not upgrade the plan or silently substitute another project.
+
+The procedure above is not evidence that rollback is available or has been tested. Mark recovery `UNKNOWN` until the selected plan, target, and restore/reset path have current evidence.
+
 ## Verdict
 
 - R1: `TODO`
