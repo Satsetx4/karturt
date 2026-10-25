@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { hashPassword } from "better-auth/crypto";
+import { hashPassword, verifyPassword } from "better-auth/crypto";
 import { and, count, eq, getTableName, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { AppDatabase } from "@/db/client";
@@ -192,7 +192,11 @@ async function assertEmptySeedTarget(database: FixtureDb) {
   await assertExactTableCounts(database, emptyTableCounts());
 }
 
-async function verifyFixture(database: FixtureDb, businessDate: string): Promise<boolean> {
+async function verifyFixture(
+  database: FixtureDb,
+  businessDate: string,
+  credentials: R2StagingFixtureCredentials,
+): Promise<boolean> {
   const [unitCountRow] = await database.select({ value: count() }).from(rtUnits);
   const unitCount = unitCountRow?.value ?? 0;
   if (unitCount === 0) {
@@ -315,11 +319,27 @@ async function verifyFixture(database: FixtureDb, businessDate: string): Promise
     !peopleRows.some(({ id, householdId }) => id === treasurer.personId && householdId === null)) {
     throw new Error("The canonical R2 fixture has missing or inactive people; refusing to change existing staging data.");
   }
-  for (const account of [resident, chairman, treasurer, systemAdmin]) {
-    const credentials = await database.select({ id: authAccount.id }).from(authAccount).where(and(
+  const expectedCredentials = [
+    [resident, credentials.residentPin],
+    [chairman, credentials.chairmanPassword],
+    [treasurer, credentials.treasurerPassword],
+    [systemAdmin, credentials.systemAdminPassword],
+  ] as const;
+  for (const [account, expectedPassword] of expectedCredentials) {
+    const credentialRows = await database.select({ password: authAccount.password }).from(authAccount).where(and(
       eq(authAccount.userId, account.authUserId), eq(authAccount.providerId, "credential"), isNotNull(authAccount.password),
     )).limit(2);
-    if (credentials.length !== 1) throw new Error("The canonical R2 fixture is incomplete; refusing to change existing staging data.");
+    const passwordHash = credentialRows[0]?.password;
+    if (credentialRows.length !== 1 || !passwordHash) {
+      throw new Error("The canonical R2 fixture is incomplete; refusing to change existing staging data.");
+    }
+    let matches = false;
+    try {
+      matches = await verifyPassword({ hash: passwordHash, password: expectedPassword });
+    } catch {
+      matches = false;
+    }
+    if (!matches) throw new Error("R2 fixture credentials do not match the existing synthetic fixture.");
   }
   return true;
 }
@@ -333,13 +353,13 @@ export async function bootstrapR2SyntheticFixture(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(businessDate) || !Number.isFinite(parsedDate) || new Date(parsedDate).toISOString().slice(0, 10) !== businessDate) {
     throw new Error("R2 fixture business date must be a valid YYYY-MM-DD date.");
   }
+  validateCredentials(credentials);
   return database.transaction(async (transaction) => {
     const tx = transaction as unknown as FixtureDb;
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('karturt:r2:canonical-synthetic-fixture:v1', 0))`);
-    if (await verifyFixture(tx, businessDate)) {
+    if (await verifyFixture(tx, businessDate, credentials)) {
       return { status: "already_present", counts: { rtUnits: 1, residents: 1, treasurers: 1, chairmen: 1, systemAdmins: 1, billingYears: 1, feeRates: 1, monthlyDues: 12 } };
     }
-    validateCredentials(credentials);
 
     const { id: rtUnitId } = await bootstrapRtUnit(tx, fixture.rt);
     const year = Number(businessDate.slice(0, 4)) + 1;
@@ -398,7 +418,7 @@ export async function bootstrapR2SyntheticFixture(
       initialPin: credentials.residentPin,
     }, businessDate);
 
-    if (!(await verifyFixture(tx, businessDate))) throw new Error("R2 synthetic fixture verification did not pass after seeding.");
+    if (!(await verifyFixture(tx, businessDate, credentials))) throw new Error("R2 synthetic fixture verification did not pass after seeding.");
     return { status: "created", counts: { rtUnits: 1, residents: 1, treasurers: 1, chairmen: 1, systemAdmins: 1, billingYears: 1, feeRates: 1, monthlyDues: 12 } };
   });
 }

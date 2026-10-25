@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { verifyPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
 import {
@@ -69,6 +70,28 @@ describe("canonical R2 synthetic staging fixture", () => {
     expect(passwordHashes.map(({ password }) => password)).not.toContain(credentials.residentPin);
   });
 
+  it("refuses an idempotent retry when supplied credentials differ from the seeded fixture", async () => {
+    await bootstrapR2SyntheticFixture(database, credentials, "2026-10-25");
+    const changedCredentials = [
+      { ...credentials, residentPin: "927164" },
+      { ...credentials, chairmanPassword: "different-chairman-password-2026" },
+      { ...credentials, treasurerPassword: "different-treasurer-password-2026" },
+      { ...credentials, systemAdminPassword: "different-system-admin-password-26" },
+    ];
+
+    for (const changed of changedCredentials) {
+      await expect(bootstrapR2SyntheticFixture(database, changed, "2026-10-25"))
+        .rejects.toThrow("credentials do not match the existing synthetic fixture");
+    }
+    const [chairman] = await testDatabase.db.select({ authUserId: appAccounts.authUserId })
+      .from(appAccounts).where(eq(appAccounts.loginIdentifier, "r2-chairman"));
+    const [credential] = await testDatabase.db.select({ password: authAccount.password })
+      .from(authAccount).where(eq(authAccount.userId, chairman!.authUserId));
+
+    expect(await verifyPassword({ hash: credential!.password!, password: credentials.chairmanPassword })).toBe(true);
+    expect(await testDatabase.db.select({ id: appAccounts.id }).from(appAccounts)).toHaveLength(4);
+  });
+
   it("refuses to seed when an unrelated RT already occupies the database", async () => {
     const conflictDatabase = await createTestDatabase();
     const conflictAppDatabase = conflictDatabase.db as unknown as AppDatabase;
@@ -128,6 +151,22 @@ describe("canonical R2 synthetic staging fixture", () => {
 
     await expect(bootstrapR2SyntheticFixture(database, credentials, "2026-10-25"))
       .rejects.toThrow("Failed query: insert into \"rt_settings\"");
+    expect(await testDatabase.db.select({ id: rtUnits.id }).from(rtUnits)).toHaveLength(0);
+    expect(await testDatabase.db.select({ id: billingYears.id }).from(billingYears)).toHaveLength(0);
+    expect(await testDatabase.db.select({ id: appAccounts.id }).from(appAccounts)).toHaveLength(0);
+  });
+
+  it("rolls back the account, tariff, and household writes when dues creation fails late", async () => {
+    await testDatabase.client.exec(`
+      CREATE FUNCTION reject_r2_dues_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'synthetic dues rollback test'; END;
+      $$;
+      CREATE TRIGGER reject_r2_dues_insert BEFORE INSERT ON monthly_dues
+      FOR EACH ROW EXECUTE FUNCTION reject_r2_dues_insert();
+    `);
+
+    await expect(bootstrapR2SyntheticFixture(database, credentials, "2026-10-25"))
+      .rejects.toThrow('insert into "monthly_dues"');
     expect(await testDatabase.db.select({ id: rtUnits.id }).from(rtUnits)).toHaveLength(0);
     expect(await testDatabase.db.select({ id: billingYears.id }).from(billingYears)).toHaveLength(0);
     expect(await testDatabase.db.select({ id: appAccounts.id }).from(appAccounts)).toHaveLength(0);

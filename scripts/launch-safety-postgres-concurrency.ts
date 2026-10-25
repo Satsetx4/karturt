@@ -21,11 +21,13 @@ import {
   paymentRequests,
   payments,
   relationalSchema,
+  rtUnits,
   waiverActions,
   waiverItems,
 } from "@/db/schema";
 import type { Principal } from "@/lib/auth/permissions";
 import { createResidentAuthRecords } from "@/lib/accounts/resident-auth-records";
+import { bootstrapR2SyntheticFixture, type R2StagingFixtureCredentials } from "@/lib/rt/r2-staging-fixture";
 import { createChairmanWaiver, ChairmanWaiverConflictError } from "@/lib/billing/chairman-waiver";
 import { createResidentPaymentRequest } from "@/lib/billing/resident-payment-request";
 import {
@@ -279,7 +281,7 @@ async function waitForActivity(
 }
 
 type DelayTrigger = {
-  table: "payments" | "payment_reversals" | "waiver_actions" | "households";
+  table: "payments" | "payment_reversals" | "waiver_actions" | "households" | "rt_units";
   event: "BEFORE INSERT" | "BEFORE UPDATE OF status";
   condition?: string;
 };
@@ -633,6 +635,67 @@ async function testConcurrentHouseholdReplacement() {
   };
 }
 
+async function testConcurrentR2FixtureBootstrap() {
+  const credentials: R2StagingFixtureCredentials = {
+    residentPin: "482913",
+    chairmanPassword: "r2-concurrency-chairman-password-2026",
+    treasurerPassword: "r2-concurrency-treasurer-password-2026",
+    systemAdminPassword: "r2-concurrency-system-admin-password-26",
+  };
+  const removeTrigger = await installLockHoldingTrigger({ table: "rt_units", event: "BEFORE INSERT" });
+  let firstAttempt: Promise<Awaited<ReturnType<typeof bootstrapR2SyntheticFixture>>> | undefined;
+  let secondAttempt: Promise<Awaited<ReturnType<typeof bootstrapR2SyntheticFixture>>> | undefined;
+  let lockWait: Record<string, unknown> | undefined;
+  try {
+    firstAttempt = bootstrapR2SyntheticFixture(databaseA, credentials, businessDate);
+    const sleeping = await waitForActivity(
+      (row) => row.pid === pidA && row.wait_event === "PgSleep",
+      `${appNameA} holding the synthetic fixture transaction before the first RT insert completes`,
+    );
+    secondAttempt = bootstrapR2SyntheticFixture(databaseB, credentials, businessDate);
+    const blocked = await waitForActivity(
+      (row) => row.pid === pidB && row.wait_event_type === "Lock",
+      `${appNameB} waiting on the synthetic fixture advisory transaction lock`,
+    );
+    lockWait = {
+      observed: true,
+      firstBackendPid: sleeping.pid,
+      firstWaitEvent: sleeping.wait_event,
+      secondBackendPid: blocked.pid,
+      secondWaitEventType: blocked.wait_event_type,
+      secondWaitEvent: blocked.wait_event,
+    };
+    const outcomes = await Promise.allSettled([firstAttempt, secondAttempt]) as [
+      Settled<Awaited<ReturnType<typeof bootstrapR2SyntheticFixture>>>,
+      Settled<Awaited<ReturnType<typeof bootstrapR2SyntheticFixture>>>,
+    ];
+    assertFulfilledCount(outcomes, 2, "concurrent_r2_synthetic_fixture_bootstrap");
+    const results = outcomes.map((outcome) => {
+      assert.equal(outcome.status, "fulfilled");
+      return outcome.value.status;
+    }).sort();
+    assert.deepEqual(results, ["already_present", "created"]);
+    assert.equal((await fixtureDatabase.select({ id: rtUnits.id }).from(rtUnits)).length, 1);
+    assert.equal((await fixtureDatabase.select({ id: appAccounts.id }).from(appAccounts)).length, 4);
+    assert.equal((await fixtureDatabase.select({ id: monthlyDues.id }).from(monthlyDues)).length, 12);
+
+    return {
+      name: "concurrent_r2_synthetic_fixture_bootstrap",
+      result: "PASS",
+      outcomes: results,
+      persisted: { rtUnits: 1, appAccounts: 4, monthlyDues: 12 },
+      lockWait,
+    };
+  } catch (error) {
+    await Promise.allSettled([firstAttempt, secondAttempt].filter(
+      (attempt): attempt is Promise<Awaited<ReturnType<typeof bootstrapR2SyntheticFixture>>> => attempt !== undefined,
+    ));
+    throw error;
+  } finally {
+    await removeTrigger();
+  }
+}
+
 let pidA: number;
 let pidB: number;
 
@@ -653,7 +716,9 @@ async function main() {
   assert.notEqual(pidA, pidB, "two racing pools must use independent PostgreSQL backends");
 
   const checks = [];
+  // This bootstrap invariant requires the freshly migrated disposable catalog; later race scenarios add their own RT fixtures.
   for (const [name, run] of [
+    ["concurrent_r2_synthetic_fixture_bootstrap", testConcurrentR2FixtureBootstrap],
     ["duplicate_payment_request_verification", testConcurrentVerification],
     ["same_key_cash_retry", testSameKeyCashRetry],
     ["same_payment_concurrent_reversal", testConcurrentReversal],

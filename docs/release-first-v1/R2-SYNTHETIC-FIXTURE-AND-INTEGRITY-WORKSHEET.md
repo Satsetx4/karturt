@@ -2,15 +2,17 @@
 
 **Template only.** This file does not authorize a database connection or write. Leave every value blank until a target-bound R2 run is separately authorized. `PASS` requires sanitized evidence tied to the exact candidate SHA and canonical staging target.
 
+The source candidate now includes a GitHub Actions credential path, exact-SHA dispatch checks, protected Environment, and failure/retry boundary documented in [R2 secure staging runner](./R2-SECURE-STAGING-RUNNER.md). This remains source-only until reviewed source reaches `main`, the Environment is privately configured after the owner gate, and all live R2 preflight gates pass.
+
 ## Hard stop: fixture bootstrap path
 
-The repository does not currently provide a complete, staging-safe app-native path for creating the initial RT, its open billing year, the first authorized official account, and the tariff needed to create resident dues. The Chairman household endpoint can create a household only after those prerequisites already exist.
+The repository does not provide an app-native path for creating the initial RT, its open billing year, the first authorized official account, and the tariff needed to create resident dues. The source candidate adds a narrowly named, runtime-DML synthetic fixture bootstrap for these prerequisites; it is trusted bootstrap DML, not an app-authenticated flow. The Chairman household endpoint can create a household only after those prerequisites already exist.
 
 The older phase smoke scripts seed fixtures with direct Drizzle writes and are hard-bound to a different development Neon target. `db:bootstrap-rt`, `account:provision`, and other development smoke scripts are also direct database setup paths and do not enforce the RELEASE FIRST target tuple. Do not repoint or reuse them on staging. Do not substitute ad hoc SQL/ORM writes, Neon control-plane role creation, or a migration run as the database owner.
 
-The generic `db:bootstrap-rt` and `account:provision` commands now reject staging and production labels. The tested `r2-bootstrap-policy.ts` parser is only an offline input guard; it does not verify the contents of GitHub/provider evidence, open a connection, or create fixtures. Neither change closes the complete bootstrap gate.
+The generic `db:bootstrap-rt` and `account:provision` commands reject staging and production labels. The R2 fixture path checks the exact candidate SHA, target, operation, owner GO, migration-cleanup and isolation evidence, and runtime identity in source. Its focused offline tests cover invalid credential replays and rollback after the tariff/dues phase. Exact-head CI, source review, live isolation/recovery, authenticated TLS, migration cleanup, and PG18 fixture integrity are still pending.
 
-Until a candidate-bound fixture bootstrap path is implemented, reviewed, and exact-head CI passes, record `R2 fixture bootstrap path = BLOCKED` and keep R2 below `PASS`. A future path must use only synthetic identifiers, verify the exact target and effective runtime identity before each write, require target-bound authorization, and provide sanitized post-write counts and integrity results. Do not create or seed anything while this gate is blocked.
+Keep `R2 fixture bootstrap path = SOURCE-CANDIDATE / LIVE BLOCKED` and R2 below `PASS` until the exact source SHA passes CI and review, owner proves synthetic-only isolation and Free recovery, official migrations complete with migrator cleanup, and the fixture operation has fresh target-bound authorization. The bootstrap uses only synthetic identifiers and verifies target/runtime identity before writing in one transaction. It does not prove app-level tenant authorization. Do not create or seed anything while live gates remain blocked.
 
 ## Run identity
 
