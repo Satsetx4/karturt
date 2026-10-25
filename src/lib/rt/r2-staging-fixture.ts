@@ -33,10 +33,20 @@ const fixture = {
     village: "Synthetic Staging",
   },
   houseNumber: "R2-101",
+  houseLabel: "Rumah sintetis",
+  residentName: "Warga Sintetis 101",
   residentLogin: "R2-101",
   chairmanLogin: "r2-chairman",
+  chairmanName: "Ketua RT Sintetis",
+  chairmanDisplayName: "Ketua RT Uji",
+  chairmanEmail: "r2-chairman@accounts.karturt.invalid",
   treasurerLogin: "r2-treasurer",
+  treasurerName: "Bendahara Sintetis",
+  treasurerDisplayName: "Bendahara Uji",
+  treasurerEmail: "r2-treasurer@accounts.karturt.invalid",
   systemAdminLogin: "r2-system-admin",
+  systemAdminDisplayName: "Admin Sistem Uji",
+  systemAdminEmail: "r2-system-admin@accounts.karturt.invalid",
   monthlyAmount: 50_000,
 };
 
@@ -216,13 +226,18 @@ async function verifyFixture(
     throw new Error("An unrelated RT occupies the canonical staging target; refusing to seed.");
   }
   await assertExactTableCounts(database, expectedFixtureTableCounts);
-  const settings = await database.select({ id: rtSettings.id }).from(rtSettings).where(eq(rtSettings.rtUnitId, unit.id)).limit(2);
-  if (settings.length !== 1) throw new Error("The canonical R2 fixture is incomplete; refusing to change existing staging data.");
+  const settings = await database.select({ id: rtSettings.id, dueDay: rtSettings.dueDay, currency: rtSettings.currency })
+    .from(rtSettings).where(eq(rtSettings.rtUnitId, unit.id)).limit(2);
+  if (settings.length !== 1 || settings[0]?.dueDay !== 10 || settings[0]?.currency !== "IDR") {
+    throw new Error("The canonical R2 fixture settings do not match; refusing to change existing staging data.");
+  }
 
-  const [house] = await database.select({ id: houses.id }).from(houses).where(and(
+  const [house] = await database.select({ id: houses.id, label: houses.label }).from(houses).where(and(
     eq(houses.rtUnitId, unit.id), eq(houses.number, fixture.houseNumber),
   )).limit(1);
-  if (!house) throw new Error("The canonical R2 fixture is incomplete; refusing to change existing staging data.");
+  if (!house || house.label !== fixture.houseLabel) {
+    throw new Error("The canonical R2 fixture house does not match; refusing to change existing staging data.");
+  }
   const [household] = await database.select({
     id: households.id,
     startsOn: households.startsOn,
@@ -311,13 +326,48 @@ async function verifyFixture(
       throw new Error("The canonical R2 fixture has missing or inactive official assignments; refusing to change existing staging data.");
     }
   }
-  const peopleRows = await database.select({ id: people.id, isActive: people.isActive, householdId: people.householdId })
+  const peopleRows = await database.select({
+    id: people.id,
+    fullName: people.fullName,
+    phone: people.phone,
+    isActive: people.isActive,
+    householdId: people.householdId,
+  })
     .from(people).where(eq(people.rtUnitId, unit.id));
-  if (peopleRows.length !== 3 || peopleRows.some(({ isActive }) => !isActive) ||
-    !peopleRows.some(({ id, householdId }) => id === resident.personId && householdId === household.id) ||
-    !peopleRows.some(({ id, householdId }) => id === chairman.personId && householdId === null) ||
-    !peopleRows.some(({ id, householdId }) => id === treasurer.personId && householdId === null)) {
-    throw new Error("The canonical R2 fixture has missing or inactive people; refusing to change existing staging data.");
+  const expectedPeople = [
+    { id: resident.personId, fullName: fixture.residentName, householdId: household.id },
+    { id: chairman.personId, fullName: fixture.chairmanName, householdId: null },
+    { id: treasurer.personId, fullName: fixture.treasurerName, householdId: null },
+  ];
+  if (peopleRows.length !== expectedPeople.length || expectedPeople.some((expected) => {
+    const actual = peopleRows.find(({ id }) => id === expected.id);
+    return !actual || !actual.isActive || actual.fullName !== expected.fullName ||
+      actual.phone !== null || actual.householdId !== expected.householdId;
+  })) {
+    throw new Error("The canonical R2 fixture people do not match the expected synthetic profiles; refusing to change existing staging data.");
+  }
+  const expectedAuthUsers = [
+    { id: resident.authUserId, name: fixture.residentName, emailVerified: false, residentEmail: true },
+    { id: chairman.authUserId, name: fixture.chairmanDisplayName, email: fixture.chairmanEmail, emailVerified: true },
+    { id: treasurer.authUserId, name: fixture.treasurerDisplayName, email: fixture.treasurerEmail, emailVerified: true },
+    { id: systemAdmin.authUserId, name: fixture.systemAdminDisplayName, email: fixture.systemAdminEmail, emailVerified: true },
+  ] as const;
+  for (const expected of expectedAuthUsers) {
+    const [actual] = await database.select({
+      name: authUser.name,
+      email: authUser.email,
+      emailVerified: authUser.emailVerified,
+      image: authUser.image,
+      twoFactorEnabled: authUser.twoFactorEnabled,
+    }).from(authUser).where(eq(authUser.id, expected.id)).limit(2);
+    const validResidentEmail = "residentEmail" in expected &&
+      /^resident-[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}@accounts\.karturt\.invalid$/i.test(actual?.email ?? "");
+    if (!actual || actual.name !== expected.name ||
+      ("email" in expected && actual.email !== expected.email) ||
+      ("residentEmail" in expected && !validResidentEmail) ||
+      actual.emailVerified !== expected.emailVerified || actual.image !== null || actual.twoFactorEnabled) {
+      throw new Error("The canonical R2 fixture authentication profiles do not match the expected synthetic identities; refusing to change existing staging data.");
+    }
   }
   const expectedCredentials = [
     [resident, credentials.residentPin],
@@ -369,20 +419,20 @@ export async function bootstrapR2SyntheticFixture(
     const startsOn = `${year}-01-01`;
     const chairmanRecords = await createOfficial(tx, {
       rtUnitId,
-      personName: "Ketua RT Sintetis",
+      personName: fixture.chairmanName,
       loginIdentifier: fixture.chairmanLogin,
-      email: "r2-chairman@accounts.karturt.invalid",
-      displayName: "Ketua RT Uji",
+      email: fixture.chairmanEmail,
+      displayName: fixture.chairmanDisplayName,
       password: credentials.chairmanPassword,
       role: "rt_chairman",
       startsOn: businessDate,
     });
     await createOfficial(tx, {
       rtUnitId,
-      personName: "Bendahara Sintetis",
+      personName: fixture.treasurerName,
       loginIdentifier: fixture.treasurerLogin,
-      email: "r2-treasurer@accounts.karturt.invalid",
-      displayName: "Bendahara Uji",
+      email: fixture.treasurerEmail,
+      displayName: fixture.treasurerDisplayName,
       password: credentials.treasurerPassword,
       role: "treasurer",
       startsOn: businessDate,
@@ -391,8 +441,8 @@ export async function bootstrapR2SyntheticFixture(
       rtUnitId: null,
       personName: null,
       loginIdentifier: fixture.systemAdminLogin,
-      email: "r2-system-admin@accounts.karturt.invalid",
-      displayName: "Admin Sistem Uji",
+      email: fixture.systemAdminEmail,
+      displayName: fixture.systemAdminDisplayName,
       password: credentials.systemAdminPassword,
     });
 
@@ -412,9 +462,9 @@ export async function bootstrapR2SyntheticFixture(
     }, businessDate);
     await activateBillingYear(tx, chairman, { billingYearId: billingYear.id });
     await createHouseholdResident(tx, chairman, {
-      newHouse: { number: fixture.houseNumber, label: "Rumah sintetis" },
+      newHouse: { number: fixture.houseNumber, label: fixture.houseLabel },
       startsOn,
-      fullName: "Warga Sintetis 101",
+      fullName: fixture.residentName,
       initialPin: credentials.residentPin,
     }, businessDate);
 
