@@ -117,7 +117,9 @@ jobs:
       startsWith(github.ref, 'refs/heads/codex/r2-secure-staging-runner-') ||
       startsWith(github.head_ref, 'codex/r2-secure-staging-runner-') ||
       startsWith(github.ref, 'refs/heads/codex/r2-disposable-recovery-') ||
-      startsWith(github.head_ref, 'codex/r2-disposable-recovery-')
+      startsWith(github.head_ref, 'codex/r2-disposable-recovery-') ||
+      github.ref == 'refs/heads/codex/v1-dependency-remediation-main-20261025' ||
+      github.head_ref == 'codex/v1-dependency-remediation-main-20261025'
     name: Launch Safety independent PostgreSQL concurrency
     needs: gate-a
     runs-on: ubuntu-latest
@@ -177,7 +179,9 @@ jobs:
   r2-disposable-postgres-18-recovery:
     if: >-
       startsWith(github.ref, 'refs/heads/codex/r2-disposable-recovery-') ||
-      startsWith(github.head_ref, 'codex/r2-disposable-recovery-')
+      startsWith(github.head_ref, 'codex/r2-disposable-recovery-') ||
+      github.ref == 'refs/heads/codex/v1-dependency-remediation-main-20261025' ||
+      github.head_ref == 'codex/v1-dependency-remediation-main-20261025'
     name: R2 disposable PostgreSQL 18 recovery
     needs: gate-a
     runs-on: ubuntu-latest
