@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
+import { officialMigrationTags } from "../../src/db/migration-chain";
 import {
   activeDueSettlements,
   appAccounts,
@@ -115,6 +116,11 @@ describe("legacy billing migration upgrade", () => {
       const migrations = readdirSync(migrationFolder)
         .filter((name) => name.endsWith(".sql"))
         .sort();
+      const migrationJournal = JSON.parse(readFileSync(resolve(migrationFolder, "meta", "_journal.json"), "utf8")) as {
+        entries: Array<{ tag: string }>;
+      };
+      expect(migrations.map((name) => name.replace(/\.sql$/, ""))).toEqual(officialMigrationTags);
+      expect(migrationJournal.entries.map((entry) => entry.tag)).toEqual(officialMigrationTags);
       for (const name of migrations) {
         await cleanClient.exec(readFileSync(resolve(migrationFolder, name), "utf8"));
       }

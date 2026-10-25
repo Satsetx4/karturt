@@ -2,8 +2,9 @@ import { readFileSync } from "node:fs";
 import { checkServerIdentity, rootCertificates } from "node:tls";
 import { Pool, type PoolConfig } from "pg";
 import { stagingDatabaseTarget } from "@/db/staging-target";
+import { assertPreviewConnectionTarget } from "@/db/preview-target";
 
-export type DatabaseEnvironment = "development" | "staging" | "production" | "test";
+export type DatabaseEnvironment = "development" | "preview" | "staging" | "production" | "test";
 export type DatabaseConnectionPurpose = "runtime" | "migration";
 
 function validateApplicationName(applicationName: string, databaseEnvironment: DatabaseEnvironment, purpose: DatabaseConnectionPurpose) {
@@ -79,9 +80,12 @@ export function createDatabasePoolConfig(
   if (isCanonicalStagingTarget && databaseEnvironment !== "staging") {
     throw new Error("The canonical staging database cannot be used under another environment label.");
   }
+  if (databaseEnvironment === "preview") assertPreviewConnectionTarget(connectionString, purpose);
   const isLoopback = loopbackHosts.has(host);
-  if (isLoopback && (databaseEnvironment === "staging" || databaseEnvironment === "production")) {
-    throw new Error("Staging and production database connections must use a remote TLS endpoint.");
+  if (isLoopback && (databaseEnvironment === "preview" || databaseEnvironment === "staging" || databaseEnvironment === "production")) {
+    throw new Error(databaseEnvironment === "preview"
+      ? "Preview database connections must use a remote TLS endpoint."
+      : "Staging and production database connections must use a remote TLS endpoint.");
   }
 
   if (databaseEnvironment === "staging") {
@@ -103,8 +107,10 @@ export function createDatabasePoolConfig(
   const caPath = url.searchParams.get("sslrootcert");
   const channelBinding = url.searchParams.get("channel_binding");
   const sslNegotiation = url.searchParams.get("sslnegotiation");
-  if (databaseEnvironment === "staging" && caPath && caPath !== "system") {
-    throw new Error("Staging TLS must use the Node.js trusted CA store; custom CA paths are not accepted.");
+  if ((databaseEnvironment === "preview" || databaseEnvironment === "staging") && caPath && caPath !== "system") {
+    throw new Error(databaseEnvironment === "preview"
+      ? "Preview TLS must use the Node.js trusted CA store; custom CA paths are not accepted."
+      : "Staging TLS must use the Node.js trusted CA store; custom CA paths are not accepted.");
   }
   if (channelBinding && channelBinding !== "prefer") {
     throw new Error("Strict PostgreSQL channel binding is unsupported; omit channel_binding or use prefer.");
@@ -128,7 +134,7 @@ export function createDatabasePoolConfig(
   const ssl = isLoopback
     ? undefined
     : {
-      ...(databaseEnvironment === "staging"
+      ...(databaseEnvironment === "staging" || databaseEnvironment === "preview"
         ? { ca: [...rootCertificates] }
         : caPath && caPath !== "system"
           ? { ca: readFileSync(caPath) }

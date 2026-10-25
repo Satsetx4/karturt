@@ -8,6 +8,14 @@ import { resolve } from "node:path";
 import { createDatabasePool } from "@/db/pool";
 import { relationalSchema } from "@/db/schema";
 import { stagingDatabaseTarget } from "@/db/staging-target";
+import { officialMigrationCount, officialMigrationHeadTag, officialMigrationTags } from "@/db/migration-chain";
+import {
+  assertPreviewConnectionTarget,
+  parsePreviewMigrationMode,
+  parsePreviewTargetIdentity,
+  previewDatabaseTarget,
+  type PreviewTargetIdentity,
+} from "@/db/preview-target";
 import {
   hasNoStagingMigrationGrantOptions,
   hasRequiredMigrationPublicSchemaPrivileges,
@@ -79,8 +87,9 @@ function readCheckedOutReleaseSha() {
   }
 }
 
-async function assertStagingRuntimeConnection(
+async function assertRuntimeConnection(
   pool: ReturnType<typeof createDatabasePool>,
+  expected: { database: string; runtimeRole: string; environmentName: string },
 ): Promise<RuntimeConnectionEvidence> {
   const result = await pool.query<RuntimeConnectionEvidence & {
     role_can_login: boolean;
@@ -150,9 +159,9 @@ async function assertStagingRuntimeConnection(
   const row = result.rows[0];
   if (
     !row ||
-    row.databaseName !== stagingDatabaseTarget.database ||
-    row.effectiveRole !== stagingDatabaseTarget.runtimeRole ||
-    row.sessionRole !== stagingDatabaseTarget.runtimeRole ||
+    row.databaseName !== expected.database ||
+    row.effectiveRole !== expected.runtimeRole ||
+    row.sessionRole !== expected.runtimeRole ||
     Math.floor(row.serverVersionNum / 10_000) !== 18 ||
     !row.tlsActive ||
     !row.role_can_login ||
@@ -174,7 +183,7 @@ async function assertStagingRuntimeConnection(
     row.custom_schemas_owned_by_runtime !== 0 ||
     row.custom_schemas_with_create !== 0
   ) {
-    throw new Error("Staging runtime connection preflight failed.");
+    throw new Error(`${expected.environmentName} runtime connection preflight failed.`);
   }
 
   return {
@@ -184,6 +193,160 @@ async function assertStagingRuntimeConnection(
     serverVersionNum: row.serverVersionNum,
     tlsActive: row.tlsActive,
   };
+}
+
+async function assertPreviewMigrationConnection(
+  pool: ReturnType<typeof createDatabasePool>,
+  target: PreviewTargetIdentity,
+): Promise<RuntimeConnectionEvidence> {
+  const result = await pool.query<{
+    database_name: string;
+    effective_role: string;
+    session_role: string;
+    server_version_num: number;
+    tls_active: boolean;
+    role_can_login: boolean;
+    role_is_superuser: boolean;
+    role_can_create_db: boolean;
+    role_can_create_role: boolean;
+    role_can_replicate: boolean;
+    role_bypasses_rls: boolean;
+    role_inherits: boolean;
+    role_membership_count: number;
+    database_owned_by_migration: boolean;
+    database_create_effective: boolean;
+    database_temp_public: boolean;
+    database_temp_effective: boolean;
+    public_usage_effective: boolean;
+    public_create_effective: boolean;
+    drizzle_schema_exists: boolean;
+    drizzle_usage_effective: boolean;
+    drizzle_create_effective: boolean;
+  }>(`
+    SELECT
+      current_database() AS database_name,
+      current_user AS effective_role,
+      session_user AS session_role,
+      current_setting('server_version_num')::int AS server_version_num,
+      EXISTS (
+        SELECT 1 FROM pg_catalog.pg_stat_ssl
+        WHERE pid = pg_catalog.pg_backend_pid() AND ssl
+      ) AS tls_active,
+      role.rolcanlogin AS role_can_login,
+      role.rolsuper AS role_is_superuser,
+      role.rolcreatedb AS role_can_create_db,
+      role.rolcreaterole AS role_can_create_role,
+      role.rolreplication AS role_can_replicate,
+      role.rolbypassrls AS role_bypasses_rls,
+      role.rolinherit AS role_inherits,
+      (SELECT count(*)::int FROM pg_catalog.pg_auth_members WHERE member = role.oid) AS role_membership_count,
+      EXISTS (
+        SELECT 1 FROM pg_catalog.pg_database AS database
+        WHERE database.datname = current_database() AND database.datdba = role.oid
+      ) AS database_owned_by_migration,
+      pg_catalog.has_database_privilege(role.oid, current_database(), 'CREATE') AS database_create_effective,
+      EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_database AS database
+        CROSS JOIN LATERAL pg_catalog.aclexplode(
+          COALESCE(database.datacl, pg_catalog.acldefault('d', database.datdba))
+        ) AS acl
+        WHERE database.datname = current_database()
+          AND acl.grantee = 0
+          AND acl.privilege_type = 'TEMPORARY'
+      ) AS database_temp_public,
+      pg_catalog.has_database_privilege(role.oid, current_database(), 'TEMPORARY') AS database_temp_effective,
+      pg_catalog.has_schema_privilege(role.oid, 'public', 'USAGE') AS public_usage_effective,
+      pg_catalog.has_schema_privilege(role.oid, 'public', 'CREATE') AS public_create_effective,
+      EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = 'drizzle') AS drizzle_schema_exists,
+      CASE WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = 'drizzle')
+        THEN pg_catalog.has_schema_privilege(role.oid, 'drizzle', 'USAGE') ELSE false END AS drizzle_usage_effective,
+      CASE WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = 'drizzle')
+        THEN pg_catalog.has_schema_privilege(role.oid, 'drizzle', 'CREATE') ELSE false END AS drizzle_create_effective
+    FROM pg_catalog.pg_roles AS role
+    WHERE role.rolname = current_user
+  `);
+
+  const row = result.rows[0];
+  if (
+    !row ||
+    row.database_name !== target.database ||
+    row.effective_role !== previewDatabaseTarget.migrationRole ||
+    row.session_role !== previewDatabaseTarget.migrationRole ||
+    Math.floor(row.server_version_num / 10_000) !== 18 ||
+    !row.tls_active ||
+    !row.role_can_login ||
+    row.role_is_superuser ||
+    row.role_can_create_db ||
+    row.role_can_create_role ||
+    row.role_can_replicate ||
+    row.role_bypasses_rls ||
+    row.role_inherits ||
+    row.role_membership_count !== 0 ||
+    row.database_owned_by_migration ||
+    !row.database_create_effective ||
+    row.database_temp_public ||
+    row.database_temp_effective ||
+    !row.public_usage_effective ||
+    !row.public_create_effective ||
+    (row.drizzle_schema_exists && (!row.drizzle_usage_effective || !row.drizzle_create_effective))
+  ) {
+    throw new Error("Preview migration connection failed the isolated PostgreSQL 18 and least-privilege preflight.");
+  }
+  return {
+    databaseName: row.database_name,
+    effectiveRole: row.effective_role,
+    sessionRole: row.session_role,
+    serverVersionNum: row.server_version_num,
+    tlsActive: row.tls_active,
+  };
+}
+
+async function assertPreviewMigrationState(
+  pool: ReturnType<typeof createDatabasePool>,
+  expectedMigrations: Array<{ hash: string; folderMillis: number }>,
+) {
+  const state = await pool.query<{
+    journal_exists: boolean;
+    application_object_count: number;
+    application_routine_count: number;
+  }>(`
+    SELECT
+      pg_catalog.to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS journal_exists,
+      (
+        SELECT count(*)::int
+        FROM pg_catalog.pg_class AS relation
+        JOIN pg_catalog.pg_namespace AS schema ON schema.oid = relation.relnamespace
+        WHERE ${nonSystemNamespace}
+          AND relation.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
+          AND NOT (schema.nspname = 'drizzle' AND relation.relname = '__drizzle_migrations')
+      ) AS application_object_count,
+      (
+        SELECT count(*)::int
+        FROM pg_catalog.pg_proc AS routine
+        JOIN pg_catalog.pg_namespace AS schema ON schema.oid = routine.pronamespace
+        WHERE ${nonSystemNamespace}
+      ) AS application_routine_count
+  `);
+  const stateRow = state.rows[0];
+  if (!stateRow || stateRow.application_routine_count !== 0 || (!stateRow.journal_exists && stateRow.application_object_count !== 0)) {
+    throw new Error("Preview migration requires an empty synthetic database or a matching official Drizzle migration prefix.");
+  }
+  if (!stateRow.journal_exists) return;
+
+  const journal = await pool.query<{ hash: string; created_at: string }>(`
+    SELECT hash, created_at::text AS created_at
+    FROM drizzle.__drizzle_migrations
+    ORDER BY created_at ASC, id ASC
+  `);
+  const matchesOfficialPrefix = journal.rows.length <= expectedMigrations.length &&
+    journal.rows.every((entry, index) => {
+      const expected = expectedMigrations[index];
+      return entry.hash.toLowerCase() === expected.hash.toLowerCase() && entry.created_at === String(expected.folderMillis);
+    });
+  if (!matchesOfficialPrefix || (journal.rows.length === 0 && stateRow.application_object_count !== 0)) {
+    throw new Error("Preview migration journal is not an official prefix of Drizzle migrations 0000–0013.");
+  }
 }
 
 async function assertStagingMigrationPreflight(
@@ -561,9 +724,10 @@ async function assertStagingMigrationPreflight(
   };
 }
 
-async function assertStagingMigrationResult(
+async function assertMigrationResult(
   pool: ReturnType<typeof createDatabasePool>,
   expectedMigrations: Array<{ hash: string; folderMillis: number }>,
+  environmentName: string,
 ) {
   const result = await pool.query<{ hash: string; created_at: string }>(`
     SELECT
@@ -579,11 +743,11 @@ async function assertStagingMigrationResult(
       return entry.hash.toLowerCase() === expected.hash.toLowerCase() && entry.created_at === String(expected.folderMillis);
     });
   if (!matchesFrozenChain) {
-    throw new Error("Staging migration journal does not match the frozen candidate migration chain.");
+    throw new Error(`${environmentName} migration journal does not match the official Drizzle migration chain.`);
   }
 }
 
-async function assertStagingRuntimePrivileges(pool: ReturnType<typeof createDatabasePool>) {
+async function assertRuntimePrivileges(pool: ReturnType<typeof createDatabasePool>, runtimeRole: string) {
   const result = await pool.query<{
     table_count: number;
     tables_missing_select: number;
@@ -674,7 +838,7 @@ async function assertStagingRuntimePrivileges(pool: ReturnType<typeof createData
       pg_catalog.has_schema_privilege($1, 'drizzle', 'USAGE') AS drizzle_usage_effective,
       pg_catalog.has_schema_privilege($1, 'drizzle', 'CREATE') AS drizzle_create_effective,
       pg_catalog.has_table_privilege($1, 'drizzle.__drizzle_migrations', 'SELECT') AS drizzle_journal_select_effective
-  `, [stagingDatabaseTarget.runtimeRole]);
+  `, [runtimeRole]);
 
   const row = result.rows[0];
   if (
@@ -694,25 +858,33 @@ async function assertStagingRuntimePrivileges(pool: ReturnType<typeof createData
     row.drizzle_create_effective ||
     row.drizzle_journal_select_effective
   ) {
-    throw new Error("Staging runtime grants do not match the frozen least-privilege requirement.");
+    throw new Error("Runtime database grants do not match the least-privilege requirement.");
   }
 
   return { tableCount: row.table_count, sequenceCount: row.sequence_count };
 }
 
-async function grantStagingRuntimePrivileges(pool: ReturnType<typeof createDatabasePool>) {
+function quoteRoleIdentifier(roleName: string) {
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(roleName)) {
+    throw new Error("Database role name is invalid.");
+  }
+  return `"${roleName}"`;
+}
+
+async function grantRuntimePrivileges(pool: ReturnType<typeof createDatabasePool>, runtimeRole: string) {
+  const quotedRuntimeRole = quoteRoleIdentifier(runtimeRole);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query(`
       GRANT SELECT, INSERT, UPDATE, DELETE
       ON ALL TABLES IN SCHEMA public
-      TO karturt_stg_runtime_v2
+      TO ${quotedRuntimeRole}
     `);
     await client.query(`
       GRANT USAGE
       ON ALL SEQUENCES IN SCHEMA public
-      TO karturt_stg_runtime_v2
+      TO ${quotedRuntimeRole}
     `);
     await client.query("COMMIT");
   } catch (error) {
@@ -723,14 +895,20 @@ async function grantStagingRuntimePrivileges(pool: ReturnType<typeof createDatab
   }
 }
 
-async function revokeStagingCustomRoutineDefaultExecution(pool: ReturnType<typeof createDatabasePool>) {
+async function revokeCustomRoutineDefaultExecution(
+  pool: ReturnType<typeof createDatabasePool>,
+  migrationRole: string,
+  runtimeRole: string,
+) {
+  const quotedMigrationRole = quoteRoleIdentifier(migrationRole);
+  const quotedRuntimeRole = quoteRoleIdentifier(runtimeRole);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE karturt_stg_migrator_v2 REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC");
-    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE karturt_stg_migrator_v2 REVOKE EXECUTE ON FUNCTIONS FROM karturt_stg_runtime_v2");
-    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE karturt_stg_migrator_v2 IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC");
-    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE karturt_stg_migrator_v2 IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM karturt_stg_runtime_v2");
+    await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quotedMigrationRole} REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC`);
+    await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quotedMigrationRole} REVOKE EXECUTE ON FUNCTIONS FROM ${quotedRuntimeRole}`);
+    await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quotedMigrationRole} IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC`);
+    await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quotedMigrationRole} IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM ${quotedRuntimeRole}`);
     const result = await client.query<{ runtime_execute_default_count: number }>(`
       SELECT count(*)::int AS runtime_execute_default_count
       FROM pg_catalog.pg_default_acl AS defaults
@@ -742,9 +920,9 @@ async function revokeStagingCustomRoutineDefaultExecution(pool: ReturnType<typeo
           (SELECT runtime.oid FROM pg_catalog.pg_roles AS runtime WHERE runtime.rolname = $1)
         )
         AND acl.privilege_type = 'EXECUTE'
-    `, [stagingDatabaseTarget.runtimeRole]);
+    `, [runtimeRole]);
     if (result.rows[0]?.runtime_execute_default_count !== 0) {
-      throw new Error("Staging routine defaults still allow runtime or PUBLIC EXECUTE in one or more schemas.");
+      throw new Error("Routine defaults still allow runtime or PUBLIC EXECUTE in one or more schemas.");
     }
     await client.query("COMMIT");
   } catch (error) {
@@ -755,12 +933,13 @@ async function revokeStagingCustomRoutineDefaultExecution(pool: ReturnType<typeo
   }
 }
 
-async function revokeStagingRuntimeFunctionExecution(pool: ReturnType<typeof createDatabasePool>) {
+async function revokeRuntimeFunctionExecution(pool: ReturnType<typeof createDatabasePool>, runtimeRole: string) {
+  const quotedRuntimeRole = quoteRoleIdentifier(runtimeRole);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query("REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC");
-    await client.query("REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM karturt_stg_runtime_v2");
+    await client.query(`REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM ${quotedRuntimeRole}`);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -770,12 +949,20 @@ async function revokeStagingRuntimeFunctionExecution(pool: ReturnType<typeof cre
   }
 }
 
-async function revokeStagingRuntimePrivileges(pool: ReturnType<typeof createDatabasePool>) {
+async function grantPreviewRuntimeDefaultPrivileges(pool: ReturnType<typeof createDatabasePool>) {
+  const quotedMigrationRole = quoteRoleIdentifier(previewDatabaseTarget.migrationRole);
+  const quotedRuntimeRole = quoteRoleIdentifier(previewDatabaseTarget.runtimeRole);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM karturt_stg_runtime_v2");
-    await client.query("REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM karturt_stg_runtime_v2");
+    await client.query(`
+      ALTER DEFAULT PRIVILEGES FOR ROLE ${quotedMigrationRole} IN SCHEMA public
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${quotedRuntimeRole}
+    `);
+    await client.query(`
+      ALTER DEFAULT PRIVILEGES FOR ROLE ${quotedMigrationRole} IN SCHEMA public
+      GRANT USAGE ON SEQUENCES TO ${quotedRuntimeRole}
+    `);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -785,7 +972,46 @@ async function revokeStagingRuntimePrivileges(pool: ReturnType<typeof createData
   }
 }
 
-async function assertStagingRuntimePrivilegesRevoked(pool: ReturnType<typeof createDatabasePool>) {
+async function revokePreviewRuntimeDefaultPrivileges(pool: ReturnType<typeof createDatabasePool>) {
+  const quotedMigrationRole = quoteRoleIdentifier(previewDatabaseTarget.migrationRole);
+  const quotedRuntimeRole = quoteRoleIdentifier(previewDatabaseTarget.runtimeRole);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`
+      ALTER DEFAULT PRIVILEGES FOR ROLE ${quotedMigrationRole} IN SCHEMA public
+      REVOKE ALL PRIVILEGES ON TABLES FROM ${quotedRuntimeRole}
+    `);
+    await client.query(`
+      ALTER DEFAULT PRIVILEGES FOR ROLE ${quotedMigrationRole} IN SCHEMA public
+      REVOKE ALL PRIVILEGES ON SEQUENCES FROM ${quotedRuntimeRole}
+    `);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function revokeRuntimePrivileges(pool: ReturnType<typeof createDatabasePool>, runtimeRole: string) {
+  const quotedRuntimeRole = quoteRoleIdentifier(runtimeRole);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM ${quotedRuntimeRole}`);
+    await client.query(`REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM ${quotedRuntimeRole}`);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function assertRuntimePrivilegesRevoked(pool: ReturnType<typeof createDatabasePool>, runtimeRole: string) {
   const result = await pool.query<{
     tables_with_access: number;
     sequences_with_access: number;
@@ -842,7 +1068,7 @@ async function assertStagingRuntimePrivilegesRevoked(pool: ReturnType<typeof cre
       pg_catalog.has_schema_privilege($1, 'drizzle', 'USAGE') AS drizzle_usage_effective,
       pg_catalog.has_schema_privilege($1, 'drizzle', 'CREATE') AS drizzle_create_effective,
       pg_catalog.has_table_privilege($1, 'drizzle.__drizzle_migrations', 'SELECT') AS drizzle_journal_select_effective
-  `, [stagingDatabaseTarget.runtimeRole]);
+  `, [runtimeRole]);
 
   const row = result.rows[0];
   if (
@@ -856,7 +1082,7 @@ async function assertStagingRuntimePrivilegesRevoked(pool: ReturnType<typeof cre
     row.drizzle_create_effective ||
     row.drizzle_journal_select_effective
   ) {
-    throw new Error("Staging runtime access remains after failure cleanup.");
+    throw new Error("Runtime database access remains after failure cleanup.");
   }
 }
 
@@ -864,18 +1090,29 @@ async function main() {
   loadEnvConfig(process.cwd());
   const detectedEnvironment = getEnvironment();
   const staging = detectedEnvironment.databaseEnv === "staging";
+  const preview = detectedEnvironment.databaseEnv === "preview";
   const stagingMode = staging ? parseStagingMigrationMode(process.argv.slice(2)) : undefined;
+  const previewMode = preview ? parsePreviewMigrationMode(process.argv.slice(2)) : undefined;
   const environment = staging ? detectedEnvironment : requireDatabaseEnvironment();
-  const migrationUrl = process.env.DATABASE_MIGRATION_URL ?? (staging ? undefined : environment.databaseUrl);
+  const previewTarget = preview ? parsePreviewTargetIdentity(process.env) : undefined;
+  const migrationUrl = staging || preview
+    ? process.env.DATABASE_MIGRATION_URL
+    : environment.databaseUrl;
   if (!migrationUrl) {
-    if (staging && stagingMode === "plan") {
+    if ((staging && stagingMode === "plan") || (preview && previewMode === "plan")) {
       // A plan must remain usable before credentials exist and must not create a pool.
     } else {
-      throw new Error("DATABASE_MIGRATION_URL is required for staging migrations.");
+      throw new Error(staging
+        ? "DATABASE_MIGRATION_URL is required for staging migrations."
+        : "DATABASE_MIGRATION_URL is required for Preview migrations.");
     }
   }
   if (staging && stagingMode === "preflight" && !environment.databaseUrl) {
     throw new Error("DATABASE_URL is required for staging runtime TLS and role verification.");
+  }
+  if (preview) assertPreviewConnectionTarget(environment.databaseUrl!, "runtime", process.env);
+  if (preview && previewMode === "apply") {
+    assertPreviewConnectionTarget(migrationUrl!, "migration", process.env);
   }
 
   const migrationsFolder = resolve(process.cwd(), "drizzle");
@@ -886,17 +1123,16 @@ async function main() {
   const journalEntries = journal.entries ?? [];
   const releaseSha = process.env.KARTURT_RELEASE_SHA;
   const checkedOutReleaseSha = staging ? readCheckedOutReleaseSha() : undefined;
-  if (
-    staging &&
-    (!releaseSha ||
-      !/^[0-9a-f]{40}$/i.test(releaseSha) ||
-      releaseSha.toLowerCase() !== checkedOutReleaseSha ||
-      migrationEntries.length !== stagingDatabaseTarget.migrationTags.length ||
-      journalEntries.length !== stagingDatabaseTarget.migrationTags.length ||
-      journalEntries.some((entry, index) => entry.tag !== stagingDatabaseTarget.migrationTags[index]) ||
-      journalEntries.at(-1)?.tag !== stagingDatabaseTarget.migrationHeadTag)
-  ) {
-    throw new Error("Staging migration requires an exact release SHA and the frozen 0000–0013 migration chain.");
+  const officialChainMismatch =
+    migrationEntries.length !== officialMigrationCount ||
+    journalEntries.length !== officialMigrationCount ||
+    journalEntries.some((entry, index) => entry.tag !== officialMigrationTags[index]) ||
+    journalEntries.at(-1)?.tag !== officialMigrationHeadTag;
+  if (staging && (!releaseSha || !/^[0-9a-f]{40}$/i.test(releaseSha) || releaseSha.toLowerCase() !== checkedOutReleaseSha)) {
+    throw new Error("Staging migration requires an exact release SHA.");
+  }
+  if ((staging || preview) && officialChainMismatch) {
+    throw new Error("Staging and Preview migrations require the unchanged official Drizzle chain 0000–0013.");
   }
   const expectedHeadHash = migrationEntries.at(-1)?.hash;
   if (!expectedHeadHash) throw new Error("Migration chain is empty.");
@@ -919,6 +1155,18 @@ async function main() {
     }));
     return;
   }
+  if (preview && previewMode === "plan") {
+    console.info(JSON.stringify({
+      event: "database.migrations.plan",
+      environment: "preview",
+      migrationCount: migrationEntries.length,
+      migrationHeadTag: officialMigrationHeadTag,
+      target: previewTarget,
+      databaseConnectionOpened: false,
+      migrationStarted: false,
+    }));
+    return;
+  }
 
   const preflightAuthorization = staging && stagingMode === "preflight"
     ? parseStagingPreflightAuthorization(process.env, checkedOutReleaseSha!)
@@ -928,7 +1176,7 @@ async function main() {
     : undefined;
 
   const pool = createDatabasePool(migrationUrl!, environment.databaseEnv, "migration", 1);
-  const runtimePool = staging && stagingMode === "preflight"
+  const runtimePool = (staging && stagingMode === "preflight") || preview
     ? createDatabasePool(environment.databaseUrl!, environment.databaseEnv, "runtime", 1)
     : undefined;
   let runtimePrivilegesVerified = false;
@@ -936,9 +1184,23 @@ async function main() {
   let runtimeFunctionExecutionRevoked = false;
   try {
     const runtimeConnectionEvidence = runtimePool
-      ? await assertStagingRuntimeConnection(runtimePool)
+      ? await assertRuntimeConnection(runtimePool, staging
+        ? {
+          database: stagingDatabaseTarget.database,
+          runtimeRole: stagingDatabaseTarget.runtimeRole,
+          environmentName: "Staging",
+        }
+        : {
+          database: previewDatabaseTarget.database,
+          runtimeRole: previewDatabaseTarget.runtimeRole,
+          environmentName: "Preview",
+        })
+      : undefined;
+    const previewMigrationEvidence = preview
+      ? await assertPreviewMigrationConnection(pool, previewTarget!)
       : undefined;
     const stagingEvidence = staging ? await assertStagingMigrationPreflight(pool) : undefined;
+    if (preview) await assertPreviewMigrationState(pool, migrationEntries);
     if (staging && stagingMode === "preflight") {
       console.info(JSON.stringify({
         event: "database.migrations.preflight",
@@ -985,15 +1247,42 @@ async function main() {
       return;
     }
     migrationAttempted = true;
-    if (staging) await revokeStagingCustomRoutineDefaultExecution(pool);
+    if (staging) {
+      await revokeCustomRoutineDefaultExecution(
+        pool,
+        stagingDatabaseTarget.migrationRole,
+        stagingDatabaseTarget.runtimeRole,
+      );
+    }
+    if (preview) {
+      await revokeCustomRoutineDefaultExecution(
+        pool,
+        previewDatabaseTarget.migrationRole,
+        previewDatabaseTarget.runtimeRole,
+      );
+    }
     await migrate(drizzle({ client: pool, schema: relationalSchema }), { migrationsFolder });
     let runtimePrivilegeEvidence: { tableCount: number; sequenceCount: number } | undefined;
     if (staging) {
-      await revokeStagingRuntimeFunctionExecution(pool);
+      await revokeRuntimeFunctionExecution(pool, stagingDatabaseTarget.runtimeRole);
       runtimeFunctionExecutionRevoked = true;
-      await assertStagingMigrationResult(pool, migrationEntries);
-      await grantStagingRuntimePrivileges(pool);
-      runtimePrivilegeEvidence = await assertStagingRuntimePrivileges(pool);
+      await assertMigrationResult(pool, migrationEntries, "Staging");
+      await grantRuntimePrivileges(pool, stagingDatabaseTarget.runtimeRole);
+      runtimePrivilegeEvidence = await assertRuntimePrivileges(pool, stagingDatabaseTarget.runtimeRole);
+      runtimePrivilegesVerified = true;
+    }
+    if (preview) {
+      await assertMigrationResult(pool, migrationEntries, "Preview");
+      await revokeCustomRoutineDefaultExecution(
+        pool,
+        previewDatabaseTarget.migrationRole,
+        previewDatabaseTarget.runtimeRole,
+      );
+      await grantPreviewRuntimeDefaultPrivileges(pool);
+      await grantRuntimePrivileges(pool, previewDatabaseTarget.runtimeRole);
+      await revokeRuntimeFunctionExecution(pool, previewDatabaseTarget.runtimeRole);
+      runtimeFunctionExecutionRevoked = true;
+      runtimePrivilegeEvidence = await assertRuntimePrivileges(pool, previewDatabaseTarget.runtimeRole);
       runtimePrivilegesVerified = true;
     }
 
@@ -1043,28 +1332,56 @@ async function main() {
           isolationEvidenceRef: migrationAuthorization?.isolationEvidenceRef,
         },
       } : {}),
+      ...(preview ? {
+        target: previewTarget,
+        postgresMajorVersion: previewMigrationEvidence
+          ? Math.floor(previewMigrationEvidence.serverVersionNum / 10_000)
+          : undefined,
+        migrationRoleFlagsSafe: true,
+        migrationPrivilegesSafe: true,
+        tlsActive: previewMigrationEvidence?.tlsActive,
+        tlsCertificateAndHostnameVerified: Boolean(previewMigrationEvidence),
+        runtimeRoleSafe: true,
+        runtimeConnectionVerified: Boolean(runtimeConnectionEvidence),
+        runtimeTlsActive: runtimeConnectionEvidence?.tlsActive,
+        runtimeTlsCertificateAndHostnameVerified: Boolean(runtimeConnectionEvidence),
+        runtimeTablesVerified: runtimePrivilegeEvidence?.tableCount,
+        runtimeSequencesVerified: runtimePrivilegeEvidence?.sequenceCount,
+        fullMigrationJournalVerified: true,
+        runtimePrivilegesVerified: true,
+      } : {}),
     }));
   } catch (error) {
-    if (staging && migrationAttempted && !runtimePrivilegesVerified) {
+    if ((staging || preview) && migrationAttempted && !runtimePrivilegesVerified) {
       try {
+        const runtimeRole = preview ? previewDatabaseTarget.runtimeRole : stagingDatabaseTarget.runtimeRole;
         if (!runtimeFunctionExecutionRevoked) {
-          await revokeStagingRuntimeFunctionExecution(pool);
+          await revokeRuntimeFunctionExecution(pool, runtimeRole);
           runtimeFunctionExecutionRevoked = true;
         }
-        await revokeStagingRuntimePrivileges(pool);
-        await assertStagingRuntimePrivilegesRevoked(pool);
-        console.warn(JSON.stringify({
-          event: "database.migrations.runtime_access_revoked_after_failure",
-          target: {
-            projectId: stagingDatabaseTarget.projectId,
-            branchId: stagingDatabaseTarget.branchId,
-            endpointId: stagingDatabaseTarget.endpointId,
-            database: stagingDatabaseTarget.database,
-          },
-          verified: true,
-        }));
+        await revokeRuntimePrivileges(pool, runtimeRole);
+        if (preview) await revokePreviewRuntimeDefaultPrivileges(pool);
+        await assertRuntimePrivilegesRevoked(pool, runtimeRole);
+        if (preview) {
+          console.warn(JSON.stringify({
+            event: "database.migrations.preview_runtime_access_revoked_after_failure",
+            target: previewTarget,
+            verified: true,
+          }));
+        } else {
+          console.warn(JSON.stringify({
+            event: "database.migrations.runtime_access_revoked_after_failure",
+            target: {
+              projectId: stagingDatabaseTarget.projectId,
+              branchId: stagingDatabaseTarget.branchId,
+              endpointId: stagingDatabaseTarget.endpointId,
+              database: stagingDatabaseTarget.database,
+            },
+            verified: true,
+          }));
+        }
       } catch (cleanupError) {
-        console.error("Staging runtime grant cleanup failed; owner readback is required.", safeErrorSummary(cleanupError));
+        console.error("Runtime grant cleanup failed; owner readback is required.", safeErrorSummary(cleanupError));
       }
     }
     throw error;

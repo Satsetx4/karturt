@@ -33,6 +33,8 @@
     "smoke:phase-11-http": "tsx scripts/phase-11-tariff-adjustment-http-smoke.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
+    "db:migrate:preview": "tsx src/db/migrate.ts --preview",
+    "db:migrate:preview:plan": "tsx src/db/migrate.ts --preview --plan",
     "db:bootstrap-r2-staging": "tsx scripts/r2-bootstrap-staging.ts",
     "db:check": "tsx scripts/check-db.ts",
     "db:bootstrap-rt": "tsx scripts/bootstrap-rt.ts",

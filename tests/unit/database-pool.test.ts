@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDatabasePoolConfig } from "@/db/pool";
 import { stagingDatabaseTarget } from "@/db/staging-target";
+import { previewDatabaseTarget } from "@/db/preview-target";
 
 describe("database pool security configuration", () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -43,6 +44,36 @@ describe("database pool security configuration", () => {
       rejectUnauthorized: true,
       servername: stagingDatabaseTarget.directHost,
     }));
+  });
+
+  it("binds Preview connections to the declared isolated Neon target with full TLS verification", () => {
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "flat-cloud-12345678/br-synthetic-123456/ep-synthetic-123456/karturt_preview");
+    vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "solid-cloud-87654321/br-prodtest-123456/ep-prodtest-123456/karturt_prod");
+    const host = "ep-synthetic-123456.c-3.ap-southeast-1.aws.neon.tech";
+    const config = createDatabasePoolConfig(
+      `postgresql://${previewDatabaseTarget.runtimeRole}:test-only@${host}/karturt_preview?sslmode=require`,
+      "preview",
+      "runtime",
+    );
+
+    expect(config.ssl).toEqual(expect.objectContaining({ rejectUnauthorized: true, servername: host, ca: expect.any(Array) }));
+    expect(config.ssl).toHaveProperty("checkServerIdentity");
+    expect(config.host).toBe(host);
+  });
+
+  it("rejects staging and production targets under the Preview label", () => {
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "flat-cloud-12345678/br-synthetic-123456/ep-synthetic-123456/karturt_preview");
+    vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "solid-cloud-87654321/br-prodtest-123456/ep-prodtest-123456/karturt_prod");
+    expect(() => createDatabasePoolConfig(
+      `postgresql://${stagingDatabaseTarget.runtimeRole}:test-only@${stagingDatabaseTarget.directHost}/${stagingDatabaseTarget.database}`,
+      "preview",
+      "runtime",
+    )).toThrow("canonical staging database cannot be used");
+    expect(() => createDatabasePoolConfig(
+      `postgresql://${previewDatabaseTarget.runtimeRole}:test-only@ep-prodtest-123456.c-3.ap-southeast-1.aws.neon.tech/karturt_preview`,
+      "preview",
+      "runtime",
+    )).toThrow("does not match the isolated Neon target and role");
   });
 
   it("binds a bounded R3 worker application name to one staging runtime connection", () => {
