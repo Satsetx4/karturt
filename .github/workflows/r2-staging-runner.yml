@@ -1,0 +1,121 @@
+name: KartuRT R2 staging runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Full SHA of the merged PR #93 candidate with exact-head Gate A evidence
+        required: true
+        type: string
+      operation:
+        description: Run a read-only authenticated TLS preflight or the separately authorized migrations
+        required: true
+        default: preflight
+        type: choice
+        options:
+          - preflight
+          - migrate
+      owner_go_comment_id:
+        description: Issue #98 comment ID containing exact-SHA R2 GO; required for migrate
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: karturt-r2-staging
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: Authorize exact candidate without database secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      issues: read
+    outputs:
+      candidate_sha: ${{ steps.authorize.outputs.candidate_sha }}
+      operation: ${{ steps.authorize.outputs.operation }}
+      ci_run_id: ${{ steps.authorize.outputs.ci_run_id }}
+      ci_attempt: ${{ steps.authorize.outputs.ci_attempt }}
+      authorization_ref: ${{ steps.authorize.outputs.authorization_ref }}
+      target: ${{ steps.authorize.outputs.target }}
+    steps:
+      - name: Check out trusted default branch workflow policy
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Verify owner, merged PR #93, exact-head CI, and optional R2 GO
+        id: authorize
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          R2_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          R2_OPERATION: ${{ inputs.operation }}
+          R2_OWNER_GO_COMMENT_ID: ${{ inputs.owner_go_comment_id }}
+        run: node .github/scripts/r2-staging-runner-authorize.mjs
+
+  execute:
+    name: Protected staging preflight or migration
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: karturt-r2-staging
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the exact authorized candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.authorize.outputs.candidate_sha }}
+          persist-credentials: false
+
+      - name: Verify candidate checkout
+        env:
+          EXPECTED_SOURCE_SHA: ${{ needs.authorize.outputs.candidate_sha }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$actual_sha" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "Candidate checkout does not match the authorized SHA."
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Install reviewed candidate dependencies without database credentials
+        run: npm ci
+
+      - name: Connect with role-specific credentials and execute selected operation
+        env:
+          APP_ENV: staging
+          DATABASE_ENV: staging
+          KARTURT_RELEASE_SHA: ${{ needs.authorize.outputs.candidate_sha }}
+          DATABASE_MIGRATION_URL: ${{ secrets.KARTURT_R2_STAGING_DATABASE_MIGRATION_URL }}
+          DATABASE_URL: ${{ secrets.KARTURT_R2_STAGING_DATABASE_URL }}
+          R2_OPERATION: ${{ needs.authorize.outputs.operation }}
+          KARTURT_R2_MIGRATION_AUTHORIZED_SHA: ${{ needs.authorize.outputs.operation == 'migrate' && needs.authorize.outputs.candidate_sha || '' }}
+          KARTURT_R2_MIGRATION_AUTHORIZED_TARGET: ${{ needs.authorize.outputs.operation == 'migrate' && needs.authorize.outputs.target || '' }}
+          KARTURT_R2_MIGRATION_AUTHORIZED_OPERATION: ${{ needs.authorize.outputs.operation == 'migrate' && 'official-migrations-0000-0013' || '' }}
+          KARTURT_R2_CI_HEAD_SHA: ${{ needs.authorize.outputs.candidate_sha }}
+          KARTURT_R2_CI_RUN_ID: ${{ needs.authorize.outputs.ci_run_id }}
+          KARTURT_R2_CI_ATTEMPT: ${{ needs.authorize.outputs.ci_attempt }}
+          KARTURT_R2_MIGRATION_AUTHORIZATION_REF: ${{ needs.authorize.outputs.authorization_ref }}
+        run: |
+          if [ "$R2_OPERATION" = "migrate" ]; then
+            npm run db:migrate -- --apply
+          else
+            npm run db:migrate -- --preflight
+          fi

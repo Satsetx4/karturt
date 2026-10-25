@@ -13,7 +13,8 @@ import {
   hasRequiredMigrationPublicSchemaPrivileges,
   parseStagingMigrationAuthorization,
 } from "@/db/migration-role-policy";
-import { requireDatabaseEnvironment } from "@/lib/env";
+import { parseStagingMigrationMode } from "@/db/staging-migration-mode";
+import { getEnvironment, requireDatabaseEnvironment } from "@/lib/env";
 
 function safeErrorSummary(error: unknown) {
   if (typeof error !== "object" || error === null) return { name: "UnknownError" };
@@ -860,11 +861,20 @@ async function assertStagingRuntimePrivilegesRevoked(pool: ReturnType<typeof cre
 
 async function main() {
   loadEnvConfig(process.cwd());
-  const environment = requireDatabaseEnvironment();
-  const staging = environment.databaseEnv === "staging";
+  const detectedEnvironment = getEnvironment();
+  const staging = detectedEnvironment.databaseEnv === "staging";
+  const stagingMode = staging ? parseStagingMigrationMode(process.argv.slice(2)) : undefined;
+  const environment = staging ? detectedEnvironment : requireDatabaseEnvironment();
   const migrationUrl = process.env.DATABASE_MIGRATION_URL ?? (staging ? undefined : environment.databaseUrl);
   if (!migrationUrl) {
-    throw new Error("DATABASE_MIGRATION_URL is required for staging migrations.");
+    if (staging && stagingMode === "plan") {
+      // A plan must remain usable before credentials exist and must not create a pool.
+    } else {
+      throw new Error("DATABASE_MIGRATION_URL is required for staging migrations.");
+    }
+  }
+  if (staging && stagingMode !== "plan" && !environment.databaseUrl) {
+    throw new Error("DATABASE_URL is required for staging migration TLS and runtime-role verification.");
   }
 
   const migrationsFolder = resolve(process.cwd(), "drizzle");
@@ -887,14 +897,33 @@ async function main() {
   ) {
     throw new Error("Staging migration requires an exact release SHA and the frozen 0000–0013 migration chain.");
   }
-  if (staging) parseStagingMigrationAuthorization(process.env, checkedOutReleaseSha!);
-
   const expectedHeadHash = migrationEntries.at(-1)?.hash;
   if (!expectedHeadHash) throw new Error("Migration chain is empty.");
 
-  const pool = createDatabasePool(migrationUrl, environment.databaseEnv, "migration", 1);
+  if (staging && stagingMode === "plan") {
+    console.info(JSON.stringify({
+      event: "database.migrations.plan",
+      environment: "staging",
+      releaseSha,
+      migrationCount: migrationEntries.length,
+      migrationHeadTag: journalEntries.at(-1)?.tag,
+      target: {
+        projectId: stagingDatabaseTarget.projectId,
+        branchId: stagingDatabaseTarget.branchId,
+        endpointId: stagingDatabaseTarget.endpointId,
+        database: stagingDatabaseTarget.database,
+      },
+      databaseConnectionOpened: false,
+      migrationStarted: false,
+    }));
+    return;
+  }
+
+  if (stagingMode === "apply") parseStagingMigrationAuthorization(process.env, checkedOutReleaseSha!);
+
+  const pool = createDatabasePool(migrationUrl!, environment.databaseEnv, "migration", 1);
   const runtimePool = staging
-    ? createDatabasePool(environment.databaseUrl, environment.databaseEnv, "runtime", 1)
+    ? createDatabasePool(environment.databaseUrl!, environment.databaseEnv, "runtime", 1)
     : undefined;
   let runtimePrivilegesVerified = false;
   let migrationAttempted = false;
@@ -904,6 +933,47 @@ async function main() {
       ? await assertStagingRuntimeConnection(runtimePool)
       : undefined;
     const stagingEvidence = staging ? await assertStagingMigrationPreflight(pool) : undefined;
+    if (staging && stagingMode === "preflight") {
+      console.info(JSON.stringify({
+        event: "database.migrations.preflight",
+        environment: "staging",
+        releaseSha,
+        migrationCount: migrationEntries.length,
+        migrationHeadTag: journalEntries.at(-1)?.tag,
+        target: {
+          projectId: stagingDatabaseTarget.projectId,
+          branchId: stagingDatabaseTarget.branchId,
+          endpointId: stagingDatabaseTarget.endpointId,
+          database: stagingDatabaseTarget.database,
+        },
+        migrationIdentity: {
+          database: stagingEvidence?.databaseName,
+          effectiveRole: stagingEvidence?.effectiveRole,
+          sessionRole: stagingEvidence?.sessionRole,
+          postgresMajorVersion: stagingEvidence ? Math.floor(stagingEvidence.serverVersionNum / 10_000) : undefined,
+          tlsActive: stagingEvidence?.tlsActive,
+          tlsCertificateAndHostnameVerified: stagingEvidence?.tlsCertificateAndHostnameVerified,
+          migrationRoleFlagsSafe: stagingEvidence?.migrationRoleFlagsSafe,
+          migrationPrivilegesSafe: stagingEvidence?.migrationPrivilegesSafe,
+          emptyPreMigrationRelationCatalog: stagingEvidence?.emptyPreMigrationRelationCatalog,
+          emptyPreMigrationRoutineCatalog: stagingEvidence?.emptyPreMigrationRoutineCatalog,
+          databaseTemporaryPrivilegeDenied: stagingEvidence?.databaseTemporaryPrivilegeDenied,
+        },
+        runtimeIdentity: {
+          database: runtimeConnectionEvidence?.databaseName,
+          effectiveRole: runtimeConnectionEvidence?.effectiveRole,
+          sessionRole: runtimeConnectionEvidence?.sessionRole,
+          postgresMajorVersion: runtimeConnectionEvidence
+            ? Math.floor(runtimeConnectionEvidence.serverVersionNum / 10_000)
+            : undefined,
+          tlsActive: runtimeConnectionEvidence?.tlsActive,
+          tlsCertificateAndHostnameVerified: Boolean(runtimeConnectionEvidence),
+          runtimeRoleSafe: true,
+        },
+        databaseWritesStarted: false,
+      }));
+      return;
+    }
     migrationAttempted = true;
     if (staging) await revokeStagingCustomRoutineDefaultExecution(pool);
     await migrate(drizzle({ client: pool, schema: relationalSchema }), { migrationsFolder });

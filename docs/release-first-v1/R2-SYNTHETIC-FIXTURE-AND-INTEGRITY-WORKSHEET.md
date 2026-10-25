@@ -2,6 +2,8 @@
 
 **Template only.** This file does not authorize a database connection or write. Leave every value blank until a target-bound R2 run is separately authorized. `PASS` requires sanitized evidence tied to the exact candidate SHA and canonical staging target.
 
+The candidate GitHub Actions credential path, exact-SHA dispatch checks, private environment setup, and failure/retry boundary are documented in [R2 secure staging runner](./R2-SECURE-STAGING-RUNNER.md). That workflow is not usable until its reviewed source reaches `main`, the environment is privately configured, and all live R2 preflight gates pass.
+
 ## Hard stop: fixture bootstrap path
 
 The repository does not currently provide a complete, staging-safe app-native path for creating the initial RT, its open billing year, the first authorized official account, and the tariff needed to create resident dues. The Chairman household endpoint can create a household only after those prerequisites already exist.
