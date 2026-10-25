@@ -120,6 +120,8 @@ jobs:
       startsWith(github.head_ref, 'codex/r2-environment-no-bypass-guard-') ||
       startsWith(github.ref, 'refs/heads/codex/r2-disposable-recovery-') ||
       startsWith(github.head_ref, 'codex/r2-disposable-recovery-') ||
+      startsWith(github.ref, 'refs/heads/codex/demo-to-production-') ||
+      startsWith(github.head_ref, 'codex/demo-to-production-') ||
       github.ref == 'refs/heads/codex/v1-dependency-remediation-main-20261025' ||
       github.head_ref == 'codex/v1-dependency-remediation-main-20261025'
     name: Launch Safety independent PostgreSQL concurrency
@@ -184,6 +186,8 @@ jobs:
       startsWith(github.head_ref, 'codex/r2-disposable-recovery-') ||
       startsWith(github.ref, 'refs/heads/codex/r2-environment-no-bypass-guard-') ||
       startsWith(github.head_ref, 'codex/r2-environment-no-bypass-guard-') ||
+      startsWith(github.ref, 'refs/heads/codex/demo-to-production-') ||
+      startsWith(github.head_ref, 'codex/demo-to-production-') ||
       github.ref == 'refs/heads/codex/v1-dependency-remediation-main-20261025' ||
       github.head_ref == 'codex/v1-dependency-remediation-main-20261025'
     name: R2 disposable PostgreSQL 18 recovery
