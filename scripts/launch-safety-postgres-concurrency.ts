@@ -716,13 +716,14 @@ async function main() {
   assert.notEqual(pidA, pidB, "two racing pools must use independent PostgreSQL backends");
 
   const checks = [];
+  // This bootstrap invariant requires the freshly migrated disposable catalog; later race scenarios add their own RT fixtures.
   for (const [name, run] of [
+    ["concurrent_r2_synthetic_fixture_bootstrap", testConcurrentR2FixtureBootstrap],
     ["duplicate_payment_request_verification", testConcurrentVerification],
     ["same_key_cash_retry", testSameKeyCashRetry],
     ["same_payment_concurrent_reversal", testConcurrentReversal],
     ["same_due_concurrent_waiver", testConcurrentWaiver],
     ["same_house_concurrent_resident_replacement", testConcurrentHouseholdReplacement],
-    ["concurrent_r2_synthetic_fixture_bootstrap", testConcurrentR2FixtureBootstrap],
   ] as const) {
     process.stdout.write(`Running PostgreSQL race scenario: ${name}\n`);
     checks.push(await run());
