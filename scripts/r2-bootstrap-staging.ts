@@ -102,26 +102,26 @@ async function assertRuntimeRole(pool: ReturnType<typeof createDatabasePool>) {
         THEN pg_catalog.has_schema_privilege(role.oid, 'drizzle', 'CREATE') ELSE false END AS "drizzleCreateEffective",
       CASE WHEN pg_catalog.to_regclass('drizzle.__drizzle_migrations') IS NOT NULL
         THEN pg_catalog.has_table_privilege(role.oid, 'drizzle.__drizzle_migrations', 'SELECT') ELSE false END AS "drizzleJournalSelectEffective",
-      EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator') AS "migrationRoleExists",
-      COALESCE((SELECT rolcanlogin FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator'), false) AS "migrationRoleCanLogin",
-      COALESCE((SELECT rolsuper FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator'), false) AS "migrationRoleIsSuperuser",
-      COALESCE((SELECT rolcreatedb FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator'), true) AS "migrationRoleCanCreateDb",
-      COALESCE((SELECT rolcreaterole FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator'), true) AS "migrationRoleCanCreateRole",
-      COALESCE((SELECT rolreplication FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator'), true) AS "migrationRoleCanReplicate",
-      COALESCE((SELECT rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator'), true) AS "migrationRoleBypassesRls",
-      COALESCE((SELECT rolinherit FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator'), true) AS "migrationRoleInherits",
-      COALESCE((SELECT count(*)::int FROM pg_catalog.pg_auth_members WHERE member = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator')), 0) AS "migrationRoleMembershipCount",
-      COALESCE((SELECT pg_catalog.has_database_privilege(migrator.oid, current_database(), 'CREATE') FROM pg_catalog.pg_roles AS migrator WHERE migrator.rolname = 'karturt_stg_migrator'), true) AS "migrationDatabaseCreateEffective",
-      COALESCE((SELECT pg_catalog.has_database_privilege(migrator.oid, current_database(), 'TEMPORARY') FROM pg_catalog.pg_roles AS migrator WHERE migrator.rolname = 'karturt_stg_migrator'), true) AS "migrationDatabaseTempEffective",
-      COALESCE((SELECT pg_catalog.has_schema_privilege(migrator.oid, 'public', 'CREATE') FROM pg_catalog.pg_roles AS migrator WHERE migrator.rolname = 'karturt_stg_migrator'), true) AS "migrationPublicCreateEffective",
+      EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator_v2') AS "migrationRoleExists",
+      COALESCE((SELECT rolcanlogin FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator_v2'), false) AS "migrationRoleCanLogin",
+      COALESCE((SELECT rolsuper FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator_v2'), false) AS "migrationRoleIsSuperuser",
+      COALESCE((SELECT rolcreatedb FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator_v2'), true) AS "migrationRoleCanCreateDb",
+      COALESCE((SELECT rolcreaterole FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator_v2'), true) AS "migrationRoleCanCreateRole",
+      COALESCE((SELECT rolreplication FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator_v2'), true) AS "migrationRoleCanReplicate",
+      COALESCE((SELECT rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator_v2'), true) AS "migrationRoleBypassesRls",
+      COALESCE((SELECT rolinherit FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator_v2'), true) AS "migrationRoleInherits",
+      COALESCE((SELECT count(*)::int FROM pg_catalog.pg_auth_members WHERE member = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = 'karturt_stg_migrator_v2')), 0) AS "migrationRoleMembershipCount",
+      COALESCE((SELECT pg_catalog.has_database_privilege(migrator.oid, current_database(), 'CREATE') FROM pg_catalog.pg_roles AS migrator WHERE migrator.rolname = 'karturt_stg_migrator_v2'), true) AS "migrationDatabaseCreateEffective",
+      COALESCE((SELECT pg_catalog.has_database_privilege(migrator.oid, current_database(), 'TEMPORARY') FROM pg_catalog.pg_roles AS migrator WHERE migrator.rolname = 'karturt_stg_migrator_v2'), true) AS "migrationDatabaseTempEffective",
+      COALESCE((SELECT pg_catalog.has_schema_privilege(migrator.oid, 'public', 'CREATE') FROM pg_catalog.pg_roles AS migrator WHERE migrator.rolname = 'karturt_stg_migrator_v2'), true) AS "migrationPublicCreateEffective",
       COALESCE((
         SELECT count(*)::int FROM pg_catalog.pg_namespace AS schema
         WHERE schema.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast', 'public')
           AND schema.nspname !~ '^pg_(temp|toast_temp)_[0-9]+$'
-          AND pg_catalog.has_schema_privilege('karturt_stg_migrator', schema.oid, 'CREATE')
+          AND pg_catalog.has_schema_privilege('karturt_stg_migrator_v2', schema.oid, 'CREATE')
       ), 1) AS "migrationCustomSchemasWithCreate",
-      COALESCE((SELECT pg_catalog.has_schema_privilege(migrator.oid, 'drizzle', 'USAGE') FROM pg_catalog.pg_roles AS migrator WHERE migrator.rolname = 'karturt_stg_migrator'), true) AS "migrationDrizzleUsageEffective",
-      COALESCE((SELECT pg_catalog.has_schema_privilege(migrator.oid, 'drizzle', 'CREATE') FROM pg_catalog.pg_roles AS migrator WHERE migrator.rolname = 'karturt_stg_migrator'), true) AS "migrationDrizzleCreateEffective"
+      COALESCE((SELECT pg_catalog.has_schema_privilege(migrator.oid, 'drizzle', 'USAGE') FROM pg_catalog.pg_roles AS migrator WHERE migrator.rolname = 'karturt_stg_migrator_v2'), true) AS "migrationDrizzleUsageEffective",
+      COALESCE((SELECT pg_catalog.has_schema_privilege(migrator.oid, 'drizzle', 'CREATE') FROM pg_catalog.pg_roles AS migrator WHERE migrator.rolname = 'karturt_stg_migrator_v2'), true) AS "migrationDrizzleCreateEffective"
     FROM pg_catalog.pg_roles AS role
     WHERE role.rolname = current_user
   `);

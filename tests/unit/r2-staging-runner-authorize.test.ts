@@ -31,7 +31,7 @@ const disposableRecoveryStepName = "Rebuild and verify synthetic state on Postgr
 const disposableRecoveryTarget = "postgresql-18-disposable";
 const disposableRecoveryOperation = "rebuild-reseed-official-migrations-0000-0013";
 const apiBase = "https://api.github.com";
-const branch = "codex/r2-secure-staging-runner-20261025";
+const branch = "codex/r2-disposable-recovery-r2b-20261025";
 const issueUrl = `${apiBase}/repos/Satsetx4/karturt/issues/98`;
 
 function context(overrides: Record<string, string> = {}) {
@@ -253,7 +253,7 @@ function fetchFor(overrides: {
 
     if (url.pathname.endsWith(`/commits/${candidateSha}/pulls`)) {
       return response(overrides.pullRequests ?? [{
-        number: 100,
+        number: 101,
         state: "closed",
         merged_at: "2026-10-25T00:00:00Z",
         base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
@@ -309,7 +309,7 @@ function fetchFor(overrides: {
         head_sha: candidateSha,
         head_branch: branch,
         event: "pull_request",
-        pull_requests: [{ number: 100 }],
+        pull_requests: [{ number: 101 }],
       }] });
     }
     const gateJobMatch = url.pathname.match(/\/actions\/runs\/(\d+)\/attempts\/(\d+)\/jobs$/);
@@ -389,7 +389,7 @@ describe("R2 staging runner authorization", () => {
     expect(workflow).toMatch(/name: Install reviewed candidate dependencies without database credentials\s+working-directory: candidate\s+run: npm ci --ignore-scripts/);
   });
 
-  it("binds migrate to main dispatch, merged PR #100, exact-head CI, PG18 disposable recovery, protected environment, and exact owner GO", async () => {
+  it("binds migrate to main dispatch, merged PR #101, exact-head CI, PG18 disposable recovery, protected environment, and exact owner GO", async () => {
     const fetchImpl = fetchFor();
     const result = await authorizeR2StagingDispatch({ context: context(), fetchImpl });
     expect(result).toEqual({
@@ -556,14 +556,14 @@ describe("R2 staging runner authorization", () => {
 
   it("rejects unmerged or wrong candidate PRs before looking up CI", async () => {
     const fetchImpl = fetchFor({ pullRequests: [{
-      number: 100,
+      number: 101,
       state: "open",
       merged_at: null,
       base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
       head: { ref: branch, sha: candidateSha, repo: { full_name: "Satsetx4/karturt" } },
     }] });
     await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl })).rejects.toThrow(
-      "merged head of PR #100",
+      "merged head of PR #101",
     );
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
@@ -748,7 +748,7 @@ describe("R2 staging runner authorization", () => {
     await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl })).rejects.toThrow(message);
   });
 
-  it("rejects recovery evidence linked to an earlier run when a newer exact-head PR #100 run is selected", async () => {
+  it("rejects recovery evidence linked to an earlier run when a newer exact-head PR #101 run is selected", async () => {
     const latestRunId = "40147824802";
     const latestRun = {
       id: Number(latestRunId),
@@ -759,7 +759,7 @@ describe("R2 staging runner authorization", () => {
       head_sha: candidateSha,
       head_branch: branch,
       event: "pull_request",
-      pull_requests: [{ number: 100 }],
+      pull_requests: [{ number: 101 }],
     };
     const fetchImpl = fetchFor({
       runs: [

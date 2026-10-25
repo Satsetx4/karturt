@@ -707,12 +707,12 @@ async function grantStagingRuntimePrivileges(pool: ReturnType<typeof createDatab
     await client.query(`
       GRANT SELECT, INSERT, UPDATE, DELETE
       ON ALL TABLES IN SCHEMA public
-      TO karturt_stg_runtime
+      TO karturt_stg_runtime_v2
     `);
     await client.query(`
       GRANT USAGE
       ON ALL SEQUENCES IN SCHEMA public
-      TO karturt_stg_runtime
+      TO karturt_stg_runtime_v2
     `);
     await client.query("COMMIT");
   } catch (error) {
@@ -727,10 +727,10 @@ async function revokeStagingCustomRoutineDefaultExecution(pool: ReturnType<typeo
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE karturt_stg_migrator REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC");
-    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE karturt_stg_migrator REVOKE EXECUTE ON FUNCTIONS FROM karturt_stg_runtime");
-    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE karturt_stg_migrator IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC");
-    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE karturt_stg_migrator IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM karturt_stg_runtime");
+    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE karturt_stg_migrator_v2 REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC");
+    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE karturt_stg_migrator_v2 REVOKE EXECUTE ON FUNCTIONS FROM karturt_stg_runtime_v2");
+    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE karturt_stg_migrator_v2 IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC");
+    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE karturt_stg_migrator_v2 IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM karturt_stg_runtime_v2");
     const result = await client.query<{ runtime_execute_default_count: number }>(`
       SELECT count(*)::int AS runtime_execute_default_count
       FROM pg_catalog.pg_default_acl AS defaults
@@ -760,7 +760,7 @@ async function revokeStagingRuntimeFunctionExecution(pool: ReturnType<typeof cre
   try {
     await client.query("BEGIN");
     await client.query("REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC");
-    await client.query("REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM karturt_stg_runtime");
+    await client.query("REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM karturt_stg_runtime_v2");
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -774,8 +774,8 @@ async function revokeStagingRuntimePrivileges(pool: ReturnType<typeof createData
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM karturt_stg_runtime");
-    await client.query("REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM karturt_stg_runtime");
+    await client.query("REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM karturt_stg_runtime_v2");
+    await client.query("REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM karturt_stg_runtime_v2");
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -1080,12 +1080,12 @@ async function main() {
             database: stagingDatabaseTarget.database,
           },
           actions: [
-            "Revoke CREATE on public from karturt_stg_migrator",
-            "Revoke CREATE on drizzle from karturt_stg_migrator",
-            "Revoke USAGE on drizzle from karturt_stg_migrator",
-            "Revoke temporary database CREATE from karturt_stg_migrator",
+            "Revoke CREATE on public from karturt_stg_migrator_v2",
+            "Revoke CREATE on drizzle from karturt_stg_migrator_v2",
+            "Revoke USAGE on drizzle from karturt_stg_migrator_v2",
+            "Revoke temporary database CREATE from karturt_stg_migrator_v2",
             "Verify database TEMP remains revoked from PUBLIC and both staging roles",
-            "Set karturt_stg_migrator back to NOLOGIN",
+            "Set karturt_stg_migrator_v2 back to NOLOGIN",
           ],
           verified: false,
         }));
