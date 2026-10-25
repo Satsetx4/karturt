@@ -98,13 +98,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.authorize.outputs.candidate_sha }}
+          path: candidate
           persist-credentials: false
 
       - name: Verify candidate checkout
         env:
           EXPECTED_SOURCE_SHA: ${{ needs.authorize.outputs.candidate_sha }}
         run: |
-          actual_sha="$(git rev-parse HEAD)"
+          actual_sha="$(git -C candidate rev-parse HEAD)"
           if [ "$actual_sha" != "$EXPECTED_SOURCE_SHA" ]; then
             echo "Candidate checkout does not match the authorized SHA."
             exit 1
@@ -117,6 +118,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install reviewed candidate dependencies without database credentials
+        working-directory: candidate
         run: npm ci --ignore-scripts
 
       - name: Check out trusted authorization policy after candidate setup

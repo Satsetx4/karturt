@@ -94,8 +94,12 @@ export async function executeAuthorizedStagingOperation({
 
   await assertLatestR2StagingOwnerDecision({ context: authorizationContext, fetchImpl });
 
+  if (typeof env.GITHUB_WORKSPACE !== "string" || env.GITHUB_WORKSPACE.length === 0) {
+    throw new Error("The protected runner workspace is unavailable; no database command was started.");
+  }
+
   const result = spawnImpl("npm", config.args, {
-    cwd: env.GITHUB_WORKSPACE,
+    cwd: resolve(env.GITHUB_WORKSPACE, "candidate"),
     env: childEnv,
     stdio: "inherit",
     windowsHide: true,

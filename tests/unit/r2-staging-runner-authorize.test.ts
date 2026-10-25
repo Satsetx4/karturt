@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { executeAuthorizedStagingOperation } from "../../.github/scripts/r2-staging-runner-execute.mjs";
 import {
   authorizeR2StagingDispatch,
@@ -330,6 +331,9 @@ describe("R2 staging runner authorization", () => {
       .map((line) => line.trim())
       .filter((line) => /^run:\s*npm ci(?:\s|$)/.test(line));
     expect(installCommands).toEqual(["run: npm ci --ignore-scripts"]);
+    expect(workflow).toMatch(/name: Check out the exact authorized candidate[\s\S]*?path: candidate/);
+    expect(workflow).toMatch(/name: Check out trusted authorization policy after candidate setup[\s\S]*?path: \.r2-policy/);
+    expect(workflow).toMatch(/name: Install reviewed candidate dependencies without database credentials\s+working-directory: candidate\s+run: npm ci --ignore-scripts/);
   });
 
   it("binds migrate to main dispatch, merged PR #99, exact-head CI, protected environment, and exact owner GO", async () => {
@@ -357,8 +361,8 @@ describe("R2 staging runner authorization", () => {
   ])("rechecks %s immediately before spawning with only that operation's child environment", async (operation, goOperation, migratorKey, runtimeKey, fixtureKey) => {
     const env = authorizedExecutionEnv(operation);
     const events: string[] = [];
-    let capturedSpawn: { command: string; args: string[]; options: { env: NodeJS.ProcessEnv } } | undefined;
-    const spawnMock = vi.fn((command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
+    let capturedSpawn: { command: string; args: string[]; options: { cwd: string; env: NodeJS.ProcessEnv } } | undefined;
+    const spawnMock = vi.fn((command: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv }) => {
       events.push("spawn");
       capturedSpawn = { command, args, options };
       return { status: 0, error: undefined, pid: 42, output: [], stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), signal: null };
@@ -380,7 +384,8 @@ describe("R2 staging runner authorization", () => {
       : operation === "migrate"
         ? ["run", "db:migrate", "--", "--apply"]
         : ["run", "db:bootstrap-r2-staging", "--", "--apply"]);
-    const childOptions = capturedSpawn?.options as { env: NodeJS.ProcessEnv };
+    expect(capturedSpawn?.options.cwd).toBe(resolve("/runner/work/karturt/karturt", "candidate"));
+    const childOptions = capturedSpawn?.options as { cwd: string; env: NodeJS.ProcessEnv };
     expect(childOptions.env.GITHUB_TOKEN).toBeUndefined();
     expect(childOptions.env.EXTRA_SECRET).toBeUndefined();
     expect(childOptions.env.DATABASE_MIGRATION_URL).toBe(migratorKey ? "migration-secret-value" : undefined);
@@ -555,12 +560,20 @@ describe("R2 staging runner authorization", () => {
 
   it.each([
     [{ deployment_branch_policy: { protected_branches: true, custom_branch_policies: false }, protection_rules: [] }, [{ name: "main" }], "custom branch policy"],
-    [{ name: runnerEnvironment, deployment_branch_policy: { protected_branches: false, custom_branch_policies: true }, protection_rules: [] }, [{ name: "main" }], "require repository-owner approval"],
+    [{ name: runnerEnvironment, deployment_branch_policy: { protected_branches: false, custom_branch_policies: true }, protection_rules: [] }, [{ name: "main" }], "list the repository owner as its only required reviewer"],
     [{ name: runnerEnvironment, deployment_branch_policy: { protected_branches: false, custom_branch_policies: true }, protection_rules: [{
       type: "required_reviewers",
       prevent_self_review: true,
       reviewers: [{ type: "User", reviewer: { login: "Satsetx4" } }],
     }] }, [{ name: "main" }], "allow that owner to review each run"],
+    [{ name: runnerEnvironment, deployment_branch_policy: { protected_branches: false, custom_branch_policies: true }, protection_rules: [{
+      type: "required_reviewers",
+      prevent_self_review: false,
+      reviewers: [
+        { type: "User", reviewer: { login: "Satsetx4" } },
+        { type: "User", reviewer: { login: "another-reviewer" } },
+      ],
+    }] }, [{ name: "main" }], "list the repository owner as its only required reviewer"],
     [undefined, [{ name: "main" }, { name: "release" }], "allow deployments from main only"],
   ])("rejects unsafe or missing Environment protection %#", async (environment, branchPolicies, message) => {
     const fetchImpl = fetchFor({ environment, branchPolicies });

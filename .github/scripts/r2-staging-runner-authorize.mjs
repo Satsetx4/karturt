@@ -215,11 +215,14 @@ async function assertProtectedEnvironment(readJson) {
   }
 
   const reviewerRule = (environment.protection_rules ?? []).find((rule) => rule.type === "required_reviewers");
-  const hasOwnerReviewer = (reviewerRule?.reviewers ?? []).some((entry) =>
-    entry.type === "User" && entry.reviewer?.login === owner
-  );
-  if (!hasOwnerReviewer || reviewerRule.prevent_self_review !== false) {
-    throw new Error("The R2 Environment must require repository-owner approval and allow that owner to review each run.");
+  const reviewers = reviewerRule?.reviewers ?? [];
+  const ownerIsOnlyReviewer = reviewers.length === 1 &&
+    reviewers[0].type === "User" && reviewers[0].reviewer?.login === owner;
+  if (!ownerIsOnlyReviewer) {
+    throw new Error("The R2 Environment must list the repository owner as its only required reviewer.");
+  }
+  if (reviewerRule.prevent_self_review !== false) {
+    throw new Error("The R2 Environment must allow that owner to review each run.");
   }
 
   const policiesResponse = await readJson(`environments/${runnerEnvironment}/deployment-branch-policies?per_page=100`);
