@@ -11,10 +11,15 @@ export const runnerWorkflowName = "KartuRT R2 staging runner";
 
 const owner = "Satsetx4";
 const repository = "Satsetx4/karturt";
-const expectedCandidatePullRequest = 99;
+const expectedCandidatePullRequest = 100;
+const disposableRecoveryJobName = "R2 disposable PostgreSQL 18 recovery";
+const disposableRecoveryStepName = "Rebuild and verify synthetic state on PostgreSQL 18";
+const disposableRecoveryTarget = "postgresql-18-disposable";
+const disposableRecoveryOperation = "rebuild-reseed-official-migrations-0000-0013";
 const requiredJobs = [
   "Gate A local verification",
   "Launch Safety independent PostgreSQL concurrency",
+  disposableRecoveryJobName,
 ];
 
 function requiredString(value, name) {
@@ -159,6 +164,49 @@ function assertEvidenceLines(comment, apiBase, description, requiredLines) {
   if (requiredLines.some((line) => !actualLines.has(line))) {
     throw new Error(`${description} does not bind the exact SHA, target, and required PASS evidence.`);
   }
+}
+
+function assertDisposableRecoveryEvidence(comment, apiBase, description, request, ciRun) {
+  const lines = exactLines(comment.body);
+  if ([...lines].some((line) => line.startsWith("FREE_RECOVERY:"))) {
+    throw new Error(`${description} cannot use FREE_RECOVERY evidence; require PostgreSQL 18 disposable recovery proof.`);
+  }
+  for (const prefix of [
+    "R2_ISOLATION_RESULT:",
+    "SHA:",
+    "TARGET:",
+    "SYNTHETIC_ONLY:",
+    "STAGING_DISPOSABLE_RECOVERY:",
+    "RECOVERY_TARGET:",
+    "RECOVERY_OPERATION:",
+    "RECOVERY_RUN:",
+  ]) {
+    const matchingLines = [...lines].filter((line) => line.startsWith(prefix));
+    if (matchingLines.length > 1) {
+      throw new Error(`${description} must contain exactly one ${prefix} evidence line.`);
+    }
+  }
+  for (const [prefix, requiredLine] of [
+    ["NEON_INSTANT_RESTORE:", "NEON_INSTANT_RESTORE: NOT_RUN"],
+    ["PRODUCTION_RECOVERY:", "PRODUCTION_RECOVERY: NOT_PROVEN"],
+  ]) {
+    const matchingLines = [...lines].filter((line) => line.startsWith(prefix));
+    if (matchingLines.length !== 1 || matchingLines[0] !== requiredLine) {
+      throw new Error(`${description} must state ${requiredLine} exactly.`);
+    }
+  }
+  assertEvidenceLines(comment, apiBase, description, [
+    "R2_ISOLATION_RESULT: PASS",
+    `SHA: ${request.candidateSha}`,
+    `TARGET: ${runnerTarget}`,
+    "SYNTHETIC_ONLY: PASS",
+    "STAGING_DISPOSABLE_RECOVERY: PASS",
+    `RECOVERY_TARGET: ${disposableRecoveryTarget}`,
+    `RECOVERY_OPERATION: ${disposableRecoveryOperation}`,
+    `RECOVERY_RUN: ${ciRun.id}/${ciRun.run_attempt}`,
+    "NEON_INSTANT_RESTORE: NOT_RUN",
+    "PRODUCTION_RECOVERY: NOT_PROVEN",
+  ]);
 }
 
 async function assertSuccessfulRunnerEvidence(readJson, apiBase, comment, request, description, operation, requiredLines) {
@@ -308,11 +356,11 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     pr.head?.repo?.full_name === repository
   );
   if (!candidatePr) {
-    throw new Error("candidate_sha must be the merged head of PR #99 into main.");
+    throw new Error("candidate_sha must be the merged head of PR #100 into main.");
   }
 
   if (typeof candidatePr.merge_commit_sha !== "string" || !/^[0-9a-f]{40}$/.test(candidatePr.merge_commit_sha)) {
-    throw new Error("Merged PR #99 must expose its immutable merge result SHA.");
+    throw new Error("Merged PR #100 must expose its immutable merge result SHA.");
   }
   const candidateCommit = await readJson(`commits/${request.candidateSha}`);
   const mergeCommit = await readJson(`commits/${candidatePr.merge_commit_sha}`);
@@ -334,7 +382,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
   if (mainAncestry.base_commit?.sha !== candidatePr.merge_commit_sha ||
       mainAncestry.merge_base_commit?.sha !== candidatePr.merge_commit_sha ||
       !["ahead", "identical"].includes(mainAncestry.status)) {
-    throw new Error("The approved PR #99 merge result must be an ancestor of the protected-main dispatch SHA.");
+    throw new Error("The approved PR #100 merge result must be an ancestor of the protected-main dispatch SHA.");
   }
 
   const tracker = await readJson("issues/98");
@@ -355,7 +403,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)));
   const ciRun = exactRuns[0];
   if (!ciRun || ciRun.status !== "completed" || ciRun.conclusion !== "success") {
-    throw new Error("The latest PR #99 Gate A run for candidate_sha must be completed and successful.");
+    throw new Error("The latest PR #100 Gate A run for candidate_sha must be completed and successful.");
   }
   if (!Number.isSafeInteger(ciRun.id) || !Number.isSafeInteger(ciRun.run_attempt) || ciRun.run_attempt < 1) {
     throw new Error("The exact-head Gate A run is missing a valid run ID or attempt.");
@@ -369,7 +417,13 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     const job = jobs.get(name);
     return !job || job.status !== "completed" || job.conclusion !== "success";
   })) {
-    throw new Error("Gate A and independent disposable PostgreSQL concurrency must both pass on candidate_sha.");
+    throw new Error("Gate A and independent disposable PostgreSQL concurrency must both pass on candidate_sha; the PG18 disposable recovery job must also pass.");
+  }
+  const recoveryJob = jobs.get(disposableRecoveryJobName);
+  const recoveryStep = recoveryJob?.steps?.find((step) => step.name === disposableRecoveryStepName);
+  if (recoveryJob?.status !== "completed" || recoveryJob.conclusion !== "success" ||
+      recoveryStep?.status !== "completed" || recoveryStep.conclusion !== "success") {
+    throw new Error("The exact-head PostgreSQL 18 disposable recovery job and proof step must both be completed and successful.");
   }
 
   await assertProtectedEnvironment(readJson);
@@ -384,13 +438,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
   if (request.operation === "preflight") {
     const isolationComment = await readJson(`issues/comments/${evidenceRefs.isolationEvidenceCommentId}`);
     assertEvidencePredatesOwnerGo(isolationComment, apiBase, "Isolation and recovery evidence", evidenceRefs.isolationEvidenceCommentId, ownerGoComment);
-    assertEvidenceLines(isolationComment, apiBase, "Isolation and recovery evidence", [
-      "R2_ISOLATION_RESULT: PASS",
-      `SHA: ${request.candidateSha}`,
-      `TARGET: ${runnerTarget}`,
-      "SYNTHETIC_ONLY: PASS",
-      "FREE_RECOVERY: PASS",
-    ]);
+    assertDisposableRecoveryEvidence(isolationComment, apiBase, "Isolation and recovery evidence", request, ciRun);
     isolationEvidenceRef = `#98/${evidenceRefs.isolationEvidenceCommentId}`;
   } else if (request.operation === "migrate") {
     const preflightComment = await readJson(`issues/comments/${evidenceRefs.preflightEvidenceCommentId}`);
@@ -409,13 +457,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     ]);
     const isolationComment = await readJson(`issues/comments/${evidenceRefs.isolationEvidenceCommentId}`);
     assertEvidencePredatesOwnerGo(isolationComment, apiBase, "Isolation and recovery evidence", evidenceRefs.isolationEvidenceCommentId, ownerGoComment);
-    assertEvidenceLines(isolationComment, apiBase, "Isolation and recovery evidence", [
-      "R2_ISOLATION_RESULT: PASS",
-      `SHA: ${request.candidateSha}`,
-      `TARGET: ${runnerTarget}`,
-      "SYNTHETIC_ONLY: PASS",
-      "FREE_RECOVERY: PASS",
-    ]);
+    assertDisposableRecoveryEvidence(isolationComment, apiBase, "Isolation and recovery evidence", request, ciRun);
     preflightEvidenceRef = `#98/${evidenceRefs.preflightEvidenceCommentId}`;
     isolationEvidenceRef = `#98/${evidenceRefs.isolationEvidenceCommentId}`;
   } else if (request.operation === fixtureOperation) {
@@ -431,13 +473,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     ]);
     const isolationComment = await readJson(`issues/comments/${evidenceRefs.isolationEvidenceCommentId}`);
     assertEvidencePredatesOwnerGo(isolationComment, apiBase, "Isolation and recovery evidence", evidenceRefs.isolationEvidenceCommentId, ownerGoComment);
-    assertEvidenceLines(isolationComment, apiBase, "Isolation and recovery evidence", [
-      "R2_ISOLATION_RESULT: PASS",
-      `SHA: ${request.candidateSha}`,
-      `TARGET: ${runnerTarget}`,
-      "SYNTHETIC_ONLY: PASS",
-      "FREE_RECOVERY: PASS",
-    ]);
+    assertDisposableRecoveryEvidence(isolationComment, apiBase, "Isolation and recovery evidence", request, ciRun);
     migrationEvidenceRef = `#98/${evidenceRefs.migrationEvidenceCommentId}`;
     isolationEvidenceRef = `#98/${evidenceRefs.isolationEvidenceCommentId}`;
   }

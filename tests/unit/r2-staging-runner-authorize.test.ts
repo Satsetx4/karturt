@@ -24,6 +24,12 @@ const preflightRunnerRunId = "9000000101";
 const migrationRunnerRunId = "9000000102";
 const preflightRunnerGoCommentId = "6389999901";
 const migrationRunnerGoCommentId = "6389999902";
+const gateARunId = "40147824801";
+const gateAAttempt = "1";
+const disposableRecoveryJobName = "R2 disposable PostgreSQL 18 recovery";
+const disposableRecoveryStepName = "Rebuild and verify synthetic state on PostgreSQL 18";
+const disposableRecoveryTarget = "postgresql-18-disposable";
+const disposableRecoveryOperation = "rebuild-reseed-official-migrations-0000-0013";
 const apiBase = "https://api.github.com";
 const branch = "codex/r2-secure-staging-runner-20261025";
 const issueUrl = `${apiBase}/repos/Satsetx4/karturt/issues/98`;
@@ -129,6 +135,60 @@ function goBody(operation: string, extraLines: string[] = []) {
   ].join("\n");
 }
 
+function recoveryEvidenceBody(overrides: {
+  sha?: string;
+  target?: string;
+  recoveryResult?: string;
+  recoveryTarget?: string;
+  recoveryOperation?: string;
+  recoveryRun?: string;
+  neonRestore?: string;
+  productionRecovery?: string;
+  extraLines?: string[];
+} = {}) {
+  return [
+    "R2_ISOLATION_RESULT: PASS",
+    `SHA: ${overrides.sha ?? candidateSha}`,
+    `TARGET: ${overrides.target ?? runnerTarget}`,
+    "SYNTHETIC_ONLY: PASS",
+    overrides.recoveryResult ?? "STAGING_DISPOSABLE_RECOVERY: PASS",
+    `RECOVERY_TARGET: ${overrides.recoveryTarget ?? disposableRecoveryTarget}`,
+    `RECOVERY_OPERATION: ${overrides.recoveryOperation ?? disposableRecoveryOperation}`,
+    `RECOVERY_RUN: ${overrides.recoveryRun ?? `${gateARunId}/${gateAAttempt}`}`,
+    overrides.neonRestore ?? "NEON_INSTANT_RESTORE: NOT_RUN",
+    overrides.productionRecovery ?? "PRODUCTION_RECOVERY: NOT_PROVEN",
+    ...(overrides.extraLines ?? []),
+  ].join("\n");
+}
+
+function disposableRecoveryJob(overrides: {
+  status?: string;
+  conclusion?: string;
+  stepName?: string;
+  stepStatus?: string;
+  stepConclusion?: string;
+  steps?: unknown[];
+} = {}) {
+  return {
+    name: disposableRecoveryJobName,
+    status: overrides.status ?? "completed",
+    conclusion: overrides.conclusion ?? "success",
+    steps: overrides.steps ?? [{
+      name: overrides.stepName ?? disposableRecoveryStepName,
+      status: overrides.stepStatus ?? "completed",
+      conclusion: overrides.stepConclusion ?? "success",
+    }],
+  };
+}
+
+function gateJobs(recoveryJob: Record<string, unknown> | null = disposableRecoveryJob()) {
+  return [
+    { name: "Gate A local verification", status: "completed", conclusion: "success" },
+    { name: "Launch Safety independent PostgreSQL concurrency", status: "completed", conclusion: "success" },
+    ...(recoveryJob ? [recoveryJob] : []),
+  ];
+}
+
 function stagingOperationRun(runId: string, operation: string, goCommentId: string) {
   const stepName = operation === "preflight"
     ? "Verify both PostgreSQL roles with authenticated TLS"
@@ -171,6 +231,7 @@ function fetchFor(overrides: {
   stagingRuns?: unknown[];
   runnerRuns?: Record<string, Record<string, unknown>>;
   runnerJobs?: Record<string, unknown>;
+  gateJobsByRun?: Record<string, unknown[]>;
   mergeComparison?: Record<string, unknown>;
   candidateMergeComparison?: Record<string, unknown>;
   candidateTree?: string;
@@ -192,7 +253,7 @@ function fetchFor(overrides: {
 
     if (url.pathname.endsWith(`/commits/${candidateSha}/pulls`)) {
       return response(overrides.pullRequests ?? [{
-        number: 99,
+        number: 100,
         state: "closed",
         merged_at: "2026-10-25T00:00:00Z",
         base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
@@ -240,22 +301,20 @@ function fetchFor(overrides: {
     }
     if (url.pathname.endsWith("/actions/workflows/gate-a.yml/runs")) {
       return response({ workflow_runs: overrides.runs ?? [{
-        id: 40147824801,
-        run_attempt: 1,
+        id: Number(gateARunId),
+        run_attempt: Number(gateAAttempt),
         status: "completed",
         conclusion: "success",
         created_at: "2026-10-25T00:00:00Z",
         head_sha: candidateSha,
         head_branch: branch,
         event: "pull_request",
-        pull_requests: [{ number: 99 }],
+        pull_requests: [{ number: 100 }],
       }] });
     }
-    if (url.pathname.endsWith("/actions/runs/40147824801/attempts/1/jobs")) {
-      return response({ jobs: overrides.jobs ?? [
-        { name: "Gate A local verification", status: "completed", conclusion: "success" },
-        { name: "Launch Safety independent PostgreSQL concurrency", status: "completed", conclusion: "success" },
-      ] });
+    const gateJobMatch = url.pathname.match(/\/actions\/runs\/(\d+)\/attempts\/(\d+)\/jobs$/);
+    if (gateJobMatch && (gateJobMatch[1] === gateARunId || overrides.gateJobsByRun?.[gateJobMatch[1]])) {
+      return response({ jobs: overrides.gateJobsByRun?.[gateJobMatch[1]] ?? overrides.jobs ?? gateJobs() });
     }
     if (url.pathname.endsWith(`/environments/${runnerEnvironment}/deployment-branch-policies`)) {
       return response({ branch_policies: overrides.branchPolicies ?? [{ name: "main" }] });
@@ -311,13 +370,7 @@ function fetchFor(overrides: {
     if (url.pathname.endsWith(`/issues/comments/${isolationEvidenceCommentId}`)) {
       return response(overrides.evidenceComments?.[isolationEvidenceCommentId] ?? issueComment(
         isolationEvidenceCommentId,
-        [
-          "R2_ISOLATION_RESULT: PASS",
-          `SHA: ${candidateSha}`,
-          `TARGET: ${runnerTarget}`,
-          "SYNTHETIC_ONLY: PASS",
-          "FREE_RECOVERY: PASS",
-        ].join("\n"),
+        recoveryEvidenceBody(),
       ));
     }
     return response({}, 404);
@@ -336,14 +389,14 @@ describe("R2 staging runner authorization", () => {
     expect(workflow).toMatch(/name: Install reviewed candidate dependencies without database credentials\s+working-directory: candidate\s+run: npm ci --ignore-scripts/);
   });
 
-  it("binds migrate to main dispatch, merged PR #99, exact-head CI, protected environment, and exact owner GO", async () => {
+  it("binds migrate to main dispatch, merged PR #100, exact-head CI, PG18 disposable recovery, protected environment, and exact owner GO", async () => {
     const fetchImpl = fetchFor();
     const result = await authorizeR2StagingDispatch({ context: context(), fetchImpl });
     expect(result).toEqual({
       candidateSha,
       operation: "migrate",
-      ciRunId: "40147824801",
-      ciAttempt: "1",
+      ciRunId: gateARunId,
+      ciAttempt: gateAAttempt,
       authorizationRef: `#98/${ownerGoCommentId}`,
       preflightEvidenceRef: `#98/${preflightEvidenceCommentId}`,
       migrationEvidenceRef: "",
@@ -503,14 +556,14 @@ describe("R2 staging runner authorization", () => {
 
   it("rejects unmerged or wrong candidate PRs before looking up CI", async () => {
     const fetchImpl = fetchFor({ pullRequests: [{
-      number: 99,
+      number: 100,
       state: "open",
       merged_at: null,
       base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
       head: { ref: branch, sha: candidateSha, repo: { full_name: "Satsetx4/karturt" } },
     }] });
     await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl })).rejects.toThrow(
-      "merged head of PR #99",
+      "merged head of PR #100",
     );
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
@@ -597,14 +650,138 @@ describe("R2 staging runner authorization", () => {
       .rejects.toThrow("referenced R2 GO comment must be an unedited issue comment");
   });
 
+  it("rejects legacy FREE_RECOVERY text without the staging-specific disposable proof", async () => {
+    const fetchImpl = fetchFor({
+      comment: issueComment(ownerGoCommentId, goBody(preflightOperation)),
+      evidenceComments: {
+        [isolationEvidenceCommentId]: issueComment(isolationEvidenceCommentId, [
+          "R2_ISOLATION_RESULT: PASS",
+          `SHA: ${candidateSha}`,
+          `TARGET: ${runnerTarget}`,
+          "SYNTHETIC_ONLY: PASS",
+          "FREE_RECOVERY: PASS",
+        ].join("\n")),
+      },
+    });
+    await expect(authorizeR2StagingDispatch({
+      context: context({ operation: "preflight" }),
+      fetchImpl,
+    })).rejects.toThrow("cannot use FREE_RECOVERY evidence");
+  });
+
+  it.each([
+    [recoveryEvidenceBody({ recoveryResult: "STAGING_DISPOSABLE_RECOVERY: MISSING" }), "required PASS evidence"],
+    [recoveryEvidenceBody({ sha: "f".repeat(40) }), "required PASS evidence"],
+    [recoveryEvidenceBody({ target: "another/neon/target" }), "required PASS evidence"],
+    [recoveryEvidenceBody({ recoveryTarget: "postgresql-17-disposable" }), "required PASS evidence"],
+    [recoveryEvidenceBody({ recoveryOperation: "restore-production-backup" }), "required PASS evidence"],
+    [recoveryEvidenceBody({ recoveryRun: "40147824800/1" }), "required PASS evidence"],
+    [recoveryEvidenceBody({ recoveryRun: `${gateARunId}/2` }), "required PASS evidence"],
+  ])("rejects recovery evidence with missing or mismatched bindings %#", async (body, message) => {
+    const fetchImpl = fetchFor({
+      comment: issueComment(ownerGoCommentId, goBody(preflightOperation)),
+      evidenceComments: { [isolationEvidenceCommentId]: issueComment(isolationEvidenceCommentId, body) },
+    });
+    await expect(authorizeR2StagingDispatch({
+      context: context({ operation: "preflight" }),
+      fetchImpl,
+    })).rejects.toThrow(message);
+  });
+
+  it.each([
+    "R2_ISOLATION_RESULT: FAIL",
+    `SHA: ${"f".repeat(40)}`,
+    "TARGET: another/neon/target",
+    "SYNTHETIC_ONLY: FAIL",
+    "STAGING_DISPOSABLE_RECOVERY: FAIL",
+    "RECOVERY_TARGET: postgresql-17-disposable",
+    "RECOVERY_OPERATION: restore-production-backup",
+    "RECOVERY_RUN: 40147824800/1",
+  ])("rejects contradictory duplicate recovery binding %s", async (conflictingLine) => {
+    const fetchImpl = fetchFor({
+      comment: issueComment(ownerGoCommentId, goBody(preflightOperation)),
+      evidenceComments: {
+        [isolationEvidenceCommentId]: issueComment(
+          isolationEvidenceCommentId,
+          `${recoveryEvidenceBody()}\n${conflictingLine}`,
+        ),
+      },
+    });
+    await expect(authorizeR2StagingDispatch({
+      context: context({ operation: "preflight" }),
+      fetchImpl,
+    })).rejects.toThrow("must contain exactly one");
+  });
+
+  it.each([
+    [recoveryEvidenceBody().replace("\nNEON_INSTANT_RESTORE: NOT_RUN", ""), "NEON_INSTANT_RESTORE: NOT_RUN"],
+    [recoveryEvidenceBody({ neonRestore: "NEON_INSTANT_RESTORE: PASS" }), "NEON_INSTANT_RESTORE: NOT_RUN"],
+    [recoveryEvidenceBody().replace("\nPRODUCTION_RECOVERY: NOT_PROVEN", ""), "PRODUCTION_RECOVERY: NOT_PROVEN"],
+    [recoveryEvidenceBody({ productionRecovery: "PRODUCTION_RECOVERY: PASS" }), "PRODUCTION_RECOVERY: NOT_PROVEN"],
+  ])("requires exact no-Neon-restore and no-production-recovery labels %#", async (body, message) => {
+    const fetchImpl = fetchFor({
+      comment: issueComment(ownerGoCommentId, goBody(preflightOperation)),
+      evidenceComments: { [isolationEvidenceCommentId]: issueComment(isolationEvidenceCommentId, body) },
+    });
+    await expect(authorizeR2StagingDispatch({
+      context: context({ operation: "preflight" }),
+      fetchImpl,
+    })).rejects.toThrow(`must state ${message} exactly`);
+  });
+
+  it("rejects recovery PASS text when the exact-head Gate A run has no recovery proof job", async () => {
+    const fetchImpl = fetchFor({ jobs: gateJobs(null) });
+    await expect(authorizeR2StagingDispatch({
+      context: context({ operation: "preflight" }),
+      fetchImpl,
+    })).rejects.toThrow("PG18 disposable recovery job must also pass");
+  });
+
+  it.each([
+    [disposableRecoveryJob({ conclusion: "failure" }), "PG18 disposable recovery job must also pass"],
+    [disposableRecoveryJob({ conclusion: "skipped" }), "PG18 disposable recovery job must also pass"],
+    [disposableRecoveryJob({ steps: [] }), "proof step must both be completed and successful"],
+    [disposableRecoveryJob({ stepConclusion: "failure" }), "proof step must both be completed and successful"],
+    [disposableRecoveryJob({ stepConclusion: "skipped" }), "proof step must both be completed and successful"],
+  ])("rejects missing, failed, or skipped disposable recovery job/step %#", async (recoveryJob, message) => {
+    const fetchImpl = fetchFor({ jobs: gateJobs(recoveryJob) });
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl })).rejects.toThrow(message);
+  });
+
+  it("rejects recovery evidence linked to an earlier run when a newer exact-head PR #100 run is selected", async () => {
+    const latestRunId = "40147824802";
+    const latestRun = {
+      id: Number(latestRunId),
+      run_attempt: 2,
+      status: "completed",
+      conclusion: "success",
+      created_at: "2026-10-25T00:00:01Z",
+      head_sha: candidateSha,
+      head_branch: branch,
+      event: "pull_request",
+      pull_requests: [{ number: 100 }],
+    };
+    const fetchImpl = fetchFor({
+      runs: [
+        {
+          ...latestRun,
+          id: Number(gateARunId),
+          run_attempt: Number(gateAAttempt),
+          created_at: "2026-10-25T00:00:00Z",
+        },
+        latestRun,
+      ],
+      gateJobsByRun: { [latestRunId]: gateJobs() },
+      comment: issueComment(ownerGoCommentId, goBody(preflightOperation)),
+    });
+    await expect(authorizeR2StagingDispatch({
+      context: context({ operation: "preflight" }),
+      fetchImpl,
+    })).rejects.toThrow("required PASS evidence");
+  });
+
   it("requires prerequisite evidence to predate the owner GO and remain unedited", async () => {
-    const isolation = issueComment(isolationEvidenceCommentId, [
-      "R2_ISOLATION_RESULT: PASS",
-      `SHA: ${candidateSha}`,
-      `TARGET: ${runnerTarget}`,
-      "SYNTHETIC_ONLY: PASS",
-      "FREE_RECOVERY: PASS",
-    ].join("\n"));
+    const isolation = issueComment(isolationEvidenceCommentId, recoveryEvidenceBody());
     const afterGo = new Date(Date.parse(issueComment(ownerGoCommentId, "").created_at) + 1000).toISOString();
     const fetchImpl = fetchFor({
       comment: issueComment(ownerGoCommentId, goBody(preflightOperation)),
