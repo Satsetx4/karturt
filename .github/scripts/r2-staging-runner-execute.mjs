@@ -1,7 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
-import { authorizeR2StagingDispatch } from "./r2-staging-runner-authorize.mjs";
+import {
+  assertLatestR2StagingOwnerDecision,
+  authorizeR2StagingDispatch,
+} from "./r2-staging-runner-authorize.mjs";
 
 const operationConfig = {
   preflight: {
@@ -57,21 +60,23 @@ export async function executeAuthorizedStagingOperation({
   const config = operationConfig[operation];
   if (!config) throw new Error("R2 staging operation is not supported.");
 
+  const authorizationContext = {
+    event: env.GITHUB_EVENT_NAME,
+    ref: env.GITHUB_REF,
+    actor: env.GITHUB_ACTOR,
+    repository: env.GITHUB_REPOSITORY,
+    candidateSha: env.R2_CANDIDATE_SHA,
+    dispatchSha: env.R2_DISPATCH_SHA,
+    operation,
+    ownerGoCommentId: env.R2_OWNER_GO_COMMENT_ID,
+    currentRunId: env.GITHUB_RUN_ID,
+    currentRunAttempt: env.GITHUB_RUN_ATTEMPT,
+    apiBase: env.GITHUB_API_URL,
+    token: env.GITHUB_TOKEN,
+  };
+
   await authorizeR2StagingDispatch({
-    context: {
-      event: env.GITHUB_EVENT_NAME,
-      ref: env.GITHUB_REF,
-      actor: env.GITHUB_ACTOR,
-      repository: env.GITHUB_REPOSITORY,
-      candidateSha: env.R2_CANDIDATE_SHA,
-      dispatchSha: env.R2_DISPATCH_SHA,
-      operation,
-      ownerGoCommentId: env.R2_OWNER_GO_COMMENT_ID,
-      currentRunId: env.GITHUB_RUN_ID,
-      currentRunAttempt: env.GITHUB_RUN_ATTEMPT,
-      apiBase: env.GITHUB_API_URL,
-      token: env.GITHUB_TOKEN,
-    },
+    context: authorizationContext,
     fetchImpl,
   });
 
@@ -86,6 +91,8 @@ export async function executeAuthorizedStagingOperation({
   for (const key of config.forwarded) {
     if (typeof env[key] === "string") childEnv[key] = env[key];
   }
+
+  await assertLatestR2StagingOwnerDecision({ context: authorizationContext, fetchImpl });
 
   const result = spawnImpl("npm", config.args, {
     cwd: env.GITHUB_WORKSPACE,

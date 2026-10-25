@@ -92,7 +92,11 @@ function assertOwnerGoComment(comment, request) {
     throw new Error("The referenced R2 GO comment must bind GO, SHA, canonical target, and selected operation exactly.");
   }
   const referencedComment = (prefix) => {
-    const line = [...actualLines].find((entry) => entry.startsWith(`${prefix}: `));
+    const entries = String(comment.body ?? "").split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith(`${prefix}: `));
+    if (entries.length !== 1) return undefined;
+    const [line] = entries;
     return line?.match(new RegExp(`^${prefix}: #98/(\\d+)$`))?.[1];
   };
   if (request.operation === "preflight") {
@@ -123,6 +127,29 @@ function assertIssueComment(comment, apiBase, description) {
   if (comment.user?.login !== owner) throw new Error(`${description} must be authored by the repository owner.`);
   if (comment.issue_url !== `${apiBase}/repos/${repository}/issues/98`) {
     throw new Error(`${description} must belong to issue #98.`);
+  }
+}
+
+function assertImmutableIssueComment(comment, apiBase, description, expectedId) {
+  assertIssueComment(comment, apiBase, description);
+  if (!/^\d+$/.test(String(comment.id)) || String(comment.id) !== String(expectedId)) {
+    throw new Error(`${description} did not resolve to the referenced issue #98 comment.`);
+  }
+  const createdAt = Date.parse(comment.created_at);
+  const updatedAt = Date.parse(comment.updated_at);
+  if (!Number.isFinite(createdAt) || !Number.isFinite(updatedAt) || createdAt !== updatedAt) {
+    throw new Error(`${description} must be an unedited issue comment.`);
+  }
+}
+
+function assertEvidencePredatesOwnerGo(comment, apiBase, description, evidenceId, ownerGoComment) {
+  assertImmutableIssueComment(comment, apiBase, description, evidenceId);
+  const evidenceIdValue = BigInt(String(comment.id));
+  const ownerGoIdValue = BigInt(String(ownerGoComment.id));
+  const evidenceCreatedAt = Date.parse(comment.created_at);
+  const ownerGoCreatedAt = Date.parse(ownerGoComment.created_at);
+  if (evidenceIdValue >= ownerGoIdValue || evidenceCreatedAt > ownerGoCreatedAt) {
+    throw new Error(`${description} must be created before the owner GO comment.`);
   }
 }
 
@@ -223,7 +250,32 @@ async function assertLatestOwnerDecision(readJson, apiBase, request) {
       latestDecisions.length !== 1 || latestDecisions[0] !== "R2_RUNNER_GO: GO") {
     throw new Error("The referenced owner GO is missing, stale, or superseded by a later matching owner decision.");
   }
-  assertIssueComment(latest, apiBase, "The latest R2 owner decision");
+  assertImmutableIssueComment(latest, apiBase, "The latest R2 owner decision", request.ownerGoCommentId);
+}
+
+function createGitHubReader(context, fetchImpl) {
+  const token = requiredString(context.token, "GITHUB_TOKEN");
+  const apiBase = requiredString(context.apiBase, "GITHUB_API_URL").replace(/\/$/, "");
+
+  async function readJson(path) {
+    const response = await fetchImpl(`${apiBase}/repos/${repository}/${path}`, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    });
+    if (!response.ok) throw new Error(`GitHub authorization readback failed (HTTP ${response.status}).`);
+    return response.json();
+  }
+
+  return { apiBase, readJson };
+}
+
+export async function assertLatestR2StagingOwnerDecision({ context, fetchImpl = fetch }) {
+  const request = parseDispatchRequest(context);
+  const { apiBase, readJson } = createGitHubReader(context, fetchImpl);
+  await assertLatestOwnerDecision(readJson, apiBase, request);
 }
 
 async function assertOwnerGoUnused(readJson, request) {
@@ -240,20 +292,7 @@ async function assertOwnerGoUnused(readJson, request) {
 
 export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch }) {
   const request = parseDispatchRequest(context);
-  const token = requiredString(context.token, "GITHUB_TOKEN");
-  const apiBase = requiredString(context.apiBase, "GITHUB_API_URL").replace(/\/$/, "");
-
-  async function readJson(path) {
-    const response = await fetchImpl(`${apiBase}/repos/${repository}/${path}`, {
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${token}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
-    });
-    if (!response.ok) throw new Error(`GitHub authorization readback failed (HTTP ${response.status}).`);
-    return response.json();
-  }
+  const { apiBase, readJson } = createGitHubReader(context, fetchImpl);
 
   const pullRequests = await readJson(`commits/${request.candidateSha}/pulls?per_page=100`);
   const candidatePr = pullRequests.find((pr) =>
@@ -332,9 +371,8 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
 
   await assertProtectedEnvironment(readJson);
   const ownerGoComment = await readJson(`issues/comments/${request.ownerGoCommentId}`);
-  assertIssueComment(ownerGoComment, apiBase, "The referenced R2 GO comment");
+  assertImmutableIssueComment(ownerGoComment, apiBase, "The referenced R2 GO comment", request.ownerGoCommentId);
   const evidenceRefs = assertOwnerGoComment(ownerGoComment, request);
-  await assertLatestOwnerDecision(readJson, apiBase, request);
   await assertOwnerGoUnused(readJson, request);
 
   let preflightEvidenceRef = "";
@@ -342,6 +380,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
   let isolationEvidenceRef = "";
   if (request.operation === "preflight") {
     const isolationComment = await readJson(`issues/comments/${evidenceRefs.isolationEvidenceCommentId}`);
+    assertEvidencePredatesOwnerGo(isolationComment, apiBase, "Isolation and recovery evidence", evidenceRefs.isolationEvidenceCommentId, ownerGoComment);
     assertEvidenceLines(isolationComment, apiBase, "Isolation and recovery evidence", [
       "R2_ISOLATION_RESULT: PASS",
       `SHA: ${request.candidateSha}`,
@@ -352,6 +391,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     isolationEvidenceRef = `#98/${evidenceRefs.isolationEvidenceCommentId}`;
   } else if (request.operation === "migrate") {
     const preflightComment = await readJson(`issues/comments/${evidenceRefs.preflightEvidenceCommentId}`);
+    assertEvidencePredatesOwnerGo(preflightComment, apiBase, "Authenticated preflight evidence", evidenceRefs.preflightEvidenceCommentId, ownerGoComment);
     await assertSuccessfulRunnerEvidence(readJson, apiBase, preflightComment, request, "Authenticated preflight evidence", "preflight", [
       "R2_PREFLIGHT_RESULT: PASS",
       `SHA: ${request.candidateSha}`,
@@ -365,6 +405,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
       "FREE_PLAN: PASS",
     ]);
     const isolationComment = await readJson(`issues/comments/${evidenceRefs.isolationEvidenceCommentId}`);
+    assertEvidencePredatesOwnerGo(isolationComment, apiBase, "Isolation and recovery evidence", evidenceRefs.isolationEvidenceCommentId, ownerGoComment);
     assertEvidenceLines(isolationComment, apiBase, "Isolation and recovery evidence", [
       "R2_ISOLATION_RESULT: PASS",
       `SHA: ${request.candidateSha}`,
@@ -376,6 +417,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     isolationEvidenceRef = `#98/${evidenceRefs.isolationEvidenceCommentId}`;
   } else if (request.operation === fixtureOperation) {
     const migrationComment = await readJson(`issues/comments/${evidenceRefs.migrationEvidenceCommentId}`);
+    assertEvidencePredatesOwnerGo(migrationComment, apiBase, "Migration cleanup evidence", evidenceRefs.migrationEvidenceCommentId, ownerGoComment);
     await assertSuccessfulRunnerEvidence(readJson, apiBase, migrationComment, request, "Migration cleanup evidence", "migrate", [
       "R2_MIGRATION_RESULT: PASS",
       `SHA: ${request.candidateSha}`,
@@ -385,6 +427,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
       "RUNTIME_DML_ONLY: PASS",
     ]);
     const isolationComment = await readJson(`issues/comments/${evidenceRefs.isolationEvidenceCommentId}`);
+    assertEvidencePredatesOwnerGo(isolationComment, apiBase, "Isolation and recovery evidence", evidenceRefs.isolationEvidenceCommentId, ownerGoComment);
     assertEvidenceLines(isolationComment, apiBase, "Isolation and recovery evidence", [
       "R2_ISOLATION_RESULT: PASS",
       `SHA: ${request.candidateSha}`,
@@ -395,6 +438,8 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     migrationEvidenceRef = `#98/${evidenceRefs.migrationEvidenceCommentId}`;
     isolationEvidenceRef = `#98/${evidenceRefs.isolationEvidenceCommentId}`;
   }
+
+  await assertLatestOwnerDecision(readJson, apiBase, request);
 
   return {
     candidateSha: request.candidateSha,

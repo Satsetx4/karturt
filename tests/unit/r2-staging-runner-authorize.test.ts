@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { executeAuthorizedStagingOperation } from "../../.github/scripts/r2-staging-runner-execute.mjs";
 import {
   authorizeR2StagingDispatch,
@@ -101,7 +102,8 @@ function response(body: unknown, status = 200) {
 }
 
 function issueComment(id: string, body: string, user = "Satsetx4") {
-  return { id: Number(id), issue_url: issueUrl, user: { login: user }, body };
+  const createdAt = new Date(Date.parse("2026-10-25T00:00:00Z") + Number(id) - 6389999900).toISOString();
+  return { id: Number(id), issue_url: issueUrl, user: { login: user }, body, created_at: createdAt, updated_at: createdAt };
 }
 
 function goBody(operation: string, extraLines: string[] = []) {
@@ -322,6 +324,14 @@ function fetchFor(overrides: {
 }
 
 describe("R2 staging runner authorization", () => {
+  it("installs candidate dependencies without running package lifecycle scripts", () => {
+    const workflow = readFileSync(new URL("../../.github/workflows/r2-staging-runner.yml", import.meta.url), "utf8");
+    const installCommands = workflow.split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => /^run:\s*npm ci(?:\s|$)/.test(line));
+    expect(installCommands).toEqual(["run: npm ci --ignore-scripts"]);
+  });
+
   it("binds migrate to main dispatch, merged PR #99, exact-head CI, protected environment, and exact owner GO", async () => {
     const fetchImpl = fetchFor();
     const result = await authorizeR2StagingDispatch({ context: context(), fetchImpl });
@@ -346,15 +356,23 @@ describe("R2 staging runner authorization", () => {
     [fixtureOperation, fixtureOperation, "", "DATABASE_URL", "KARTURT_R2_RESIDENT_PIN"],
   ])("rechecks %s immediately before spawning with only that operation's child environment", async (operation, goOperation, migratorKey, runtimeKey, fixtureKey) => {
     const env = authorizedExecutionEnv(operation);
+    const events: string[] = [];
     let capturedSpawn: { command: string; args: string[]; options: { env: NodeJS.ProcessEnv } } | undefined;
     const spawnMock = vi.fn((command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
+      events.push("spawn");
       capturedSpawn = { command, args, options };
       return { status: 0, error: undefined, pid: 42, output: [], stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), signal: null };
     });
     const spawnImpl = spawnMock as unknown as typeof import("node:child_process").spawnSync;
-    const fetchImpl = fetchFor({ comment: issueComment(ownerGoCommentId, goBody(goOperation)) });
+    const baseFetch = fetchFor({ comment: issueComment(ownerGoCommentId, goBody(goOperation)) });
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/issues/98/comments")) events.push("latest-owner-decision");
+      return baseFetch(input, init);
+    }) as unknown as typeof fetch;
 
     await expect(executeAuthorizedStagingOperation({ env, fetchImpl, spawnImpl })).resolves.toBe(0);
+    expect(events.slice(-2)).toEqual(["latest-owner-decision", "spawn"]);
     expect(spawnMock).toHaveBeenCalledTimes(1);
     expect(capturedSpawn?.command).toBe("npm");
     expect(capturedSpawn?.args).toEqual(operation === "preflight"
@@ -396,6 +414,33 @@ describe("R2 staging runner authorization", () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
+  it("does not spawn when a NO-GO is posted during prerequisite evidence checks", async () => {
+    const env = authorizedExecutionEnv("migrate");
+    const go = issueComment(ownerGoCommentId, goBody(migrationOperation));
+    const noGo = issueComment("6391000000", goBody(migrationOperation).replace("R2_RUNNER_GO: GO", "R2_RUNNER_GO: NO-GO"));
+    const baseFetch = fetchFor({ comment: go });
+    let latestDecisionReads = 0;
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/issues/98/comments")) {
+        latestDecisionReads += 1;
+        if (latestDecisionReads === 2) return response([go, noGo]);
+      }
+      return baseFetch(input, init);
+    }) as unknown as typeof fetch;
+    const spawnMock = vi.fn(() => ({
+      status: 0, error: undefined, pid: 42, output: [], stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), signal: null,
+    }));
+
+    await expect(executeAuthorizedStagingOperation({
+      env,
+      fetchImpl,
+      spawnImpl: spawnMock as unknown as typeof import("node:child_process").spawnSync,
+    })).rejects.toThrow("missing, stale, or superseded");
+    expect(latestDecisionReads).toBe(2);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
   it("requires an operation-specific owner GO even for read-only preflight", async () => {
     const fetchImpl = fetchFor();
     await expect(authorizeR2StagingDispatch({
@@ -414,10 +459,7 @@ describe("R2 staging runner authorization", () => {
   });
 
   it("accepts the separately authorized synthetic fixture operation with verified evidence refs", async () => {
-    const comment = issueComment(ownerGoCommentId, goBody(fixtureOperation, [
-      `MIGRATION_EVIDENCE_COMMENT: #98/${migrationEvidenceCommentId}`,
-      `ISOLATION_EVIDENCE_COMMENT: #98/${isolationEvidenceCommentId}`,
-    ]));
+    const comment = issueComment(ownerGoCommentId, goBody(fixtureOperation));
     const fetchImpl = fetchFor({ comment });
     await expect(authorizeR2StagingDispatch({
       context: context({ operation: fixtureOperation }),
@@ -431,10 +473,7 @@ describe("R2 staging runner authorization", () => {
   });
 
   it("rejects fixture GO when migration-cleanup evidence is missing or mismatched", async () => {
-    const comment = issueComment(ownerGoCommentId, goBody(fixtureOperation, [
-      `MIGRATION_EVIDENCE_COMMENT: #98/${migrationEvidenceCommentId}`,
-      `ISOLATION_EVIDENCE_COMMENT: #98/${isolationEvidenceCommentId}`,
-    ]));
+    const comment = issueComment(ownerGoCommentId, goBody(fixtureOperation));
     const fetchImpl = fetchFor({
       comment,
       evidenceComments: {
@@ -533,6 +572,50 @@ describe("R2 staging runner authorization", () => {
     const noGo = issueComment("6390000000", goBody(migrationOperation).replace("R2_RUNNER_GO: GO", "R2_RUNNER_GO: NO-GO"));
     const fetchImpl = fetchFor({ comments: [go, noGo] });
     await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl })).rejects.toThrow("missing, stale, or superseded");
+  });
+
+  it("rejects an owner GO comment that was edited", async () => {
+    const comment = {
+      ...issueComment(ownerGoCommentId, goBody(migrationOperation)),
+      updated_at: new Date(Date.parse("2026-10-25T00:00:01Z")).toISOString(),
+    };
+    const fetchImpl = fetchFor({ comment });
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
+      .rejects.toThrow("referenced R2 GO comment must be an unedited issue comment");
+  });
+
+  it("requires prerequisite evidence to predate the owner GO and remain unedited", async () => {
+    const isolation = issueComment(isolationEvidenceCommentId, [
+      "R2_ISOLATION_RESULT: PASS",
+      `SHA: ${candidateSha}`,
+      `TARGET: ${runnerTarget}`,
+      "SYNTHETIC_ONLY: PASS",
+      "FREE_RECOVERY: PASS",
+    ].join("\n"));
+    const afterGo = new Date(Date.parse(issueComment(ownerGoCommentId, "").created_at) + 1000).toISOString();
+    const fetchImpl = fetchFor({
+      comment: issueComment(ownerGoCommentId, goBody(preflightOperation)),
+      evidenceComments: {
+        [isolationEvidenceCommentId]: { ...isolation, created_at: afterGo, updated_at: afterGo },
+      },
+    });
+    await expect(authorizeR2StagingDispatch({
+      context: context({ operation: "preflight" }),
+      fetchImpl,
+    })).rejects.toThrow("Isolation and recovery evidence must be created before the owner GO comment");
+
+    const editedIsolation = {
+      ...isolation,
+      updated_at: new Date(Date.parse(isolation.updated_at) + 1000).toISOString(),
+    };
+    const editedFetch = fetchFor({
+      comment: issueComment(ownerGoCommentId, goBody(preflightOperation)),
+      evidenceComments: { [isolationEvidenceCommentId]: editedIsolation },
+    });
+    await expect(authorizeR2StagingDispatch({
+      context: context({ operation: "preflight" }),
+      fetchImpl: editedFetch,
+    })).rejects.toThrow("Isolation and recovery evidence must be an unedited issue comment");
   });
 
   it("rejects reuse of an owner GO already attached to an earlier staging run", async () => {

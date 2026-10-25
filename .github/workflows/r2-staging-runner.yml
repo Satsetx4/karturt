@@ -117,7 +117,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install reviewed candidate dependencies without database credentials
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Check out trusted authorization policy after candidate setup
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
