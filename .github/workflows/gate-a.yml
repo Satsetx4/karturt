@@ -46,6 +46,17 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify source checkout
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$actual_sha" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "Expected source SHA $EXPECTED_SOURCE_SHA but checked out $actual_sha."
+            exit 1
+          fi
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -89,7 +100,20 @@ jobs:
         run: npm run build
 
   launch-safety-postgres-concurrency:
-    if: github.ref == 'refs/heads/feat/launch-safety-single-rt' || github.head_ref == 'feat/launch-safety-single-rt' || github.ref == 'refs/heads/fix/launch-safety-security-closure' || github.head_ref == 'fix/launch-safety-security-closure' || github.ref == 'refs/heads/feat/delivery-readiness-single-rt' || github.head_ref == 'feat/delivery-readiness-single-rt'
+    # Keep the isolated PostgreSQL race suite active for Fast Track V1 work.
+    if: >-
+      github.ref == 'refs/heads/feat/launch-safety-single-rt' ||
+      github.head_ref == 'feat/launch-safety-single-rt' ||
+      github.ref == 'refs/heads/fix/launch-safety-security-closure' ||
+      github.head_ref == 'fix/launch-safety-security-closure' ||
+      github.ref == 'refs/heads/feat/delivery-readiness-single-rt' ||
+      github.head_ref == 'feat/delivery-readiness-single-rt' ||
+      startsWith(github.ref, 'refs/heads/fix/fast-track-v1-') ||
+      startsWith(github.head_ref, 'fix/fast-track-v1-') ||
+      startsWith(github.ref, 'refs/heads/ci/fast-track-v1-') ||
+      startsWith(github.head_ref, 'ci/fast-track-v1-') ||
+      startsWith(github.ref, 'refs/heads/codex/fast-track-v1-') ||
+      startsWith(github.head_ref, 'codex/fast-track-v1-')
     name: Launch Safety independent PostgreSQL concurrency
     needs: gate-a
     runs-on: ubuntu-latest
@@ -114,6 +138,17 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify source checkout
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$actual_sha" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "Expected source SHA $EXPECTED_SOURCE_SHA but checked out $actual_sha."
+            exit 1
+          fi
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -129,7 +164,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: launch-safety-postgres-concurrency-${{ github.sha }}
+          name: launch-safety-postgres-concurrency-${{ github.event.pull_request.head.sha || github.sha }}
           path: docs/launch-safety-evidence/postgres-independent-concurrency.json
           if-no-files-found: ignore
           retention-days: 14

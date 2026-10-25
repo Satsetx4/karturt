@@ -5,6 +5,7 @@ import {
   appAccounts,
   billingYears,
   feeRates,
+  monthlyDues,
   officialAssignments,
 } from "@/db/schema";
 import { appendAuditEvent } from "@/lib/audit/writer";
@@ -260,8 +261,40 @@ export async function createChairmanFeeRate(
         .limit(1)
         .for("update");
       if (!year) throw new ChairmanFeeRateNotFoundError("Tahun tagihan tidak ditemukan.");
-      if (year.status !== "open") {
-        throw new ChairmanFeeRateConflictError("Tarif hanya dapat ditambahkan pada tahun tagihan yang sedang dibuka.");
+      const isInitialDraftRate = year.status === "draft" && normalized.effectiveMonth === 1;
+      if (year.status !== "open" && !isInitialDraftRate) {
+        throw new ChairmanFeeRateConflictError("Tarif awal hanya dapat ditambahkan pada tahun rancangan; perubahan tarif memerlukan tahun terbuka.");
+      }
+      if (isInitialDraftRate) {
+        const existingRates = await transaction
+          .select({ id: feeRates.id })
+          .from(feeRates)
+          .where(and(eq(feeRates.rtUnitId, rtUnitId), eq(feeRates.billingYearId, year.id)))
+          .limit(1);
+        const existingDues = await transaction
+          .select({ id: monthlyDues.id })
+          .from(monthlyDues)
+          .where(and(eq(monthlyDues.rtUnitId, rtUnitId), eq(monthlyDues.billingYearId, year.id)))
+          .limit(1);
+        if (existingRates.length > 0 || existingDues.length > 0) {
+          throw new ChairmanFeeRateConflictError("Tarif awal Januari hanya dapat dibuat sebelum tarif atau iuran tahunan tersedia.");
+        }
+        const otherOpenYears = await transaction
+          .select({ id: billingYears.id })
+          .from(billingYears)
+          .where(and(
+            eq(billingYears.rtUnitId, rtUnitId),
+            eq(billingYears.status, "open"),
+          ))
+          .limit(1);
+        if (otherOpenYears.length > 0) {
+          throw new ChairmanFeeRateConflictError("Tutup tahun tagihan yang sedang dibuka sebelum menyiapkan tarif dasar tahun baru.");
+        }
+        const [openedYear] = await transaction.update(billingYears)
+          .set({ status: "open" })
+          .where(and(eq(billingYears.id, year.id), eq(billingYears.status, "draft")))
+          .returning({ id: billingYears.id });
+        if (!openedYear) throw new ChairmanFeeRateConflictError("Tahun tagihan berubah sebelum tarif dasar dibuat.");
       }
 
       const period = canonicalPeriod(year.year, normalized.effectiveMonth);

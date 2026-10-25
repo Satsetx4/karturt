@@ -1,3 +1,11 @@
+export type ResidentMonthReceipt = {
+  /** Amount allocated to this month from the canonical payment ledger. */
+  allocationAmount: number;
+  method: "cash" | "transfer";
+  verifiedAt: string;
+  reference: string;
+};
+
 export type ResidentDue = {
   billingYear: number;
   month: number;
@@ -10,13 +18,19 @@ export type ResidentDue = {
   outstanding: number;
   dueDate: string;
   status: "paid" | "unpaid" | "waived" | "not_due";
+  /** Calendar display only; the persisted due status remains unchanged. */
+  periodTiming?: "past" | "current" | "future";
+  /** Active payment allocations for a paid month, excluding reversed payments. */
+  receipts?: ResidentMonthReceipt[];
   paymentRequestStatus?: "pending" | "verified" | "rejected" | "cancelled" | null;
 };
 export type CurrentResidentStatusToken =
   | "PAID"
   | "UNPAID"
   | "WAIVED"
-  | "NOT_DUE";
+  | "NOT_DUE"
+  | "UPCOMING"
+  | "OVERDUE";
 export type ResidentStatusToken = CurrentResidentStatusToken | "PENDING";
 
 export const monthNames = [
@@ -49,11 +63,15 @@ export const residentStatusLabels: Record<ResidentStatusToken, string> = {
   UNPAID: "Belum bayar",
   WAIVED: "Dibebaskan",
   NOT_DUE: "Tidak perlu bayar",
+  UPCOMING: "Belum jatuh tempo",
+  OVERDUE: "Menunggak",
   PENDING: "Menunggu konfirmasi",
 };
 
 export function dueToken(due: ResidentDue): ResidentStatusToken {
   if (due.status === "unpaid" && due.paymentRequestStatus === "pending") return "PENDING";
+  if (due.status === "unpaid" && due.periodTiming === "future") return "UPCOMING";
+  if (due.status === "unpaid" && due.periodTiming === "past") return "OVERDUE";
   return domainStatusTokens[due.status];
 }
 
@@ -81,7 +99,7 @@ export function duesSummary(dues: ResidentDue[]) {
           : 0),
       unpaid:
         total.unpaid +
-        (due.status === "unpaid" && due.paymentRequestStatus !== "pending"
+        (due.status === "unpaid" && due.periodTiming !== "future" && due.paymentRequestStatus !== "pending"
           ? due.outstanding
           : 0),
     }),

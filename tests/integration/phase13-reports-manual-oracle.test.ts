@@ -328,6 +328,17 @@ const DIRECT_YEARLY_SQL = `${DIRECT_COMPONENTS_SQL}
   FROM calculated_dues
 `;
 
+const DIRECT_POSITION_SQL = `${DIRECT_COMPONENTS_SQL}
+  SELECT
+    coalesce(sum(outstanding) FILTER (
+      WHERE date_trunc('month', due_date) <= date_trunc('month', $3::date)
+    ), 0)::int AS "dueNowOutstanding",
+    coalesce(sum(outstanding) FILTER (
+      WHERE date_trunc('month', due_date) > date_trunc('month', $3::date)
+    ), 0)::int AS "futureUnpaidOutstanding"
+  FROM calculated_dues
+`;
+
 const DIRECT_ARREARS_SQL = `${DIRECT_COMPONENTS_SQL}
   SELECT due.household_id AS "householdId", house.number AS "houseNumber",
     household.status AS "householdStatus", household.starts_on AS "startsOn", household.ends_on AS "endsOn",
@@ -578,7 +589,13 @@ describe("F13 PGlite manual reporting oracle", () => {
     const may20After = await financialSnapshot(testDatabase, rtUnitId);
     expect(may20After).toEqual(may20Before);
 
-    expect(reportMay20).toMatchObject({ year: YEAR, availableYears: [YEAR] });
+    expect(reportMay20).toMatchObject({
+      year: YEAR,
+      availableYears: [YEAR],
+      asOf: { businessDate: BUSINESS_DATE, period: "2026-05" },
+      dueNowOutstanding: 195_000,
+      futureUnpaidOutstanding: 840_000,
+    });
     expect(reportMay20.monthly).toHaveLength(12);
     expect(reportMay20.monthly.slice(0, 5).map(projection)).toEqual(JAN_TO_MAY_EXPECTED);
     expect(reportMay20.monthly.slice(5).every((month) =>
@@ -621,6 +638,9 @@ describe("F13 PGlite manual reporting oracle", () => {
     expect(reportMay20.yearly.overdueCount).toBe(5);
     expect(reportMay05.yearly).toEqual({ ...ANNUAL_EXPECTED, overdueCount: 3 });
 
+    expect(reportMay05.asOf).toEqual({ businessDate: BEFORE_MAY_DUE_DATE, period: "2026-05" });
+    expect(reportMay05.dueNowOutstanding).toBe(195_000);
+    expect(reportMay05.futureUnpaidOutstanding).toBe(840_000);
     expect(reportMay20.arrears).toMatchObject({ totalOutstanding: 195_000, count: 5, householdCount: 3 });
     expect(expectedReportHouseholds(reportMay20)).toEqual([
       {
@@ -675,9 +695,17 @@ describe("F13 PGlite manual reporting oracle", () => {
     const sqlMay05Yearly = await testDatabase.client.query<Record<string, number>>(
       DIRECT_YEARLY_SQL, [rtUnitId, billingYear.id, BEFORE_MAY_DUE_DATE],
     );
+    const sqlMay20Position = await testDatabase.client.query<{
+      dueNowOutstanding: number;
+      futureUnpaidOutstanding: number;
+    }>(DIRECT_POSITION_SQL, [rtUnitId, billingYear.id, BUSINESS_DATE]);
     expect(sqlMay20Monthly.rows.map(projection)).toEqual(reportMay20.monthly.map(projection));
     expect(sqlMay20Yearly.rows[0]).toMatchObject(ANNUAL_EXPECTED);
     expect(sqlMay05Yearly.rows[0]).toMatchObject({ ...ANNUAL_EXPECTED, overdueCount: 3 });
+    expect(sqlMay20Position.rows[0]).toEqual({
+      dueNowOutstanding: reportMay20.dueNowOutstanding,
+      futureUnpaidOutstanding: reportMay20.futureUnpaidOutstanding,
+    });
 
     const sqlMay20Arrears = await testDatabase.client.query<{
       householdId: string;

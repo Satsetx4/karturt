@@ -1,5 +1,6 @@
 import { loadEnvConfig } from "@next/env";
 import { closeDb, getDb } from "@/db/client";
+import { assertDevelopmentProvisioningEnvironment } from "@/db/development-provisioning-guard";
 import { requireDatabaseEnvironment } from "@/lib/env";
 import { bootstrapRtUnit } from "@/lib/rt/bootstrap";
 
@@ -11,7 +12,8 @@ function required(name: string) {
 
 async function main() {
   loadEnvConfig(process.cwd());
-  requireDatabaseEnvironment();
+  const environment = requireDatabaseEnvironment();
+  assertDevelopmentProvisioningEnvironment(environment);
   const values = {
     code: required("KARTUR_RT_CODE"),
     rwCode: required("KARTUR_RW_CODE"),

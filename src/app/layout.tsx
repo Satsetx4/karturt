@@ -1,13 +1,6 @@
 import type { Metadata } from "next";
-import { Source_Sans_3 } from "next/font/google";
 import { getPublicAppUrl } from "@/lib/env";
 import "./globals.css";
-
-const sourceSans = Source_Sans_3({
-  variable: "--font-source-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-});
 
 const appUrl = getPublicAppUrl();
 const themeBootstrap = `(()=>{let theme="light";try{const stored=localStorage.getItem("karturt:theme");if(stored==="dark")theme="dark"}catch{}document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle("dark",theme==="dark")})()`;
@@ -47,7 +40,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="id" className={`${sourceSans.variable} antialiased`} suppressHydrationWarning>
+    <html lang="id" className="antialiased" suppressHydrationWarning>
       <head>
         <script id="karturt-theme-bootstrap" dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationData).replace(/</g, "\\u003c") }} />

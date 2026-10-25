@@ -1,0 +1,118 @@
+import { describe, expect, it } from "vitest";
+import { assessR3ObservationSample, parseR3ObserverInputs } from "@/db/r3-observer";
+import { getR3WorkerIdentity } from "@/lib/r3-worker-identity";
+
+const releaseSha = "63c3a89aee70a9fdd11db499db261e3d7caa136d";
+
+function environment(overrides: Partial<NodeJS.ProcessEnv> = {}): NodeJS.ProcessEnv {
+  return {
+    NODE_ENV: "test",
+    APP_ENV: "staging",
+    DATABASE_ENV: "staging",
+    KARTURT_R3_CI_RUN_ID: "40117598868",
+    KARTURT_R3_CI_ATTEMPT: "1",
+    KARTURT_R2_PASS_EVIDENCE_REF: "release-packet-r2-pass",
+    KARTURT_R3_AUTHORIZATION_REF: "#98/9999999999",
+    KARTURT_R3_SCENARIO: "R3-RACE-VERIFY",
+    KARTURT_R3_RUN_ID: "r3run20261025",
+    KARTURT_R3_BUSINESS_DATE: "2026-10-25",
+    KARTURT_R3_APP_ORIGIN_A: "https://localhost:3443",
+    KARTURT_R3_APP_ORIGIN_B: "https://localhost:3444",
+    DATABASE_URL: "postgresql://karturt_stg_runtime:secret@ep-red-boat-azzqyf45.c-3.ap-southeast-1.aws.neon.tech/karturt_staging",
+    ...overrides,
+  };
+}
+
+describe("RELEASE FIRST R3 observer input gate", () => {
+  it("accepts a full exact-head setup with two distinct local HTTPS workers", () => {
+    const parsed = parseR3ObserverInputs(environment(), releaseSha);
+
+    expect(parsed).toEqual(expect.objectContaining({
+      releaseSha,
+      scenario: "R3-RACE-VERIFY",
+      appOriginA: "https://localhost:3443",
+      appOriginB: "https://localhost:3444",
+      applicationNameA: "krt-r3-r3run20261025-R3-RACE-VERIFY-a",
+      applicationNameB: "krt-r3-r3run20261025-R3-RACE-VERIFY-b",
+      observerApplicationName: "krt-r3-r3run20261025-R3-RACE-VERIFY-observer",
+    }));
+  });
+
+  it("fails before a database connection when SHA or authorization evidence is missing", () => {
+    expect(() => parseR3ObserverInputs(environment(), "short-sha"))
+      .toThrow("full current Git HEAD");
+    expect(() => parseR3ObserverInputs(environment({ KARTURT_R3_AUTHORIZATION_REF: "" }), releaseSha))
+      .toThrow("KARTURT_R3_AUTHORIZATION_REF is required");
+  });
+
+  it("rejects reused origins, a future scenario, and a non-staging environment", () => {
+    expect(() => parseR3ObserverInputs(environment({ KARTURT_R3_APP_ORIGIN_B: "https://localhost:3443" }), releaseSha))
+      .toThrow("origins must be distinct");
+    expect(() => parseR3ObserverInputs(environment({ KARTURT_R3_SCENARIO: "R3-RACE-WAIVER" }), releaseSha))
+      .toThrow("not one of the four approved race cases");
+    expect(() => parseR3ObserverInputs(environment({ DATABASE_ENV: "production" }), releaseSha))
+      .toThrow("must both be staging");
+  });
+});
+
+describe("R3 observer sample assessment", () => {
+  it("passes only a snapshot showing both active sessions, lock contention, same runtime identity, and TLS", () => {
+    expect(assessR3ObservationSample({
+      session_count_a: 1,
+      session_count_b: 1,
+      active_a: true,
+      active_b: true,
+      app_sessions_lock_wait_observed: true,
+      backend_session_count: 2,
+      runtime_role_matched: true,
+      app_tls_encrypted: true,
+    })).toEqual({
+      sessionsVisible: true,
+      roleMatched: true,
+      appTlsEncrypted: true,
+      backendSessionsDistinct: true,
+      overlapObserved: true,
+      appSessionsLockWaitObserved: true,
+    });
+  });
+
+  it("does not infer overlap from two idle sessions or distinct PIDs alone", () => {
+    expect(assessR3ObservationSample({
+      session_count_a: 1,
+      session_count_b: 1,
+      active_a: false,
+      active_b: false,
+      app_sessions_lock_wait_observed: false,
+      backend_session_count: 2,
+      runtime_role_matched: true,
+      app_tls_encrypted: true,
+    })).toMatchObject({
+      backendSessionsDistinct: true,
+      overlapObserved: false,
+      appSessionsLockWaitObserved: false,
+    });
+  });
+});
+
+describe("R3 health worker identity", () => {
+  const stagingWorkerEnvironment: NodeJS.ProcessEnv = {
+    NODE_ENV: "test",
+    APP_ENV: "staging",
+    KARTURT_R3_RUN_ID: "r3run20261025",
+    KARTURT_R3_SCENARIO: "R3-RACE-VERIFY",
+    KARTURT_R3_WORKER_TAG: "a",
+  };
+
+  it("returns a process identity only for the matching staging run", () => {
+    expect(getR3WorkerIdentity("r3run20261025", stagingWorkerEnvironment, releaseSha, 12345)).toEqual({
+      releaseSha,
+      runId: "r3run20261025",
+      scenario: "R3-RACE-VERIFY",
+      workerTag: "a",
+      workerInstanceId: expect.stringMatching(/^[0-9a-f]{16}$/),
+    });
+    expect(getR3WorkerIdentity("other-run", stagingWorkerEnvironment, releaseSha, 12345)).toBeNull();
+    expect(getR3WorkerIdentity("r3run20261025", stagingWorkerEnvironment, undefined, 12345)).toBeNull();
+    expect(getR3WorkerIdentity("r3run20261025", { ...stagingWorkerEnvironment, APP_ENV: "production" }, releaseSha, 12345)).toBeNull();
+  });
+});
