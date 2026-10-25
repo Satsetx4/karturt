@@ -220,6 +220,7 @@ function stagingOperationRun(runId: string, operation: string, goCommentId: stri
 
 function fetchFor(overrides: {
   pullRequests?: unknown[];
+  pullRequestPages?: Record<number, unknown[]>;
   runs?: unknown[];
   jobs?: unknown[];
   comment?: Record<string, unknown>;
@@ -251,15 +252,24 @@ function fetchFor(overrides: {
     expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer test-token-never-a-real-secret");
     expect(url.pathname).not.toContain("/secrets");
 
-    if (url.pathname.endsWith(`/commits/${candidateSha}/pulls`)) {
-      return response(overrides.pullRequests ?? [{
+    if (url.pathname.endsWith("/pulls")) {
+      expect(url.searchParams.get("state")).toBe("all");
+      expect(url.searchParams.get("sort")).toBe("created");
+      expect(url.searchParams.get("direction")).toBe("asc");
+      expect(url.searchParams.get("per_page")).toBe("100");
+      const page = Number(url.searchParams.get("page"));
+      const allPullRequests = overrides.pullRequests ?? [{
         number: 101,
         state: "closed",
         merged_at: "2026-10-25T00:00:00Z",
         base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
         head: { ref: branch, sha: candidateSha, repo: { full_name: "Satsetx4/karturt" } },
         merge_commit_sha: mergeCommitSha,
-      }]);
+      }];
+      const pagePullRequests = overrides.pullRequestPages
+        ? overrides.pullRequestPages[page] ?? []
+        : allPullRequests.slice((page - 1) * 100, page * 100);
+      return response(pagePullRequests);
     }
     if (url.pathname.endsWith(`/commits/${candidateSha}`)) {
       return response({ commit: { tree: { sha: overrides.candidateTree ?? candidateTreeSha } } });
@@ -405,6 +415,174 @@ describe("R2 staging runner authorization", () => {
     });
     expect(JSON.stringify(result)).not.toContain("test-token-never-a-real-secret");
     expect(fetchImpl).toHaveBeenCalledTimes(17);
+  });
+
+  it.each([
+    ["omitted", undefined],
+    ["empty", []],
+  ] as const)("accepts exact-head Gate A CI with %s pull request links for the unique merged PR #101 association", async (_linkState, pullRequestLinks) => {
+    const gateRun = {
+      id: Number(gateARunId),
+      run_attempt: Number(gateAAttempt),
+      status: "completed",
+      conclusion: "success",
+      created_at: "2026-10-25T00:00:00Z",
+      head_sha: candidateSha,
+      head_branch: branch,
+      event: "pull_request",
+    } as Record<string, unknown>;
+    if (pullRequestLinks !== undefined) gateRun.pull_requests = pullRequestLinks;
+    const result = await authorizeR2StagingDispatch({
+      context: context(),
+      fetchImpl: fetchFor({
+        runs: [gateRun],
+      }),
+    });
+
+    expect(result.ciRunId).toBe(gateARunId);
+    expect(result.ciAttempt).toBe(gateAAttempt);
+  });
+
+  it.each([
+    ["different base", { base: { ref: "release", repo: { full_name: "Satsetx4/karturt" } } }],
+    ["fork head repository", { head: { ref: branch, sha: candidateSha, repo: { full_name: "another-owner/karturt" } } }],
+  ] as const)("rejects omitted Gate A PR links when another PR shares the candidate SHA and branch via a %s", async (_associationType, associationOverride) => {
+    const matchingAssociation = {
+      state: "closed",
+      merged_at: "2026-10-25T00:00:00Z",
+      base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
+      head: { ref: branch, sha: candidateSha, repo: { full_name: "Satsetx4/karturt" } },
+      merge_commit_sha: mergeCommitSha,
+    };
+    const fetchImpl = fetchFor({
+      pullRequests: [
+        { number: 101, ...matchingAssociation },
+        { number: 102, ...matchingAssociation, ...associationOverride },
+      ],
+      runs: [{
+        id: Number(gateARunId),
+        run_attempt: Number(gateAAttempt),
+        status: "completed",
+        conclusion: "success",
+        created_at: "2026-10-25T00:00:00Z",
+        head_sha: candidateSha,
+        head_branch: branch,
+        event: "pull_request",
+      }],
+    });
+
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
+      .rejects.toThrow("unique authoritative association with merged PR #101");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("paginates the repository pull request list before accepting a unique PR #101 association", async () => {
+    const matchingAssociation = {
+      state: "closed",
+      merged_at: "2026-10-25T00:00:00Z",
+      base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
+      head: { ref: branch, sha: candidateSha, repo: { full_name: "Satsetx4/karturt" } },
+      merge_commit_sha: mergeCommitSha,
+    };
+    const unrelatedPullRequests = Array.from({ length: 99 }, (_, index) => ({
+      number: 200 + index,
+      base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
+      head: { ref: `unrelated-${index}`, sha: "e".repeat(40), repo: { full_name: "Satsetx4/karturt" } },
+    }));
+    const fetchImpl = fetchFor({
+      pullRequests: [
+        { number: 101, ...matchingAssociation },
+        ...unrelatedPullRequests,
+        { number: 500, head: { ref: "unrelated-final", sha: "f".repeat(40), repo: { full_name: "Satsetx4/karturt" } } },
+      ],
+      runs: [{
+        id: Number(gateARunId),
+        run_attempt: Number(gateAAttempt),
+        status: "completed",
+        conclusion: "success",
+        created_at: "2026-10-25T00:00:00Z",
+        head_sha: candidateSha,
+        head_branch: branch,
+        event: "pull_request",
+      }],
+    });
+
+    const result = await authorizeR2StagingDispatch({ context: context(), fetchImpl });
+
+    expect(result.ciRunId).toBe(gateARunId);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.stringContaining("/pulls?state=all&sort=created&direction=asc&per_page=100&page=2"),
+      expect.anything(),
+    );
+  });
+
+  it("rejects an ambiguous candidate PR association found on a later repository page", async () => {
+    const matchingAssociation = {
+      state: "closed",
+      merged_at: "2026-10-25T00:00:00Z",
+      base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
+      head: { ref: branch, sha: candidateSha, repo: { full_name: "Satsetx4/karturt" } },
+      merge_commit_sha: mergeCommitSha,
+    };
+    const unrelatedPullRequests = Array.from({ length: 99 }, (_, index) => ({
+      number: 200 + index,
+      base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
+      head: { ref: `unrelated-${index}`, sha: "e".repeat(40), repo: { full_name: "Satsetx4/karturt" } },
+    }));
+    const fetchImpl = fetchFor({
+      pullRequests: [
+        { number: 101, ...matchingAssociation },
+        ...unrelatedPullRequests,
+        {
+          number: 500,
+          ...matchingAssociation,
+          base: { ref: "release", repo: { full_name: "Satsetx4/karturt" } },
+        },
+      ],
+    });
+
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
+      .rejects.toThrow("unique authoritative association with merged PR #101");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.stringContaining("/pulls?state=all&sort=created&direction=asc&per_page=100&page=2"),
+      expect.anything(),
+    );
+  });
+
+  it("fails closed when repository pull request pagination reaches page 99 without a short page", async () => {
+    const fullPage = Array.from({ length: 100 }, (_, index) => ({ number: index + 1 }));
+    const pullRequestPages: Record<number, unknown[]> = {};
+    for (let page = 1; page < 100; page += 1) pullRequestPages[page] = fullPage;
+    const fetchImpl = fetchFor({ pullRequestPages });
+
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
+      .rejects.toThrow("pagination did not reach a short page before page 100");
+    expect(fetchImpl).toHaveBeenCalledTimes(99);
+  });
+
+  it("rejects candidate Gate A runs whose non-empty PR link list excludes PR #101", async () => {
+    const linkedRun = {
+      id: Number(gateARunId),
+      run_attempt: Number(gateAAttempt),
+      status: "completed",
+      conclusion: "success",
+      created_at: "2026-10-25T00:00:00Z",
+      head_sha: candidateSha,
+      head_branch: branch,
+      event: "pull_request",
+      pull_requests: [{ number: 102 }],
+    };
+    const correctlyLinkedRun = {
+      ...linkedRun,
+      id: Number(gateARunId) + 1,
+      created_at: "2026-10-24T23:59:00Z",
+      pull_requests: [{ number: 101 }],
+    };
+    const fetchImpl = fetchFor({ runs: [correctlyLinkedRun, linkedRun] });
+
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
+      .rejects.toThrow("Every non-empty candidate Gate A pull request link list must include PR #101");
   });
 
   it.each([

@@ -12,6 +12,8 @@ export const runnerWorkflowName = "KartuRT R2 staging runner";
 const owner = "Satsetx4";
 const repository = "Satsetx4/karturt";
 const expectedCandidatePullRequest = 101;
+const pullRequestPageSize = 100;
+const maxPullRequestPage = 100;
 const disposableRecoveryJobName = "R2 disposable PostgreSQL 18 recovery";
 const disposableRecoveryStepName = "Rebuild and verify synthetic state on PostgreSQL 18";
 const disposableRecoveryTarget = "postgresql-18-disposable";
@@ -345,18 +347,46 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
   const request = parseDispatchRequest(context);
   const { apiBase, readJson } = createGitHubReader(context, fetchImpl);
 
-  const pullRequests = await readJson(`commits/${request.candidateSha}/pulls?per_page=100`);
-  const candidatePr = pullRequests.find((pr) =>
-    pr.number === expectedCandidatePullRequest &&
-    pr.state === "closed" &&
-    Boolean(pr.merged_at) &&
+  const pullRequests = [];
+  let repositoryPullRequestListComplete = false;
+  for (let page = 1; page < maxPullRequestPage; page += 1) {
+    const pagePullRequests = await readJson(
+      `pulls?state=all&sort=created&direction=asc&per_page=${pullRequestPageSize}&page=${page}`,
+    );
+    if (!Array.isArray(pagePullRequests) || pagePullRequests.length > pullRequestPageSize) {
+      throw new Error("GitHub returned an invalid repository pull request page; refusing to prove a unique PR #101 match.");
+    }
+    pullRequests.push(...pagePullRequests);
+    if (pagePullRequests.length < pullRequestPageSize) {
+      repositoryPullRequestListComplete = true;
+      break;
+    }
+  }
+  if (!repositoryPullRequestListComplete) {
+    throw new Error(`GitHub repository pull request pagination did not reach a short page before page ${maxPullRequestPage}.`);
+  }
+  const candidateAssociations = pullRequests.filter((pr) =>
     pr.base?.ref === "main" &&
     pr.base?.repo?.full_name === repository &&
     pr.head?.sha === request.candidateSha &&
-    pr.head?.repo?.full_name === repository
+    pr.head?.repo?.full_name === repository &&
+    typeof pr.head?.ref === "string" &&
+    pr.head.ref.length > 0
+  );
+  const candidatePr = candidateAssociations.find((pr) =>
+    pr.number === expectedCandidatePullRequest &&
+    pr.state === "closed" &&
+    Boolean(pr.merged_at)
   );
   if (!candidatePr) {
     throw new Error("candidate_sha must be the merged head of PR #101 into main.");
+  }
+  const matchingAssociations = pullRequests.filter((pr) =>
+    pr.head?.sha === request.candidateSha &&
+    pr.head?.ref === candidatePr.head.ref
+  );
+  if (matchingAssociations.length !== 1 || matchingAssociations[0]?.number !== expectedCandidatePullRequest) {
+    throw new Error("candidate_sha and its head branch must have a unique authoritative association with merged PR #101.");
   }
 
   if (typeof candidatePr.merge_commit_sha !== "string" || !/^[0-9a-f]{40}$/.test(candidatePr.merge_commit_sha)) {
@@ -393,13 +423,25 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
   const workflowRuns = await readJson(
     `actions/workflows/gate-a.yml/runs?head_sha=${request.candidateSha}&per_page=100`,
   );
-  const exactRuns = (workflowRuns.workflow_runs ?? [])
-    .filter((run) =>
-      run.head_sha === request.candidateSha &&
-      run.head_branch === candidatePr.head.ref &&
-      run.event === "pull_request" &&
-      (run.pull_requests ?? []).some((pullRequest) => pullRequest.number === expectedCandidatePullRequest)
-    )
+  // The exhaustive repository PR enumeration above binds this SHA and head
+  // branch uniquely to PR #101. GitHub may omit workflow_runs[].pull_requests after merge.
+  const candidateRuns = (workflowRuns.workflow_runs ?? []).filter((run) =>
+    run.head_sha === request.candidateSha &&
+    run.head_branch === candidatePr.head.ref &&
+    run.event === "pull_request"
+  );
+  for (const run of candidateRuns) {
+    const pullRequestLinks = run.pull_requests;
+    if (pullRequestLinks == null) continue;
+    if (!Array.isArray(pullRequestLinks)) {
+      throw new Error("A candidate Gate A run has invalid pull request links; refusing to authorize.");
+    }
+    if (pullRequestLinks.length > 0 &&
+        !pullRequestLinks.some((pullRequest) => pullRequest?.number === expectedCandidatePullRequest)) {
+      throw new Error("Every non-empty candidate Gate A pull request link list must include PR #101.");
+    }
+  }
+  const exactRuns = candidateRuns
     .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)));
   const ciRun = exactRuns[0];
   if (!ciRun || ciRun.status !== "completed" || ciRun.conclusion !== "success") {
