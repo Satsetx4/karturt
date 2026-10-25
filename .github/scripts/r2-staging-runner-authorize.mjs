@@ -11,7 +11,7 @@ export const runnerWorkflowName = "KartuRT R2 staging runner";
 
 const owner = "Satsetx4";
 const repository = "Satsetx4/karturt";
-const expectedCandidatePullRequest = 103;
+const expectedCandidatePullRequest = 105;
 const pullRequestPageSize = 100;
 const maxPullRequestPage = 100;
 const disposableRecoveryJobName = "R2 disposable PostgreSQL 18 recovery";
@@ -263,6 +263,9 @@ async function assertProtectedEnvironment(readJson) {
       environment.deployment_branch_policy?.custom_branch_policies !== true) {
     throw new Error("The R2 Environment must exist and allow only the configured custom branch policy.");
   }
+  if (environment.can_admins_bypass !== false) {
+    throw new Error("The R2 Environment must disable administrator bypass.");
+  }
 
   const reviewerRule = (environment.protection_rules ?? []).find((rule) => rule.type === "required_reviewers");
   const reviewers = reviewerRule?.reviewers ?? [];
@@ -354,7 +357,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
       `pulls?state=all&sort=created&direction=asc&per_page=${pullRequestPageSize}&page=${page}`,
     );
     if (!Array.isArray(pagePullRequests) || pagePullRequests.length > pullRequestPageSize) {
-      throw new Error("GitHub returned an invalid repository pull request page; refusing to prove a unique PR #103 match.");
+      throw new Error("GitHub returned an invalid repository pull request page; refusing to prove a unique PR #105 match.");
     }
     pullRequests.push(...pagePullRequests);
     if (pagePullRequests.length < pullRequestPageSize) {
@@ -379,18 +382,18 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     Boolean(pr.merged_at)
   );
   if (!candidatePr) {
-    throw new Error("candidate_sha must be the merged head of PR #103 into main.");
+    throw new Error("candidate_sha must be the merged head of PR #105 into main.");
   }
   const matchingAssociations = pullRequests.filter((pr) =>
     pr.head?.sha === request.candidateSha &&
     pr.head?.ref === candidatePr.head.ref
   );
   if (matchingAssociations.length !== 1 || matchingAssociations[0]?.number !== expectedCandidatePullRequest) {
-    throw new Error("candidate_sha and its head branch must have a unique authoritative association with merged PR #103.");
+    throw new Error("candidate_sha and its head branch must have a unique authoritative association with merged PR #105.");
   }
 
   if (typeof candidatePr.merge_commit_sha !== "string" || !/^[0-9a-f]{40}$/.test(candidatePr.merge_commit_sha)) {
-    throw new Error("Merged PR #103 must expose its immutable merge result SHA.");
+    throw new Error("Merged PR #105 must expose its immutable merge result SHA.");
   }
   const candidateCommit = await readJson(`commits/${request.candidateSha}`);
   const mergeCommit = await readJson(`commits/${candidatePr.merge_commit_sha}`);
@@ -412,7 +415,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
   if (mainAncestry.base_commit?.sha !== candidatePr.merge_commit_sha ||
       mainAncestry.merge_base_commit?.sha !== candidatePr.merge_commit_sha ||
       !["ahead", "identical"].includes(mainAncestry.status)) {
-    throw new Error("The approved PR #103 merge result must be an ancestor of the protected-main dispatch SHA.");
+    throw new Error("The approved PR #105 merge result must be an ancestor of the protected-main dispatch SHA.");
   }
 
   const tracker = await readJson("issues/98");
@@ -424,7 +427,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     `actions/workflows/gate-a.yml/runs?head_sha=${request.candidateSha}&per_page=100`,
   );
   // The exhaustive repository PR enumeration above binds this SHA and head
-  // branch uniquely to PR #103. GitHub may omit workflow_runs[].pull_requests after merge.
+  // branch uniquely to PR #105. GitHub may omit workflow_runs[].pull_requests after merge.
   const candidateRuns = (workflowRuns.workflow_runs ?? []).filter((run) =>
     run.head_sha === request.candidateSha &&
     run.head_branch === candidatePr.head.ref &&
@@ -438,14 +441,14 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     }
     if (pullRequestLinks.length > 0 &&
         !pullRequestLinks.some((pullRequest) => pullRequest?.number === expectedCandidatePullRequest)) {
-      throw new Error("Every non-empty candidate Gate A pull request link list must include PR #103.");
+      throw new Error("Every non-empty candidate Gate A pull request link list must include PR #105.");
     }
   }
   const exactRuns = candidateRuns
     .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)));
   const ciRun = exactRuns[0];
   if (!ciRun || ciRun.status !== "completed" || ciRun.conclusion !== "success") {
-    throw new Error("The latest PR #103 Gate A run for candidate_sha must be completed and successful.");
+    throw new Error("The latest PR #105 Gate A run for candidate_sha must be completed and successful.");
   }
   if (!Number.isSafeInteger(ciRun.id) || !Number.isSafeInteger(ciRun.run_attempt) || ciRun.run_attempt < 1) {
     throw new Error("The exact-head Gate A run is missing a valid run ID or attempt.");
