@@ -115,7 +115,9 @@ jobs:
       startsWith(github.ref, 'refs/heads/codex/fast-track-v1-') ||
       startsWith(github.head_ref, 'codex/fast-track-v1-') ||
       startsWith(github.ref, 'refs/heads/codex/r2-secure-staging-runner-') ||
-      startsWith(github.head_ref, 'codex/r2-secure-staging-runner-')
+      startsWith(github.head_ref, 'codex/r2-secure-staging-runner-') ||
+      startsWith(github.ref, 'refs/heads/codex/r2-disposable-recovery-') ||
+      startsWith(github.head_ref, 'codex/r2-disposable-recovery-')
     name: Launch Safety independent PostgreSQL concurrency
     needs: gate-a
     runs-on: ubuntu-latest
@@ -171,3 +173,73 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+
+  r2-disposable-postgres-18-recovery:
+    if: >-
+      startsWith(github.ref, 'refs/heads/codex/r2-disposable-recovery-') ||
+      startsWith(github.head_ref, 'codex/r2-disposable-recovery-')
+    name: R2 disposable PostgreSQL 18 recovery
+    needs: gate-a
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: karturt_concurrency_test
+          POSTGRES_USER: karturt_concurrency_test
+          POSTGRES_PASSWORD: local-test-only-not-a-deployment-secret
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U karturt_concurrency_test -d karturt_concurrency_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_ENV: test
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify source checkout
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$actual_sha" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "Expected source SHA $EXPECTED_SOURCE_SHA but checked out $actual_sha."
+            exit 1
+          fi
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Rebuild and verify synthetic state on PostgreSQL 18
+        env:
+          R2_DISPOSABLE_PG18_ADMIN_URL: postgresql://karturt_concurrency_test:local-test-only-not-a-deployment-secret@127.0.0.1:5432/postgres
+          R2_DISPOSABLE_PG18_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: npm run test:r2-disposable-pg18-recovery
+      - name: Independent payment concurrency on PostgreSQL 18
+        env:
+          LAUNCH_SAFETY_POSTGRES_URL: postgresql://karturt_concurrency_test:local-test-only-not-a-deployment-secret@127.0.0.1:5432/karturt_concurrency_test
+        run: |
+          npm run test:postgres-concurrency
+          node -e 'const e = require("./docs/launch-safety-evidence/postgres-independent-concurrency.json"); if (e.result !== "PASS" || Math.floor(Number(e.postgresVersion.versionNumber) / 10000) !== 18) { console.error("Independent concurrency evidence did not prove PostgreSQL 18 PASS."); process.exit(1); }'
+      - name: Upload disposable PostgreSQL 18 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r2-disposable-pg18-recovery-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/r2-disposable-pg18-recovery-${{ github.event.pull_request.head.sha || github.sha }}-*.json
+            docs/launch-safety-evidence/postgres-independent-concurrency.json
+          if-no-files-found: ignore
+          retention-days: 14
