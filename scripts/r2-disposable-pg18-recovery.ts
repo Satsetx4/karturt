@@ -223,7 +223,7 @@ async function assertAccounting(pool: Pool, reversed: boolean) {
   assert.deepEqual([Number(cash.amount), cash.allocation_count, Number(cash.allocated), cash.active_count, cash.reversed], [50000, 1, 50000, reversed ? 0 : 1, reversed]);
   const audits = await pool.query<{ action: string; count: number }>(`
     SELECT action, count(*)::int AS count FROM audit_events
-    WHERE action IN ('payment_request.verified','payment.cash_recorded','payment.reversed') GROUP BY action ORDER BY action
+    WHERE action IN ('payment_request.verified','payment.cash_recorded','payment.reversed') GROUP BY action ORDER BY action COLLATE "C"
   `);
   const expectedAudits = [
     { action: "payment.cash_recorded", count: 1 },
