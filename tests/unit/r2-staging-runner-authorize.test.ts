@@ -259,7 +259,7 @@ function fetchFor(overrides: {
       expect(url.searchParams.get("per_page")).toBe("100");
       const page = Number(url.searchParams.get("page"));
       const allPullRequests = overrides.pullRequests ?? [{
-        number: 105,
+        number: 106,
         state: "closed",
         merged_at: "2026-10-25T00:00:00Z",
         base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
@@ -319,7 +319,7 @@ function fetchFor(overrides: {
         head_sha: candidateSha,
         head_branch: branch,
         event: "pull_request",
-        pull_requests: [{ number: 105 }],
+      pull_requests: [{ number: 106 }],
       }] });
     }
     const gateJobMatch = url.pathname.match(/\/actions\/runs\/(\d+)\/attempts\/(\d+)\/jobs$/);
@@ -400,7 +400,7 @@ describe("R2 staging runner authorization", () => {
     expect(workflow).toMatch(/name: Install reviewed candidate dependencies without database credentials\s+working-directory: candidate\s+run: npm ci --ignore-scripts/);
   });
 
-  it("binds migrate to main dispatch, merged PR #105, exact-head CI, PG18 disposable recovery, protected environment, and exact owner GO", async () => {
+  it("binds migrate to main dispatch, merged PR #106, exact-head CI, PG18 disposable recovery, protected environment, and exact owner GO", async () => {
     const fetchImpl = fetchFor();
     const result = await authorizeR2StagingDispatch({ context: context(), fetchImpl });
     expect(result).toEqual({
@@ -421,7 +421,7 @@ describe("R2 staging runner authorization", () => {
   it.each([
     ["omitted", undefined],
     ["empty", []],
-  ] as const)("accepts exact-head Gate A CI with %s pull request links for the unique merged PR #105 association", async (_linkState, pullRequestLinks) => {
+  ] as const)("accepts exact-head Gate A CI with %s pull request links for the unique merged PR #106 association", async (_linkState, pullRequestLinks) => {
     const gateRun = {
       id: Number(gateARunId),
       run_attempt: Number(gateAAttempt),
@@ -457,7 +457,7 @@ describe("R2 staging runner authorization", () => {
     };
     const fetchImpl = fetchFor({
       pullRequests: [
-        { number: 105, ...matchingAssociation },
+        { number: 106, ...matchingAssociation },
         { number: 104, ...matchingAssociation, ...associationOverride },
       ],
       runs: [{
@@ -473,11 +473,11 @@ describe("R2 staging runner authorization", () => {
     });
 
     await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
-      .rejects.toThrow("unique authoritative association with merged PR #105");
+      .rejects.toThrow("unique authoritative association with merged PR #106");
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it("paginates the repository pull request list before accepting a unique PR #105 association", async () => {
+  it("paginates the repository pull request list before accepting a unique PR #106 association", async () => {
     const matchingAssociation = {
       state: "closed",
       merged_at: "2026-10-25T00:00:00Z",
@@ -492,7 +492,7 @@ describe("R2 staging runner authorization", () => {
     }));
     const fetchImpl = fetchFor({
       pullRequests: [
-        { number: 105, ...matchingAssociation },
+        { number: 106, ...matchingAssociation },
         ...unrelatedPullRequests,
         { number: 500, head: { ref: "unrelated-final", sha: "f".repeat(40), repo: { full_name: "Satsetx4/karturt" } } },
       ],
@@ -532,7 +532,7 @@ describe("R2 staging runner authorization", () => {
     }));
     const fetchImpl = fetchFor({
       pullRequests: [
-        { number: 105, ...matchingAssociation },
+        { number: 106, ...matchingAssociation },
         ...unrelatedPullRequests,
         {
           number: 500,
@@ -543,7 +543,7 @@ describe("R2 staging runner authorization", () => {
     });
 
     await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
-      .rejects.toThrow("unique authoritative association with merged PR #105");
+      .rejects.toThrow("unique authoritative association with merged PR #106");
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(fetchImpl).toHaveBeenCalledWith(
       expect.stringContaining("/pulls?state=all&sort=created&direction=asc&per_page=100&page=2"),
@@ -562,7 +562,7 @@ describe("R2 staging runner authorization", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(99);
   });
 
-  it("rejects candidate Gate A runs whose non-empty PR link list excludes PR #105", async () => {
+  it("rejects candidate Gate A runs whose non-empty PR link list excludes PR #106", async () => {
     const linkedRun = {
       id: Number(gateARunId),
       run_attempt: Number(gateAAttempt),
@@ -578,12 +578,12 @@ describe("R2 staging runner authorization", () => {
       ...linkedRun,
       id: Number(gateARunId) + 1,
       created_at: "2026-10-24T23:59:00Z",
-      pull_requests: [{ number: 105 }],
+      pull_requests: [{ number: 106 }],
     };
     const fetchImpl = fetchFor({ runs: [correctlyLinkedRun, linkedRun] });
 
     await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
-      .rejects.toThrow("Every non-empty candidate Gate A pull request link list must include PR #105");
+      .rejects.toThrow("Every non-empty candidate Gate A pull request link list must include PR #106");
   });
 
   it.each([
@@ -735,14 +735,14 @@ describe("R2 staging runner authorization", () => {
 
   it("rejects unmerged or wrong candidate PRs before looking up CI", async () => {
     const fetchImpl = fetchFor({ pullRequests: [{
-      number: 105,
+      number: 106,
       state: "open",
       merged_at: null,
       base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
       head: { ref: branch, sha: candidateSha, repo: { full_name: "Satsetx4/karturt" } },
     }] });
     await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl })).rejects.toThrow(
-      "merged head of PR #105",
+      "merged head of PR #106",
     );
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
@@ -942,7 +942,7 @@ describe("R2 staging runner authorization", () => {
     await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl })).rejects.toThrow(message);
   });
 
-  it("rejects recovery evidence linked to an earlier run when a newer exact-head PR #105 run is selected", async () => {
+  it("rejects recovery evidence linked to an earlier run when a newer exact-head PR #106 run is selected", async () => {
     const latestRunId = "40147824802";
     const latestRun = {
       id: Number(latestRunId),
@@ -953,7 +953,7 @@ describe("R2 staging runner authorization", () => {
       head_sha: candidateSha,
       head_branch: branch,
       event: "pull_request",
-      pull_requests: [{ number: 105 }],
+      pull_requests: [{ number: 106 }],
     };
     const fetchImpl = fetchFor({
       runs: [
