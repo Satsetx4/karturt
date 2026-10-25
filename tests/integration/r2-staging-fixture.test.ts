@@ -6,10 +6,13 @@ import {
   appAccounts,
   authAccount,
   authRateLimit,
+  authUser,
   billingYears,
   feeRates,
+  houses,
   monthlyDues,
   officialAssignments,
+  people,
   rtUnits,
 } from "@/db/schema";
 import { bootstrapR2SyntheticFixture, type R2StagingFixtureCredentials } from "@/lib/rt/r2-staging-fixture";
@@ -130,6 +133,36 @@ describe("canonical R2 synthetic staging fixture", () => {
 
     await expect(bootstrapR2SyntheticFixture(database, credentials, "2026-10-25"))
       .rejects.toThrow("missing or inactive accounts");
+  });
+
+  it("refuses an idempotent retry when the synthetic house label has drifted", async () => {
+    await bootstrapR2SyntheticFixture(database, credentials, "2026-10-25");
+    const [house] = await testDatabase.db.select({ id: houses.id }).from(houses);
+    await testDatabase.db.update(houses).set({ label: "Label lain" }).where(eq(houses.id, house!.id));
+
+    await expect(bootstrapR2SyntheticFixture(database, credentials, "2026-10-25"))
+      .rejects.toThrow("house does not match");
+  });
+
+  it("refuses an idempotent retry when a synthetic resident profile has drifted", async () => {
+    await bootstrapR2SyntheticFixture(database, credentials, "2026-10-25");
+    const [resident] = await testDatabase.db.select({ personId: appAccounts.personId })
+      .from(appAccounts).where(eq(appAccounts.loginIdentifier, "R2-101"));
+    await testDatabase.db.update(people).set({ fullName: "Nama lain" }).where(eq(people.id, resident!.personId!));
+
+    await expect(bootstrapR2SyntheticFixture(database, credentials, "2026-10-25"))
+      .rejects.toThrow("synthetic profiles");
+  });
+
+  it("refuses an idempotent retry when a synthetic authentication identity has drifted", async () => {
+    await bootstrapR2SyntheticFixture(database, credentials, "2026-10-25");
+    const [resident] = await testDatabase.db.select({ authUserId: appAccounts.authUserId })
+      .from(appAccounts).where(eq(appAccounts.loginIdentifier, "R2-101"));
+    await testDatabase.db.update(authUser).set({ name: "Nama autentikasi lain" })
+      .where(eq(authUser.id, resident!.authUserId));
+
+    await expect(bootstrapR2SyntheticFixture(database, credentials, "2026-10-25"))
+      .rejects.toThrow("authentication profiles");
   });
 
   it("rolls back all seeded rows when a required synthetic credential is invalid", async () => {
