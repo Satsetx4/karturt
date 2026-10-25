@@ -11,7 +11,7 @@ export const runnerWorkflowName = "KartuRT R2 staging runner";
 
 const owner = "Satsetx4";
 const repository = "Satsetx4/karturt";
-const expectedCandidatePullRequest = 100;
+const expectedCandidatePullRequest = 101;
 const disposableRecoveryJobName = "R2 disposable PostgreSQL 18 recovery";
 const disposableRecoveryStepName = "Rebuild and verify synthetic state on PostgreSQL 18";
 const disposableRecoveryTarget = "postgresql-18-disposable";
@@ -356,11 +356,11 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     pr.head?.repo?.full_name === repository
   );
   if (!candidatePr) {
-    throw new Error("candidate_sha must be the merged head of PR #100 into main.");
+    throw new Error("candidate_sha must be the merged head of PR #101 into main.");
   }
 
   if (typeof candidatePr.merge_commit_sha !== "string" || !/^[0-9a-f]{40}$/.test(candidatePr.merge_commit_sha)) {
-    throw new Error("Merged PR #100 must expose its immutable merge result SHA.");
+    throw new Error("Merged PR #101 must expose its immutable merge result SHA.");
   }
   const candidateCommit = await readJson(`commits/${request.candidateSha}`);
   const mergeCommit = await readJson(`commits/${candidatePr.merge_commit_sha}`);
@@ -382,7 +382,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
   if (mainAncestry.base_commit?.sha !== candidatePr.merge_commit_sha ||
       mainAncestry.merge_base_commit?.sha !== candidatePr.merge_commit_sha ||
       !["ahead", "identical"].includes(mainAncestry.status)) {
-    throw new Error("The approved PR #100 merge result must be an ancestor of the protected-main dispatch SHA.");
+    throw new Error("The approved PR #101 merge result must be an ancestor of the protected-main dispatch SHA.");
   }
 
   const tracker = await readJson("issues/98");
@@ -403,7 +403,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
     .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)));
   const ciRun = exactRuns[0];
   if (!ciRun || ciRun.status !== "completed" || ciRun.conclusion !== "success") {
-    throw new Error("The latest PR #100 Gate A run for candidate_sha must be completed and successful.");
+    throw new Error("The latest PR #101 Gate A run for candidate_sha must be completed and successful.");
   }
   if (!Number.isSafeInteger(ciRun.id) || !Number.isSafeInteger(ciRun.run_attempt) || ciRun.run_attempt < 1) {
     throw new Error("The exact-head Gate A run is missing a valid run ID or attempt.");
