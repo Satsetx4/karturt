@@ -19,7 +19,7 @@ function environment(overrides: Partial<NodeJS.ProcessEnv> = {}): NodeJS.Process
     KARTURT_R2_MIGRATION_PASS_SHA: releaseSha,
     KARTURT_R2_MIGRATION_EVIDENCE_REF: "r2-migration-evidence",
     KARTURT_R2_ISOLATION_EVIDENCE_REF: "owner-isolation-readback",
-    DATABASE_URL: "postgresql://karturt_stg_runtime:local-fixture-only@ep-red-boat-azzqyf45.c-3.ap-southeast-1.aws.neon.tech/karturt_staging",
+    DATABASE_URL: "postgresql://karturt_stg_runtime_v2:local-fixture-only@ep-red-boat-azzqyf45.c-3.ap-southeast-1.aws.neon.tech/karturt_staging",
     ...overrides,
   };
 }
@@ -53,9 +53,11 @@ describe("RELEASE FIRST R2 bootstrap input policy", () => {
 
   it("rejects wrong endpoints, databases, poolers, and non-runtime roles", () => {
     for (const databaseUrl of [
-      "postgresql://karturt_stg_runtime:local-fixture-only@ep-other.c-3.ap-southeast-1.aws.neon.tech/karturt_staging",
-      "postgresql://karturt_stg_runtime:local-fixture-only@ep-red-boat-azzqyf45-pooler.c-3.ap-southeast-1.aws.neon.tech/karturt_staging",
-      "postgresql://karturt_stg_runtime:local-fixture-only@ep-red-boat-azzqyf45.c-3.ap-southeast-1.aws.neon.tech/other",
+      "postgresql://karturt_stg_runtime_v2:local-fixture-only@ep-other.c-3.ap-southeast-1.aws.neon.tech/karturt_staging",
+      "postgresql://karturt_stg_runtime_v2:local-fixture-only@ep-red-boat-azzqyf45-pooler.c-3.ap-southeast-1.aws.neon.tech/karturt_staging",
+      "postgresql://karturt_stg_runtime_v2:local-fixture-only@ep-red-boat-azzqyf45.c-3.ap-southeast-1.aws.neon.tech/other",
+      "postgresql://karturt_stg_migrator_v2:local-fixture-only@ep-red-boat-azzqyf45.c-3.ap-southeast-1.aws.neon.tech/karturt_staging",
+      "postgresql://karturt_stg_runtime:local-fixture-only@ep-red-boat-azzqyf45.c-3.ap-southeast-1.aws.neon.tech/karturt_staging",
       "postgresql://karturt_stg_migrator:local-fixture-only@ep-red-boat-azzqyf45.c-3.ap-southeast-1.aws.neon.tech/karturt_staging",
     ]) {
       expect(() => parseR2BootstrapInputs(environment({ DATABASE_URL: databaseUrl }), releaseSha, "apply"))
