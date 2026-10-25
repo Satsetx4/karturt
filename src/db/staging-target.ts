@@ -4,8 +4,8 @@ export const stagingDatabaseTarget = {
   endpointId: "ep-red-boat-azzqyf45",
   database: "karturt_staging",
   directHost: "ep-red-boat-azzqyf45.c-3.ap-southeast-1.aws.neon.tech",
-  runtimeRole: "karturt_stg_runtime",
-  migrationRole: "karturt_stg_migrator",
+  runtimeRole: "karturt_stg_runtime_v2",
+  migrationRole: "karturt_stg_migrator_v2",
   migrationTags: [
     "0000_messy_menace",
     "0001_classy_ricochet",
