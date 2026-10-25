@@ -44,11 +44,21 @@ jobs:
       authorization_ref: ${{ steps.authorize.outputs.authorization_ref }}
       target: ${{ steps.authorize.outputs.target }}
     steps:
-      - name: Check out trusted default branch workflow policy
+      - name: Check out policy from the dispatch commit on main
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: main
+          ref: ${{ github.sha }}
           persist-credentials: false
+
+      - name: Verify dispatch policy checkout
+        env:
+          EXPECTED_POLICY_SHA: ${{ github.sha }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$actual_sha" != "$EXPECTED_POLICY_SHA" ]; then
+            echo "Dispatch policy checkout does not match the workflow event SHA."
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
