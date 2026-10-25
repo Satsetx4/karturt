@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       candidate_sha:
-        description: Full SHA of the merged PR #99 candidate with exact-head Gate A evidence
+        description: Full SHA of the merged PR #103 candidate with exact-head Gate A evidence
         required: true
         type: string
       operation:
@@ -71,7 +71,7 @@ jobs:
           node-version: 24
           package-manager-cache: false
 
-      - name: Verify owner, merged PR #99, exact-head CI, protected Environment, and operation GO
+      - name: Verify owner, merged PR #103, exact-head CI, protected Environment, and operation GO
         id: authorize
         env:
           GITHUB_TOKEN: ${{ github.token }}
