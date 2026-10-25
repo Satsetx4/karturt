@@ -31,7 +31,7 @@ const disposableRecoveryStepName = "Rebuild and verify synthetic state on Postgr
 const disposableRecoveryTarget = "postgresql-18-disposable";
 const disposableRecoveryOperation = "rebuild-reseed-official-migrations-0000-0013";
 const apiBase = "https://api.github.com";
-const branch = "codex/r2-secure-staging-runner-20261025";
+const branch = "codex/r2-disposable-recovery-r2b-20261025";
 const issueUrl = `${apiBase}/repos/Satsetx4/karturt/issues/98`;
 
 function context(overrides: Record<string, string> = {}) {
