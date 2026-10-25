@@ -12,6 +12,7 @@ import {
   hasNoStagingMigrationGrantOptions,
   hasRequiredMigrationPublicSchemaPrivileges,
   parseStagingMigrationAuthorization,
+  parseStagingPreflightAuthorization,
 } from "@/db/migration-role-policy";
 import { parseStagingMigrationMode } from "@/db/staging-migration-mode";
 import { getEnvironment, requireDatabaseEnvironment } from "@/lib/env";
@@ -873,8 +874,8 @@ async function main() {
       throw new Error("DATABASE_MIGRATION_URL is required for staging migrations.");
     }
   }
-  if (staging && stagingMode !== "plan" && !environment.databaseUrl) {
-    throw new Error("DATABASE_URL is required for staging migration TLS and runtime-role verification.");
+  if (staging && stagingMode === "preflight" && !environment.databaseUrl) {
+    throw new Error("DATABASE_URL is required for staging runtime TLS and role verification.");
   }
 
   const migrationsFolder = resolve(process.cwd(), "drizzle");
@@ -919,10 +920,15 @@ async function main() {
     return;
   }
 
-  if (stagingMode === "apply") parseStagingMigrationAuthorization(process.env, checkedOutReleaseSha!);
+  const preflightAuthorization = staging && stagingMode === "preflight"
+    ? parseStagingPreflightAuthorization(process.env, checkedOutReleaseSha!)
+    : undefined;
+  const migrationAuthorization = staging && stagingMode === "apply"
+    ? parseStagingMigrationAuthorization(process.env, checkedOutReleaseSha!)
+    : undefined;
 
   const pool = createDatabasePool(migrationUrl!, environment.databaseEnv, "migration", 1);
-  const runtimePool = staging
+  const runtimePool = staging && stagingMode === "preflight"
     ? createDatabasePool(environment.databaseUrl!, environment.databaseEnv, "runtime", 1)
     : undefined;
   let runtimePrivilegesVerified = false;
@@ -969,6 +975,10 @@ async function main() {
           tlsActive: runtimeConnectionEvidence?.tlsActive,
           tlsCertificateAndHostnameVerified: Boolean(runtimeConnectionEvidence),
           runtimeRoleSafe: true,
+        },
+        authorization: {
+          ownerGoRef: preflightAuthorization?.authorizationRef,
+          isolationEvidenceRef: preflightAuthorization?.isolationEvidenceRef,
         },
         databaseWritesStarted: false,
       }));
@@ -1027,6 +1037,11 @@ async function main() {
         runtimeTablesVerified: runtimePrivilegeEvidence?.tableCount,
         runtimeSequencesVerified: runtimePrivilegeEvidence?.sequenceCount,
         ownerCleanupRequired: "Revoke migrator CREATE on public and drizzle, revoke migrator USAGE on drizzle, revoke temporary database CREATE, set migrator NOLOGIN, and verify all changes before app UAT.",
+        authorization: {
+          ownerGoRef: migrationAuthorization?.authorizationRef,
+          preflightEvidenceRef: migrationAuthorization?.preflightEvidenceRef,
+          isolationEvidenceRef: migrationAuthorization?.isolationEvidenceRef,
+        },
       } : {}),
     }));
   } catch (error) {

@@ -1,23 +1,25 @@
 name: KartuRT R2 staging runner
+run-name: R2 ${{ inputs.operation }} | ${{ inputs.candidate_sha }} | GO comment ${{ inputs.owner_go_comment_id }}
 
 on:
   workflow_dispatch:
     inputs:
       candidate_sha:
-        description: Full SHA of the merged PR #93 candidate with exact-head Gate A evidence
+        description: Full SHA of the merged PR #99 candidate with exact-head Gate A evidence
         required: true
         type: string
       operation:
-        description: Run a read-only authenticated TLS preflight or the separately authorized migrations
+        description: Run one separately authorized staging operation
         required: true
         default: preflight
         type: choice
         options:
           - preflight
           - migrate
+          - synthetic-fixture-create
       owner_go_comment_id:
-        description: Issue #98 comment ID containing exact-SHA R2 GO; required for migrate
-        required: false
+        description: Issue #98 comment ID containing exact-SHA, target, and operation GO
+        required: true
         type: string
 
 permissions: {}
@@ -42,6 +44,9 @@ jobs:
       ci_run_id: ${{ steps.authorize.outputs.ci_run_id }}
       ci_attempt: ${{ steps.authorize.outputs.ci_attempt }}
       authorization_ref: ${{ steps.authorize.outputs.authorization_ref }}
+      preflight_evidence_ref: ${{ steps.authorize.outputs.preflight_evidence_ref }}
+      migration_evidence_ref: ${{ steps.authorize.outputs.migration_evidence_ref }}
+      isolation_evidence_ref: ${{ steps.authorize.outputs.isolation_evidence_ref }}
       target: ${{ steps.authorize.outputs.target }}
     steps:
       - name: Check out policy from the dispatch commit on main
@@ -66,17 +71,18 @@ jobs:
           node-version: 24
           package-manager-cache: false
 
-      - name: Verify owner, merged PR #93, exact-head CI, and optional R2 GO
+      - name: Verify owner, merged PR #99, exact-head CI, protected Environment, and operation GO
         id: authorize
         env:
           GITHUB_TOKEN: ${{ github.token }}
           R2_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          R2_DISPATCH_SHA: ${{ github.sha }}
           R2_OPERATION: ${{ inputs.operation }}
           R2_OWNER_GO_COMMENT_ID: ${{ inputs.owner_go_comment_id }}
         run: node .github/scripts/r2-staging-runner-authorize.mjs
 
   execute:
-    name: Protected staging preflight or migration
+    name: Protected staging operation
     needs: authorize
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -84,6 +90,9 @@ jobs:
       name: karturt-r2-staging
     permissions:
       contents: read
+      pull-requests: read
+      actions: read
+      issues: read
     steps:
       - name: Check out the exact authorized candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -110,24 +119,93 @@ jobs:
       - name: Install reviewed candidate dependencies without database credentials
         run: npm ci
 
-      - name: Connect with role-specific credentials and execute selected operation
+      - name: Check out trusted authorization policy after candidate setup
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: .r2-policy
+          persist-credentials: false
+
+      - name: Verify trusted policy checkout
+        env:
+          EXPECTED_POLICY_SHA: ${{ github.sha }}
+        run: |
+          actual_sha="$(git -C .r2-policy rev-parse HEAD)"
+          if [ "$actual_sha" != "$EXPECTED_POLICY_SHA" ]; then
+            echo "Trusted policy checkout does not match the workflow dispatch SHA."
+            exit 1
+          fi
+
+      - name: Verify both PostgreSQL roles with authenticated TLS
+        if: needs.authorize.outputs.operation == 'preflight'
         env:
           APP_ENV: staging
           DATABASE_ENV: staging
           KARTURT_RELEASE_SHA: ${{ needs.authorize.outputs.candidate_sha }}
           DATABASE_MIGRATION_URL: ${{ secrets.KARTURT_R2_STAGING_DATABASE_MIGRATION_URL }}
           DATABASE_URL: ${{ secrets.KARTURT_R2_STAGING_DATABASE_URL }}
-          R2_OPERATION: ${{ needs.authorize.outputs.operation }}
-          KARTURT_R2_MIGRATION_AUTHORIZED_SHA: ${{ needs.authorize.outputs.operation == 'migrate' && needs.authorize.outputs.candidate_sha || '' }}
-          KARTURT_R2_MIGRATION_AUTHORIZED_TARGET: ${{ needs.authorize.outputs.operation == 'migrate' && needs.authorize.outputs.target || '' }}
-          KARTURT_R2_MIGRATION_AUTHORIZED_OPERATION: ${{ needs.authorize.outputs.operation == 'migrate' && 'official-migrations-0000-0013' || '' }}
           KARTURT_R2_CI_HEAD_SHA: ${{ needs.authorize.outputs.candidate_sha }}
           KARTURT_R2_CI_RUN_ID: ${{ needs.authorize.outputs.ci_run_id }}
           KARTURT_R2_CI_ATTEMPT: ${{ needs.authorize.outputs.ci_attempt }}
+          KARTURT_R2_PREFLIGHT_AUTHORIZED_SHA: ${{ needs.authorize.outputs.candidate_sha }}
+          KARTURT_R2_PREFLIGHT_AUTHORIZED_TARGET: ${{ needs.authorize.outputs.target }}
+          KARTURT_R2_PREFLIGHT_AUTHORIZED_OPERATION: authenticated-tls-role-preflight
+          KARTURT_R2_PREFLIGHT_AUTHORIZATION_REF: ${{ needs.authorize.outputs.authorization_ref }}
+          KARTURT_R2_ISOLATION_EVIDENCE_REF: ${{ needs.authorize.outputs.isolation_evidence_ref }}
+          GITHUB_TOKEN: ${{ github.token }}
+          R2_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          R2_DISPATCH_SHA: ${{ github.sha }}
+          R2_OPERATION: ${{ inputs.operation }}
+          R2_OWNER_GO_COMMENT_ID: ${{ inputs.owner_go_comment_id }}
+        run: node .r2-policy/.github/scripts/r2-staging-runner-execute.mjs
+
+      - name: Apply only the frozen migration chain as the migrator role
+        if: needs.authorize.outputs.operation == 'migrate'
+        env:
+          APP_ENV: staging
+          DATABASE_ENV: staging
+          KARTURT_RELEASE_SHA: ${{ needs.authorize.outputs.candidate_sha }}
+          DATABASE_MIGRATION_URL: ${{ secrets.KARTURT_R2_STAGING_DATABASE_MIGRATION_URL }}
+          KARTURT_R2_MIGRATION_AUTHORIZED_SHA: ${{ needs.authorize.outputs.candidate_sha }}
+          KARTURT_R2_MIGRATION_AUTHORIZED_TARGET: ${{ needs.authorize.outputs.target }}
+          KARTURT_R2_MIGRATION_AUTHORIZED_OPERATION: official-migrations-0000-0013
+          KARTURT_R2_CI_HEAD_SHA: ${{ needs.authorize.outputs.candidate_sha }}
+          KARTURT_R2_CI_RUN_ID: ${{ needs.authorize.outputs.ci_run_id }}
+          KARTURT_R2_CI_ATTEMPT: ${{ needs.authorize.outputs.ci_attempt }}
+          KARTURT_R2_MIGRATION_PREFLIGHT_EVIDENCE_REF: ${{ needs.authorize.outputs.preflight_evidence_ref }}
+          KARTURT_R2_MIGRATION_ISOLATION_EVIDENCE_REF: ${{ needs.authorize.outputs.isolation_evidence_ref }}
           KARTURT_R2_MIGRATION_AUTHORIZATION_REF: ${{ needs.authorize.outputs.authorization_ref }}
-        run: |
-          if [ "$R2_OPERATION" = "migrate" ]; then
-            npm run db:migrate -- --apply
-          else
-            npm run db:migrate -- --preflight
-          fi
+          GITHUB_TOKEN: ${{ github.token }}
+          R2_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          R2_DISPATCH_SHA: ${{ github.sha }}
+          R2_OPERATION: ${{ inputs.operation }}
+          R2_OWNER_GO_COMMENT_ID: ${{ inputs.owner_go_comment_id }}
+        run: node .r2-policy/.github/scripts/r2-staging-runner-execute.mjs
+
+      - name: Create the approved synthetic fixture through the runtime role
+        if: needs.authorize.outputs.operation == 'synthetic-fixture-create'
+        env:
+          APP_ENV: staging
+          DATABASE_ENV: staging
+          KARTURT_RELEASE_SHA: ${{ needs.authorize.outputs.candidate_sha }}
+          DATABASE_URL: ${{ secrets.KARTURT_R2_STAGING_DATABASE_URL }}
+          KARTURT_R2_RESIDENT_PIN: ${{ secrets.KARTURT_R2_STAGING_RESIDENT_PIN }}
+          KARTURT_R2_CHAIRMAN_PASSWORD: ${{ secrets.KARTURT_R2_STAGING_CHAIRMAN_PASSWORD }}
+          KARTURT_R2_TREASURER_PASSWORD: ${{ secrets.KARTURT_R2_STAGING_TREASURER_PASSWORD }}
+          KARTURT_R2_SYSTEM_ADMIN_PASSWORD: ${{ secrets.KARTURT_R2_STAGING_SYSTEM_ADMIN_PASSWORD }}
+          KARTURT_R2_FIXTURE_AUTHORIZED_SHA: ${{ needs.authorize.outputs.candidate_sha }}
+          KARTURT_R2_FIXTURE_AUTHORIZED_TARGET: ${{ needs.authorize.outputs.target }}
+          KARTURT_R2_FIXTURE_AUTHORIZED_OPERATION: synthetic-fixture-create
+          KARTURT_R2_MIGRATION_PASS_SHA: ${{ needs.authorize.outputs.candidate_sha }}
+          KARTURT_R2_FIXTURE_AUTHORIZATION_REF: ${{ needs.authorize.outputs.authorization_ref }}
+          KARTURT_R2_MIGRATION_EVIDENCE_REF: ${{ needs.authorize.outputs.migration_evidence_ref }}
+          KARTURT_R2_ISOLATION_EVIDENCE_REF: ${{ needs.authorize.outputs.isolation_evidence_ref }}
+          KARTURT_R2_CI_HEAD_SHA: ${{ needs.authorize.outputs.candidate_sha }}
+          KARTURT_R2_CI_RUN_ID: ${{ needs.authorize.outputs.ci_run_id }}
+          KARTURT_R2_CI_ATTEMPT: ${{ needs.authorize.outputs.ci_attempt }}
+          GITHUB_TOKEN: ${{ github.token }}
+          R2_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          R2_DISPATCH_SHA: ${{ github.sha }}
+          R2_OPERATION: ${{ inputs.operation }}
+          R2_OWNER_GO_COMMENT_ID: ${{ inputs.owner_go_comment_id }}
+        run: node .r2-policy/.github/scripts/r2-staging-runner-execute.mjs

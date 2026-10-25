@@ -1,14 +1,30 @@
 import { describe, expect, it, vi } from "vitest";
+import { executeAuthorizedStagingOperation } from "../../.github/scripts/r2-staging-runner-execute.mjs";
 import {
   authorizeR2StagingDispatch,
+  fixtureOperation,
   migrationOperation,
+  preflightOperation,
+  runnerEnvironment,
   runnerTarget,
 } from "../../.github/scripts/r2-staging-runner-authorize.mjs";
 
 const candidateSha = "a".repeat(40);
 const ownerGoCommentId = "6389999999";
+const currentRunId = "9000000001";
+const dispatchSha = "c".repeat(40);
+const mergeCommitSha = "d".repeat(40);
+const candidateTreeSha = "b".repeat(40);
+const preflightEvidenceCommentId = "6389999996";
+const migrationEvidenceCommentId = "6389999998";
+const isolationEvidenceCommentId = "6389999997";
+const preflightRunnerRunId = "9000000101";
+const migrationRunnerRunId = "9000000102";
+const preflightRunnerGoCommentId = "6389999901";
+const migrationRunnerGoCommentId = "6389999902";
 const apiBase = "https://api.github.com";
-const branch = "codex/fast-track-v1-f1-integrated-20261024";
+const branch = "codex/r2-secure-staging-runner-20261025";
+const issueUrl = `${apiBase}/repos/Satsetx4/karturt/issues/98`;
 
 function context(overrides: Record<string, string> = {}) {
   return {
@@ -17,11 +33,66 @@ function context(overrides: Record<string, string> = {}) {
     actor: "Satsetx4",
     repository: "Satsetx4/karturt",
     candidateSha,
+    dispatchSha,
     operation: "migrate",
     ownerGoCommentId,
+    currentRunId,
+    currentRunAttempt: "1",
     apiBase,
     token: "test-token-never-a-real-secret",
     ...overrides,
+  };
+}
+
+function authorizedExecutionEnv(operation: string): NodeJS.ProcessEnv {
+  return {
+    GITHUB_EVENT_NAME: "workflow_dispatch",
+    GITHUB_REF: "refs/heads/main",
+    GITHUB_ACTOR: "Satsetx4",
+    GITHUB_REPOSITORY: "Satsetx4/karturt",
+    GITHUB_API_URL: apiBase,
+    GITHUB_TOKEN: "test-token-never-a-real-secret",
+    GITHUB_RUN_ID: currentRunId,
+    GITHUB_RUN_ATTEMPT: "1",
+    GITHUB_WORKSPACE: "/runner/work/karturt/karturt",
+    R2_CANDIDATE_SHA: candidateSha,
+    R2_DISPATCH_SHA: dispatchSha,
+    R2_OPERATION: operation,
+    R2_OWNER_GO_COMMENT_ID: ownerGoCommentId,
+    APP_ENV: "staging",
+    DATABASE_ENV: "staging",
+    KARTURT_RELEASE_SHA: candidateSha,
+    DATABASE_MIGRATION_URL: "migration-secret-value",
+    DATABASE_URL: "runtime-secret-value",
+    KARTURT_R2_RESIDENT_PIN: "resident-secret-value",
+    KARTURT_R2_CHAIRMAN_PASSWORD: "chairman-secret-value",
+    KARTURT_R2_TREASURER_PASSWORD: "treasurer-secret-value",
+    KARTURT_R2_SYSTEM_ADMIN_PASSWORD: "admin-secret-value",
+    KARTURT_R2_CI_HEAD_SHA: candidateSha,
+    KARTURT_R2_CI_RUN_ID: "40147824801",
+    KARTURT_R2_CI_ATTEMPT: "1",
+    KARTURT_R2_PREFLIGHT_AUTHORIZED_SHA: candidateSha,
+    KARTURT_R2_PREFLIGHT_AUTHORIZED_TARGET: runnerTarget,
+    KARTURT_R2_PREFLIGHT_AUTHORIZED_OPERATION: preflightOperation,
+    KARTURT_R2_PREFLIGHT_AUTHORIZATION_REF: `#98/${ownerGoCommentId}`,
+    KARTURT_R2_ISOLATION_EVIDENCE_REF: `#98/${isolationEvidenceCommentId}`,
+    KARTURT_R2_MIGRATION_AUTHORIZED_SHA: candidateSha,
+    KARTURT_R2_MIGRATION_AUTHORIZED_TARGET: runnerTarget,
+    KARTURT_R2_MIGRATION_AUTHORIZED_OPERATION: migrationOperation,
+    KARTURT_R2_MIGRATION_PREFLIGHT_EVIDENCE_REF: `#98/${preflightEvidenceCommentId}`,
+    KARTURT_R2_MIGRATION_ISOLATION_EVIDENCE_REF: `#98/${isolationEvidenceCommentId}`,
+    KARTURT_R2_MIGRATION_AUTHORIZATION_REF: `#98/${ownerGoCommentId}`,
+    KARTURT_R2_FIXTURE_AUTHORIZED_SHA: candidateSha,
+    KARTURT_R2_FIXTURE_AUTHORIZED_TARGET: runnerTarget,
+    KARTURT_R2_FIXTURE_AUTHORIZED_OPERATION: fixtureOperation,
+    KARTURT_R2_MIGRATION_PASS_SHA: candidateSha,
+    KARTURT_R2_FIXTURE_AUTHORIZATION_REF: `#98/${ownerGoCommentId}`,
+    KARTURT_R2_MIGRATION_EVIDENCE_REF: `#98/${migrationEvidenceCommentId}`,
+    EXTRA_SECRET: "must-not-be-forwarded",
+    PATH: "/usr/bin",
+    HOME: "/runner/home",
+    CI: "true",
+    NODE_ENV: "test",
   };
 }
 
@@ -29,32 +100,144 @@ function response(body: unknown, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => body };
 }
 
+function issueComment(id: string, body: string, user = "Satsetx4") {
+  return { id: Number(id), issue_url: issueUrl, user: { login: user }, body };
+}
+
+function goBody(operation: string, extraLines: string[] = []) {
+  const evidenceLines = operation === "preflight" || operation === preflightOperation
+    ? [`ISOLATION_EVIDENCE_COMMENT: #98/${isolationEvidenceCommentId}`]
+    : operation === "migrate" || operation === migrationOperation
+      ? [
+        `PREFLIGHT_EVIDENCE_COMMENT: #98/${preflightEvidenceCommentId}`,
+        `ISOLATION_EVIDENCE_COMMENT: #98/${isolationEvidenceCommentId}`,
+      ]
+      : [
+        `MIGRATION_EVIDENCE_COMMENT: #98/${migrationEvidenceCommentId}`,
+        `ISOLATION_EVIDENCE_COMMENT: #98/${isolationEvidenceCommentId}`,
+      ];
+  return [
+    "R2_RUNNER_GO: GO",
+    `SHA: ${candidateSha}`,
+    `TARGET: ${runnerTarget}`,
+    `OPERATION: ${operation}`,
+    ...evidenceLines,
+    ...extraLines,
+  ].join("\n");
+}
+
+function stagingOperationRun(runId: string, operation: string, goCommentId: string) {
+  const stepName = operation === "preflight"
+    ? "Verify both PostgreSQL roles with authenticated TLS"
+    : operation === "migrate"
+      ? "Apply only the frozen migration chain as the migrator role"
+      : "Create the approved synthetic fixture through the runtime role";
+  return {
+    run: {
+      id: Number(runId),
+      path: ".github/workflows/r2-staging-runner.yml@main",
+      name: "KartuRT R2 staging runner",
+      event: "workflow_dispatch",
+      head_branch: "main",
+      head_sha: dispatchSha,
+      actor: { login: "Satsetx4" },
+      status: "completed",
+      conclusion: "success",
+      run_attempt: 1,
+      display_title: `R2 ${operation} | ${candidateSha} | GO comment ${goCommentId}`,
+    },
+    jobs: [{
+      name: "Protected staging operation",
+      status: "completed",
+      conclusion: "success",
+      steps: [{ name: stepName, status: "completed", conclusion: "success" }],
+    }],
+  };
+}
+
 function fetchFor(overrides: {
   pullRequests?: unknown[];
   runs?: unknown[];
   jobs?: unknown[];
   comment?: Record<string, unknown>;
+  comments?: unknown[];
+  evidenceComments?: Record<string, Record<string, unknown>>;
   trackerState?: string;
+  environment?: Record<string, unknown>;
+  branchPolicies?: unknown[];
+  stagingRuns?: unknown[];
+  runnerRuns?: Record<string, Record<string, unknown>>;
+  runnerJobs?: Record<string, unknown>;
+  mergeComparison?: Record<string, unknown>;
+  candidateMergeComparison?: Record<string, unknown>;
+  candidateTree?: string;
+  mergeTree?: string;
 } = {}): typeof fetch {
+  const defaultGoComment = overrides.comment ?? issueComment(ownerGoCommentId, goBody(migrationOperation));
+  const defaultRunnerRuns: Record<string, Record<string, unknown>> = {
+    [preflightRunnerRunId]: stagingOperationRun(preflightRunnerRunId, "preflight", preflightRunnerGoCommentId).run,
+    [migrationRunnerRunId]: stagingOperationRun(migrationRunnerRunId, "migrate", migrationRunnerGoCommentId).run,
+  };
+  const defaultRunnerJobs: Record<string, unknown> = {
+    [preflightRunnerRunId]: stagingOperationRun(preflightRunnerRunId, "preflight", preflightRunnerGoCommentId).jobs,
+    [migrationRunnerRunId]: stagingOperationRun(migrationRunnerRunId, "migrate", migrationRunnerGoCommentId).jobs,
+  };
   return vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
     expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer test-token-never-a-real-secret");
+    expect(url.pathname).not.toContain("/secrets");
 
     if (url.pathname.endsWith(`/commits/${candidateSha}/pulls`)) {
       return response(overrides.pullRequests ?? [{
-        number: 93,
+        number: 99,
         state: "closed",
         merged_at: "2026-10-25T00:00:00Z",
         base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
         head: { ref: branch, sha: candidateSha, repo: { full_name: "Satsetx4/karturt" } },
+        merge_commit_sha: mergeCommitSha,
       }]);
+    }
+    if (url.pathname.endsWith(`/commits/${candidateSha}`)) {
+      return response({ commit: { tree: { sha: overrides.candidateTree ?? candidateTreeSha } } });
+    }
+    if (url.pathname.endsWith(`/commits/${mergeCommitSha}`)) {
+      return response({ commit: { tree: { sha: overrides.mergeTree ?? candidateTreeSha } } });
+    }
+    if (url.pathname.endsWith(`/compare/${candidateSha}...${mergeCommitSha}`)) {
+      return response(overrides.candidateMergeComparison ?? {
+        status: "identical",
+        base_commit: { sha: candidateSha },
+        merge_base_commit: { sha: candidateSha },
+      });
+    }
+    if (url.pathname.endsWith(`/compare/${mergeCommitSha}...${dispatchSha}`)) {
+      return response(overrides.mergeComparison ?? {
+        status: "ahead",
+        base_commit: { sha: mergeCommitSha },
+        merge_base_commit: { sha: mergeCommitSha },
+      });
+    }
+    if (url.pathname.endsWith("/issues/98/comments")) {
+      return response(overrides.comments ?? [defaultGoComment]);
+    }
+    if (url.pathname.endsWith("/actions/workflows/r2-staging-runner.yml/runs")) {
+      return response({ workflow_runs: overrides.stagingRuns ?? [] });
+    }
+    const runnerJobMatch = url.pathname.match(/\/actions\/runs\/(\d+)\/attempts\/(\d+)\/jobs$/);
+    if (runnerJobMatch && [preflightRunnerRunId, migrationRunnerRunId].includes(runnerJobMatch[1])) {
+      return response({ jobs: overrides.runnerJobs?.[runnerJobMatch[1]] ?? defaultRunnerJobs[runnerJobMatch[1]] ?? [] });
+    }
+    const runnerMatch = url.pathname.match(/\/actions\/runs\/(\d+)$/);
+    if (runnerMatch) {
+      const run = overrides.runnerRuns?.[runnerMatch[1]] ?? defaultRunnerRuns[runnerMatch[1]];
+      return response(run ?? {}, run ? 200 : 404);
     }
     if (url.pathname.endsWith("/issues/98")) {
       return response({ state: overrides.trackerState ?? "open" });
     }
     if (url.pathname.endsWith("/actions/workflows/gate-a.yml/runs")) {
       return response({ workflow_runs: overrides.runs ?? [{
-        id: 40129357313,
+        id: 40147824801,
         run_attempt: 1,
         status: "completed",
         conclusion: "success",
@@ -62,62 +245,213 @@ function fetchFor(overrides: {
         head_sha: candidateSha,
         head_branch: branch,
         event: "pull_request",
-        pull_requests: [{ number: 93 }],
+        pull_requests: [{ number: 99 }],
       }] });
     }
-    if (url.pathname.endsWith("/actions/runs/40129357313/attempts/1/jobs")) {
+    if (url.pathname.endsWith("/actions/runs/40147824801/attempts/1/jobs")) {
       return response({ jobs: overrides.jobs ?? [
         { name: "Gate A local verification", status: "completed", conclusion: "success" },
         { name: "Launch Safety independent PostgreSQL concurrency", status: "completed", conclusion: "success" },
       ] });
     }
+    if (url.pathname.endsWith(`/environments/${runnerEnvironment}/deployment-branch-policies`)) {
+      return response({ branch_policies: overrides.branchPolicies ?? [{ name: "main" }] });
+    }
+    if (url.pathname.endsWith(`/environments/${runnerEnvironment}`)) {
+      return response(overrides.environment ?? {
+        name: runnerEnvironment,
+        deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
+        protection_rules: [{
+          type: "required_reviewers",
+          prevent_self_review: false,
+          reviewers: [{ type: "User", reviewer: { login: "Satsetx4" } }],
+        }],
+      });
+    }
     if (url.pathname.endsWith(`/issues/comments/${ownerGoCommentId}`)) {
-      return response(overrides.comment ?? {
-        issue_url: `${apiBase}/repos/Satsetx4/karturt/issues/98`,
-        user: { login: "Satsetx4" },
-        body: [
-          "R2_RUNNER_GO: GO",
+      return response(defaultGoComment);
+    }
+    if (url.pathname.endsWith(`/issues/comments/${migrationEvidenceCommentId}`)) {
+      return response(overrides.evidenceComments?.[migrationEvidenceCommentId] ?? issueComment(
+        migrationEvidenceCommentId,
+        [
+          "R2_MIGRATION_RESULT: PASS",
           `SHA: ${candidateSha}`,
           `TARGET: ${runnerTarget}`,
-          `OPERATION: ${migrationOperation}`,
+          "EVIDENCE_OPERATION: migrate",
+          `RUN: ${migrationRunnerRunId}/1`,
+          "MIGRATION_JOURNAL: 0000-0013",
+          "MIGRATOR_NOLOGIN: PASS",
+          "RUNTIME_DML_ONLY: PASS",
         ].join("\n"),
-      });
+      ));
+    }
+    if (url.pathname.endsWith(`/issues/comments/${preflightEvidenceCommentId}`)) {
+      return response(overrides.evidenceComments?.[preflightEvidenceCommentId] ?? issueComment(
+        preflightEvidenceCommentId,
+        [
+          "R2_PREFLIGHT_RESULT: PASS",
+          `SHA: ${candidateSha}`,
+          `TARGET: ${runnerTarget}`,
+          "EVIDENCE_OPERATION: preflight",
+          `RUN: ${preflightRunnerRunId}/1`,
+          "POSTGRES_MAJOR: 18",
+          "MIGRATOR_ROLE: PASS",
+          "MIGRATOR_TLS: PASS",
+          "RUNTIME_ROLE: PASS",
+          "RUNTIME_TLS: PASS",
+          "EMPTY_CATALOG: PASS",
+          "FREE_PLAN: PASS",
+        ].join("\n"),
+      ));
+    }
+    if (url.pathname.endsWith(`/issues/comments/${isolationEvidenceCommentId}`)) {
+      return response(overrides.evidenceComments?.[isolationEvidenceCommentId] ?? issueComment(
+        isolationEvidenceCommentId,
+        [
+          "R2_ISOLATION_RESULT: PASS",
+          `SHA: ${candidateSha}`,
+          `TARGET: ${runnerTarget}`,
+          "SYNTHETIC_ONLY: PASS",
+          "FREE_RECOVERY: PASS",
+        ].join("\n"),
+      ));
     }
     return response({}, 404);
   }) as unknown as typeof fetch;
 }
 
 describe("R2 staging runner authorization", () => {
-  it("binds migrate to main dispatch, merged PR #93, exact-head CI, and exact owner GO", async () => {
+  it("binds migrate to main dispatch, merged PR #99, exact-head CI, protected environment, and exact owner GO", async () => {
     const fetchImpl = fetchFor();
     const result = await authorizeR2StagingDispatch({ context: context(), fetchImpl });
     expect(result).toEqual({
       candidateSha,
       operation: "migrate",
-      ciRunId: "40129357313",
+      ciRunId: "40147824801",
       ciAttempt: "1",
       authorizationRef: `#98/${ownerGoCommentId}`,
+      preflightEvidenceRef: `#98/${preflightEvidenceCommentId}`,
+      migrationEvidenceRef: "",
+      isolationEvidenceRef: `#98/${isolationEvidenceCommentId}`,
       target: runnerTarget,
     });
     expect(JSON.stringify(result)).not.toContain("test-token-never-a-real-secret");
-    expect(fetchImpl).toHaveBeenCalledTimes(5);
+    expect(fetchImpl).toHaveBeenCalledTimes(17);
   });
 
-  it("allows read-only preflight without an owner GO comment", async () => {
+  it.each([
+    ["preflight", preflightOperation, "DATABASE_MIGRATION_URL", "DATABASE_URL", ""],
+    ["migrate", migrationOperation, "DATABASE_MIGRATION_URL", "", ""],
+    [fixtureOperation, fixtureOperation, "", "DATABASE_URL", "KARTURT_R2_RESIDENT_PIN"],
+  ])("rechecks %s immediately before spawning with only that operation's child environment", async (operation, goOperation, migratorKey, runtimeKey, fixtureKey) => {
+    const env = authorizedExecutionEnv(operation);
+    let capturedSpawn: { command: string; args: string[]; options: { env: NodeJS.ProcessEnv } } | undefined;
+    const spawnMock = vi.fn((command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
+      capturedSpawn = { command, args, options };
+      return { status: 0, error: undefined, pid: 42, output: [], stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), signal: null };
+    });
+    const spawnImpl = spawnMock as unknown as typeof import("node:child_process").spawnSync;
+    const fetchImpl = fetchFor({ comment: issueComment(ownerGoCommentId, goBody(goOperation)) });
+
+    await expect(executeAuthorizedStagingOperation({ env, fetchImpl, spawnImpl })).resolves.toBe(0);
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    expect(capturedSpawn?.command).toBe("npm");
+    expect(capturedSpawn?.args).toEqual(operation === "preflight"
+      ? ["run", "db:migrate", "--", "--preflight"]
+      : operation === "migrate"
+        ? ["run", "db:migrate", "--", "--apply"]
+        : ["run", "db:bootstrap-r2-staging", "--", "--apply"]);
+    const childOptions = capturedSpawn?.options as { env: NodeJS.ProcessEnv };
+    expect(childOptions.env.GITHUB_TOKEN).toBeUndefined();
+    expect(childOptions.env.EXTRA_SECRET).toBeUndefined();
+    expect(childOptions.env.DATABASE_MIGRATION_URL).toBe(migratorKey ? "migration-secret-value" : undefined);
+    expect(childOptions.env.DATABASE_URL).toBe(runtimeKey ? "runtime-secret-value" : undefined);
+    const fixtureSecrets = {
+      KARTURT_R2_RESIDENT_PIN: "resident-secret-value",
+      KARTURT_R2_CHAIRMAN_PASSWORD: "chairman-secret-value",
+      KARTURT_R2_TREASURER_PASSWORD: "treasurer-secret-value",
+      KARTURT_R2_SYSTEM_ADMIN_PASSWORD: "admin-secret-value",
+    };
+    for (const [key, value] of Object.entries(fixtureSecrets)) {
+      expect(childOptions.env[key]).toBe(fixtureKey ? value : undefined);
+    }
+  });
+
+  it("does not spawn a database command when the post-Environment owner decision is contradictory", async () => {
+    const env: NodeJS.ProcessEnv = {
+      ...authorizedExecutionEnv("migrate"),
+    };
+    const conflictingGo = issueComment(ownerGoCommentId, `${goBody(migrationOperation)}\nR2_RUNNER_GO: NO-GO`);
+    const spawnMock = vi.fn(() => ({
+      status: 0, error: undefined, pid: 42, output: [], stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), signal: null,
+    }));
+    const spawnImpl = spawnMock as unknown as typeof import("node:child_process").spawnSync;
+
+    await expect(executeAuthorizedStagingOperation({
+      env,
+      fetchImpl: fetchFor({ comment: conflictingGo }),
+      spawnImpl,
+    })).rejects.toThrow("exactly one GO line and no NO-GO line");
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it("requires an operation-specific owner GO even for read-only preflight", async () => {
     const fetchImpl = fetchFor();
-    const result = await authorizeR2StagingDispatch({
+    await expect(authorizeR2StagingDispatch({
       context: context({ operation: "preflight", ownerGoCommentId: "" }),
       fetchImpl,
+    })).rejects.toThrow("owner GO comment ID");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("accepts read-only preflight only with its exact owner GO", async () => {
+    const fetchImpl = fetchFor({ comment: issueComment(ownerGoCommentId, goBody(preflightOperation)) });
+    await expect(authorizeR2StagingDispatch({
+      context: context({ operation: "preflight" }),
+      fetchImpl,
+    })).resolves.toMatchObject({ operation: "preflight", authorizationRef: `#98/${ownerGoCommentId}` });
+  });
+
+  it("accepts the separately authorized synthetic fixture operation with verified evidence refs", async () => {
+    const comment = issueComment(ownerGoCommentId, goBody(fixtureOperation, [
+      `MIGRATION_EVIDENCE_COMMENT: #98/${migrationEvidenceCommentId}`,
+      `ISOLATION_EVIDENCE_COMMENT: #98/${isolationEvidenceCommentId}`,
+    ]));
+    const fetchImpl = fetchFor({ comment });
+    await expect(authorizeR2StagingDispatch({
+      context: context({ operation: fixtureOperation }),
+      fetchImpl,
+    })).resolves.toMatchObject({
+      operation: fixtureOperation,
+      migrationEvidenceRef: `#98/${migrationEvidenceCommentId}`,
+      isolationEvidenceRef: `#98/${isolationEvidenceCommentId}`,
     });
-    expect(result.authorizationRef).toBe("");
-    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    expect(fetchImpl).toHaveBeenCalledTimes(17);
+  });
+
+  it("rejects fixture GO when migration-cleanup evidence is missing or mismatched", async () => {
+    const comment = issueComment(ownerGoCommentId, goBody(fixtureOperation, [
+      `MIGRATION_EVIDENCE_COMMENT: #98/${migrationEvidenceCommentId}`,
+      `ISOLATION_EVIDENCE_COMMENT: #98/${isolationEvidenceCommentId}`,
+    ]));
+    const fetchImpl = fetchFor({
+      comment,
+      evidenceComments: {
+        [migrationEvidenceCommentId]: issueComment(migrationEvidenceCommentId, `R2_MIGRATION_RESULT: PASS\nSHA: ${"b".repeat(40)}`),
+      },
+    });
+    await expect(authorizeR2StagingDispatch({
+      context: context({ operation: fixtureOperation }),
+      fetchImpl,
+    })).rejects.toThrow("Migration cleanup evidence does not bind the exact SHA, target");
   });
 
   it.each([
     [{ ref: "refs/heads/codex/untrusted" }, "protected main"],
     [{ actor: "someone-else" }, "repository owner"],
     [{ candidateSha: "../secrets" }, "full lowercase commit SHA"],
-    [{ operation: "fixture" }, "preflight or migrate"],
+    [{ operation: "fixture" }, "preflight, migrate, or synthetic-fixture-create"],
     [{ ownerGoCommentId: "" }, "issue #98 owner GO comment ID"],
   ])("rejects unsafe dispatch inputs %#", async (overrides, message) => {
     await expect(authorizeR2StagingDispatch({ context: context(overrides) })).rejects.toThrow(message);
@@ -125,25 +459,49 @@ describe("R2 staging runner authorization", () => {
 
   it("rejects unmerged or wrong candidate PRs before looking up CI", async () => {
     const fetchImpl = fetchFor({ pullRequests: [{
-      number: 93,
+      number: 99,
       state: "open",
       merged_at: null,
       base: { ref: "main", repo: { full_name: "Satsetx4/karturt" } },
       head: { ref: branch, sha: candidateSha, repo: { full_name: "Satsetx4/karturt" } },
     }] });
     await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl })).rejects.toThrow(
-      "merged head of PR #93",
+      "merged head of PR #99",
     );
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("requires the merged PR result to be present in the protected-main dispatch commit", async () => {
+    const fetchImpl = fetchFor({ mergeComparison: {
+      status: "diverged",
+      base_commit: { sha: mergeCommitSha },
+      merge_base_commit: { sha: "e".repeat(40) },
+    } });
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
+      .rejects.toThrow("must be an ancestor of the protected-main dispatch SHA");
+    expect(fetchImpl).toHaveBeenCalledTimes(5);
+  });
+
+  it("requires the tested candidate source tree to match or be contained in the PR merge result", async () => {
+    const fetchImpl = fetchFor({
+      candidateTree: "b".repeat(40),
+      mergeTree: "e".repeat(40),
+      candidateMergeComparison: {
+        status: "diverged",
+        base_commit: { sha: candidateSha },
+        merge_base_commit: { sha: "f".repeat(40) },
+      },
+    });
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
+      .rejects.toThrow("tested candidate commit must be contained in the merged result");
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+  });
+
   it("stops when master tracker #98 is closed", async () => {
     const fetchImpl = fetchFor({ trackerState: "closed" });
-    await expect(authorizeR2StagingDispatch({
-      context: context({ operation: "preflight", ownerGoCommentId: "" }),
-      fetchImpl,
-    })).rejects.toThrow("Master tracker issue #98 must remain open");
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
+      .rejects.toThrow("Master tracker issue #98 must remain open");
+    expect(fetchImpl).toHaveBeenCalledTimes(6);
   });
 
   it("rejects a failed disposable concurrency job even if the run conclusion is success", async () => {
@@ -157,9 +515,71 @@ describe("R2 staging runner authorization", () => {
   });
 
   it.each([
-    [{ user: { login: "another-user" }, issue_url: `${apiBase}/repos/Satsetx4/karturt/issues/98`, body: "" }, "not authored by the repository owner"],
-    [{ user: { login: "Satsetx4" }, issue_url: `${apiBase}/repos/Satsetx4/karturt/issues/93`, body: "" }, "belong to issue #98"],
-    [{ user: { login: "Satsetx4" }, issue_url: `${apiBase}/repos/Satsetx4/karturt/issues/98`, body: "R2_RUNNER_GO: GO" }, "bind GO, SHA, canonical target"],
+    [{ deployment_branch_policy: { protected_branches: true, custom_branch_policies: false }, protection_rules: [] }, [{ name: "main" }], "custom branch policy"],
+    [{ name: runnerEnvironment, deployment_branch_policy: { protected_branches: false, custom_branch_policies: true }, protection_rules: [] }, [{ name: "main" }], "require repository-owner approval"],
+    [{ name: runnerEnvironment, deployment_branch_policy: { protected_branches: false, custom_branch_policies: true }, protection_rules: [{
+      type: "required_reviewers",
+      prevent_self_review: true,
+      reviewers: [{ type: "User", reviewer: { login: "Satsetx4" } }],
+    }] }, [{ name: "main" }], "allow that owner to review each run"],
+    [undefined, [{ name: "main" }, { name: "release" }], "allow deployments from main only"],
+  ])("rejects unsafe or missing Environment protection %#", async (environment, branchPolicies, message) => {
+    const fetchImpl = fetchFor({ environment, branchPolicies });
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl })).rejects.toThrow(message);
+  });
+
+  it("rejects a later owner NO-GO for the same SHA, target, and operation", async () => {
+    const go = issueComment(ownerGoCommentId, goBody(migrationOperation));
+    const noGo = issueComment("6390000000", goBody(migrationOperation).replace("R2_RUNNER_GO: GO", "R2_RUNNER_GO: NO-GO"));
+    const fetchImpl = fetchFor({ comments: [go, noGo] });
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl })).rejects.toThrow("missing, stale, or superseded");
+  });
+
+  it("rejects reuse of an owner GO already attached to an earlier staging run", async () => {
+    const priorRun = {
+      id: 8999999999,
+      display_title: `R2 migrate | ${candidateSha} | GO comment ${ownerGoCommentId}`,
+    };
+    const fetchImpl = fetchFor({ stagingRuns: [priorRun] });
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
+      .rejects.toThrow("already been used");
+  });
+
+  it("rejects reruns so every retry needs a fresh owner GO", async () => {
+    await expect(authorizeR2StagingDispatch({
+      context: context({ currentRunAttempt: "2" }),
+    })).rejects.toThrow("cannot be rerun");
+  });
+
+  it("rejects successful-looking prior evidence when its linked run used a different main policy SHA", async () => {
+    const expected = stagingOperationRun(preflightRunnerRunId, "preflight", preflightRunnerGoCommentId).run;
+    const fetchImpl = fetchFor({ runnerRuns: {
+      [preflightRunnerRunId]: { ...expected, head_sha: "e".repeat(40) },
+    } });
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
+      .rejects.toThrow("completed successful main workflow_dispatch run");
+  });
+
+  it("rejects a single owner comment containing both GO and NO-GO", async () => {
+    const comment = issueComment(ownerGoCommentId, `${goBody(migrationOperation)}\nR2_RUNNER_GO: NO-GO`);
+    const fetchImpl = fetchFor({ comment });
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
+      .rejects.toThrow("exactly one GO line and no NO-GO line");
+  });
+
+  it("rejects successful-looking prior evidence when its workflow path is not the documented main path", async () => {
+    const expected = stagingOperationRun(preflightRunnerRunId, "preflight", preflightRunnerGoCommentId).run;
+    const fetchImpl = fetchFor({ runnerRuns: {
+      [preflightRunnerRunId]: { ...expected, path: ".github/workflows/r2-staging-runner.yml@refs/heads/main" },
+    } });
+    await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl }))
+      .rejects.toThrow("completed successful main workflow_dispatch run");
+  });
+
+  it.each([
+    [issueComment(ownerGoCommentId, "", "another-user"), "authored by the repository owner"],
+    [{ ...issueComment(ownerGoCommentId, ""), issue_url: `${apiBase}/repos/Satsetx4/karturt/issues/93` }, "belong to issue #98"],
+    [issueComment(ownerGoCommentId, "R2_RUNNER_GO: GO"), "bind GO, SHA, canonical target"],
   ])("rejects stale or non-owner GO comment evidence %#", async (comment, message) => {
     await expect(authorizeR2StagingDispatch({ context: context(), fetchImpl: fetchFor({ comment }) }))
       .rejects.toThrow(message);
