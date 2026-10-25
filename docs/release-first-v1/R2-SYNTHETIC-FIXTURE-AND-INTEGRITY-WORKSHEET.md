@@ -2,7 +2,7 @@
 
 **Template only.** This file does not authorize a database connection or write. Leave every value blank until a target-bound R2 run is separately authorized. `PASS` requires sanitized evidence tied to the exact candidate SHA and canonical staging target.
 
-The source candidate now includes a GitHub Actions credential path, exact-SHA dispatch checks, protected Environment, and failure/retry boundary documented in [R2 secure staging runner](./R2-SECURE-STAGING-RUNNER.md). This remains source-only until reviewed source reaches `main`, the Environment is privately configured after the owner gate, and all live R2 preflight gates pass.
+The merged source candidate includes a GitHub Actions credential path, exact-SHA dispatch checks, protected Environment, and failure/retry boundary documented in [R2 secure staging runner](./R2-SECURE-STAGING-RUNNER.md). Candidate head `b2ca52514c54b5d383d32f8d728e8e92d4126e95` passed Gate A, independent PostgreSQL concurrency, and disposable PostgreSQL 18 recovery in exact PR run `40213718974`. Live R2 preflight gates have not passed.
 
 ## Hard stop: fixture bootstrap path
 
@@ -10,9 +10,9 @@ The repository does not provide an app-native path for creating the initial RT, 
 
 The older phase smoke scripts seed fixtures with direct Drizzle writes and are hard-bound to a different development Neon target. `db:bootstrap-rt`, `account:provision`, and other development smoke scripts are also direct database setup paths and do not enforce the RELEASE FIRST target tuple. Do not repoint or reuse them on staging. Do not substitute ad hoc SQL/ORM writes, Neon control-plane role creation, or a migration run as the database owner.
 
-The generic `db:bootstrap-rt` and `account:provision` commands reject staging and production labels. The R2 fixture path checks the exact candidate SHA, target, operation, owner GO, migration-cleanup and isolation evidence, and runtime identity in source. Its focused offline tests cover invalid credential replays and rollback after the tariff/dues phase. Exact-head CI, source review, live isolation/recovery, authenticated TLS, migration cleanup, and PG18 fixture integrity are still pending.
+The generic `db:bootstrap-rt` and `account:provision` commands reject staging and production labels. The R2 fixture path checks the exact candidate SHA, target, operation, owner GO, migration-cleanup and isolation evidence, and runtime identity in source. Its focused offline tests cover invalid credential replays and rollback after the tariff/dues phase. Candidate `b2ca52514c54b5d383d32f8d728e8e92d4126e95` passed exact-head CI run `40213718974`. No independent GitHub review submission for the fixture implementation is recorded. Live candidate-bound isolation/recovery evidence, authenticated TLS, migration cleanup, and PG18 fixture integrity are still pending.
 
-Keep `R2 fixture bootstrap path = SOURCE-CANDIDATE / LIVE BLOCKED` and R2 below `PASS` until the exact source SHA passes CI and review, owner proves synthetic-only isolation and Free recovery, official migrations complete with migrator cleanup, and the fixture operation has fresh target-bound authorization. The bootstrap uses only synthetic identifiers and verifies target/runtime identity before writing in one transaction. It does not prove app-level tenant authorization. Do not create or seed anything while live gates remain blocked.
+Keep `R2 fixture bootstrap path = SOURCE-CANDIDATE / LIVE BLOCKED` and R2 below `PASS` until source review is recorded, the owner proves synthetic-only isolation and Free recovery for the current candidate, official migrations complete with migrator cleanup, and the fixture operation has fresh target-bound authorization. The bootstrap uses only synthetic identifiers and verifies target/runtime identity before writing in one transaction. It does not prove app-level tenant authorization. Do not create or seed anything while live gates remain blocked.
 
 ## Run identity
 
@@ -65,7 +65,9 @@ Derive expectations from the frozen ledger and recorded app operations, not from
 
 | Gate | Status | Exact-SHA evidence / stop reason |
 |---|---|---|
-| Fixture bootstrap path reviewed and CI-verified | BLOCKED until completed | |
+| Fixture bootstrap path exact-head CI | PASS | Candidate `b2ca52514c54b5d383d32f8d728e8e92d4126e95`, PR run `40213718974`, all three required jobs passed |
+| Independent review of fixture bootstrap path | NOT RECORDED | PR #103 has no submitted review; do not infer one from CI |
+| Fixture bootstrap live gates | BLOCKED | Candidate-bound isolation/recovery, authenticated TLS, migrations, cleanup, and fixture integrity are not run |
 | Frozen fixture ledger and independent oracle | NOT RUN | |
 | Post-migration integrity and negative checks | NOT RUN | |
 | Migrator cleanup and effective privilege readback | NOT RUN | |
