@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import { createDatabasePool, isVerifiedNodeTlsSocket } from "@/db/pool";
 import { relationalSchema } from "@/db/schema";
 import { stagingDatabaseTarget } from "@/db/staging-target";
+import { resolveDatabaseTlsEvidence, type DatabaseTlsEvidenceSource } from "@/db/tls-evidence";
 import { officialMigrationCount, officialMigrationHeadTag, officialMigrationTags } from "@/db/migration-chain";
 import {
   assertPreviewConnectionTarget,
@@ -57,7 +58,7 @@ type RuntimeConnectionEvidence = {
   sessionRole: string;
   serverVersionNum: number;
   tlsActive: boolean;
-  tlsEvidenceSource?: "postgres_pg_stat_ssl" | "node_tls_socket";
+  tlsEvidenceSource?: DatabaseTlsEvidenceSource;
   postgresReportedTlsActive?: boolean;
 };
 
@@ -108,7 +109,7 @@ function readCheckedOutReleaseSha() {
 async function assertRuntimeConnection(
   pool: ReturnType<typeof createDatabasePool>,
   expected: { database: string; runtimeRole: string; environmentName: string },
-  tlsEvidenceSource: "postgres_pg_stat_ssl" | "node_tls_socket" = "postgres_pg_stat_ssl",
+  tlsEvidenceSource: DatabaseTlsEvidenceSource = "postgres_pg_stat_ssl",
 ): Promise<RuntimeConnectionEvidence> {
   const client = await pool.connect();
   try {
@@ -179,16 +180,19 @@ async function assertRuntimeConnection(
     `);
 
     const row = result.rows[0];
-    const tlsActive = tlsEvidenceSource === "node_tls_socket"
-      ? isVerifiedNodeTlsSocket(client.connection.stream)
-      : row?.tlsActive === true;
+    const tlsEvidence = resolveDatabaseTlsEvidence(tlsEvidenceSource, {
+      nodeTlsSocketVerified: tlsEvidenceSource === "node_tls_socket"
+        ? isVerifiedNodeTlsSocket(client.connection.stream)
+        : undefined,
+      postgresReportedTlsActive: row?.tlsActive === true,
+    });
     if (
       !row ||
       row.databaseName !== expected.database ||
       row.effectiveRole !== expected.runtimeRole ||
       row.sessionRole !== expected.runtimeRole ||
       Math.floor(row.serverVersionNum / 10_000) !== 18 ||
-      !tlsActive ||
+      !tlsEvidence.tlsActive ||
       !row.role_can_login ||
       row.role_is_superuser ||
       row.role_can_create_db ||
@@ -216,9 +220,7 @@ async function assertRuntimeConnection(
       effectiveRole: row.effectiveRole,
       sessionRole: row.sessionRole,
       serverVersionNum: row.serverVersionNum,
-      tlsActive,
-      tlsEvidenceSource,
-      ...(tlsEvidenceSource === "node_tls_socket" ? { postgresReportedTlsActive: row.tlsActive } : {}),
+      ...tlsEvidence,
     };
   } finally {
     client.release();
@@ -300,14 +302,17 @@ async function assertPreviewMigrationConnection(
     `);
 
     const row = result.rows[0];
-    const tlsActive = isVerifiedNodeTlsSocket(client.connection.stream);
+    const tlsEvidence = resolveDatabaseTlsEvidence("node_tls_socket", {
+      nodeTlsSocketVerified: isVerifiedNodeTlsSocket(client.connection.stream),
+      postgresReportedTlsActive: row?.tls_active === true,
+    });
     if (
       !row ||
       row.database_name !== target.database ||
       row.effective_role !== previewDatabaseTarget.migrationRole ||
       row.session_role !== previewDatabaseTarget.migrationRole ||
       Math.floor(row.server_version_num / 10_000) !== 18 ||
-      !tlsActive ||
+      !tlsEvidence.tlsActive ||
       !row.role_can_login ||
       row.role_is_superuser ||
       row.role_can_create_db ||
@@ -331,9 +336,7 @@ async function assertPreviewMigrationConnection(
       effectiveRole: row.effective_role,
       sessionRole: row.session_role,
       serverVersionNum: row.server_version_num,
-      tlsActive,
-      tlsEvidenceSource: "node_tls_socket",
-      postgresReportedTlsActive: row.tls_active,
+      ...tlsEvidence,
     };
   } finally {
     client.release();
