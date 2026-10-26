@@ -66,6 +66,12 @@ const nonSystemNamespace = `
   AND schema.nspname !~ '^pg_(temp|toast_temp)_[0-9]+$'
 `;
 
+const previewRuntimeTriggerFunctionSignatures = [
+  "public.due_active_received_phase11_v1(uuid)",
+  "public.due_effective_target_phase11_v1(uuid)",
+  "public.phase12_can_reconcile_future_due_v1(public.monthly_dues, public.monthly_dues)",
+] as const;
+
 function readCheckedOutReleaseSha() {
   try {
     const status = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], {
@@ -772,7 +778,16 @@ async function assertMigrationResult(
   }
 }
 
-async function assertRuntimePrivileges(pool: ReturnType<typeof createDatabasePool>, runtimeRole: string) {
+async function assertRuntimePrivileges(
+  pool: ReturnType<typeof createDatabasePool>,
+  runtimeRole: string,
+  previewRuntime = false,
+) {
+  const allowedRuntimeFunctions = previewRuntime
+    ? previewRuntimeTriggerFunctionSignatures
+      .map((signature) => `SELECT pg_catalog.to_regprocedure('${signature}')::oid AS oid`)
+      .join(" UNION ALL ")
+    : "SELECT NULL::oid AS oid WHERE false";
   const result = await pool.query<{
     table_count: number;
     tables_missing_select: number;
@@ -785,13 +800,18 @@ async function assertRuntimePrivileges(pool: ReturnType<typeof createDatabasePoo
     sequences_overprivileged: number;
     schemas_with_create: number;
     database_temp_effective: boolean;
-    routines_with_execute: number;
+    unexpected_routines_with_execute: number;
+    allowlisted_routines_with_execute: number;
+    allowlisted_routines_expected: number;
     drizzle_usage_effective: boolean;
     drizzle_create_effective: boolean;
     drizzle_journal_select_effective: boolean;
   }>(`
     WITH runtime AS (
       SELECT oid FROM pg_catalog.pg_roles WHERE rolname = $1
+    ),
+    allowed_runtime_functions AS (
+      ${allowedRuntimeFunctions}
     ),
     app_tables AS (
       SELECT relation.oid, relation.relowner, relation.relacl
@@ -855,11 +875,24 @@ async function assertRuntimePrivileges(pool: ReturnType<typeof createDatabasePoo
       (
         SELECT count(*) FILTER (
           WHERE pg_catalog.has_function_privilege($1, routine.oid, 'EXECUTE')
+            AND NOT EXISTS (
+              SELECT 1 FROM allowed_runtime_functions AS allowed WHERE allowed.oid = routine.oid
+            )
         )::int
         FROM pg_catalog.pg_proc AS routine
         JOIN pg_catalog.pg_namespace AS schema ON schema.oid = routine.pronamespace
         WHERE ${nonSystemNamespace}
-      ) AS routines_with_execute,
+      ) AS unexpected_routines_with_execute,
+      (
+        SELECT count(*) FILTER (
+          WHERE allowed.oid IS NOT NULL AND pg_catalog.has_function_privilege($1, allowed.oid, 'EXECUTE')
+        )::int
+        FROM allowed_runtime_functions AS allowed
+      ) AS allowlisted_routines_with_execute,
+      (
+        SELECT count(*) FILTER (WHERE allowed.oid IS NOT NULL)::int
+        FROM allowed_runtime_functions AS allowed
+      ) AS allowlisted_routines_expected,
       pg_catalog.has_schema_privilege($1, 'drizzle', 'USAGE') AS drizzle_usage_effective,
       pg_catalog.has_schema_privilege($1, 'drizzle', 'CREATE') AS drizzle_create_effective,
       pg_catalog.has_table_privilege($1, 'drizzle.__drizzle_migrations', 'SELECT') AS drizzle_journal_select_effective
@@ -878,7 +911,9 @@ async function assertRuntimePrivileges(pool: ReturnType<typeof createDatabasePoo
     row.sequences_overprivileged !== 0 ||
     row.schemas_with_create !== 0 ||
     row.database_temp_effective ||
-    row.routines_with_execute !== 0 ||
+    row.unexpected_routines_with_execute !== 0 ||
+    row.allowlisted_routines_expected !== (previewRuntime ? previewRuntimeTriggerFunctionSignatures.length : 0) ||
+    row.allowlisted_routines_with_execute !== (previewRuntime ? previewRuntimeTriggerFunctionSignatures.length : 0) ||
     row.drizzle_usage_effective ||
     row.drizzle_create_effective ||
     row.drizzle_journal_select_effective
@@ -886,7 +921,11 @@ async function assertRuntimePrivileges(pool: ReturnType<typeof createDatabasePoo
     throw new Error("Runtime database grants do not match the least-privilege requirement.");
   }
 
-  return { tableCount: row.table_count, sequenceCount: row.sequence_count };
+  return {
+    tableCount: row.table_count,
+    sequenceCount: row.sequence_count,
+    allowlistedFunctionCount: row.allowlisted_routines_with_execute,
+  };
 }
 
 function quoteRoleIdentifier(roleName: string) {
@@ -965,6 +1004,29 @@ async function revokeRuntimeFunctionExecution(pool: ReturnType<typeof createData
     await client.query("BEGIN");
     await client.query("REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC");
     await client.query(`REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM ${quotedRuntimeRole}`);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function grantPreviewRuntimeTriggerFunctionExecution(
+  pool: ReturnType<typeof createDatabasePool>,
+  runtimeRole: string,
+) {
+  const quotedRuntimeRole = quoteRoleIdentifier(runtimeRole);
+  if (runtimeRole !== previewDatabaseTarget.runtimeRole) {
+    throw new Error("The Preview trigger-function allowlist is restricted to the Preview runtime role.");
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const signature of previewRuntimeTriggerFunctionSignatures) {
+      await client.query(`GRANT EXECUTE ON FUNCTION ${signature} TO ${quotedRuntimeRole}`);
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -1289,7 +1351,7 @@ async function main() {
       );
     }
     await migrate(drizzle({ client: pool, schema: relationalSchema }), { migrationsFolder });
-    let runtimePrivilegeEvidence: { tableCount: number; sequenceCount: number } | undefined;
+    let runtimePrivilegeEvidence: { tableCount: number; sequenceCount: number; allowlistedFunctionCount: number } | undefined;
     if (staging) {
       await revokeRuntimeFunctionExecution(pool, stagingDatabaseTarget.runtimeRole);
       runtimeFunctionExecutionRevoked = true;
@@ -1309,7 +1371,9 @@ async function main() {
       await grantRuntimePrivileges(pool, previewDatabaseTarget.runtimeRole);
       await revokeRuntimeFunctionExecution(pool, previewDatabaseTarget.runtimeRole);
       runtimeFunctionExecutionRevoked = true;
-      runtimePrivilegeEvidence = await assertRuntimePrivileges(pool, previewDatabaseTarget.runtimeRole);
+      await grantPreviewRuntimeTriggerFunctionExecution(pool, previewDatabaseTarget.runtimeRole);
+      runtimeFunctionExecutionRevoked = false;
+      runtimePrivilegeEvidence = await assertRuntimePrivileges(pool, previewDatabaseTarget.runtimeRole, true);
       runtimePrivilegesVerified = true;
     }
 
@@ -1378,6 +1442,7 @@ async function main() {
         runtimePostgresReportedTlsActive: runtimeConnectionEvidence?.postgresReportedTlsActive,
         runtimeTablesVerified: runtimePrivilegeEvidence?.tableCount,
         runtimeSequencesVerified: runtimePrivilegeEvidence?.sequenceCount,
+        runtimeFunctionsAllowlisted: runtimePrivilegeEvidence?.allowlistedFunctionCount,
         fullMigrationJournalVerified: true,
         runtimePrivilegesVerified: true,
       } : {}),
