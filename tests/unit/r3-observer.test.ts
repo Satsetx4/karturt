@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assessR3ObservationSample, parseR3ObserverInputs } from "@/db/r3-observer";
+import { assessR3ObservationSample, parseR3ObserverInputs, r3WorkerProbeHeaders } from "@/db/r3-observer";
 import { getR3WorkerIdentity } from "@/lib/r3-worker-identity";
 
 const releaseSha = "63c3a89aee70a9fdd11db499db261e3d7caa136d";
@@ -63,6 +63,7 @@ describe("RELEASE FIRST R3 observer input gate", () => {
       KARTURT_R2_PASS_EVIDENCE_REF: "",
       KARTURT_PREVIEW_TARGET_ID: "misty-king-95262980/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview",
       KARTURT_PRODUCTION_TARGET_ID: "wild-glitter-41970460/br-spring-smoke-ao3apicl/ep-sparkling-rain-aospujja/karturt_production",
+      VERCEL_AUTOMATION_BYPASS_SECRET: "preview-bypass-test-only",
       DATABASE_URL: "postgresql://karturt_preview_runtime:test-only@ep-calm-glade-b3rpal01.c-3.ap-southeast-1.aws.neon.tech/karturt_preview?sslmode=verify-full",
       KARTURT_R3_APP_ORIGIN_A: "https://karturt-review-staging-20261012-a-sekawan.vercel.app",
       KARTURT_R3_APP_ORIGIN_B: "https://karturt-review-staging-20261012-b-sekawan.vercel.app",
@@ -120,6 +121,20 @@ describe("R3 observer sample assessment", () => {
       overlapObserved: false,
       appSessionsLockWaitObserved: false,
     });
+  });
+
+  it("sends Vercel protection bypass only on protected Preview worker probes", () => {
+    expect(r3WorkerProbeHeaders({ VERCEL_AUTOMATION_BYPASS_SECRET: "preview-bypass-test-only" }, "preview", "r3run20261025"))
+      .toEqual({
+        "x-karturt-r3-run-id": "r3run20261025",
+        "x-vercel-protection-bypass": "preview-bypass-test-only",
+      });
+    expect(r3WorkerProbeHeaders({}, "staging", "r3run20261025"))
+      .toEqual({ "x-karturt-r3-run-id": "r3run20261025" });
+    expect(() => r3WorkerProbeHeaders({}, "preview", "r3run20261025"))
+      .toThrow("VERCEL_AUTOMATION_BYPASS_SECRET is required");
+    expect(() => r3WorkerProbeHeaders({ VERCEL_AUTOMATION_BYPASS_SECRET: "bad\r\nheader" }, "preview", "r3run20261025"))
+      .toThrow("VERCEL_AUTOMATION_BYPASS_SECRET is required");
   });
 });
 

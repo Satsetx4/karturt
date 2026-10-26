@@ -27,6 +27,22 @@ export type R3ObserverInputs = {
   databaseUrl: string;
 };
 
+export function r3WorkerProbeHeaders(
+  environment: Record<string, string | undefined>,
+  databaseEnvironment: "preview" | "staging",
+  runId: string,
+) {
+  const headers: Record<string, string> = { "x-karturt-r3-run-id": runId };
+  if (databaseEnvironment === "preview") {
+    const bypassSecret = environment.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
+    if (!bypassSecret || /[\r\n]/.test(bypassSecret)) {
+      throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required for protected Preview probes; no database connection was opened.");
+    }
+    headers["x-vercel-protection-bypass"] = bypassSecret;
+  }
+  return headers;
+}
+
 function required(environment: NodeJS.ProcessEnv, key: string) {
   const value = environment[key]?.trim();
   if (!value) throw new Error(`${key} is required; the R3 observer fails closed.`);
@@ -120,6 +136,8 @@ export function parseR3ObserverInputs(
   const applicationNameA = `${workerPrefix}-a`;
   const applicationNameB = `${workerPrefix}-b`;
   const observerApplicationName = `${workerPrefix}-observer`;
+
+  if (preview) r3WorkerProbeHeaders(environment, "preview", runId);
 
   const databaseUrl = required(environment, "DATABASE_URL");
   if (preview) assertPreviewConnectionTarget(databaseUrl, "runtime", environment);

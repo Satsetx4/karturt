@@ -7,6 +7,7 @@ import { stagingDatabaseTarget } from "@/db/staging-target";
 import {
   assessR3ObservationSample,
   parseR3ObserverInputs,
+  r3WorkerProbeHeaders,
   type R3ObservationSample,
 } from "@/db/r3-observer";
 
@@ -37,9 +38,10 @@ async function verifyAppWorker(
   expectedTag: "a" | "b",
   runId: string,
   releaseSha: string,
+  databaseEnvironment: "preview" | "staging",
 ) {
   const response = await fetch(new URL("/api/health", origin), {
-    headers: { "x-karturt-r3-run-id": runId },
+    headers: r3WorkerProbeHeaders(process.env, databaseEnvironment, runId),
     redirect: "error",
     signal: AbortSignal.timeout(5_000),
   });
@@ -169,8 +171,8 @@ async function main() {
     }
 
     const [workerA, workerB] = await Promise.all([
-      verifyAppWorker(inputs.appOriginA, "a", inputs.runId, inputs.releaseSha),
-      verifyAppWorker(inputs.appOriginB, "b", inputs.runId, inputs.releaseSha),
+      verifyAppWorker(inputs.appOriginA, "a", inputs.runId, inputs.releaseSha, inputs.databaseEnvironment),
+      verifyAppWorker(inputs.appOriginB, "b", inputs.runId, inputs.releaseSha, inputs.databaseEnvironment),
     ]);
     if (workerA.workerInstanceId === workerB.workerInstanceId) {
       throw new Error("Both R3 origins resolved to the same application worker instance.");
