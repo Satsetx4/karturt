@@ -28,6 +28,28 @@ const allowedConnectionParameters = new Set([
   "channel_binding",
 ]);
 
+export function isVerifiedNodeTlsSocket(stream: unknown): boolean {
+  if (!stream || typeof stream !== "object") return false;
+
+  const socket = stream as {
+    encrypted?: unknown;
+    authorized?: unknown;
+    authorizationError?: unknown;
+    getProtocol?: () => string | null;
+  };
+  if (
+    socket.encrypted !== true ||
+    socket.authorized !== true ||
+    (socket.authorizationError !== undefined && socket.authorizationError !== null) ||
+    typeof socket.getProtocol !== "function"
+  ) {
+    return false;
+  }
+
+  const protocol = socket.getProtocol();
+  return protocol === "TLSv1.2" || protocol === "TLSv1.3";
+}
+
 function assertStagingTarget(
   url: URL,
   purpose: DatabaseConnectionPurpose,

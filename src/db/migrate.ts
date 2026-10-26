@@ -5,7 +5,7 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createDatabasePool } from "@/db/pool";
+import { createDatabasePool, isVerifiedNodeTlsSocket } from "@/db/pool";
 import { relationalSchema } from "@/db/schema";
 import { stagingDatabaseTarget } from "@/db/staging-target";
 import { officialMigrationCount, officialMigrationHeadTag, officialMigrationTags } from "@/db/migration-chain";
@@ -57,6 +57,8 @@ type RuntimeConnectionEvidence = {
   sessionRole: string;
   serverVersionNum: number;
   tlsActive: boolean;
+  tlsEvidenceSource?: "postgres_pg_stat_ssl" | "node_tls_socket";
+  postgresReportedTlsActive?: boolean;
 };
 
 const nonSystemNamespace = `
@@ -90,27 +92,31 @@ function readCheckedOutReleaseSha() {
 async function assertRuntimeConnection(
   pool: ReturnType<typeof createDatabasePool>,
   expected: { database: string; runtimeRole: string; environmentName: string },
+  tlsEvidenceSource: "postgres_pg_stat_ssl" | "node_tls_socket" = "postgres_pg_stat_ssl",
 ): Promise<RuntimeConnectionEvidence> {
-  const result = await pool.query<RuntimeConnectionEvidence & {
-    role_can_login: boolean;
-    role_is_superuser: boolean;
-    role_can_create_db: boolean;
-    role_can_create_role: boolean;
-    role_can_replicate: boolean;
-    role_bypasses_rls: boolean;
-    role_inherits: boolean;
-    role_membership_count: number;
-    database_owned_by_runtime: boolean;
-    database_create_effective: boolean;
-    database_temp_effective: boolean;
-    public_usage_effective: boolean;
-    public_create_effective: boolean;
-    drizzle_owned_by_runtime: boolean;
-    drizzle_usage_effective: boolean;
-    drizzle_create_effective: boolean;
-    custom_schemas_owned_by_runtime: number;
-    custom_schemas_with_create: number;
-  }>(`
+  const client = await pool.connect();
+  try {
+    const result = await client.query<
+      RuntimeConnectionEvidence & {
+        role_can_login: boolean;
+        role_is_superuser: boolean;
+        role_can_create_db: boolean;
+        role_can_create_role: boolean;
+        role_can_replicate: boolean;
+        role_bypasses_rls: boolean;
+        role_inherits: boolean;
+        role_membership_count: number;
+        database_owned_by_runtime: boolean;
+        database_create_effective: boolean;
+        database_temp_effective: boolean;
+        public_usage_effective: boolean;
+        public_create_effective: boolean;
+        drizzle_owned_by_runtime: boolean;
+        drizzle_usage_effective: boolean;
+        drizzle_create_effective: boolean;
+        custom_schemas_owned_by_runtime: number;
+        custom_schemas_with_create: number;
+      }>(`
     SELECT
       current_database() AS "databaseName",
       current_user AS "effectiveRole",
@@ -154,75 +160,85 @@ async function assertRuntimeConnection(
       ) AS custom_schemas_with_create
     FROM pg_catalog.pg_roles AS role
     WHERE role.rolname = current_user
-  `);
+    `);
 
-  const row = result.rows[0];
-  if (
-    !row ||
-    row.databaseName !== expected.database ||
-    row.effectiveRole !== expected.runtimeRole ||
-    row.sessionRole !== expected.runtimeRole ||
-    Math.floor(row.serverVersionNum / 10_000) !== 18 ||
-    !row.tlsActive ||
-    !row.role_can_login ||
-    row.role_is_superuser ||
-    row.role_can_create_db ||
-    row.role_can_create_role ||
-    row.role_can_replicate ||
-    row.role_bypasses_rls ||
-    row.role_inherits ||
-    row.role_membership_count !== 0 ||
-    row.database_owned_by_runtime ||
-    row.database_create_effective ||
-    row.database_temp_effective ||
-    !row.public_usage_effective ||
-    row.public_create_effective ||
-    row.drizzle_owned_by_runtime ||
-    row.drizzle_usage_effective ||
-    row.drizzle_create_effective ||
-    row.custom_schemas_owned_by_runtime !== 0 ||
-    row.custom_schemas_with_create !== 0
-  ) {
-    throw new Error(`${expected.environmentName} runtime connection preflight failed.`);
+    const row = result.rows[0];
+    const tlsActive = tlsEvidenceSource === "node_tls_socket"
+      ? isVerifiedNodeTlsSocket(client.connection.stream)
+      : row?.tlsActive === true;
+    if (
+      !row ||
+      row.databaseName !== expected.database ||
+      row.effectiveRole !== expected.runtimeRole ||
+      row.sessionRole !== expected.runtimeRole ||
+      Math.floor(row.serverVersionNum / 10_000) !== 18 ||
+      !tlsActive ||
+      !row.role_can_login ||
+      row.role_is_superuser ||
+      row.role_can_create_db ||
+      row.role_can_create_role ||
+      row.role_can_replicate ||
+      row.role_bypasses_rls ||
+      row.role_inherits ||
+      row.role_membership_count !== 0 ||
+      row.database_owned_by_runtime ||
+      row.database_create_effective ||
+      row.database_temp_effective ||
+      !row.public_usage_effective ||
+      row.public_create_effective ||
+      row.drizzle_owned_by_runtime ||
+      row.drizzle_usage_effective ||
+      row.drizzle_create_effective ||
+      row.custom_schemas_owned_by_runtime !== 0 ||
+      row.custom_schemas_with_create !== 0
+    ) {
+      throw new Error(`${expected.environmentName} runtime connection preflight failed.`);
+    }
+
+    return {
+      databaseName: row.databaseName,
+      effectiveRole: row.effectiveRole,
+      sessionRole: row.sessionRole,
+      serverVersionNum: row.serverVersionNum,
+      tlsActive,
+      tlsEvidenceSource,
+      ...(tlsEvidenceSource === "node_tls_socket" ? { postgresReportedTlsActive: row.tlsActive } : {}),
+    };
+  } finally {
+    client.release();
   }
-
-  return {
-    databaseName: row.databaseName,
-    effectiveRole: row.effectiveRole,
-    sessionRole: row.sessionRole,
-    serverVersionNum: row.serverVersionNum,
-    tlsActive: row.tlsActive,
-  };
 }
 
 async function assertPreviewMigrationConnection(
   pool: ReturnType<typeof createDatabasePool>,
   target: PreviewTargetIdentity,
 ): Promise<RuntimeConnectionEvidence> {
-  const result = await pool.query<{
-    database_name: string;
-    effective_role: string;
-    session_role: string;
-    server_version_num: number;
-    tls_active: boolean;
-    role_can_login: boolean;
-    role_is_superuser: boolean;
-    role_can_create_db: boolean;
-    role_can_create_role: boolean;
-    role_can_replicate: boolean;
-    role_bypasses_rls: boolean;
-    role_inherits: boolean;
-    role_membership_count: number;
-    database_owned_by_migration: boolean;
-    database_create_effective: boolean;
-    database_temp_public: boolean;
-    database_temp_effective: boolean;
-    public_usage_effective: boolean;
-    public_create_effective: boolean;
-    drizzle_schema_exists: boolean;
-    drizzle_usage_effective: boolean;
-    drizzle_create_effective: boolean;
-  }>(`
+  const client = await pool.connect();
+  try {
+    const result = await client.query<{
+      database_name: string;
+      effective_role: string;
+      session_role: string;
+      server_version_num: number;
+      tls_active: boolean;
+      role_can_login: boolean;
+      role_is_superuser: boolean;
+      role_can_create_db: boolean;
+      role_can_create_role: boolean;
+      role_can_replicate: boolean;
+      role_bypasses_rls: boolean;
+      role_inherits: boolean;
+      role_membership_count: number;
+      database_owned_by_migration: boolean;
+      database_create_effective: boolean;
+      database_temp_public: boolean;
+      database_temp_effective: boolean;
+      public_usage_effective: boolean;
+      public_create_effective: boolean;
+      drizzle_schema_exists: boolean;
+      drizzle_usage_effective: boolean;
+      drizzle_create_effective: boolean;
+    }>(`
     SELECT
       current_database() AS database_name,
       current_user AS effective_role,
@@ -265,41 +281,47 @@ async function assertPreviewMigrationConnection(
         THEN pg_catalog.has_schema_privilege(role.oid, 'drizzle', 'CREATE') ELSE false END AS drizzle_create_effective
     FROM pg_catalog.pg_roles AS role
     WHERE role.rolname = current_user
-  `);
+    `);
 
-  const row = result.rows[0];
-  if (
-    !row ||
-    row.database_name !== target.database ||
-    row.effective_role !== previewDatabaseTarget.migrationRole ||
-    row.session_role !== previewDatabaseTarget.migrationRole ||
-    Math.floor(row.server_version_num / 10_000) !== 18 ||
-    !row.tls_active ||
-    !row.role_can_login ||
-    row.role_is_superuser ||
-    row.role_can_create_db ||
-    row.role_can_create_role ||
-    row.role_can_replicate ||
-    row.role_bypasses_rls ||
-    row.role_inherits ||
-    row.role_membership_count !== 0 ||
-    row.database_owned_by_migration ||
-    !row.database_create_effective ||
-    row.database_temp_public ||
-    row.database_temp_effective ||
-    !row.public_usage_effective ||
-    !row.public_create_effective ||
-    (row.drizzle_schema_exists && (!row.drizzle_usage_effective || !row.drizzle_create_effective))
-  ) {
-    throw new Error("Preview migration connection failed the isolated PostgreSQL 18 and least-privilege preflight.");
+    const row = result.rows[0];
+    const tlsActive = isVerifiedNodeTlsSocket(client.connection.stream);
+    if (
+      !row ||
+      row.database_name !== target.database ||
+      row.effective_role !== previewDatabaseTarget.migrationRole ||
+      row.session_role !== previewDatabaseTarget.migrationRole ||
+      Math.floor(row.server_version_num / 10_000) !== 18 ||
+      !tlsActive ||
+      !row.role_can_login ||
+      row.role_is_superuser ||
+      row.role_can_create_db ||
+      row.role_can_create_role ||
+      row.role_can_replicate ||
+      row.role_bypasses_rls ||
+      row.role_inherits ||
+      row.role_membership_count !== 0 ||
+      row.database_owned_by_migration ||
+      !row.database_create_effective ||
+      row.database_temp_public ||
+      row.database_temp_effective ||
+      !row.public_usage_effective ||
+      !row.public_create_effective ||
+      (row.drizzle_schema_exists && (!row.drizzle_usage_effective || !row.drizzle_create_effective))
+    ) {
+      throw new Error("Preview migration connection failed the isolated PostgreSQL 18 and least-privilege preflight.");
+    }
+    return {
+      databaseName: row.database_name,
+      effectiveRole: row.effective_role,
+      sessionRole: row.session_role,
+      serverVersionNum: row.server_version_num,
+      tlsActive,
+      tlsEvidenceSource: "node_tls_socket",
+      postgresReportedTlsActive: row.tls_active,
+    };
+  } finally {
+    client.release();
   }
-  return {
-    databaseName: row.database_name,
-    effectiveRole: row.effective_role,
-    sessionRole: row.session_role,
-    serverVersionNum: row.server_version_num,
-    tlsActive: row.tls_active,
-  };
 }
 
 async function assertPreviewMigrationState(
@@ -1194,7 +1216,9 @@ async function main() {
           database: previewDatabaseTarget.database,
           runtimeRole: previewDatabaseTarget.runtimeRole,
           environmentName: "Preview",
-        })
+        },
+        preview ? "node_tls_socket" : "postgres_pg_stat_ssl",
+      )
       : undefined;
     const previewMigrationEvidence = preview
       ? await assertPreviewMigrationConnection(pool, previewTarget!)
@@ -1341,10 +1365,14 @@ async function main() {
         migrationPrivilegesSafe: true,
         tlsActive: previewMigrationEvidence?.tlsActive,
         tlsCertificateAndHostnameVerified: Boolean(previewMigrationEvidence),
+        tlsEvidenceSource: previewMigrationEvidence?.tlsEvidenceSource,
+        postgresReportedTlsActive: previewMigrationEvidence?.postgresReportedTlsActive,
         runtimeRoleSafe: true,
         runtimeConnectionVerified: Boolean(runtimeConnectionEvidence),
         runtimeTlsActive: runtimeConnectionEvidence?.tlsActive,
         runtimeTlsCertificateAndHostnameVerified: Boolean(runtimeConnectionEvidence),
+        runtimeTlsEvidenceSource: runtimeConnectionEvidence?.tlsEvidenceSource,
+        runtimePostgresReportedTlsActive: runtimeConnectionEvidence?.postgresReportedTlsActive,
         runtimeTablesVerified: runtimePrivilegeEvidence?.tableCount,
         runtimeSequencesVerified: runtimePrivilegeEvidence?.sequenceCount,
         fullMigrationJournalVerified: true,

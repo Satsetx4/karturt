@@ -1,7 +1,28 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createDatabasePoolConfig } from "@/db/pool";
+import { createDatabasePoolConfig, isVerifiedNodeTlsSocket } from "@/db/pool";
 import { stagingDatabaseTarget } from "@/db/staging-target";
 import { previewDatabaseTarget } from "@/db/preview-target";
+
+describe("PostgreSQL TLS socket evidence", () => {
+  it.each(["TLSv1.2", "TLSv1.3"])("accepts a certificate-authorized encrypted %s socket", (protocol) => {
+    expect(isVerifiedNodeTlsSocket({
+      encrypted: true,
+      authorized: true,
+      authorizationError: undefined,
+      getProtocol: (): string | null => protocol,
+    })).toBe(true);
+  });
+
+  it.each([
+    ["unencrypted", { encrypted: false, authorized: true, getProtocol: (): string | null => "TLSv1.3" }],
+    ["unverified", { encrypted: true, authorized: false, authorizationError: "UNABLE_TO_VERIFY_LEAF_SIGNATURE", getProtocol: (): string | null => "TLSv1.3" }],
+    ["authorization error present", { encrypted: true, authorized: true, authorizationError: "ERR_TLS_CERT_ALTNAME_INVALID", getProtocol: (): string | null => "TLSv1.3" }],
+    ["old protocol", { encrypted: true, authorized: true, getProtocol: (): string | null => "TLSv1.1" }],
+    ["incomplete handshake", { encrypted: true, authorized: true, getProtocol: (): string | null => null }],
+  ])("rejects %s socket evidence", (_case, evidence) => {
+    expect(isVerifiedNodeTlsSocket(evidence)).toBe(false);
+  });
+});
 
 describe("database pool security configuration", () => {
   afterEach(() => vi.unstubAllEnvs());
