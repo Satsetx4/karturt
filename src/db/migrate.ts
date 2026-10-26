@@ -351,7 +351,10 @@ async function assertPreviewMigrationState(
       ) AS application_routine_count
   `);
   const stateRow = state.rows[0];
-  if (!stateRow || stateRow.application_routine_count !== 0 || (!stateRow.journal_exists && stateRow.application_object_count !== 0)) {
+  if (
+    !stateRow ||
+    (!stateRow.journal_exists && (stateRow.application_object_count !== 0 || stateRow.application_routine_count !== 0))
+  ) {
     throw new Error("Preview migration requires an empty synthetic database or a matching official Drizzle migration prefix.");
   }
   if (!stateRow.journal_exists) return;
