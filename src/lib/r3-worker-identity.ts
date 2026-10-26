@@ -1,5 +1,7 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { assertR3PreviewBusinessDateTarget } from "@/db/preview-target";
+
+const processInstanceNonce = randomUUID();
 
 export type R3WorkerIdentity = {
   releaseSha: string;
@@ -43,7 +45,7 @@ export function getR3WorkerIdentity(
   }
 
   const workerInstanceId = createHash("sha256")
-    .update(`${runId}:${scenario}:${workerTag}:${processId}`)
+    .update(`${runId}:${scenario}:${processId}:${processInstanceNonce}`)
     .digest("hex")
     .slice(0, 16);
 

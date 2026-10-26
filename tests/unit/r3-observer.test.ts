@@ -161,6 +161,21 @@ describe("R3 health worker identity", () => {
     expect(getR3WorkerIdentity("r3run20261025", { ...stagingWorkerEnvironment, APP_ENV: "production" }, releaseSha, 12345)).toBeNull();
   });
 
+  it("does not use the worker tag to claim two processes are distinct", () => {
+    const identityA = getR3WorkerIdentity("r3run20261025", {
+      ...stagingWorkerEnvironment,
+      KARTURT_R3_WORKER_TAG: "a",
+    }, releaseSha, 12345);
+    const identityB = getR3WorkerIdentity("r3run20261025", {
+      ...stagingWorkerEnvironment,
+      KARTURT_R3_WORKER_TAG: "b",
+    }, releaseSha, 12345);
+
+    expect(identityA?.workerInstanceId).toBe(identityB?.workerInstanceId);
+    expect(getR3WorkerIdentity("r3run20261025", stagingWorkerEnvironment, releaseSha, 12346)?.workerInstanceId)
+      .not.toBe(identityA?.workerInstanceId);
+  });
+
   it("returns a worker identity on the exact approved Preview target", () => {
     const previewEnvironment: NodeJS.ProcessEnv = {
       NODE_ENV: "test",
