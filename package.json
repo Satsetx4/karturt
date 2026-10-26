@@ -39,6 +39,7 @@
     "db:migrate:production:preflight": "tsx src/db/migrate.ts --production --preflight",
     "db:migrate:production:apply": "tsx src/db/migrate.ts --production --apply",
     "db:bootstrap-r2-staging": "tsx scripts/r2-bootstrap-staging.ts",
+    "auth:rekey-preview-synthetic": "tsx scripts/rekey-preview-synthetic-credentials.ts",
     "db:check": "tsx scripts/check-db.ts",
     "db:bootstrap-rt": "tsx scripts/bootstrap-rt.ts",
     "account:provision": "tsx scripts/provision-account.ts"

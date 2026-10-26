@@ -297,6 +297,25 @@ function normalizeContext(action: string, context: AuditContext | undefined): Au
     return { recoveryReference: reference as string | null, revokedSessionCount };
   }
 
+  if (action === "preview.synthetic_credential.rekeyed") {
+    if (keys.join(",") !== "credentialRole,executionMethod,revokedSessionCount") {
+      throw new Error("Audit context fields do not match the action contract.");
+    }
+    const credentialRole = value.credentialRole;
+    const executionMethod = value.executionMethod;
+    const revokedSessionCount = value.revokedSessionCount;
+    if (!new Set(["resident", "rt_chairman", "treasurer", "system_admin"]).has(String(credentialRole))) {
+      throw new Error("Preview credential audit role is not canonical.");
+    }
+    if (executionMethod !== "owner_authorized_preview_cli") {
+      throw new Error("Preview credential audit must identify its owner-authorized execution method.");
+    }
+    if (typeof revokedSessionCount !== "number" || !Number.isSafeInteger(revokedSessionCount) || revokedSessionCount < 0) {
+      throw new Error("Audit session count must be a non-negative integer.");
+    }
+    return { credentialRole: credentialRole as string, executionMethod, revokedSessionCount };
+  }
+
   if (keys.length > 0) {
     throw new Error("Audit context fields must be explicitly allowlisted for the action.");
   }
@@ -341,6 +360,9 @@ export async function appendAuditEvent<TTransaction extends TransactionExecutor>
   }
   if (action === "payment.reversed" && (entityType !== "payment" || reason === null)) {
     throw new Error("Payment reversal audit requires a payment entity and a reason.");
+  }
+  if (action === "preview.synthetic_credential.rekeyed" && (entityType !== "synthetic_account" || reason !== null)) {
+    throw new Error("Preview credential rekey audit requires a synthetic account entity and no reason.");
   }
   if (action === "waiver.created" && (entityType !== "waiver_action" || reason === null)) {
     throw new Error("Waiver audit requires a waiver action entity and a reason.");
