@@ -8,7 +8,7 @@ export type StagingMigrationAuthorization = {
   isolationEvidenceRef: string;
   authorizationRef: string;
   authorizedTarget: string;
-  authorizedOperation: "official-migrations-0000-0013";
+  authorizedOperation: "official-migrations-0000-0014";
 };
 
 export type StagingPreflightAuthorization = {
@@ -46,8 +46,8 @@ export function parseStagingMigrationAuthorization(
   if (requiredEnvironmentValue(environment, "KARTURT_R2_MIGRATION_AUTHORIZED_TARGET") !== stagingDatabaseTargetReference) {
     throw new Error("Staging migration authorization must name the canonical staging target.");
   }
-  if (requiredEnvironmentValue(environment, "KARTURT_R2_MIGRATION_AUTHORIZED_OPERATION") !== "official-migrations-0000-0013") {
-    throw new Error("Staging migration authorization must explicitly allow official-migrations-0000-0013.");
+  if (requiredEnvironmentValue(environment, "KARTURT_R2_MIGRATION_AUTHORIZED_OPERATION") !== "official-migrations-0000-0014") {
+    throw new Error("Staging migration authorization must explicitly allow official-migrations-0000-0014.");
   }
 
   const ciRunId = requiredEnvironmentValue(environment, "KARTURT_R2_CI_RUN_ID");
@@ -77,7 +77,7 @@ export function parseStagingMigrationAuthorization(
     isolationEvidenceRef,
     authorizationRef,
     authorizedTarget: stagingDatabaseTargetReference,
-    authorizedOperation: "official-migrations-0000-0013",
+    authorizedOperation: "official-migrations-0000-0014",
   };
 }
 

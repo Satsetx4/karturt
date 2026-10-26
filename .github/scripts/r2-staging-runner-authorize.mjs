@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 export const runnerTarget = "flat-cloud-57657711/br-sparkling-flower-azordm9k/ep-red-boat-azzqyf45/karturt_staging";
 export const runnerEnvironment = "karturt-r2-staging";
-export const migrationOperation = "official-migrations-0000-0013";
+export const migrationOperation = "official-migrations-0000-0014";
 export const preflightOperation = "authenticated-tls-role-preflight";
 export const fixtureOperation = "synthetic-fixture-create";
 export const runnerWorkflowName = "KartuRT R2 staging runner";
@@ -17,7 +17,7 @@ const maxPullRequestPage = 100;
 const disposableRecoveryJobName = "R2 disposable PostgreSQL 18 recovery";
 const disposableRecoveryStepName = "Rebuild and verify synthetic state on PostgreSQL 18";
 const disposableRecoveryTarget = "postgresql-18-disposable";
-const disposableRecoveryOperation = "rebuild-reseed-official-migrations-0000-0013";
+const disposableRecoveryOperation = "rebuild-reseed-official-migrations-0000-0014";
 const requiredJobs = [
   "Gate A local verification",
   "Launch Safety independent PostgreSQL concurrency",
@@ -512,7 +512,7 @@ export async function authorizeR2StagingDispatch({ context, fetchImpl = fetch })
       "R2_MIGRATION_RESULT: PASS",
       `SHA: ${request.candidateSha}`,
       `TARGET: ${runnerTarget}`,
-      "MIGRATION_JOURNAL: 0000-0013",
+      "MIGRATION_JOURNAL: 0000-0014",
       "MIGRATOR_NOLOGIN: PASS",
       "RUNTIME_DML_ONLY: PASS",
     ]);

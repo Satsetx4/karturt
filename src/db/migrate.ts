@@ -400,7 +400,7 @@ async function assertTargetMigrationState(
       return entry.hash.toLowerCase() === expected.hash.toLowerCase() && entry.created_at === String(expected.folderMillis);
     });
   if (!matchesOfficialPrefix || (journal.rows.length === 0 && stateRow.application_object_count !== 0)) {
-    throw new Error("Preview migration journal is not an official prefix of Drizzle migrations 0000–0013.");
+    throw new Error("Preview migration journal is not an official prefix of Drizzle migrations 0000–0014.");
   }
 }
 
@@ -1274,7 +1274,7 @@ async function main() {
     throw new Error("Production migration requires an exact checked-out release SHA.");
   }
   if ((staging || preview || production) && officialChainMismatch) {
-    throw new Error("Staging, Preview, and Production migrations require the unchanged official Drizzle chain 0000–0013.");
+    throw new Error("Staging, Preview, and Production migrations require the unchanged official Drizzle chain 0000–0014.");
   }
   const expectedHeadHash = migrationEntries.at(-1)?.hash;
   if (!expectedHeadHash) throw new Error("Migration chain is empty.");

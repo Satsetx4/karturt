@@ -13,7 +13,7 @@ function migrationEnvironment(overrides: Record<string, string | undefined> = {}
     NODE_ENV: "test",
     KARTURT_R2_MIGRATION_AUTHORIZED_SHA: releaseSha,
     KARTURT_R2_MIGRATION_AUTHORIZED_TARGET: "flat-cloud-57657711/br-sparkling-flower-azordm9k/ep-red-boat-azzqyf45/karturt_staging",
-    KARTURT_R2_MIGRATION_AUTHORIZED_OPERATION: "official-migrations-0000-0013",
+    KARTURT_R2_MIGRATION_AUTHORIZED_OPERATION: "official-migrations-0000-0014",
     KARTURT_R2_CI_HEAD_SHA: releaseSha,
     KARTURT_R2_CI_RUN_ID: "40123595717",
     KARTURT_R2_CI_ATTEMPT: "1",
@@ -49,7 +49,7 @@ describe("staging migration authorization", () => {
       isolationEvidenceRef: "#98/6388444455",
       authorizationRef: "#98/6388444457",
       authorizedTarget: "flat-cloud-57657711/br-sparkling-flower-azordm9k/ep-red-boat-azzqyf45/karturt_staging",
-      authorizedOperation: "official-migrations-0000-0013",
+      authorizedOperation: "official-migrations-0000-0014",
     });
   });
 
@@ -80,7 +80,7 @@ describe("staging migration authorization", () => {
     )).toThrow("canonical staging target");
     expect(() => parseStagingMigrationAuthorization(
       migrationEnvironment({ KARTURT_R2_MIGRATION_AUTHORIZED_OPERATION: "synthetic-fixture-create" }), releaseSha,
-    )).toThrow("official-migrations-0000-0013");
+    )).toThrow("official-migrations-0000-0014");
   });
 });
 
@@ -102,7 +102,7 @@ describe("staging preflight authorization", () => {
       preflightEnvironment({ KARTURT_R2_PREFLIGHT_AUTHORIZED_SHA: "b".repeat(40) }), releaseSha,
     )).toThrow("full checked-out release SHA");
     expect(() => parseStagingPreflightAuthorization(
-      preflightEnvironment({ KARTURT_R2_PREFLIGHT_AUTHORIZED_OPERATION: "official-migrations-0000-0013" }), releaseSha,
+      preflightEnvironment({ KARTURT_R2_PREFLIGHT_AUTHORIZED_OPERATION: "official-migrations-0000-0014" }), releaseSha,
     )).toThrow("authenticated-tls-role-preflight");
     expect(() => parseStagingPreflightAuthorization(
       preflightEnvironment({ KARTURT_R2_PREFLIGHT_AUTHORIZATION_REF: "password=secret" }), releaseSha,
