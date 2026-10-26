@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { assertR3PreviewBusinessDateTarget } from "@/db/preview-target";
 
 export type R3WorkerIdentity = {
   releaseSha: string;
@@ -17,6 +18,9 @@ export function getR3WorkerIdentity(
   const runId = environment.KARTURT_R3_RUN_ID;
   const scenario = environment.KARTURT_R3_SCENARIO;
   const workerTag = environment.KARTURT_R3_WORKER_TAG;
+  const staging = environment.APP_ENV === "staging" && environment.DATABASE_ENV === "staging";
+  const preview = environment.APP_ENV === "preview" && environment.DATABASE_ENV === "preview";
+  if (preview) assertR3PreviewBusinessDateTarget(environment);
   const validScenario = [
     "R3-RACE-REQUEST",
     "R3-RACE-VERIFY",
@@ -24,7 +28,7 @@ export function getR3WorkerIdentity(
     "R3-RACE-REVERSAL",
   ].includes(scenario ?? "");
   if (
-    environment.APP_ENV !== "staging" ||
+    (!staging && !preview) ||
     !runId ||
     requestedRunId !== runId ||
     !/^[a-z0-9]{8,20}$/.test(runId) ||

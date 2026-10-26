@@ -6,6 +6,13 @@ export const previewDatabaseTarget = {
   migrationRole: "karturt_preview_migrator",
 } as const;
 
+export const r3PreviewBusinessDateTarget = {
+  projectId: "misty-king-95262980",
+  branchId: "br-raspy-flower-b3nu1qhn",
+  endpointId: "ep-calm-glade-b3rpal01",
+  database: previewDatabaseTarget.database,
+} as const;
+
 export type PreviewTargetIdentity = {
   projectId: string;
   branchId: string;
@@ -54,6 +61,18 @@ export function parsePreviewTargetIdentity(environment: NodeJS.ProcessEnv = proc
   }
 
   return preview;
+}
+
+export function assertR3PreviewBusinessDateTarget(environment: NodeJS.ProcessEnv = process.env) {
+  const target = parsePreviewTargetIdentity(environment);
+  if (
+    target.projectId !== r3PreviewBusinessDateTarget.projectId ||
+    target.branchId !== r3PreviewBusinessDateTarget.branchId ||
+    target.endpointId !== r3PreviewBusinessDateTarget.endpointId ||
+    target.database !== r3PreviewBusinessDateTarget.database
+  ) {
+    throw new Error("R3 business-date override is restricted to the approved Preview database target.");
+  }
 }
 
 export function assertPreviewConnectionTarget(

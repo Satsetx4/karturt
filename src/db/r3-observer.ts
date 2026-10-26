@@ -1,3 +1,5 @@
+import { assertPreviewConnectionTarget, assertR3PreviewBusinessDateTarget } from "@/db/preview-target";
+
 export const r3ConcurrencyScenarios = [
   "R3-RACE-REQUEST",
   "R3-RACE-VERIFY",
@@ -9,9 +11,10 @@ export type R3ConcurrencyScenario = (typeof r3ConcurrencyScenarios)[number];
 
 export type R3ObserverInputs = {
   releaseSha: string;
-  ciRunId: string;
-  ciAttempt: string;
-  r2PassEvidenceRef: string;
+  ciRunId?: string;
+  ciAttempt?: string;
+  databaseEnvironment: "preview" | "staging";
+  r2PassEvidenceRef?: string;
   authorizationRef: string;
   scenario: R3ConcurrencyScenario;
   runId: string;
@@ -30,7 +33,7 @@ function required(environment: NodeJS.ProcessEnv, key: string) {
   return value;
 }
 
-function localHttpsOrigin(value: string, key: string) {
+function applicationHttpsOrigin(value: string, key: string, databaseEnvironment: "preview" | "staging") {
   let parsed: URL;
   try {
     parsed = new URL(value);
@@ -38,10 +41,14 @@ function localHttpsOrigin(value: string, key: string) {
     throw new Error(`${key} must be a local HTTPS origin.`);
   }
   const host = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const allowedHost = databaseEnvironment === "preview"
+    ? host.endsWith(".vercel.app")
+    : ["localhost", "127.0.0.1", "::1"].includes(host);
+  const localPortRequired = databaseEnvironment === "staging";
   if (
     parsed.protocol !== "https:" ||
-    !["localhost", "127.0.0.1", "::1"].includes(host) ||
-    !parsed.port ||
+    !allowedHost ||
+    (localPortRequired && !parsed.port) ||
     parsed.username ||
     parsed.password ||
     parsed.pathname !== "/" ||
@@ -63,24 +70,28 @@ export function parseR3ObserverInputs(
   environment: NodeJS.ProcessEnv,
   actualHeadSha: string,
 ): R3ObserverInputs {
-  if (environment.APP_ENV !== "staging" || environment.DATABASE_ENV !== "staging") {
-    throw new Error("APP_ENV and DATABASE_ENV must both be staging; no database connection was opened.");
+  const staging = environment.APP_ENV === "staging" && environment.DATABASE_ENV === "staging";
+  const preview = environment.APP_ENV === "preview" && environment.DATABASE_ENV === "preview";
+  if (!staging && !preview) {
+    throw new Error("APP_ENV and DATABASE_ENV must both be staging or Preview; no database connection was opened.");
   }
+  if (preview) assertR3PreviewBusinessDateTarget(environment);
 
   if (!/^[0-9a-f]{40}$/.test(actualHeadSha)) {
     throw new Error("The observer requires a full current Git HEAD; no database connection was opened.");
   }
   const releaseSha = actualHeadSha;
 
-  const ciRunId = required(environment, "KARTURT_R3_CI_RUN_ID");
-  const ciAttempt = required(environment, "KARTURT_R3_CI_ATTEMPT");
-  if (!/^\d+$/.test(ciRunId) || !/^\d+$/.test(ciAttempt)) {
+  const ciRunId = staging ? required(environment, "KARTURT_R3_CI_RUN_ID") : undefined;
+  const ciAttempt = staging ? required(environment, "KARTURT_R3_CI_ATTEMPT") : undefined;
+  if (staging && (!/^\d+$/.test(ciRunId ?? "") || !/^\d+$/.test(ciAttempt ?? ""))) {
     throw new Error("R3 source CI run and attempt must be numeric; no database connection was opened.");
   }
 
-  const r2PassEvidenceRef = required(environment, "KARTURT_R2_PASS_EVIDENCE_REF");
+  const r2PassEvidenceRef = staging ? required(environment, "KARTURT_R2_PASS_EVIDENCE_REF") : undefined;
   const authorizationRef = required(environment, "KARTURT_R3_AUTHORIZATION_REF");
-  if (!/^[A-Za-z0-9.#:/_-]{3,160}$/.test(r2PassEvidenceRef) || !/^[A-Za-z0-9.#:/_-]{3,160}$/.test(authorizationRef)) {
+  if ((r2PassEvidenceRef !== undefined && !/^[A-Za-z0-9.#:/_-]{3,160}$/.test(r2PassEvidenceRef)) ||
+      !/^[A-Za-z0-9.#:/_-]{3,160}$/.test(authorizationRef)) {
     throw new Error("R2 evidence and R3 authorization references must be short, non-secret references.");
   }
 
@@ -99,8 +110,8 @@ export function parseR3ObserverInputs(
     throw new Error("KARTURT_R3_BUSINESS_DATE must be a valid YYYY-MM-DD date.");
   }
 
-  const appOriginA = localHttpsOrigin(required(environment, "KARTURT_R3_APP_ORIGIN_A"), "KARTURT_R3_APP_ORIGIN_A");
-  const appOriginB = localHttpsOrigin(required(environment, "KARTURT_R3_APP_ORIGIN_B"), "KARTURT_R3_APP_ORIGIN_B");
+  const appOriginA = applicationHttpsOrigin(required(environment, "KARTURT_R3_APP_ORIGIN_A"), "KARTURT_R3_APP_ORIGIN_A", preview ? "preview" : "staging");
+  const appOriginB = applicationHttpsOrigin(required(environment, "KARTURT_R3_APP_ORIGIN_B"), "KARTURT_R3_APP_ORIGIN_B", preview ? "preview" : "staging");
   if (appOriginA === appOriginB) {
     throw new Error("R3 application origins must be distinct HTTPS origins on separate app processes.");
   }
@@ -111,10 +122,12 @@ export function parseR3ObserverInputs(
   const observerApplicationName = `${workerPrefix}-observer`;
 
   const databaseUrl = required(environment, "DATABASE_URL");
+  if (preview) assertPreviewConnectionTarget(databaseUrl, "runtime", environment);
   return {
     releaseSha,
     ciRunId,
     ciAttempt,
+    databaseEnvironment: preview ? "preview" : "staging",
     r2PassEvidenceRef,
     authorizationRef,
     scenario: scenarioValue as R3ConcurrencyScenario,

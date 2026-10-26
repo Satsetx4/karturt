@@ -114,7 +114,7 @@ describe("database pool security configuration", () => {
       "migration",
       1,
       "krt-r3-r3run20261025-R3-RACE-VERIFY-a",
-    )).toThrow("R3 application name is allowed only for a bounded staging runtime worker.");
+    )).toThrow("R3 application name is allowed only for a bounded one-connection staging or approved Preview runtime worker.");
   });
 
   it("uses trusted Node.js roots and rejects custom CA paths for staging", () => {

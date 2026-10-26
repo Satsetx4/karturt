@@ -1,12 +1,16 @@
 import { and, gte, isNull, lte, or, type SQL } from "drizzle-orm";
+import { assertR3PreviewBusinessDateTarget } from "@/db/preview-target";
 import { officialAssignments } from "@/db/schema";
 
 export function jakartaBusinessDate(now = new Date()) {
   const r3BusinessDate = process.env.KARTURT_R3_BUSINESS_DATE;
   if (r3BusinessDate !== undefined) {
-    if (process.env.APP_ENV !== "staging" || process.env.DATABASE_ENV !== "staging") {
-      throw new Error("KARTURT_R3_BUSINESS_DATE is allowed only when APP_ENV and DATABASE_ENV are staging.");
+    const staging = process.env.APP_ENV === "staging" && process.env.DATABASE_ENV === "staging";
+    const preview = process.env.APP_ENV === "preview" && process.env.DATABASE_ENV === "preview";
+    if (!staging && !preview) {
+      throw new Error("KARTURT_R3_BUSINESS_DATE is allowed only when APP_ENV and DATABASE_ENV are staging or Preview.");
     }
+    if (preview) assertR3PreviewBusinessDateTarget(process.env);
     if (!/^[a-z0-9]{8,20}$/.test(process.env.KARTURT_R3_RUN_ID ?? "") ||
         !/^[A-Za-z0-9.#:/_-]{3,160}$/.test(process.env.KARTURT_R3_AUTHORIZATION_REF ?? "") ||
         !/^[0-9a-f]{40}$/.test(process.env.KARTURT_COMPILED_RELEASE_SHA ?? "")) {

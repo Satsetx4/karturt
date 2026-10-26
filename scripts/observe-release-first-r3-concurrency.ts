@@ -1,13 +1,18 @@
 import { execFileSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { Pool, type PoolClient } from "pg";
-import { createDatabasePoolConfig } from "@/db/pool";
+import { createDatabasePoolConfig, isVerifiedNodeTlsSocket } from "@/db/pool";
+import { previewDatabaseTarget, r3PreviewBusinessDateTarget } from "@/db/preview-target";
 import { stagingDatabaseTarget } from "@/db/staging-target";
 import {
   assessR3ObservationSample,
   parseR3ObserverInputs,
   type R3ObservationSample,
 } from "@/db/r3-observer";
+
+type R3ObservationQueryRow = Omit<R3ObservationSample, "app_tls_encrypted"> & {
+  app_pg_stat_ssl_active: boolean | null;
+};
 
 const pollIntervalMilliseconds = 25;
 const observationTimeoutMilliseconds = 90_000;
@@ -40,6 +45,7 @@ async function verifyAppWorker(
   });
   const body = await response.json() as {
     status?: unknown;
+    databaseTlsVerified?: unknown;
     r3Worker?: {
       releaseSha?: unknown;
       runId?: unknown;
@@ -52,6 +58,7 @@ async function verifyAppWorker(
     !response.ok ||
     new URL(response.url).origin !== origin ||
     body.status !== "ok" ||
+    body.databaseTlsVerified !== true ||
     body.r3Worker?.releaseSha !== releaseSha ||
     body.r3Worker.runId !== runId ||
     body.r3Worker.scenario !== process.env.KARTURT_R3_SCENARIO ||
@@ -61,7 +68,10 @@ async function verifyAppWorker(
   ) {
     throw new Error("An app origin did not prove its expected same-SHA worker identity.");
   }
-  return body.r3Worker.workerInstanceId;
+  return {
+    workerInstanceId: body.r3Worker.workerInstanceId,
+    databaseTlsVerified: body.databaseTlsVerified,
+  };
 }
 
 async function readOnlyQuery<T extends object>(client: PoolClient, query: string, values: unknown[] = []) {
@@ -78,7 +88,14 @@ async function readOnlyQuery<T extends object>(client: PoolClient, query: string
 
 async function main() {
   const inputs = parseR3ObserverInputs(process.env, readGitEvidence());
-  const poolConfig = createDatabasePoolConfig(inputs.databaseUrl, "staging", "runtime", 1);
+  const poolConfig = createDatabasePoolConfig(inputs.databaseUrl, inputs.databaseEnvironment, "runtime", 1);
+  const expectedTarget = inputs.databaseEnvironment === "preview"
+    ? {
+      ...r3PreviewBusinessDateTarget,
+      runtimeRole: previewDatabaseTarget.runtimeRole,
+      directHost: poolConfig.host,
+    }
+    : stagingDatabaseTarget;
   const pool = new Pool({
     ...poolConfig,
     application_name: inputs.observerApplicationName,
@@ -89,6 +106,7 @@ async function main() {
   let client: PoolClient | undefined;
   try {
     client = await pool.connect();
+    const observerTlsVerified = isVerifiedNodeTlsSocket(client.connection.stream);
     const identity = await readOnlyQuery<{
       database_name: string;
       current_role: string;
@@ -110,11 +128,11 @@ async function main() {
     const postgresMajor = identityRow ? Math.floor(identityRow.server_version_num / 10_000) : 0;
     const identityMatches = Boolean(
       identityRow &&
-      identityRow.database_name === stagingDatabaseTarget.database &&
-      identityRow.current_role === stagingDatabaseTarget.runtimeRole &&
-      identityRow.session_role === stagingDatabaseTarget.runtimeRole &&
+      identityRow.database_name === expectedTarget.database &&
+      identityRow.current_role === expectedTarget.runtimeRole &&
+      identityRow.session_role === expectedTarget.runtimeRole &&
       postgresMajor === 18 &&
-      identityRow.tls_active,
+      observerTlsVerified,
     );
     if (!identityMatches) {
       process.stdout.write(`${JSON.stringify({
@@ -123,17 +141,17 @@ async function main() {
         reason: "Target, PostgreSQL version, direct runtime identity, or verified TLS did not match.",
         releaseSha: inputs.releaseSha,
         externalGateReferences: {
-          sourceCi: { runId: inputs.ciRunId, attempt: inputs.ciAttempt, verification: "NOT_PERFORMED" },
-          r2: { ref: inputs.r2PassEvidenceRef, verification: "NOT_PERFORMED" },
+          sourceCi: { runId: inputs.ciRunId ?? null, attempt: inputs.ciAttempt ?? null, verification: "NOT_PERFORMED" },
+          r2: { ref: inputs.r2PassEvidenceRef ?? null, verification: "NOT_PERFORMED" },
           authorization: { ref: inputs.authorizationRef, verification: "NOT_PERFORMED" },
         },
         scenario: inputs.scenario,
         runId: inputs.runId,
         expectedConfiguredTarget: {
-          projectId: stagingDatabaseTarget.projectId,
-          branchId: stagingDatabaseTarget.branchId,
-          endpointId: stagingDatabaseTarget.endpointId,
-          database: stagingDatabaseTarget.database,
+          projectId: expectedTarget.projectId,
+          branchId: expectedTarget.branchId,
+          endpointId: expectedTarget.endpointId,
+          database: expectedTarget.database,
         },
         operationCorrelation: "NOT_PROVEN_BY_OBSERVER",
       }, null, 2)}\n`);
@@ -150,13 +168,14 @@ async function main() {
       throw new Error("A run-specific app pool tag already existed before worker verification; observation stopped.");
     }
 
-    const [workerInstanceA, workerInstanceB] = await Promise.all([
+    const [workerA, workerB] = await Promise.all([
       verifyAppWorker(inputs.appOriginA, "a", inputs.runId, inputs.releaseSha),
       verifyAppWorker(inputs.appOriginB, "b", inputs.runId, inputs.releaseSha),
     ]);
-    if (workerInstanceA === workerInstanceB) {
+    if (workerA.workerInstanceId === workerB.workerInstanceId) {
       throw new Error("Both R3 origins resolved to the same application worker instance.");
     }
+    const applicationTlsVerified = workerA.databaseTlsVerified && workerB.databaseTlsVerified;
 
     const sampleQuery = `
       SELECT
@@ -182,7 +201,7 @@ async function main() {
         bool_and(
           activity.usename = $3 AND activity.datname = current_database()
         ) AS runtime_role_matched,
-        bool_and(ssl.ssl IS TRUE) AS app_tls_encrypted
+        bool_and(ssl.ssl IS TRUE) AS app_pg_stat_ssl_active
       FROM pg_catalog.pg_stat_activity AS activity
       LEFT JOIN pg_catalog.pg_stat_ssl AS ssl USING (pid)
       WHERE activity.pid <> pg_catalog.pg_backend_pid()
@@ -195,6 +214,7 @@ async function main() {
       sessionsVisible: false,
       roleMatched: false,
       appTlsEncrypted: false,
+      appPgStatSslReportsTls: false,
       backendSessionsDistinct: false,
       overlapObserved: false,
       appSessionsLockWaitObserved: false,
@@ -202,19 +222,23 @@ async function main() {
     };
 
     while (Date.now() - startedAt <= observationTimeoutMilliseconds) {
-      const result = await readOnlyQuery<R3ObservationSample>(client, sampleQuery, [
+      const result = await readOnlyQuery<R3ObservationQueryRow>(client, sampleQuery, [
         inputs.applicationNameA,
         inputs.applicationNameB,
-        stagingDatabaseTarget.runtimeRole,
+        expectedTarget.runtimeRole,
         [inputs.applicationNameA, inputs.applicationNameB],
       ]);
       sampleCount += 1;
       const sample = result.rows[0];
       if (sample) {
-        const current = assessR3ObservationSample(sample);
+        const current = assessR3ObservationSample({
+          ...sample,
+          app_tls_encrypted: applicationTlsVerified,
+        });
         proof.sessionsVisible ||= current.sessionsVisible;
         proof.roleMatched ||= current.roleMatched;
         proof.appTlsEncrypted ||= current.appTlsEncrypted;
+        proof.appPgStatSslReportsTls ||= sample.app_pg_stat_ssl_active === true;
         proof.backendSessionsDistinct ||= current.backendSessionsDistinct;
         proof.overlapObserved ||= current.overlapObserved;
         proof.appSessionsLockWaitObserved ||= current.appSessionsLockWaitObserved;
@@ -227,41 +251,42 @@ async function main() {
     }
 
     const structuralObservation = proof.completeSampleObserved ? "OBSERVED" : "NOT_OBSERVED";
-    const observerTlsVerified = typeof poolConfig.ssl === "object" && poolConfig.ssl !== null &&
+    const observerTlsPolicyVerified = typeof poolConfig.ssl === "object" && poolConfig.ssl !== null &&
       poolConfig.ssl.rejectUnauthorized === true &&
-      poolConfig.ssl.servername === stagingDatabaseTarget.directHost;
+      poolConfig.ssl.servername === poolConfig.host && observerTlsVerified;
     process.stdout.write(`${JSON.stringify({
       event: "karturt.release_first.r3_pg18_concurrency_observation",
       verdict: "UNVERIFIED",
       structuralObservation,
       releaseSha: inputs.releaseSha,
       externalGateReferences: {
-        sourceCi: { runId: inputs.ciRunId, attempt: inputs.ciAttempt, verification: "NOT_PERFORMED" },
-        r2: { ref: inputs.r2PassEvidenceRef, verification: "NOT_PERFORMED" },
+        sourceCi: { runId: inputs.ciRunId ?? null, attempt: inputs.ciAttempt ?? null, verification: "NOT_PERFORMED" },
+        r2: { ref: inputs.r2PassEvidenceRef ?? null, verification: "NOT_PERFORMED" },
         authorization: { ref: inputs.authorizationRef, verification: "NOT_PERFORMED" },
       },
       scenario: inputs.scenario,
       runId: inputs.runId,
       businessDate: inputs.businessDate,
-      r2PassEvidenceRef: inputs.r2PassEvidenceRef,
+      r2PassEvidenceRef: inputs.r2PassEvidenceRef ?? null,
       authorizationRef: inputs.authorizationRef,
       observedAt: new Date().toISOString(),
       expectedConfiguredTarget: {
-        projectId: stagingDatabaseTarget.projectId,
-        branchId: stagingDatabaseTarget.branchId,
-        endpointId: stagingDatabaseTarget.endpointId,
-        database: stagingDatabaseTarget.database,
+        projectId: expectedTarget.projectId,
+        branchId: expectedTarget.branchId,
+        endpointId: expectedTarget.endpointId,
+        database: expectedTarget.database,
       },
       liveConnection: {
         database: identityRow?.database_name,
         currentRole: identityRow?.current_role,
         sessionRole: identityRow?.session_role,
         postgresMajor,
-        tlsEncrypted: identityRow?.tls_active === true,
-        tlsCertificateAndHostnameVerification: observerTlsVerified,
+        tlsEncrypted: observerTlsVerified,
+        tlsCertificateAndHostnameVerification: observerTlsPolicyVerified,
+        pgStatSslReportsTls: identityRow?.tls_active === true,
       },
       appOrigins: [inputs.appOriginA, inputs.appOriginB],
-      applicationWorkerDistinct: workerInstanceA !== workerInstanceB,
+      applicationWorkerDistinct: workerA.workerInstanceId !== workerB.workerInstanceId,
       configuredApplicationPoolNamesDistinct: inputs.applicationNameA !== inputs.applicationNameB,
       backendSessionsDistinct: proof.backendSessionsDistinct,
       overlapObservedAtSomeSample: proof.overlapObserved,
@@ -269,6 +294,7 @@ async function main() {
       completeObservationSampleObserved: proof.completeSampleObserved,
       runtimeRoleMatched: proof.roleMatched,
       appSessionsTlsEncrypted: proof.appTlsEncrypted,
+      appSessionsPgStatSslReportsTls: proof.appPgStatSslReportsTls,
       operationCorrelation: "NOT_PROVEN_BY_OBSERVER",
       scenarioOutcome: "MUST_BE_VERIFIED_SEPARATELY_AGAINST_THE_FROZEN_FIXTURE_LEDGER",
       readOnlyTransactions: true,

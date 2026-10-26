@@ -51,7 +51,36 @@ describe("RELEASE FIRST R3 observer input gate", () => {
     expect(() => parseR3ObserverInputs(environment({ KARTURT_R3_SCENARIO: "R3-RACE-WAIVER" }), releaseSha))
       .toThrow("not one of the four approved race cases");
     expect(() => parseR3ObserverInputs(environment({ DATABASE_ENV: "production" }), releaseSha))
-      .toThrow("must both be staging");
+      .toThrow("must both be staging or Preview");
+  });
+
+  it("accepts a Preview observer only for the exact Neon target and distinct Vercel deployments", () => {
+    const preview = environment({
+      APP_ENV: "preview",
+      DATABASE_ENV: "preview",
+      KARTURT_R3_CI_RUN_ID: "",
+      KARTURT_R3_CI_ATTEMPT: "",
+      KARTURT_R2_PASS_EVIDENCE_REF: "",
+      KARTURT_PREVIEW_TARGET_ID: "misty-king-95262980/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview",
+      KARTURT_PRODUCTION_TARGET_ID: "wild-glitter-41970460/br-spring-smoke-ao3apicl/ep-sparkling-rain-aospujja/karturt_production",
+      DATABASE_URL: "postgresql://karturt_preview_runtime:test-only@ep-calm-glade-b3rpal01.c-3.ap-southeast-1.aws.neon.tech/karturt_preview?sslmode=verify-full",
+      KARTURT_R3_APP_ORIGIN_A: "https://karturt-review-staging-20261012-a-sekawan.vercel.app",
+      KARTURT_R3_APP_ORIGIN_B: "https://karturt-review-staging-20261012-b-sekawan.vercel.app",
+    });
+
+    expect(parseR3ObserverInputs(preview, releaseSha)).toMatchObject({
+      databaseEnvironment: "preview",
+      ciRunId: undefined,
+      ciAttempt: undefined,
+      r2PassEvidenceRef: undefined,
+      appOriginA: "https://karturt-review-staging-20261012-a-sekawan.vercel.app",
+      appOriginB: "https://karturt-review-staging-20261012-b-sekawan.vercel.app",
+      releaseSha,
+    });
+    expect(() => parseR3ObserverInputs({
+      ...preview,
+      KARTURT_PREVIEW_TARGET_ID: "other-project/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview",
+    }, releaseSha)).toThrow("approved Preview database target");
   });
 });
 
@@ -98,6 +127,7 @@ describe("R3 health worker identity", () => {
   const stagingWorkerEnvironment: NodeJS.ProcessEnv = {
     NODE_ENV: "test",
     APP_ENV: "staging",
+    DATABASE_ENV: "staging",
     KARTURT_R3_RUN_ID: "r3run20261025",
     KARTURT_R3_SCENARIO: "R3-RACE-VERIFY",
     KARTURT_R3_WORKER_TAG: "a",
@@ -114,5 +144,30 @@ describe("R3 health worker identity", () => {
     expect(getR3WorkerIdentity("other-run", stagingWorkerEnvironment, releaseSha, 12345)).toBeNull();
     expect(getR3WorkerIdentity("r3run20261025", stagingWorkerEnvironment, undefined, 12345)).toBeNull();
     expect(getR3WorkerIdentity("r3run20261025", { ...stagingWorkerEnvironment, APP_ENV: "production" }, releaseSha, 12345)).toBeNull();
+  });
+
+  it("returns a worker identity on the exact approved Preview target", () => {
+    const previewEnvironment: NodeJS.ProcessEnv = {
+      NODE_ENV: "test",
+      APP_ENV: "preview",
+      DATABASE_ENV: "preview",
+      KARTURT_PREVIEW_TARGET_ID: "misty-king-95262980/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview",
+      KARTURT_PRODUCTION_TARGET_ID: "wild-glitter-41970460/br-spring-smoke-ao3apicl/ep-sparkling-rain-aospujja/karturt_production",
+      KARTURT_R3_RUN_ID: "cp3preview261026",
+      KARTURT_R3_SCENARIO: "R3-RACE-REQUEST",
+      KARTURT_R3_WORKER_TAG: "b",
+    };
+
+    expect(getR3WorkerIdentity("cp3preview261026", previewEnvironment, releaseSha, 12345)).toEqual({
+      releaseSha,
+      runId: "cp3preview261026",
+      scenario: "R3-RACE-REQUEST",
+      workerTag: "b",
+      workerInstanceId: expect.stringMatching(/^[0-9a-f]{16}$/),
+    });
+    expect(() => getR3WorkerIdentity("cp3preview261026", {
+      ...previewEnvironment,
+      KARTURT_PREVIEW_TARGET_ID: "other-project/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview",
+    }, releaseSha, 12345)).toThrow("approved Preview database target");
   });
 });

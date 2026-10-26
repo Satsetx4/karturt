@@ -2,20 +2,28 @@ import { readFileSync } from "node:fs";
 import { checkServerIdentity, rootCertificates } from "node:tls";
 import { Pool, type PoolConfig } from "pg";
 import { stagingDatabaseTarget } from "@/db/staging-target";
-import { assertPreviewConnectionTarget } from "@/db/preview-target";
+import { assertPreviewConnectionTarget, assertR3PreviewBusinessDateTarget } from "@/db/preview-target";
 
 export type DatabaseEnvironment = "development" | "preview" | "staging" | "production" | "test";
 export type DatabaseConnectionPurpose = "runtime" | "migration";
 
-function validateApplicationName(applicationName: string, databaseEnvironment: DatabaseEnvironment, purpose: DatabaseConnectionPurpose) {
+function validateApplicationName(
+  applicationName: string,
+  databaseEnvironment: DatabaseEnvironment,
+  purpose: DatabaseConnectionPurpose,
+  max: number,
+) {
   const r3ApplicationName = /^krt-r3-[a-z0-9]{8,20}-R3-RACE-(REQUEST|VERIFY|CASH|REVERSAL)-(a|b)$/;
+  const previewR3 = databaseEnvironment === "preview" && process.env.APP_ENV === "preview";
+  if (previewR3) assertR3PreviewBusinessDateTarget(process.env);
   if (
-    databaseEnvironment !== "staging" ||
+    (databaseEnvironment !== "staging" && !previewR3) ||
     purpose !== "runtime" ||
+    max !== 1 ||
     applicationName.length > 63 ||
     !r3ApplicationName.test(applicationName)
   ) {
-    throw new Error("R3 application name is allowed only for a bounded staging runtime worker.");
+    throw new Error("R3 application name is allowed only for a bounded one-connection staging or approved Preview runtime worker.");
   }
 }
 
@@ -144,7 +152,7 @@ export function createDatabasePoolConfig(
     throw new Error("Database connection URL must not include a fragment.");
   }
 
-  if (applicationNameOverride) validateApplicationName(applicationNameOverride, databaseEnvironment, purpose);
+  if (applicationNameOverride) validateApplicationName(applicationNameOverride, databaseEnvironment, purpose, max);
   const applicationName = applicationNameOverride ?? url.searchParams.get("application_name") ?? undefined;
   const userName = decodeURIComponent(url.username);
   const password = decodeURIComponent(url.password);
