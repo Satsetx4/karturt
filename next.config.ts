@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { execFileSync } from "node:child_process";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
+import { isExactVercelPreviewGitBuild } from "@/lib/deployment-build-source";
 
 const compiledReleaseSha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 if (!/^[0-9a-f]{40}$/.test(compiledReleaseSha)) {
@@ -37,6 +38,8 @@ const nextConfig: NextConfig = {
 };
 
 export default function config(phase: string): NextConfig {
-  if (phase === PHASE_PRODUCTION_BUILD) assertCleanBuildSource();
+  if (phase === PHASE_PRODUCTION_BUILD && !isExactVercelPreviewGitBuild(process.env, compiledReleaseSha)) {
+    assertCleanBuildSource();
+  }
   return nextConfig;
 }
