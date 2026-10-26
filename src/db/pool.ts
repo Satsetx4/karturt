@@ -3,6 +3,7 @@ import { checkServerIdentity, rootCertificates } from "node:tls";
 import { Pool, type PoolConfig } from "pg";
 import { stagingDatabaseTarget } from "@/db/staging-target";
 import { assertPreviewConnectionTarget, assertR3PreviewBusinessDateTarget } from "@/db/preview-target";
+import { assertProductionConnectionTarget } from "@/db/production-target";
 
 export type DatabaseEnvironment = "development" | "preview" | "staging" | "production" | "test";
 export type DatabaseConnectionPurpose = "runtime" | "migration";
@@ -111,6 +112,7 @@ export function createDatabasePoolConfig(
     throw new Error("The canonical staging database cannot be used under another environment label.");
   }
   if (databaseEnvironment === "preview") assertPreviewConnectionTarget(connectionString, purpose);
+  if (databaseEnvironment === "production") assertProductionConnectionTarget(connectionString, purpose);
   const isLoopback = loopbackHosts.has(host);
   if (isLoopback && (databaseEnvironment === "preview" || databaseEnvironment === "staging" || databaseEnvironment === "production")) {
     throw new Error(databaseEnvironment === "preview"
@@ -137,10 +139,16 @@ export function createDatabasePoolConfig(
   const caPath = url.searchParams.get("sslrootcert");
   const channelBinding = url.searchParams.get("channel_binding");
   const sslNegotiation = url.searchParams.get("sslnegotiation");
-  if ((databaseEnvironment === "preview" || databaseEnvironment === "staging") && caPath && caPath !== "system") {
+  if (
+    (databaseEnvironment === "preview" || databaseEnvironment === "staging" || databaseEnvironment === "production") &&
+    caPath &&
+    caPath !== "system"
+  ) {
     throw new Error(databaseEnvironment === "preview"
       ? "Preview TLS must use the Node.js trusted CA store; custom CA paths are not accepted."
-      : "Staging TLS must use the Node.js trusted CA store; custom CA paths are not accepted.");
+      : databaseEnvironment === "production"
+        ? "Production TLS must use the Node.js trusted CA store; custom CA paths are not accepted."
+        : "Staging TLS must use the Node.js trusted CA store; custom CA paths are not accepted.");
   }
   if (channelBinding && channelBinding !== "prefer") {
     throw new Error("Strict PostgreSQL channel binding is unsupported; omit channel_binding or use prefer.");
@@ -164,7 +172,7 @@ export function createDatabasePoolConfig(
   const ssl = isLoopback
     ? undefined
     : {
-      ...(databaseEnvironment === "staging" || databaseEnvironment === "preview"
+      ...(databaseEnvironment === "staging" || databaseEnvironment === "preview" || databaseEnvironment === "production"
         ? { ca: [...rootCertificates] }
         : caPath && caPath !== "system"
           ? { ca: readFileSync(caPath) }

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDatabasePoolConfig, isVerifiedNodeTlsSocket } from "@/db/pool";
 import { stagingDatabaseTarget } from "@/db/staging-target";
 import { previewDatabaseTarget } from "@/db/preview-target";
+import { productionDatabaseTarget } from "@/db/production-target";
 
 describe("PostgreSQL TLS socket evidence", () => {
   it.each(["TLSv1.2", "TLSv1.3"])("accepts a certificate-authorized encrypted %s socket", (protocol) => {
@@ -80,6 +81,43 @@ describe("database pool security configuration", () => {
     expect(config.ssl).toEqual(expect.objectContaining({ rejectUnauthorized: true, servername: host, ca: expect.any(Array) }));
     expect(config.ssl).toHaveProperty("checkServerIdentity");
     expect(config.host).toBe(host);
+  });
+
+  it("binds Production connections to the declared direct Neon target and verify-full TLS", () => {
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "misty-king-95262980/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview");
+    vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "mute-meadow-51843316/br-winter-violet-a1az4w20/ep-curly-voice-a17q2gf5/karturt_production");
+    const host = "ep-curly-voice-a17q2gf5.ap-southeast-1.aws.neon.tech";
+    const config = createDatabasePoolConfig(
+      `postgresql://${productionDatabaseTarget.runtimeRole}:test-only@${host}/karturt_production?sslmode=verify-full&sslrootcert=system`,
+      "production",
+      "runtime",
+    );
+
+    expect(config.host).toBe(host);
+    expect(config.ssl).toEqual(expect.objectContaining({ rejectUnauthorized: true, servername: host, ca: expect.any(Array) }));
+    expect(config.ssl).toHaveProperty("checkServerIdentity");
+  });
+
+  it("rejects Production connections outside the target, role, or verify-full TLS contract", () => {
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "misty-king-95262980/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview");
+    vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "mute-meadow-51843316/br-winter-violet-a1az4w20/ep-curly-voice-a17q2gf5/karturt_production");
+    const host = "ep-curly-voice-a17q2gf5.ap-southeast-1.aws.neon.tech";
+
+    expect(() => createDatabasePoolConfig(
+      `postgresql://${productionDatabaseTarget.runtimeRole}:test-only@ep-other-123456.ap-southeast-1.aws.neon.tech/karturt_production?sslmode=verify-full&sslrootcert=system`,
+      "production",
+      "runtime",
+    )).toThrow("Production runtime connection does not match the isolated Neon target");
+    expect(() => createDatabasePoolConfig(
+      `postgresql://${productionDatabaseTarget.migrationRole}:test-only@${host}/karturt_production?sslmode=verify-full&sslrootcert=system`,
+      "production",
+      "runtime",
+    )).toThrow("Production runtime connection does not match the isolated Neon target");
+    expect(() => createDatabasePoolConfig(
+      `postgresql://${productionDatabaseTarget.runtimeRole}:test-only@${host}/karturt_production?sslmode=require&sslrootcert=system`,
+      "production",
+      "runtime",
+    )).toThrow("Production runtime connection does not match the isolated Neon target");
   });
 
   it("rejects staging and production targets under the Preview label", () => {
