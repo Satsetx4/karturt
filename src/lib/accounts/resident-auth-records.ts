@@ -55,6 +55,7 @@ export async function createResidentAuthRecords(
     loginIdentifier,
     personId: input.personId,
     householdId: input.householdId,
+    pinHash: passwordHash,
   }).returning({ id: appAccounts.id });
 
   if (!account) throw new Error("Resident account could not be created.");

@@ -2,7 +2,8 @@ import { and, eq, isNull, lte, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuth } from "@/lib/auth/server";
-import { clearResidentLoginFailures, isResidentLoginLocked, recordFailedResidentLogin } from "@/lib/auth/login-lockout";
+import { isValidAccountPassword } from "@/lib/auth/account-password";
+import { clearAccountLoginFailures, isAccountLoginLocked, recordFailedAccountLogin } from "@/lib/auth/login-lockout";
 import { toPublicLoginResponse } from "@/lib/auth/login-response";
 import { getDb } from "@/db/client";
 import { appAccounts, authAccount, authSession, houses, households, officialAssignments, people } from "@/db/schema";
@@ -135,8 +136,11 @@ export async function POST(request: Request, context: { params: Promise<{ type: 
   const parsed = payloadSchema.safeParse(rawBody);
   if (!parsed.success) return NextResponse.json({ message: "Periksa kembali data yang diisi." }, { status: 400 });
   if (parsed.data.website) return NextResponse.json({ message: "Data masuk belum cocok atau akun belum aktif." }, { status: 401 });
-  if (type === "resident" && !/^\d{6}$/.test(parsed.data.password)) {
-    return NextResponse.json({ message: "Nomor rumah atau PIN belum cocok." }, { status: 401 });
+  if (!isValidAccountPassword(type, parsed.data.password)) {
+    if (type === "resident") {
+      return NextResponse.json({ message: "Nomor rumah atau PIN belum cocok." }, { status: 401 });
+    }
+    return toPublicLoginResponse(new Response(null, { status: 401 }));
   }
 
   const identifier = type === "resident" ? parsed.data.identifier.toUpperCase() : parsed.data.identifier.toLowerCase();
@@ -151,7 +155,7 @@ export async function POST(request: Request, context: { params: Promise<{ type: 
     return rejectLoginAttempt(request, type, parsed.data.password);
   }
 
-  if (type === "resident" && await isResidentLoginLocked(db, account.id)) {
+  if (await isAccountLoginLocked(db, account.id, type)) {
     return rejectLoginAttempt(request, type, parsed.data.password);
   }
 
@@ -200,8 +204,8 @@ export async function POST(request: Request, context: { params: Promise<{ type: 
     const stillCurrent = await residentLoginStateMatches(db, account, identifier, residentCredential);
     if (!stillCurrent) return rejectChangedResidentLogin(db, account.authUserId);
   }
-  if (type === "resident" && response.status === 401) await recordFailedResidentLogin(db, account.id);
-  if (type === "resident" && response.ok) await clearResidentLoginFailures(db, account.id);
+  if (response.status === 401) await recordFailedAccountLogin(db, account.id, type);
+  if (response.ok) await clearAccountLoginFailures(db, account.id, type);
   console.info(JSON.stringify({ event: "auth.login.completed", accountType: type, outcome: response.ok ? "accepted" : "rejected" }));
   return toPublicLoginResponse(response);
 }

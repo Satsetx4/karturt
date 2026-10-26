@@ -1025,3 +1025,23 @@ button { color: inherit; }
   .chairman-report-button { transition-duration: .01ms; }
 }
 
+
+
+.account-security-menu { display: flex; justify-content: flex-end; padding: 10px 0 4px; }
+.account-security-link { min-height: 44px; }
+.security-policy-note { margin: 20px 0; padding: 15px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); }
+.security-policy-note strong { display: block; color: var(--ink); }
+.security-policy-note p { margin: 7px 0 0; line-height: 1.55; }
+.security-not-ready { display: flex; align-items: flex-start; gap: 12px; margin-top: 22px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); background: var(--surface-raised); }
+.security-not-ready svg { flex: 0 0 auto; color: var(--teal); }
+.security-not-ready p { margin: 0; }
+.pin-recovery { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.security-recovery-toggle { min-height: 44px; padding: 8px 10px; border: 0; border-radius: 9px; color: var(--teal); background: transparent; font: inherit; font-weight: 750; text-align: left; cursor: pointer; transition: transform .18s ease, background-color .18s ease; }
+.security-recovery-toggle:hover { background: var(--teal-wash); }
+.security-recovery-toggle:active { transform: scale(.97); }
+.security-recovery-toggle:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .security-recovery-toggle { transition-duration: .01ms; } }
+@media (max-width: 440px) {
+  .account-security-menu { justify-content: stretch; }
+  .account-security-link { width: 100%; }
+}

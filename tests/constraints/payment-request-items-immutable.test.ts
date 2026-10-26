@@ -6,7 +6,6 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { and, eq } from "drizzle-orm";
 import {
-  appAccounts,
   auditEvents,
   billingYears,
   monthlyDues,
@@ -49,14 +48,14 @@ describe("payment request item snapshot migration", () => {
     const rtUnitId = await createRt(database);
     const household = await createHousehold(database, rtUnitId);
     const auth = await createAuthUser(database);
-    const [residentAccount] = await database.insert(appAccounts).values({
-      rtUnitId,
-      authUserId: auth.id,
-      accountType: "resident",
-      loginIdentifier: `resident-${randomUUID()}`,
-      personId: household.personId,
-      householdId: household.householdId,
-    }).returning({ id: appAccounts.id });
+    // Seed the historical pre-hardening schema before migration 0005. The
+    // current Drizzle schema includes columns added much later in migration 0014.
+    const [residentAccount] = (await client.query<{ id: string }>(`
+      INSERT INTO app_accounts (
+        rt_unit_id, auth_user_id, account_type, login_identifier, person_id, household_id
+      ) VALUES ($1, $2, 'resident', $3, $4, $5)
+      RETURNING id
+    `, [rtUnitId, auth.id, `resident-${randomUUID()}`, household.personId, household.householdId])).rows;
     const [billingYear] = await database.insert(billingYears).values({
       rtUnitId,
       year: 2026,

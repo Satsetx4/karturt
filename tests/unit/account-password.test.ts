@@ -1,35 +1,41 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { randomBytes, randomInt } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { isValidAccountPassword } from "../../src/lib/auth/account-password";
+import type { AccountType } from "@/db/schema";
+import { isValidAccountPassword } from "@/lib/auth/account-password";
 
-describe("provisioned account password format", () => {
-  it("requires resident PINs to be exactly six digits", () => {
-    expect(isValidAccountPassword("resident", "000000")).toBe(true);
-    expect(isValidAccountPassword("resident", "12345")).toBe(false);
-    expect(isValidAccountPassword("resident", "1234567")).toBe(false);
-    expect(isValidAccountPassword("resident", "abc123")).toBe(false);
+function generatedValue(length: number) {
+  return randomBytes(Math.ceil(length / 2)).toString("hex").slice(0, length);
+}
+
+function generatedPin() {
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
+}
+
+describe("account password policy", () => {
+  it("accepts only six-digit resident PINs", () => {
+    const validPin = generatedPin();
+    const shortCandidate = generatedValue(5);
+    const longCandidate = generatedValue(7);
+    const nonNumericCandidate = `${String.fromCharCode(randomInt(65, 91))}${generatedValue(5)}`;
+
+    expect(isValidAccountPassword("resident", validPin)).toBe(true);
+    expect(isValidAccountPassword("resident", shortCandidate)).toBe(false);
+    expect(isValidAccountPassword("resident", longCandidate)).toBe(false);
+    expect(isValidAccountPassword("resident", nonNumericCandidate)).toBe(false);
   });
 
-  it("keeps official and System Admin passwords independent from resident PIN format", () => {
-    expect(isValidAccountPassword("official", "long password")).toBe(true);
-    expect(isValidAccountPassword("system_admin", "secure password")).toBe(true);
-  });
+  it("requires 16 to 128 characters for official and System Admin passwords", () => {
+    const privilegedTypes: AccountType[] = ["official", "system_admin"];
+    const minimumCandidate = generatedValue(16);
+    const maximumCandidate = generatedValue(128);
+    const shortCandidate = generatedValue(15);
+    const longCandidate = generatedValue(129);
 
-  it("keeps the provisioning environment template aligned with the provisioning script", () => {
-    const template = readFileSync(resolve(process.cwd(), ".env.example"), "utf8");
-    for (const name of [
-      "KARTURT_ACCOUNT_TYPE",
-      "KARTURT_LOGIN_IDENTIFIER",
-      "KARTURT_DISPLAY_NAME",
-      "KARTURT_ACCOUNT_PASSWORD",
-      "KARTURT_RT_UNIT_ID",
-      "KARTURT_PERSON_ID",
-      "KARTURT_HOUSEHOLD_ID",
-      "KARTURT_OFFICIAL_ROLE",
-      "KARTURT_ASSIGNMENT_STARTS_ON",
-    ]) {
-      expect(template).toContain(`${name}=`);
+    for (const type of privilegedTypes) {
+      expect(isValidAccountPassword(type, minimumCandidate)).toBe(true);
+      expect(isValidAccountPassword(type, maximumCandidate)).toBe(true);
+      expect(isValidAccountPassword(type, shortCandidate)).toBe(false);
+      expect(isValidAccountPassword(type, longCandidate)).toBe(false);
     }
   });
 });

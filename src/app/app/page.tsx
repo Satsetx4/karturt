@@ -63,6 +63,11 @@ export default async function AccountHomePage() {
         <Brand compact />
         <SignOutButton />
       </header>
+      <div className="account-security-menu">
+        <Link className="button button--secondary account-security-link" href="/app/keamanan">
+          <ShieldCheck size={18} aria-hidden="true" /> Keamanan akun
+        </Link>
+      </div>
       {profile ? (
         <ResidentCard profile={profile} businessDate={jakartaBusinessDate()} />
       ) : principal.role === "treasurer" ? (

@@ -13,6 +13,7 @@ export const officialMigrationTags = [
   "0011_phase_10_waiver",
   "0012_phase_11_tariff_adjustment",
   "0013_phase_12_household_management",
+  "0014_handy_genesis",
 ] as const;
 
 export const officialMigrationCount = officialMigrationTags.length;

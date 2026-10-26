@@ -99,6 +99,13 @@
       "when": 1791010052523,
       "tag": "0013_phase_12_household_management",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793047220192,
+      "tag": "0014_handy_genesis",
+      "breakpoints": true
     }
   ]
 }
