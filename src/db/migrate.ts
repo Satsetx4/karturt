@@ -66,7 +66,17 @@ const nonSystemNamespace = `
   AND schema.nspname !~ '^pg_(temp|toast_temp)_[0-9]+$'
 `;
 
-const previewRuntimeTriggerFunctionSignatures = [
+const previewRuntimeTriggerDependencySignatures = [
+  "public.assert_cash_payment_ledger_v1(uuid)",
+  "public.assert_due_active_settlement_phase9_v1(uuid)",
+  "public.assert_due_adjustment_audit_phase11_v1(uuid)",
+  "public.assert_fee_rate_audit_phase11_v1(uuid)",
+  "public.assert_payment_ledger_phase9_v1(uuid)",
+  "public.assert_payment_request_ledger_v1(uuid)",
+  "public.assert_payment_request_phase9_v1(uuid)",
+  "public.assert_payment_reversal_phase9_v1(uuid)",
+  "public.assert_waiver_action_phase10_v1(uuid)",
+  "public.assert_waiver_due_phase10_v1(uuid)",
   "public.due_active_received_phase11_v1(uuid)",
   "public.due_effective_target_phase11_v1(uuid)",
   "public.phase12_can_reconcile_future_due_v1(public.monthly_dues, public.monthly_dues)",
@@ -784,7 +794,7 @@ async function assertRuntimePrivileges(
   previewRuntime = false,
 ) {
   const allowedRuntimeFunctions = previewRuntime
-    ? previewRuntimeTriggerFunctionSignatures
+    ? previewRuntimeTriggerDependencySignatures
       .map((signature) => `SELECT pg_catalog.to_regprocedure('${signature}')::oid AS oid`)
       .join(" UNION ALL ")
     : "SELECT NULL::oid AS oid WHERE false";
@@ -912,8 +922,8 @@ async function assertRuntimePrivileges(
     row.schemas_with_create !== 0 ||
     row.database_temp_effective ||
     row.unexpected_routines_with_execute !== 0 ||
-    row.allowlisted_routines_expected !== (previewRuntime ? previewRuntimeTriggerFunctionSignatures.length : 0) ||
-    row.allowlisted_routines_with_execute !== (previewRuntime ? previewRuntimeTriggerFunctionSignatures.length : 0) ||
+    row.allowlisted_routines_expected !== (previewRuntime ? previewRuntimeTriggerDependencySignatures.length : 0) ||
+    row.allowlisted_routines_with_execute !== (previewRuntime ? previewRuntimeTriggerDependencySignatures.length : 0) ||
     row.drizzle_usage_effective ||
     row.drizzle_create_effective ||
     row.drizzle_journal_select_effective
@@ -1024,7 +1034,7 @@ async function grantPreviewRuntimeTriggerFunctionExecution(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    for (const signature of previewRuntimeTriggerFunctionSignatures) {
+    for (const signature of previewRuntimeTriggerDependencySignatures) {
       await client.query(`GRANT EXECUTE ON FUNCTION ${signature} TO ${quotedRuntimeRole}`);
     }
     await client.query("COMMIT");
