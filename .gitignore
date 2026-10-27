@@ -13,6 +13,8 @@
 # testing
 /coverage
 /scripts/__pycache__/
+/tests/**/__pycache__/
+/data/private/
 
 # next.js
 /.next/

@@ -22,6 +22,13 @@ export type ResidentDue = {
   periodTiming?: "past" | "current" | "future";
   /** Active payment allocations for a paid month, excluding reversed payments. */
   receipts?: ResidentMonthReceipt[];
+  /** Imported historical balance metadata; it is not a payment receipt. */
+  openingBalanceImport?: {
+    amount: number;
+    sourceSheet: "Sheet2";
+    asOfDate: string;
+    recordedAt: string;
+  } | null;
   paymentRequestStatus?: "pending" | "verified" | "rejected" | "cancelled" | null;
 };
 export type CurrentResidentStatusToken =

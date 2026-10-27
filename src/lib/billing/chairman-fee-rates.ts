@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
 import {
   appAccounts,
@@ -172,8 +172,8 @@ export async function listChairmanFeeRates(
     .orderBy(asc(billingYears.year));
 
   const yearFilter = billingYearId === undefined
-    ? eq(feeRates.rtUnitId, rtUnitId)
-    : and(eq(feeRates.rtUnitId, rtUnitId), eq(feeRates.billingYearId, billingYearId));
+    ? and(eq(feeRates.rtUnitId, rtUnitId), isNull(feeRates.householdId))
+    : and(eq(feeRates.rtUnitId, rtUnitId), eq(feeRates.billingYearId, billingYearId), isNull(feeRates.householdId));
   const rates = await database
     .select({
       id: feeRates.id,
@@ -309,6 +309,7 @@ export async function createChairmanFeeRate(
           eq(feeRates.rtUnitId, rtUnitId),
           eq(feeRates.billingYearId, year.id),
           eq(feeRates.effectiveMonth, normalized.effectiveMonth),
+          isNull(feeRates.householdId),
         ))
         .limit(1)
         .for("share");

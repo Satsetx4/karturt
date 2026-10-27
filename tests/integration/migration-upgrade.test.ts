@@ -138,7 +138,7 @@ describe("legacy billing migration upgrade", () => {
     expect(migrated).toEqual({ status: "not_due", waived_reason: null });
   });
 
-  it("applies the clean migration chain through 0014", async () => {
+  it("applies the clean migration chain through 0015", async () => {
     const cleanClient = new PGlite();
     try {
       const migrationFolder = resolve(process.cwd(), "drizzle");
@@ -196,7 +196,7 @@ describe("legacy billing migration upgrade", () => {
     }
   }, 60000);
 
-  it("upgrades intact transfer and cash history through 0014 without changing Gate C ledger history", async () => {
+  it("upgrades intact transfer and cash history through 0015 without changing Gate C ledger history", async () => {
     const upgradeClient = new PGlite();
     try {
       const migrationFolder = resolve(process.cwd(), "drizzle");
@@ -409,12 +409,6 @@ describe("legacy billing migration upgrade", () => {
         householdId: null,
         personId: household.personId,
       };
-      await createChairmanAdjustment(db as unknown as AppDatabase, chairmanPrincipal, {
-        monthlyDueId: duesBeforeUpgrade.find((due) => due.month === 3)!.id,
-        amountDelta: 10000,
-        reason: "Development migration preservation fixture",
-        idempotencyKey: randomUUID(),
-      }, "2026-10-02");
       const gateCHistoryBefore = await snapshotGateCHistory(upgradeClient);
       const householdManagementMigration = "0013_phase_12_household_management.sql";
       await upgradeClient.exec(readFileSync(resolve(migrationFolder, householdManagementMigration), "utf8"));
@@ -422,6 +416,15 @@ describe("legacy billing migration upgrade", () => {
       const pinSecurityMigration = "0014_handy_genesis.sql";
       await upgradeClient.exec(readFileSync(resolve(migrationFolder, pinSecurityMigration), "utf8"));
       expect(await snapshotGateCHistory(upgradeClient)).toEqual(gateCHistoryBefore);
+      const sheet2OpeningBalanceMigration = "0015_sheet2_opening_balance_import.sql";
+      await upgradeClient.exec(readFileSync(resolve(migrationFolder, sheet2OpeningBalanceMigration), "utf8"));
+      expect(await snapshotGateCHistory(upgradeClient)).toEqual(gateCHistoryBefore);
+      await createChairmanAdjustment(db as unknown as AppDatabase, chairmanPrincipal, {
+        monthlyDueId: duesBeforeUpgrade.find((due) => due.month === 3)!.id,
+        amountDelta: 10000,
+        reason: "Development migration preservation fixture",
+        idempotencyKey: randomUUID(),
+      }, "2026-10-02");
       const [migratedResident] = await db.select({ pinHash: appAccounts.pinHash })
         .from(appAccounts).where(eq(appAccounts.id, residentAccountId)).limit(1);
       const [residentCredential] = await db.select({ password: authAccount.password })

@@ -400,7 +400,7 @@ async function assertTargetMigrationState(
       return entry.hash.toLowerCase() === expected.hash.toLowerCase() && entry.created_at === String(expected.folderMillis);
     });
   if (!matchesOfficialPrefix || (journal.rows.length === 0 && stateRow.application_object_count !== 0)) {
-    throw new Error("Preview migration journal is not an official prefix of Drizzle migrations 0000–0014.");
+    throw new Error("Preview migration journal is not an official prefix of Drizzle migrations 0000–0015.");
   }
 }
 
