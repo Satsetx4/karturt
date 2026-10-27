@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDatabasePoolConfig } from "@/db/pool";
 import { getR3PoolIdentity } from "@/db/client";
 
-const previewTarget = "misty-king-95262980/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview";
+const previewTarget = "rough-queen-62552713/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview";
 const productionTarget = "wild-glitter-41970460/br-spring-smoke-ao3apicl/ep-sparkling-rain-aospujja/karturt_production";
-const previewUrl = "postgresql://karturt_preview_runtime:test-only@ep-calm-glade-b3rpal01.c-3.ap-southeast-1.aws.neon.tech/karturt_preview?sslmode=verify-full";
+const previewUrl = "postgresql://karturt_preview_runtime:test-only@ep-green-smoke-aobgfksu.c-3.ap-southeast-1.aws.neon.tech/karturt_preview?sslmode=verify-full";
 
 function setPreviewTarget(target = previewTarget) {
   vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", target);
@@ -41,7 +41,7 @@ describe("R3 Preview pool identity", () => {
   it("rejects a Preview race-worker identity for another project", () => {
     vi.stubEnv("APP_ENV", "preview");
     vi.stubEnv("DATABASE_ENV", "preview");
-    setPreviewTarget("other-project/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview");
+    setPreviewTarget("other-project/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview");
     vi.stubEnv("KARTURT_R3_RUN_ID", "cp3preview261026");
     vi.stubEnv("KARTURT_R3_SCENARIO", "R3-RACE-REQUEST");
     vi.stubEnv("KARTURT_R3_WORKER_TAG", "a");
@@ -79,7 +79,7 @@ describe("R3 Preview pool identity", () => {
 
   it("rejects Preview race pool names unless the exact approved target is configured", () => {
     vi.stubEnv("APP_ENV", "preview");
-    setPreviewTarget("other-project/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview");
+    setPreviewTarget("other-project/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview");
 
     expect(() => createDatabasePoolConfig(
       previewUrl,

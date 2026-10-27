@@ -84,7 +84,7 @@ describe("database pool security configuration", () => {
   });
 
   it("binds Production connections to the declared direct Neon target and verify-full TLS", () => {
-    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "misty-king-95262980/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview");
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "rough-queen-62552713/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview");
     vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "mute-meadow-51843316/br-winter-violet-a1az4w20/ep-curly-voice-a17q2gf5/karturt_production");
     const host = "ep-curly-voice-a17q2gf5.ap-southeast-1.aws.neon.tech";
     const config = createDatabasePoolConfig(
@@ -99,7 +99,7 @@ describe("database pool security configuration", () => {
   });
 
   it("rejects Production connections outside the target, role, or verify-full TLS contract", () => {
-    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "misty-king-95262980/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview");
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "rough-queen-62552713/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview");
     vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "mute-meadow-51843316/br-winter-violet-a1az4w20/ep-curly-voice-a17q2gf5/karturt_production");
     const host = "ep-curly-voice-a17q2gf5.ap-southeast-1.aws.neon.tech";
 

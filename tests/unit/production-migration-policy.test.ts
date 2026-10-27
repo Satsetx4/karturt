@@ -5,7 +5,7 @@ import { parseProductionTargetIdentity } from "@/db/production-target";
 const releaseSha = "88a013a7153c0f5efd41e62d1f79ff63b8e0b0c0";
 const environment = {
   KARTURT_PRODUCTION_TARGET_ID: "mute-meadow-51843316/br-winter-violet-a1az4w20/ep-curly-voice-a17q2gf5/karturt_production",
-  KARTURT_PREVIEW_TARGET_ID: "misty-king-95262980/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview",
+  KARTURT_PREVIEW_TARGET_ID: "rough-queen-62552713/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview",
   KARTURT_PRODUCTION_MIGRATION_AUTHORIZED_SHA: releaseSha,
   KARTURT_PRODUCTION_MIGRATION_AUTHORIZED_TARGET: "mute-meadow-51843316/br-winter-violet-a1az4w20/ep-curly-voice-a17q2gf5/karturt_production",
   KARTURT_PRODUCTION_MIGRATION_AUTHORIZATION_REF: "https://github.com/Satsetx4/karturt/issues/110#issuecomment-1234",

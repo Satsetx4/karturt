@@ -7,9 +7,9 @@ export const previewDatabaseTarget = {
 } as const;
 
 export const r3PreviewBusinessDateTarget = {
-  projectId: "misty-king-95262980",
-  branchId: "br-raspy-flower-b3nu1qhn",
-  endpointId: "ep-calm-glade-b3rpal01",
+  projectId: "rough-queen-62552713",
+  branchId: "br-fragrant-poetry-aousu14b",
+  endpointId: "ep-green-smoke-aobgfksu",
   database: previewDatabaseTarget.database,
 } as const;
 

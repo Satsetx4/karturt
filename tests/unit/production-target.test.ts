@@ -6,7 +6,7 @@ import {
 } from "@/db/production-target";
 
 const productionTarget = "mute-meadow-51843316/br-winter-violet-a1az4w20/ep-curly-voice-a17q2gf5/karturt_production";
-const previewTarget = "misty-king-95262980/br-raspy-flower-b3nu1qhn/ep-calm-glade-b3rpal01/karturt_preview";
+const previewTarget = "rough-queen-62552713/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview";
 const environment = {
   KARTURT_PRODUCTION_TARGET_ID: productionTarget,
   KARTURT_PREVIEW_TARGET_ID: previewTarget,
@@ -32,7 +32,7 @@ describe("Production target identity", () => {
   it("rejects Preview or canonical staging identities", () => {
     expect(() => parseProductionTargetIdentity({
       ...environment,
-      KARTURT_PRODUCTION_TARGET_ID: "misty-king-95262980/br-other-123456/ep-other-123456/karturt_production",
+      KARTURT_PRODUCTION_TARGET_ID: "rough-queen-62552713/br-other-123456/ep-other-123456/karturt_production",
     })).toThrow("separate Neon projects, branches, and endpoints");
     expect(() => parseProductionTargetIdentity({
       ...environment,
