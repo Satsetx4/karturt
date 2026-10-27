@@ -115,6 +115,9 @@ describe("payment request item snapshot migration", () => {
     await client.exec(readFileSync(resolve(migrationFolder, "0010_phase_9_payment_reversal.sql"), "utf8"));
     await client.exec(readFileSync(resolve(migrationFolder, "0011_phase_10_waiver.sql"), "utf8"));
     await client.exec(readFileSync(resolve(migrationFolder, "0012_phase_11_tariff_adjustment.sql"), "utf8"));
+    await client.exec(readFileSync(resolve(migrationFolder, "0013_phase_12_household_management.sql"), "utf8"));
+    await client.exec(readFileSync(resolve(migrationFolder, "0014_handy_genesis.sql"), "utf8"));
+    await client.exec(readFileSync(resolve(migrationFolder, "0015_sheet2_opening_balance_import.sql"), "utf8"));
 
     const principal = await resolvePrincipalForUser(database as never, auth.id, "2026-06-18");
 
