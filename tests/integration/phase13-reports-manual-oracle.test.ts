@@ -39,17 +39,18 @@ const BEFORE_MAY_DUE_DATE = "2026-05-05";
 const BEFORE_REPLACEMENT_DATE = "2026-02-28";
 
 const JAN_TO_MAY_EXPECTED = [
-  { month: 1, target: 80_000, effectiveTarget: 80_000, received: 80_000, transferReceived: 80_000, cashReceived: 0, waived: 0, outstanding: 0, obligationCount: 2, waivedCount: 0, notDueCount: 2, overdueCount: 0 },
-  { month: 2, target: 80_000, effectiveTarget: 90_000, received: 50_000, transferReceived: 0, cashReceived: 50_000, waived: 0, outstanding: 40_000, obligationCount: 2, waivedCount: 0, notDueCount: 2, overdueCount: 1 },
-  { month: 3, target: 120_000, effectiveTarget: 115_000, received: 80_000, transferReceived: 40_000, cashReceived: 40_000, waived: 0, outstanding: 35_000, obligationCount: 3, waivedCount: 0, notDueCount: 1, overdueCount: 1 },
-  { month: 4, target: 120_000, effectiveTarget: 120_000, received: 40_000, transferReceived: 0, cashReceived: 40_000, waived: 40_000, outstanding: 40_000, obligationCount: 3, waivedCount: 1, notDueCount: 1, overdueCount: 1 },
-  { month: 5, target: 120_000, effectiveTarget: 120_000, received: 40_000, transferReceived: 0, cashReceived: 40_000, waived: 0, outstanding: 80_000, obligationCount: 3, waivedCount: 0, notDueCount: 1, overdueCount: 2 },
+  { month: 1, target: 80_000, effectiveTarget: 80_000, received: 80_000, openingBalanceReceived: 0, transferReceived: 80_000, cashReceived: 0, waived: 0, outstanding: 0, obligationCount: 2, waivedCount: 0, notDueCount: 2, overdueCount: 0 },
+  { month: 2, target: 80_000, effectiveTarget: 90_000, received: 50_000, openingBalanceReceived: 0, transferReceived: 0, cashReceived: 50_000, waived: 0, outstanding: 40_000, obligationCount: 2, waivedCount: 0, notDueCount: 2, overdueCount: 1 },
+  { month: 3, target: 120_000, effectiveTarget: 115_000, received: 80_000, openingBalanceReceived: 0, transferReceived: 40_000, cashReceived: 40_000, waived: 0, outstanding: 35_000, obligationCount: 3, waivedCount: 0, notDueCount: 1, overdueCount: 1 },
+  { month: 4, target: 120_000, effectiveTarget: 120_000, received: 40_000, openingBalanceReceived: 0, transferReceived: 0, cashReceived: 40_000, waived: 40_000, outstanding: 40_000, obligationCount: 3, waivedCount: 1, notDueCount: 1, overdueCount: 1 },
+  { month: 5, target: 120_000, effectiveTarget: 120_000, received: 40_000, openingBalanceReceived: 0, transferReceived: 0, cashReceived: 40_000, waived: 0, outstanding: 80_000, obligationCount: 3, waivedCount: 0, notDueCount: 1, overdueCount: 2 },
 ] as const;
 
 const ANNUAL_EXPECTED = {
   target: 1_360_000,
   effectiveTarget: 1_365_000,
   received: 290_000,
+  openingBalanceReceived: 0,
   transferReceived: 120_000,
   cashReceived: 170_000,
   waived: 40_000,
@@ -67,6 +68,7 @@ function projection(value: unknown) {
     target: row.target,
     effectiveTarget: row.effectiveTarget,
     received: row.received,
+    openingBalanceReceived: row.openingBalanceReceived,
     transferReceived: row.transferReceived,
     cashReceived: row.cashReceived,
     waived: row.waived,
@@ -268,6 +270,14 @@ const DIRECT_COMPONENTS_SQL = `
      AND due.rt_unit_id = waiver.rt_unit_id
      AND due.household_id = waiver.household_id
     GROUP BY waiver.monthly_due_id
+  ), opening_balance_totals AS (
+    SELECT opening.monthly_due_id, sum(opening.amount)::bigint AS opening_balance_received
+    FROM public.sheet2_opening_balance_items opening
+    JOIN selected_dues due
+      ON due.id = opening.monthly_due_id
+     AND due.rt_unit_id = opening.rt_unit_id
+     AND due.household_id = opening.household_id
+    GROUP BY opening.monthly_due_id
   ), pending_dues AS (
     SELECT DISTINCT claim.monthly_due_id
     FROM public.payment_request_claims claim
@@ -279,6 +289,7 @@ const DIRECT_COMPONENTS_SQL = `
       CASE WHEN due.status = 'not_due' THEN 0 ELSE due.amount END::bigint AS target,
       CASE WHEN due.status = 'not_due' THEN 0
         ELSE due.amount + coalesce(adjustment.adjustment_total, 0) END::bigint AS effective_target,
+      coalesce(opening.opening_balance_received, 0)::bigint AS opening_balance_received,
       coalesce(method.transfer_received, 0)::bigint AS transfer_received,
       coalesce(method.cash_received, 0)::bigint AS cash_received,
       CASE WHEN due.status = 'waived' THEN coalesce(waiver.waiver_amount, 0) ELSE 0 END::bigint AS waived,
@@ -286,11 +297,12 @@ const DIRECT_COMPONENTS_SQL = `
     FROM selected_dues due
     LEFT JOIN adjustment_totals adjustment ON adjustment.monthly_due_id = due.id
     LEFT JOIN active_allocation_methods method ON method.monthly_due_id = due.id
+    LEFT JOIN opening_balance_totals opening ON opening.monthly_due_id = due.id
     LEFT JOIN waiver_totals waiver ON waiver.monthly_due_id = due.id
   ), calculated_dues AS (
     SELECT due_components.*,
       (transfer_received + cash_received)::bigint AS received,
-      (effective_target - transfer_received - cash_received - waived)::bigint AS outstanding
+      (effective_target - opening_balance_received - transfer_received - cash_received - waived)::bigint AS outstanding
     FROM due_components
   )
 `;
@@ -300,6 +312,7 @@ const DIRECT_MONTHLY_SQL = `${DIRECT_COMPONENTS_SQL}
     sum(target)::int AS target,
     sum(effective_target)::int AS "effectiveTarget",
     sum(received)::int AS received,
+    sum(opening_balance_received)::int AS "openingBalanceReceived",
     sum(transfer_received)::int AS "transferReceived",
     sum(cash_received)::int AS "cashReceived",
     sum(waived)::int AS waived,
@@ -317,6 +330,7 @@ const DIRECT_YEARLY_SQL = `${DIRECT_COMPONENTS_SQL}
   SELECT sum(target)::int AS target,
     sum(effective_target)::int AS "effectiveTarget",
     sum(received)::int AS received,
+    sum(opening_balance_received)::int AS "openingBalanceReceived",
     sum(transfer_received)::int AS "transferReceived",
     sum(cash_received)::int AS "cashReceived",
     sum(waived)::int AS waived,

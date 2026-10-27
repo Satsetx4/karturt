@@ -166,6 +166,7 @@ describe("resident monthly-dues authorization", () => {
       "dueDate",
       "effectiveTarget",
       "month",
+      "openingBalanceImport",
       "originalAmount",
       "outstanding",
       "paymentRequestStatus",
