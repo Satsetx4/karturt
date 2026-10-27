@@ -280,10 +280,6 @@ async function createPrivilegedAccount(
   return account.id;
 }
 
-function dueMonthKey(month: number) {
-  return `2026-${String(month).padStart(2, "0")}`;
-}
-
 async function assertActiveMfaActor(database: AppDatabase, actor: Principal) {
   assertCanPerform(actor, "system:manage");
   if (actor.role !== "system_admin" || actor.rtUnitId !== null || actor.householdId !== null || actor.personId !== null) {
