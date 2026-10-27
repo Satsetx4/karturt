@@ -348,21 +348,8 @@ BEGIN
       USING ERRCODE = '55000', CONSTRAINT = 'paid_monthly_due_status_transition_invalid';
   END IF;
 
-  IF OLD.status = 'paid' AND NEW.status = 'unpaid' AND NOT EXISTS (
-    SELECT 1
-    FROM public.active_due_settlements settlement
-    JOIN public.payment_reversals reversal
-      ON reversal.payment_id = settlement.payment_id
-     AND reversal.rt_unit_id = settlement.rt_unit_id
-     AND reversal.household_id = settlement.household_id
-    WHERE settlement.monthly_due_id = OLD.id
-      AND settlement.rt_unit_id = OLD.rt_unit_id
-      AND settlement.household_id = OLD.household_id
-      AND settlement.amount = OLD.amount
-  ) AND NOT (
-    EXISTS (SELECT 1 FROM public.sheet2_opening_balance_items opening WHERE opening.monthly_due_id = OLD.id)
-    AND public.due_active_received_phase11_v1(OLD.id) < public.due_effective_target_phase11_v1(OLD.id)
-  ) THEN
+  IF OLD.status = 'paid' AND NEW.status = 'unpaid'
+     AND public.due_active_received_phase11_v1(OLD.id) >= public.due_effective_target_phase11_v1(OLD.id) THEN
     RAISE EXCEPTION 'A paid due can return to unpaid only after its payment is reversed or a positive adjustment exposes an outstanding balance.'
       USING ERRCODE = '23514', CONSTRAINT = 'paid_due_unpaid_requires_owning_reversal';
   END IF;
