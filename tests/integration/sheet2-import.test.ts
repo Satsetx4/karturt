@@ -46,7 +46,7 @@ function syntheticRows(prefix: string): Sheet2ResidentImportRow[] {
     return {
       houseNumber: `SYN-${String(index + 1).padStart(3, "0")}`,
       fullName: `Synthetic Resident ${prefix} ${index + 1}`,
-      username: `synthetic-${prefix}-resident-${index + 1}`,
+      username: `SYN-${String(index + 1).padStart(3, "0")}`,
       pin: "123456",
       monthlyAmount: index < 57 ? 45_000 : 60_000,
       paidFromMonth,
@@ -220,6 +220,23 @@ describe("Sheet2 opening-balance importer (synthetic isolated database)", () => 
 
   beforeAll(async () => { database = await createTestDatabase(); });
   afterAll(async () => { await database?.close(); });
+
+  it("rejects a resident login identifier that differs from the house number", async () => {
+    const rtUnitId = await createRt(database.db);
+    const actor = await createVerifiedSystemAdmin(database.db);
+    const input = importInput(rtUnitId, actor);
+    const invalidInput = {
+      ...input,
+      residents: input.residents.map((row, index) => index === 0
+        ? { ...row, username: "SYN-LOGIN-MISMATCH" }
+        : row),
+    };
+
+    await expect(importSheet2(asAppDatabase(database.db), invalidInput))
+      .rejects.toThrow("resident login identifier does not match the house number used for sign-in");
+    expect(await database.db.select({ id: houses.id }).from(houses).where(eq(houses.rtUnitId, rtUnitId)))
+      .toHaveLength(0);
+  });
 
   it("imports annual dues, keeps opening balances outside receipt history, and replays idempotently", async () => {
     const rtUnitId = await createRt(database.db);

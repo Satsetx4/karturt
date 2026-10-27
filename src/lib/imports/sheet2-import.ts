@@ -127,6 +127,12 @@ function normalizeInput(input: Sheet2ImportInput) {
     const paidThroughMonth = row.paidThroughMonth;
     const officialRole = row.officialRole ?? null;
     if (
+      houseNumber && username &&
+      (!/^[-A-Z0-9/ ]{1,40}$/.test(username) || username !== houseNumber.toLocaleUpperCase("id-ID"))
+    ) {
+      throw new Sheet2ImportError("The resident login identifier does not match the house number used for sign-in.");
+    }
+    if (
       !houseNumber || houseNumber.length > 40 || !fullName || fullName.length > 160 ||
       !username || !LOGIN_IDENTIFIER.test(username) ||
       typeof row.pin !== "string" || !/^\d{6}$/.test(row.pin) ||
