@@ -39,6 +39,12 @@ describe("isExactVercelPreviewReleaseBuild", () => {
       VERCEL_ENV: "preview",
       KARTURT_VERCEL_PREVIEW_RELEASE_SHA: releaseSha,
     }, releaseSha)).toBe(true);
+    expect(isExactVercelPreviewReleaseBuild({
+      VERCEL: "1",
+      VERCEL_ENV: "preview",
+      VERCEL_GIT_COMMIT_SHA: "",
+      KARTURT_VERCEL_PREVIEW_RELEASE_SHA: releaseSha,
+    }, releaseSha)).toBe(true);
   });
 
   it("rejects a manual Preview SHA outside Vercel Preview or when it conflicts with Git metadata", () => {

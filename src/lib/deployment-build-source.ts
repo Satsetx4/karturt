@@ -7,7 +7,7 @@ export function isExactVercelPreviewReleaseBuild(
   if (environment.VERCEL_ENV !== "preview" || !FULL_COMMIT_SHA.test(releaseSha)) return false;
 
   const gitCommitSha = environment.VERCEL_GIT_COMMIT_SHA?.trim();
-  if (gitCommitSha !== undefined) {
+  if (gitCommitSha) {
     return FULL_COMMIT_SHA.test(gitCommitSha) &&
       gitCommitSha.toLowerCase() === releaseSha.toLowerCase();
   }
