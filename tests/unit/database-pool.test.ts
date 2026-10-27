@@ -1,6 +1,29 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createDatabasePoolConfig } from "@/db/pool";
+import { createDatabasePoolConfig, isVerifiedNodeTlsSocket } from "@/db/pool";
 import { stagingDatabaseTarget } from "@/db/staging-target";
+import { previewDatabaseTarget } from "@/db/preview-target";
+import { productionDatabaseTarget } from "@/db/production-target";
+
+describe("PostgreSQL TLS socket evidence", () => {
+  it.each(["TLSv1.2", "TLSv1.3"])("accepts a certificate-authorized encrypted %s socket", (protocol) => {
+    expect(isVerifiedNodeTlsSocket({
+      encrypted: true,
+      authorized: true,
+      authorizationError: undefined,
+      getProtocol: (): string | null => protocol,
+    })).toBe(true);
+  });
+
+  it.each([
+    ["unencrypted", { encrypted: false, authorized: true, getProtocol: (): string | null => "TLSv1.3" }],
+    ["unverified", { encrypted: true, authorized: false, authorizationError: "UNABLE_TO_VERIFY_LEAF_SIGNATURE", getProtocol: (): string | null => "TLSv1.3" }],
+    ["authorization error present", { encrypted: true, authorized: true, authorizationError: "ERR_TLS_CERT_ALTNAME_INVALID", getProtocol: (): string | null => "TLSv1.3" }],
+    ["old protocol", { encrypted: true, authorized: true, getProtocol: (): string | null => "TLSv1.1" }],
+    ["incomplete handshake", { encrypted: true, authorized: true, getProtocol: (): string | null => null }],
+  ])("rejects %s socket evidence", (_case, evidence) => {
+    expect(isVerifiedNodeTlsSocket(evidence)).toBe(false);
+  });
+});
 
 describe("database pool security configuration", () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -45,6 +68,73 @@ describe("database pool security configuration", () => {
     }));
   });
 
+  it("binds Preview connections to the declared isolated Neon target with full TLS verification", () => {
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "flat-cloud-12345678/br-synthetic-123456/ep-synthetic-123456/karturt_preview");
+    vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "solid-cloud-87654321/br-prodtest-123456/ep-prodtest-123456/karturt_prod");
+    const host = "ep-synthetic-123456.c-3.ap-southeast-1.aws.neon.tech";
+    const config = createDatabasePoolConfig(
+      `postgresql://${previewDatabaseTarget.runtimeRole}:test-only@${host}/karturt_preview?sslmode=require`,
+      "preview",
+      "runtime",
+    );
+
+    expect(config.ssl).toEqual(expect.objectContaining({ rejectUnauthorized: true, servername: host, ca: expect.any(Array) }));
+    expect(config.ssl).toHaveProperty("checkServerIdentity");
+    expect(config.host).toBe(host);
+  });
+
+  it("binds Production connections to the declared direct Neon target and verify-full TLS", () => {
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "rough-queen-62552713/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview");
+    vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "mute-meadow-51843316/br-winter-violet-a1az4w20/ep-curly-voice-a17q2gf5/karturt_production");
+    const host = "ep-curly-voice-a17q2gf5.ap-southeast-1.aws.neon.tech";
+    const config = createDatabasePoolConfig(
+      `postgresql://${productionDatabaseTarget.runtimeRole}:test-only@${host}/karturt_production?sslmode=verify-full&sslrootcert=system`,
+      "production",
+      "runtime",
+    );
+
+    expect(config.host).toBe(host);
+    expect(config.ssl).toEqual(expect.objectContaining({ rejectUnauthorized: true, servername: host, ca: expect.any(Array) }));
+    expect(config.ssl).toHaveProperty("checkServerIdentity");
+  });
+
+  it("rejects Production connections outside the target, role, or verify-full TLS contract", () => {
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "rough-queen-62552713/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview");
+    vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "mute-meadow-51843316/br-winter-violet-a1az4w20/ep-curly-voice-a17q2gf5/karturt_production");
+    const host = "ep-curly-voice-a17q2gf5.ap-southeast-1.aws.neon.tech";
+
+    expect(() => createDatabasePoolConfig(
+      `postgresql://${productionDatabaseTarget.runtimeRole}:test-only@ep-other-123456.ap-southeast-1.aws.neon.tech/karturt_production?sslmode=verify-full&sslrootcert=system`,
+      "production",
+      "runtime",
+    )).toThrow("Production runtime connection does not match the isolated Neon target");
+    expect(() => createDatabasePoolConfig(
+      `postgresql://${productionDatabaseTarget.migrationRole}:test-only@${host}/karturt_production?sslmode=verify-full&sslrootcert=system`,
+      "production",
+      "runtime",
+    )).toThrow("Production runtime connection does not match the isolated Neon target");
+    expect(() => createDatabasePoolConfig(
+      `postgresql://${productionDatabaseTarget.runtimeRole}:test-only@${host}/karturt_production?sslmode=require&sslrootcert=system`,
+      "production",
+      "runtime",
+    )).toThrow("Production runtime connection does not match the isolated Neon target");
+  });
+
+  it("rejects staging and production targets under the Preview label", () => {
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "flat-cloud-12345678/br-synthetic-123456/ep-synthetic-123456/karturt_preview");
+    vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "solid-cloud-87654321/br-prodtest-123456/ep-prodtest-123456/karturt_prod");
+    expect(() => createDatabasePoolConfig(
+      `postgresql://${stagingDatabaseTarget.runtimeRole}:test-only@${stagingDatabaseTarget.directHost}/${stagingDatabaseTarget.database}`,
+      "preview",
+      "runtime",
+    )).toThrow("canonical staging database cannot be used");
+    expect(() => createDatabasePoolConfig(
+      `postgresql://${previewDatabaseTarget.runtimeRole}:test-only@ep-prodtest-123456.c-3.ap-southeast-1.aws.neon.tech/karturt_preview`,
+      "preview",
+      "runtime",
+    )).toThrow("does not match the isolated Neon target and role");
+  });
+
   it("binds a bounded R3 worker application name to one staging runtime connection", () => {
     const config = createDatabasePoolConfig(
       `postgresql://${stagingDatabaseTarget.runtimeRole}:test-only@${stagingDatabaseTarget.directHost}/${stagingDatabaseTarget.database}`,
@@ -62,7 +152,7 @@ describe("database pool security configuration", () => {
       "migration",
       1,
       "krt-r3-r3run20261025-R3-RACE-VERIFY-a",
-    )).toThrow("R3 application name is allowed only for a bounded staging runtime worker.");
+    )).toThrow("R3 application name is allowed only for a bounded one-connection staging or approved Preview runtime worker.");
   });
 
   it("uses trusted Node.js roots and rejects custom CA paths for staging", () => {

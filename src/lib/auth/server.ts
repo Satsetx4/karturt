@@ -20,7 +20,11 @@ export function createAuth(database: AppDatabase, options: { secret: string; bas
       maxPasswordLength: 128,
       revokeSessionsOnPasswordReset: true,
     },
-    plugins: [twoFactor({ issuer: "KartuRT" })],
+    plugins: [twoFactor({
+      issuer: "KartuRT",
+      backupCodeOptions: { storeBackupCodes: "encrypted" },
+      accountLockout: { enabled: true, maxFailedAttempts: 5, durationSeconds: 900 },
+    })],
     rateLimit: {
       enabled: true,
       storage: "database",
@@ -28,6 +32,10 @@ export function createAuth(database: AppDatabase, options: { secret: string; bas
       max: 100,
       customRules: {
         "/sign-in/email": { window: 60, max: 5 },
+        "/change-password": { window: 60, max: 3 },
+        "/two-factor/enable": { window: 60, max: 3 },
+        "/two-factor/disable": { window: 60, max: 3 },
+        "/two-factor/generate-backup-codes": { window: 60, max: 3 },
         "/two-factor/verify-totp": { window: 60, max: 5 },
         "/two-factor/verify-backup-code": { window: 60, max: 5 },
       },

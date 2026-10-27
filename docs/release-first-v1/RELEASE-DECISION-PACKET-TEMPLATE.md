@@ -37,7 +37,7 @@ Gate A, local PostgreSQL, and disposable PostgreSQL 17 results describe source/C
 | Production-independent target and synthetic-only content classification | TODO | TODO |
 | Runtime and migrator effective identities, role flags, grants, and negative checks | TODO | TODO |
 | Client TLS encryption with verified peer certificate and hostname | TODO | TODO |
-| Official Drizzle migrations `0000`–`0013` under the effective migrator identity | TODO | TODO |
+| Official Drizzle migrations `0000`–`0014` under the effective migrator identity | TODO | TODO |
 | Exact-head-CI-verified trusted staging fixture bootstrap path | PASS — candidate CI only | PR #103 run 40213718974; independent source review not recorded |
 | Frozen synthetic fixture ledger and independent oracle | BLOCKED until R2 fixture authorization | TODO |
 | Synthetic fixtures and schema/financial integrity checks | TODO | TODO |

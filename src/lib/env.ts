@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const environment = z.enum(["development", "staging", "production", "test"]);
+const environment = z.enum(["development", "preview", "staging", "production", "test"]);
 
 export function getEnvironment() {
   const inferred = process.env.NODE_ENV === "production" ? "production" : process.env.NODE_ENV === "test" ? "test" : "development";
@@ -31,13 +31,13 @@ function validateDeploymentAppUrl(env: ReturnType<typeof getEnvironment>) {
   if (process.env.NODE_ENV === "production" && env.appEnv === "development") {
     throw new Error("APP_ENV must not be development in an optimized production build.");
   }
-  if (env.appEnv !== "staging" && env.appEnv !== "production") return;
+  if (env.appEnv !== "preview" && env.appEnv !== "staging" && env.appEnv !== "production") return;
   if (!process.env.NEXT_PUBLIC_APP_URL) {
-    throw new Error("NEXT_PUBLIC_APP_URL must be set for staging and production.");
+    throw new Error("NEXT_PUBLIC_APP_URL must be set for Preview, staging, and production.");
   }
   const appUrl = new URL(env.appUrl);
   if (appUrl.protocol !== "https:" || appUrl.username || appUrl.password || appUrl.pathname !== "/" || appUrl.search || appUrl.hash) {
-    throw new Error("NEXT_PUBLIC_APP_URL must be an HTTPS origin without credentials, path, query, or fragment in staging and production.");
+    throw new Error("NEXT_PUBLIC_APP_URL must be an HTTPS origin without credentials, path, query, or fragment in Preview, staging, and production.");
   }
 }
 

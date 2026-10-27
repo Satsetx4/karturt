@@ -5,6 +5,7 @@ import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { AppDatabase } from "@/db/client";
 import {
   appAccounts,
+  auditEvents,
   authAccount,
   authUser,
   billingYears,
@@ -25,7 +26,7 @@ import { jakartaBusinessDate } from "@/lib/officials/lifecycle";
 import { bootstrapRtUnit } from "@/lib/rt/bootstrap";
 import type { Principal } from "@/lib/auth/permissions";
 
-const fixture = {
+export const canonicalR2SyntheticFixture = {
   rt: {
     code: "R2-SYNTH-01",
     rwCode: "R2-SYNTH",
@@ -39,6 +40,7 @@ const fixture = {
   systemAdminLogin: "r2-system-admin",
   monthlyAmount: 50_000,
 };
+const fixture = canonicalR2SyntheticFixture;
 
 export type R2StagingFixtureCredentials = {
   residentPin: string;
@@ -63,7 +65,7 @@ export type R2StagingFixtureResult = {
 
 type FixtureDb = AppDatabase;
 
-const expectedFixtureTableCounts: Readonly<Record<string, number>> = {
+export const canonicalR2SyntheticFixtureTableCounts: Readonly<Record<string, number>> = {
   rt_units: 1,
   rt_settings: 1,
   houses: 1,
@@ -92,6 +94,7 @@ const expectedFixtureTableCounts: Readonly<Record<string, number>> = {
   waiver_actions: 0,
   waiver_items: 0,
 };
+const expectedFixtureTableCounts = canonicalR2SyntheticFixtureTableCounts;
 
 async function readTableCounts(database: FixtureDb) {
   const tables = Object.values(schema) as AnyPgTable[];
@@ -102,10 +105,14 @@ async function readTableCounts(database: FixtureDb) {
   return Object.fromEntries(counts);
 }
 
-async function assertExactTableCounts(database: FixtureDb, expected: Readonly<Record<string, number>>) {
+async function assertExactTableCounts(
+  database: FixtureDb,
+  expected: Readonly<Record<string, number>>,
+  extraRekeyAuditEvents = 0,
+) {
   const actual = await readTableCounts(database);
   const differences = Object.entries(expected)
-    .filter(([tableName, expectedCount]) => actual[tableName] !== expectedCount)
+    .filter(([tableName, expectedCount]) => actual[tableName] !== expectedCount + (tableName === "audit_events" ? extraRekeyAuditEvents : 0))
     .map(([tableName]) => tableName);
   if (differences.length > 0 || Object.keys(actual).length !== Object.keys(expected).length) {
     throw new Error(`Canonical staging row counts do not match the expected fixture in: ${differences.join(", ") || "application schema"}.`);
@@ -215,7 +222,6 @@ async function verifyFixture(
   if (!unit || unit.rwCode !== fixture.rt.rwCode || unit.name !== fixture.rt.name || unit.village !== fixture.rt.village) {
     throw new Error("An unrelated RT occupies the canonical staging target; refusing to seed.");
   }
-  await assertExactTableCounts(database, expectedFixtureTableCounts);
   const settings = await database.select({ id: rtSettings.id }).from(rtSettings).where(eq(rtSettings.rtUnitId, unit.id)).limit(2);
   if (settings.length !== 1) throw new Error("The canonical R2 fixture is incomplete; refusing to change existing staging data.");
 
@@ -294,6 +300,41 @@ async function verifyFixture(
   ) {
     throw new Error("The canonical R2 fixture has missing or inactive accounts; refusing to change existing staging data.");
   }
+
+  const credentialRekeyEvents = await database.select({
+    actorAppAccountId: auditEvents.actorAppAccountId,
+    entityId: auditEvents.entityId,
+    entityType: auditEvents.entityType,
+    reason: auditEvents.reason,
+    context: auditEvents.context,
+  }).from(auditEvents).where(eq(auditEvents.action, "preview.synthetic_credential.rekeyed"));
+  const rekeyedAccounts = new Map([
+    [resident.id, "resident"],
+    [chairman.id, "rt_chairman"],
+    [treasurer.id, "treasurer"],
+    [systemAdmin.id, "system_admin"],
+  ]);
+  if (credentialRekeyEvents.length !== 0 && credentialRekeyEvents.length !== 4) {
+    throw new Error("The canonical R2 fixture has incomplete synthetic credential-rekey audit evidence.");
+  }
+  if (credentialRekeyEvents.length === 4) {
+    const seenAccounts = new Set<string>();
+    for (const event of credentialRekeyEvents) {
+      const expectedRole = rekeyedAccounts.get(event.entityId);
+      const context = event.context as Record<string, unknown>;
+      if (
+        !expectedRole || seenAccounts.has(event.entityId) || event.actorAppAccountId !== systemAdmin.id ||
+        event.entityType !== "synthetic_account" || event.reason !== null ||
+        context.credentialRole !== expectedRole || context.executionMethod !== "owner_authorized_preview_cli" ||
+        !Number.isSafeInteger(context.revokedSessionCount) || (context.revokedSessionCount as number) < 0 ||
+        Object.keys(context).sort().join(",") !== "credentialRole,executionMethod,revokedSessionCount"
+      ) {
+        throw new Error("The canonical R2 fixture has noncanonical synthetic credential-rekey audit evidence.");
+      }
+      seenAccounts.add(event.entityId);
+    }
+  }
+  await assertExactTableCounts(database, expectedFixtureTableCounts, credentialRekeyEvents.length);
 
   for (const [account, role] of [[chairman, "rt_chairman"], [treasurer, "treasurer"]] as const) {
     const assignments = await database.select({

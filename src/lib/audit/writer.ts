@@ -278,6 +278,39 @@ function normalizeContext(action: string, context: AuditContext | undefined): Au
     return { itemCount, periods: periods as string, totalAmount };
   }
 
+  if (action === "account.password.changed") {
+    assertContextKeys(keys, "");
+    return {};
+  }
+
+  if (new Set([
+    "account.two_factor.enrollment_started",
+    "account.two_factor.verified",
+    "account.two_factor.backup_codes_rotated",
+    "account.two_factor.backup_code_used",
+  ]).has(action)) {
+    assertContextKeys(keys, "");
+    return {};
+  }
+
+  if (action === "account.pin.changed") {
+    assertContextKeys(keys, "revokedSessionCount");
+    assertAuditCount(value.revokedSessionCount);
+    return { revokedSessionCount: value.revokedSessionCount as number };
+  }
+
+  if (action === "account.pin.recovered") {
+    assertContextKeys(keys, "recoveryMethod,revokedSessionCount");
+    if (value.recoveryMethod !== "strong_account_password") {
+      throw new Error("PIN recovery audit must identify the approved account password method.");
+    }
+    assertAuditCount(value.revokedSessionCount);
+    return {
+      recoveryMethod: "strong_account_password",
+      revokedSessionCount: value.revokedSessionCount as number,
+    };
+  }
+
   if (action === "resident.pin.reset" || recoveryActions.has(action)) {
     if (keys.join(",") !== "recoveryReference,revokedSessionCount") {
       throw new Error("Audit context fields do not match the action contract.");
@@ -295,6 +328,25 @@ function normalizeContext(action: string, context: AuditContext | undefined): Au
     }
 
     return { recoveryReference: reference as string | null, revokedSessionCount };
+  }
+
+  if (action === "preview.synthetic_credential.rekeyed") {
+    if (keys.join(",") !== "credentialRole,executionMethod,revokedSessionCount") {
+      throw new Error("Audit context fields do not match the action contract.");
+    }
+    const credentialRole = value.credentialRole;
+    const executionMethod = value.executionMethod;
+    const revokedSessionCount = value.revokedSessionCount;
+    if (!new Set(["resident", "rt_chairman", "treasurer", "system_admin"]).has(String(credentialRole))) {
+      throw new Error("Preview credential audit role is not canonical.");
+    }
+    if (executionMethod !== "owner_authorized_preview_cli") {
+      throw new Error("Preview credential audit must identify its owner-authorized execution method.");
+    }
+    if (typeof revokedSessionCount !== "number" || !Number.isSafeInteger(revokedSessionCount) || revokedSessionCount < 0) {
+      throw new Error("Audit session count must be a non-negative integer.");
+    }
+    return { credentialRole: credentialRole as string, executionMethod, revokedSessionCount };
   }
 
   if (keys.length > 0) {
@@ -341,6 +393,21 @@ export async function appendAuditEvent<TTransaction extends TransactionExecutor>
   }
   if (action === "payment.reversed" && (entityType !== "payment" || reason === null)) {
     throw new Error("Payment reversal audit requires a payment entity and a reason.");
+  }
+  if (action === "preview.synthetic_credential.rekeyed" && (entityType !== "synthetic_account" || reason !== null)) {
+    throw new Error("Preview credential rekey audit requires a synthetic account entity and no reason.");
+  }
+  if (action === "account.pin.changed" && (entityType !== "account_pin" || reason !== null)) {
+    throw new Error("Self-service PIN audit requires an account PIN entity and no reason.");
+  }
+  if (action === "account.pin.recovered" && (entityType !== "account_pin" || reason !== null)) {
+    throw new Error("Account PIN recovery audit requires an account PIN entity and no reason.");
+  }
+  if (action === "account.password.changed" && (entityType !== "account_credential" || reason !== null)) {
+    throw new Error("Self-service password audit requires an account credential entity and no reason.");
+  }
+  if (action.startsWith("account.two_factor.") && (entityType !== "account_security" || reason !== null)) {
+    throw new Error("Two-factor audit requires an account security entity and no reason.");
   }
   if (action === "waiver.created" && (entityType !== "waiver_action" || reason === null)) {
     throw new Error("Waiver audit requires a waiver action entity and a reason.");

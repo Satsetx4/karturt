@@ -4,7 +4,7 @@ import { jakartaBusinessDate } from "@/lib/officials/lifecycle";
 describe("Jakarta business date", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it("uses the configured R3 business date only for the staging app and database", () => {
+  it("uses the configured R3 business date only for staging or the approved Preview target", () => {
     vi.stubEnv("APP_ENV", "staging");
     vi.stubEnv("DATABASE_ENV", "staging");
     vi.stubEnv("KARTURT_R3_RUN_ID", "uatrun2027");
@@ -13,6 +13,32 @@ describe("Jakarta business date", () => {
     vi.stubEnv("KARTURT_R3_BUSINESS_DATE", "2027-10-05");
 
     expect(jakartaBusinessDate(new Date("2026-10-05T12:00:00.000Z"))).toBe("2027-10-05");
+  });
+
+  it("allows the R3 business date for the exact isolated Preview target", () => {
+    vi.stubEnv("APP_ENV", "preview");
+    vi.stubEnv("DATABASE_ENV", "preview");
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "rough-queen-62552713/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview");
+    vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "wild-glitter-41970460/br-spring-smoke-ao3apicl/ep-sparkling-rain-aospujja/karturt_production");
+    vi.stubEnv("KARTURT_R3_RUN_ID", "uatrun2027");
+    vi.stubEnv("KARTURT_R3_AUTHORIZATION_REF", "CP3-GO-REFERENCE");
+    vi.stubEnv("KARTURT_COMPILED_RELEASE_SHA", "a".repeat(40));
+    vi.stubEnv("KARTURT_R3_BUSINESS_DATE", "2027-10-05");
+
+    expect(jakartaBusinessDate(new Date("2026-10-05T12:00:00.000Z"))).toBe("2027-10-05");
+  });
+
+  it("rejects the R3 business date for any other Preview database target", () => {
+    vi.stubEnv("APP_ENV", "preview");
+    vi.stubEnv("DATABASE_ENV", "preview");
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "other-project/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview");
+    vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "wild-glitter-41970460/br-spring-smoke-ao3apicl/ep-sparkling-rain-aospujja/karturt_production");
+    vi.stubEnv("KARTURT_R3_RUN_ID", "uatrun2027");
+    vi.stubEnv("KARTURT_R3_AUTHORIZATION_REF", "CP3-GO-REFERENCE");
+    vi.stubEnv("KARTURT_COMPILED_RELEASE_SHA", "a".repeat(40));
+    vi.stubEnv("KARTURT_R3_BUSINESS_DATE", "2027-10-05");
+
+    expect(() => jakartaBusinessDate()).toThrow("restricted to the approved Preview database target");
   });
 
   it.each([

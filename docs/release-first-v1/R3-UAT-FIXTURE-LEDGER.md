@@ -1,6 +1,6 @@
 # RELEASE FIRST V1 — R3 UAT fixture ledger
 
-**Template only.** Freeze this ledger before staging UAT. It does not authorize fixture creation or app access. Use synthetic aliases and expected aggregates only; do not record real names, addresses, phone numbers, emails, credentials, cookies, session IDs, or raw database rows.
+**Template only.** Freeze this ledger before authorized Preview or staging UAT. It does not authorize fixture creation or app access. Use synthetic aliases and expected aggregates only; do not record real names, addresses, phone numbers, emails, credentials, cookies, session IDs, or raw database rows.
 
 ## Run identity
 

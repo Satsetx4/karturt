@@ -64,4 +64,21 @@ describe("runtime environment guards", () => {
     });
     expect(() => requireAuthEnvironment()).toThrow("BETTER_AUTH_SECRET");
   });
+
+  it("requires Preview deployments to use matching labels and an HTTPS origin", () => {
+    setEnvironment({
+      APP_ENV: "preview",
+      DATABASE_ENV: "preview",
+      DATABASE_URL: "postgresql://runtime:preview-only@preview.example.test/karturt_preview",
+      BETTER_AUTH_SECRET: "a-secure-preview-test-secret-long-enough",
+      NEXT_PUBLIC_APP_URL: "https://karturt-preview.example.test",
+    });
+    expect(requireAuthEnvironment().appUrl).toBe("https://karturt-preview.example.test");
+
+    setEnvironment({ APP_ENV: "preview", DATABASE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://karturt-preview.example.test" });
+    expect(() => requireDatabaseEnvironment()).toThrow("Environment mismatch");
+
+    setEnvironment({ APP_ENV: "preview", DATABASE_ENV: "preview", NEXT_PUBLIC_APP_URL: "http://karturt-preview.example.test" });
+    expect(() => getPublicAppUrl()).toThrow("HTTPS origin");
+  });
 });

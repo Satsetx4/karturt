@@ -48,7 +48,7 @@ Derive expectations from the frozen ledger and recorded app operations, not from
 
 | Check | Expected rule / value derived from the ledger | Observed sanitized result | Evidence reference | Verifier |
 |---|---|---|---|---|
-| Official Drizzle journal matches the frozen migration chain `0000`–`0013` | | | | |
+| Official Drizzle journal matches the frozen migration chain `0000`–`0014` | | | | |
 | Required constraints and indexes exist; migration integrity checks pass | | | | |
 | Tenant, household, billing-period, and fee-rate counts match approved synthetic fixtures | | | | |
 | Due periods and amounts match the frozen fixture ledger | | | | |

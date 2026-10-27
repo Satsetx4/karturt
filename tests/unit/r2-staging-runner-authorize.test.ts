@@ -29,7 +29,7 @@ const gateAAttempt = "1";
 const disposableRecoveryJobName = "R2 disposable PostgreSQL 18 recovery";
 const disposableRecoveryStepName = "Rebuild and verify synthetic state on PostgreSQL 18";
 const disposableRecoveryTarget = "postgresql-18-disposable";
-const disposableRecoveryOperation = "rebuild-reseed-official-migrations-0000-0013";
+const disposableRecoveryOperation = "rebuild-reseed-official-migrations-0000-0014";
 const apiBase = "https://api.github.com";
 const branch = "codex/v1-dependency-remediation-main-20261025";
 const issueUrl = `${apiBase}/repos/Satsetx4/karturt/issues/98`;
@@ -353,7 +353,7 @@ function fetchFor(overrides: {
           `TARGET: ${runnerTarget}`,
           "EVIDENCE_OPERATION: migrate",
           `RUN: ${migrationRunnerRunId}/1`,
-          "MIGRATION_JOURNAL: 0000-0013",
+          "MIGRATION_JOURNAL: 0000-0014",
           "MIGRATOR_NOLOGIN: PASS",
           "RUNTIME_DML_ONLY: PASS",
         ].join("\n"),

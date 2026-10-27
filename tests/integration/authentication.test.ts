@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { base32 } from "@better-auth/utils/base32";
 import { hashPassword } from "better-auth/crypto";
 import type { AppDatabase } from "../../src/db/client";
-import { appAccounts, authAccount, authUser, households, officialAssignments, people } from "../../src/db/schema";
+import { appAccounts, authAccount, authTwoFactor, authUser, households, officialAssignments, people } from "../../src/db/schema";
 import { createAuth } from "../../src/lib/auth/server";
 import { findUniqueLoginAccount } from "../../src/lib/auth/login-account";
 import { MfaEnrollmentRequiredError, resolvePrincipalForUser, UnauthenticatedError } from "../../src/lib/auth/principal";
@@ -129,6 +129,14 @@ describe("authentication and account-role integration", () => {
     const encodedSecret = new URL(enrollment.totpURI).searchParams.get("secret");
     expect(encodedSecret).toBeTruthy();
     const secret = new TextDecoder().decode(base32.decode(encodedSecret!));
+    const [storedUnverifiedFactor] = await db.select({
+      secret: authTwoFactor.secret,
+      backupCodes: authTwoFactor.backupCodes,
+      verified: authTwoFactor.verified,
+    }).from(authTwoFactor).where(eq(authTwoFactor.userId, adminUser.id)).limit(1);
+    expect(storedUnverifiedFactor?.verified).toBe(false);
+    expect(storedUnverifiedFactor?.secret).not.toContain(secret);
+    expect(storedUnverifiedFactor?.backupCodes).not.toContain(enrollment.backupCodes[0]!);
 
     await expect(resolvePrincipalForUser(db as unknown as AppDatabase, adminUser.id))
       .rejects.toBeInstanceOf(MfaEnrollmentRequiredError);
@@ -138,6 +146,9 @@ describe("authentication and account-role integration", () => {
       headers: new Headers({ cookie }),
     });
     expect("token" in verification).toBe(true);
+    const [storedVerifiedFactor] = await db.select({ verified: authTwoFactor.verified })
+      .from(authTwoFactor).where(eq(authTwoFactor.userId, adminUser.id)).limit(1);
+    expect(storedVerifiedFactor?.verified).toBe(true);
     await expect(resolvePrincipalForUser(db as unknown as AppDatabase, adminUser.id)).resolves.toMatchObject({ role: "system_admin" });
 
     const backupCode = enrollment.backupCodes[0]!;

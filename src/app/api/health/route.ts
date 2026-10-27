@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { getDb } from "@/db/client";
+import { getConnection } from "@/db/client";
+import { isVerifiedNodeTlsSocket } from "@/db/pool";
 import { getR3WorkerIdentity } from "@/lib/r3-worker-identity";
 
 export const runtime = "nodejs";
@@ -8,7 +9,15 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    await getDb().execute(sql`select 1`);
+    const connection = getConnection();
+    await connection.db.execute(sql`select 1`);
+    const client = await connection.pool.connect();
+    let databaseTlsVerified = false;
+    try {
+      databaseTlsVerified = isVerifiedNodeTlsSocket(client.connection.stream);
+    } finally {
+      client.release();
+    }
     const workerIdentity = getR3WorkerIdentity(
       request.headers.get("x-karturt-r3-run-id"),
       process.env,
@@ -17,6 +26,7 @@ export async function GET(request: Request) {
     );
     return NextResponse.json({
       status: "ok",
+      databaseTlsVerified,
       ...(workerIdentity ? { r3Worker: workerIdentity } : {}),
     }, { headers: { "cache-control": "no-store" } });
   } catch {

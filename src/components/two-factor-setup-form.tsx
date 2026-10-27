@@ -20,6 +20,7 @@ export function TwoFactorSetupForm() {
     setBusy(true);
     setError("");
     const result = await authClient.twoFactor.enable({ password, method: "totp", issuer: "KartuRT" });
+    setPassword("");
     if (result.error || !result.data || result.data.method !== "totp") {
       setError("Penyiapan belum berhasil. Pastikan kata sandi akun benar, lalu coba lagi.");
       setBusy(false);
@@ -40,6 +41,7 @@ export function TwoFactorSetupForm() {
       setBusy(false);
       return;
     }
+    setCode("");
     setComplete(true);
     setBusy(false);
   }
@@ -65,10 +67,11 @@ export function TwoFactorSetupForm() {
       <p>Akun System Admin tidak mendapat akses sistem sebelum verifikasi ini aktif.</p>
       {!totpUri ? (
         <form className="login-form security-form" onSubmit={startEnrollment}>
-          <label className="field-label" htmlFor="admin-password">Kata sandi akun</label>
-          <input className="form-input" id="admin-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+          <label className="field-label" htmlFor="admin-password">Kata sandi System Admin</label>
+          <input className="form-input" id="admin-password" type="password" autoComplete="current-password" maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} required />
+          <p className="form-note">Gunakan kata sandi 16–128 karakter. PIN tidak dapat menggantikannya.</p>
           {error && <p className="form-error" role="alert">{error}</p>}
-          <button className="button button--primary login-submit" type="submit" disabled={busy || password.length < 6}>
+          <button className="button button--primary login-submit" type="submit" disabled={busy || password.length < 16 || password.length > 128}>
             {busy ? <LoaderCircle className="spinner" size={18} /> : <><span>Siapkan autentikator</span><ArrowLeft className="arrow-forward" size={17} /></>}
           </button>
         </form>

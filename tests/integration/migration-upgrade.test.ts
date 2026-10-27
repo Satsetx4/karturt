@@ -1,13 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
+import { hashPassword } from "better-auth/crypto";
+import { officialMigrationTags } from "../../src/db/migration-chain";
 import {
   activeDueSettlements,
   appAccounts,
+  authAccount,
   billingYears,
   dueAdjustments,
   monthlyDues,
@@ -52,6 +55,33 @@ async function snapshotGateCHistory(client: PGlite) {
     snapshot[table] = row!.rows;
   }
   return snapshot;
+}
+
+async function insertLegacyAppAccount(
+  client: PGlite,
+  input: {
+    rtUnitId: string;
+    authUserId: string;
+    accountType: "resident" | "official";
+    loginIdentifier: string;
+    personId: string;
+    householdId: string | null;
+  },
+): Promise<string> {
+  const [account] = (await client.query<{ id: string }>(`
+    INSERT INTO app_accounts (
+      rt_unit_id, auth_user_id, account_type, login_identifier, person_id, household_id
+    ) VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING id
+  `, [
+    input.rtUnitId,
+    input.authUserId,
+    input.accountType,
+    input.loginIdentifier,
+    input.personId,
+    input.householdId,
+  ])).rows;
+  return account!.id;
 }
 
 describe("legacy billing migration upgrade", () => {
@@ -108,13 +138,18 @@ describe("legacy billing migration upgrade", () => {
     expect(migrated).toEqual({ status: "not_due", waived_reason: null });
   });
 
-  it("applies the clean migration chain through 0013", async () => {
+  it("applies the clean migration chain through 0014", async () => {
     const cleanClient = new PGlite();
     try {
       const migrationFolder = resolve(process.cwd(), "drizzle");
       const migrations = readdirSync(migrationFolder)
         .filter((name) => name.endsWith(".sql"))
         .sort();
+      const migrationJournal = JSON.parse(readFileSync(resolve(migrationFolder, "meta", "_journal.json"), "utf8")) as {
+        entries: Array<{ tag: string }>;
+      };
+      expect(migrations.map((name) => name.replace(/\.sql$/, ""))).toEqual(officialMigrationTags);
+      expect(migrationJournal.entries.map((entry) => entry.tag)).toEqual(officialMigrationTags);
       for (const name of migrations) {
         await cleanClient.exec(readFileSync(resolve(migrationFolder, name), "utf8"));
       }
@@ -161,7 +196,7 @@ describe("legacy billing migration upgrade", () => {
     }
   }, 60000);
 
-  it("upgrades intact transfer and cash history through 0013 without changing Gate C ledger history", async () => {
+  it("upgrades intact transfer and cash history through 0014 without changing Gate C ledger history", async () => {
     const upgradeClient = new PGlite();
     try {
       const migrationFolder = resolve(process.cwd(), "drizzle");
@@ -177,31 +212,47 @@ describe("legacy billing migration upgrade", () => {
       const rtUnitId = await createRt(db);
       const household = await createHousehold(db, rtUnitId);
       const residentUser = await createAuthUser(db);
-      const [residentAccount] = await db.insert(appAccounts).values({
+      const residentPasswordHash = await hashPassword(randomUUID());
+      await db.insert(authAccount).values({
+        id: randomUUID(),
+        accountId: residentUser.id,
+        providerId: "credential",
+        userId: residentUser.id,
+        password: residentPasswordHash,
+      });
+      const residentAccountId = await insertLegacyAppAccount(upgradeClient, {
         rtUnitId,
         authUserId: residentUser.id,
         accountType: "resident",
         loginIdentifier: `resident-${residentUser.id}`,
         personId: household.personId,
         householdId: household.householdId,
-      }).returning({ id: appAccounts.id });
+      });
       const treasurerUser = await createAuthUser(db);
-      const [treasurerAccount] = await db.insert(appAccounts).values({
+      await db.insert(authAccount).values({
+        id: randomUUID(),
+        accountId: treasurerUser.id,
+        providerId: "credential",
+        userId: treasurerUser.id,
+        password: await hashPassword(randomUUID()),
+      });
+      const treasurerAccountId = await insertLegacyAppAccount(upgradeClient, {
         rtUnitId,
         authUserId: treasurerUser.id,
         accountType: "official",
         loginIdentifier: `treasurer-${treasurerUser.id}`,
         personId: household.personId,
-      }).returning({ id: appAccounts.id });
+        householdId: null,
+      });
       await db.insert(officialAssignments).values({
         rtUnitId,
-        appAccountId: treasurerAccount!.id,
+        appAccountId: treasurerAccountId,
         role: "treasurer",
         startsOn: "2020-01-01",
       });
       const treasurerPrincipal: Principal = {
         authUserId: treasurerUser.id,
-        appAccountId: treasurerAccount!.id,
+        appAccountId: treasurerAccountId,
         role: "treasurer",
         rtUnitId,
         householdId: null,
@@ -233,7 +284,7 @@ describe("legacy billing migration upgrade", () => {
           requestCode,
           rtUnitId,
           householdId: household.householdId,
-          requestedByAccountId: residentAccount!.id,
+          requestedByAccountId: residentAccountId,
           requestedByAccountType: "resident",
           status: "pending",
           idempotencyKey: randomUUID(),
@@ -259,7 +310,7 @@ describe("legacy billing migration upgrade", () => {
       await db.transaction(async (transaction) => {
         await transaction.execute(sql`
           INSERT INTO payments (id, rt_unit_id, household_id, payment_request_id, amount, method, verified_by_account_id, verified_by_account_type)
-          VALUES (${transferPaymentId}, ${rtUnitId}, ${household.householdId}, ${requestRow!.id}, 40000, 'transfer', ${treasurerAccount!.id}, 'official')
+          VALUES (${transferPaymentId}, ${rtUnitId}, ${household.householdId}, ${requestRow!.id}, 40000, 'transfer', ${treasurerAccountId}, 'official')
         `);
         await transaction.execute(sql`
           INSERT INTO payment_allocations (rt_unit_id, household_id, payment_request_id, payment_id, monthly_due_id, amount)
@@ -270,14 +321,14 @@ describe("legacy billing migration upgrade", () => {
         `);
         await transaction.execute(sql`
           UPDATE payment_requests
-          SET status = 'verified', verified_at = now(), verified_by_account_id = ${treasurerAccount!.id}, verified_by_account_type = 'official'
+          SET status = 'verified', verified_at = now(), verified_by_account_id = ${treasurerAccountId}, verified_by_account_type = 'official'
           WHERE id = ${requestRow!.id}
         `);
         await transaction.delete(paymentRequestClaims).where(eq(paymentRequestClaims.requestId, requestRow!.id));
         await transaction.execute(sql`
           INSERT INTO audit_events (actor_app_account_id, action, entity_type, entity_id, reason, context)
           VALUES (
-            ${treasurerAccount!.id}, 'payment_request.verified', 'payment_request', ${requestRow!.id}, NULL,
+            ${treasurerAccountId}, 'payment_request.verified', 'payment_request', ${requestRow!.id}, NULL,
             jsonb_build_object('itemCount', 1, 'totalAmount', 40000)
           )
         `);
@@ -303,7 +354,7 @@ describe("legacy billing migration upgrade", () => {
             cash_idempotency_key, cash_idempotency_fingerprint
           ) VALUES (
             ${cashPaymentId}, ${rtUnitId}, ${household.householdId}, NULL, 40000, 'cash',
-            ${treasurerAccount!.id}, 'official', ${cashKey}, ${"d".repeat(64)}
+            ${treasurerAccountId}, 'official', ${cashKey}, ${"d".repeat(64)}
           )
         `);
         await transaction.execute(sql`
@@ -317,7 +368,7 @@ describe("legacy billing migration upgrade", () => {
         await transaction.execute(sql`
           INSERT INTO audit_events (actor_app_account_id, action, entity_type, entity_id, reason, context)
           VALUES (
-            ${treasurerAccount!.id}, 'payment.cash_recorded', 'payment', ${cashPaymentId}, NULL,
+            ${treasurerAccountId}, 'payment.cash_recorded', 'payment', ${cashPaymentId}, NULL,
             jsonb_build_object('itemCount', 1, 'method', 'cash', 'totalAmount', 40000)
           )
         `);
@@ -336,22 +387,23 @@ describe("legacy billing migration upgrade", () => {
       const tariffAdjustmentMigration = "0012_phase_11_tariff_adjustment.sql";
       await upgradeClient.exec(readFileSync(resolve(migrationFolder, tariffAdjustmentMigration), "utf8"));
       const chairmanUser = await createAuthUser(db);
-      const [chairmanAccount] = await db.insert(appAccounts).values({
+      const chairmanAccountId = await insertLegacyAppAccount(upgradeClient, {
         rtUnitId,
         authUserId: chairmanUser.id,
         accountType: "official",
         loginIdentifier: `chairman-${chairmanUser.id}`,
         personId: household.personId,
-      }).returning({ id: appAccounts.id });
+        householdId: null,
+      });
       await db.insert(officialAssignments).values({
         rtUnitId,
-        appAccountId: chairmanAccount!.id,
+        appAccountId: chairmanAccountId,
         role: "rt_chairman",
         startsOn: "2020-01-01",
       });
       const chairmanPrincipal: Principal = {
         authUserId: chairmanUser.id,
-        appAccountId: chairmanAccount!.id,
+        appAccountId: chairmanAccountId,
         role: "rt_chairman",
         rtUnitId,
         householdId: null,
@@ -367,6 +419,20 @@ describe("legacy billing migration upgrade", () => {
       const householdManagementMigration = "0013_phase_12_household_management.sql";
       await upgradeClient.exec(readFileSync(resolve(migrationFolder, householdManagementMigration), "utf8"));
       expect(await snapshotGateCHistory(upgradeClient)).toEqual(gateCHistoryBefore);
+      const pinSecurityMigration = "0014_handy_genesis.sql";
+      await upgradeClient.exec(readFileSync(resolve(migrationFolder, pinSecurityMigration), "utf8"));
+      expect(await snapshotGateCHistory(upgradeClient)).toEqual(gateCHistoryBefore);
+      const [migratedResident] = await db.select({ pinHash: appAccounts.pinHash })
+        .from(appAccounts).where(eq(appAccounts.id, residentAccountId)).limit(1);
+      const [residentCredential] = await db.select({ password: authAccount.password })
+        .from(authAccount).where(and(
+          eq(authAccount.userId, residentUser.id),
+          eq(authAccount.providerId, "credential"),
+        )).limit(1);
+      const [migratedTreasurer] = await db.select({ pinHash: appAccounts.pinHash })
+        .from(appAccounts).where(eq(appAccounts.id, treasurerAccountId)).limit(1);
+      expect(migratedResident?.pinHash).toBe(residentCredential?.password);
+      expect(migratedTreasurer?.pinHash).toBeNull();
 
       const [transferAfter] = await db.select().from(payments).where(eq(payments.id, transferPaymentId));
       const [transferAllocationAfter] = await db.select().from(paymentAllocations)
@@ -379,7 +445,7 @@ describe("legacy billing migration upgrade", () => {
         paymentRequestId: transferBefore!.payment_request_id,
         amount: 40000,
         method: "transfer",
-        verifiedByAccountId: treasurerAccount!.id,
+        verifiedByAccountId: treasurerAccountId,
         cashIdempotencyKey: null,
         cashIdempotencyFingerprint: null,
       });

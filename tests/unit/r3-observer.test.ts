@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assessR3ObservationSample, parseR3ObserverInputs } from "@/db/r3-observer";
+import { assessR3ObservationSample, parseR3ObserverInputs, r3WorkerProbeHeaders } from "@/db/r3-observer";
 import { getR3WorkerIdentity } from "@/lib/r3-worker-identity";
 
 const releaseSha = "63c3a89aee70a9fdd11db499db261e3d7caa136d";
@@ -51,7 +51,37 @@ describe("RELEASE FIRST R3 observer input gate", () => {
     expect(() => parseR3ObserverInputs(environment({ KARTURT_R3_SCENARIO: "R3-RACE-WAIVER" }), releaseSha))
       .toThrow("not one of the four approved race cases");
     expect(() => parseR3ObserverInputs(environment({ DATABASE_ENV: "production" }), releaseSha))
-      .toThrow("must both be staging");
+      .toThrow("must both be staging or Preview");
+  });
+
+  it("accepts a Preview observer only for the exact Neon target and distinct Vercel deployments", () => {
+    const preview = environment({
+      APP_ENV: "preview",
+      DATABASE_ENV: "preview",
+      KARTURT_R3_CI_RUN_ID: "",
+      KARTURT_R3_CI_ATTEMPT: "",
+      KARTURT_R2_PASS_EVIDENCE_REF: "",
+      KARTURT_PREVIEW_TARGET_ID: "rough-queen-62552713/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview",
+      KARTURT_PRODUCTION_TARGET_ID: "wild-glitter-41970460/br-spring-smoke-ao3apicl/ep-sparkling-rain-aospujja/karturt_production",
+      VERCEL_AUTOMATION_BYPASS_SECRET: "preview-bypass-test-only",
+      DATABASE_URL: "postgresql://karturt_preview_runtime:test-only@ep-green-smoke-aobgfksu.c-3.ap-southeast-1.aws.neon.tech/karturt_preview?sslmode=verify-full",
+      KARTURT_R3_APP_ORIGIN_A: "https://karturt-review-staging-20261012-a-sekawan.vercel.app",
+      KARTURT_R3_APP_ORIGIN_B: "https://karturt-review-staging-20261012-b-sekawan.vercel.app",
+    });
+
+    expect(parseR3ObserverInputs(preview, releaseSha)).toMatchObject({
+      databaseEnvironment: "preview",
+      ciRunId: undefined,
+      ciAttempt: undefined,
+      r2PassEvidenceRef: undefined,
+      appOriginA: "https://karturt-review-staging-20261012-a-sekawan.vercel.app",
+      appOriginB: "https://karturt-review-staging-20261012-b-sekawan.vercel.app",
+      releaseSha,
+    });
+    expect(() => parseR3ObserverInputs({
+      ...preview,
+      KARTURT_PREVIEW_TARGET_ID: "other-project/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview",
+    }, releaseSha)).toThrow("approved Preview database target");
   });
 });
 
@@ -92,12 +122,27 @@ describe("R3 observer sample assessment", () => {
       appSessionsLockWaitObserved: false,
     });
   });
+
+  it("sends Vercel protection bypass only on protected Preview worker probes", () => {
+    expect(r3WorkerProbeHeaders({ VERCEL_AUTOMATION_BYPASS_SECRET: "preview-bypass-test-only" }, "preview", "r3run20261025"))
+      .toEqual({
+        "x-karturt-r3-run-id": "r3run20261025",
+        "x-vercel-protection-bypass": "preview-bypass-test-only",
+      });
+    expect(r3WorkerProbeHeaders({}, "staging", "r3run20261025"))
+      .toEqual({ "x-karturt-r3-run-id": "r3run20261025" });
+    expect(() => r3WorkerProbeHeaders({}, "preview", "r3run20261025"))
+      .toThrow("VERCEL_AUTOMATION_BYPASS_SECRET is required");
+    expect(() => r3WorkerProbeHeaders({ VERCEL_AUTOMATION_BYPASS_SECRET: "bad\r\nheader" }, "preview", "r3run20261025"))
+      .toThrow("VERCEL_AUTOMATION_BYPASS_SECRET is required");
+  });
 });
 
 describe("R3 health worker identity", () => {
   const stagingWorkerEnvironment: NodeJS.ProcessEnv = {
     NODE_ENV: "test",
     APP_ENV: "staging",
+    DATABASE_ENV: "staging",
     KARTURT_R3_RUN_ID: "r3run20261025",
     KARTURT_R3_SCENARIO: "R3-RACE-VERIFY",
     KARTURT_R3_WORKER_TAG: "a",
@@ -114,5 +159,45 @@ describe("R3 health worker identity", () => {
     expect(getR3WorkerIdentity("other-run", stagingWorkerEnvironment, releaseSha, 12345)).toBeNull();
     expect(getR3WorkerIdentity("r3run20261025", stagingWorkerEnvironment, undefined, 12345)).toBeNull();
     expect(getR3WorkerIdentity("r3run20261025", { ...stagingWorkerEnvironment, APP_ENV: "production" }, releaseSha, 12345)).toBeNull();
+  });
+
+  it("does not use the worker tag to claim two processes are distinct", () => {
+    const identityA = getR3WorkerIdentity("r3run20261025", {
+      ...stagingWorkerEnvironment,
+      KARTURT_R3_WORKER_TAG: "a",
+    }, releaseSha, 12345);
+    const identityB = getR3WorkerIdentity("r3run20261025", {
+      ...stagingWorkerEnvironment,
+      KARTURT_R3_WORKER_TAG: "b",
+    }, releaseSha, 12345);
+
+    expect(identityA?.workerInstanceId).toBe(identityB?.workerInstanceId);
+    expect(getR3WorkerIdentity("r3run20261025", stagingWorkerEnvironment, releaseSha, 12346)?.workerInstanceId)
+      .not.toBe(identityA?.workerInstanceId);
+  });
+
+  it("returns a worker identity on the exact approved Preview target", () => {
+    const previewEnvironment: NodeJS.ProcessEnv = {
+      NODE_ENV: "test",
+      APP_ENV: "preview",
+      DATABASE_ENV: "preview",
+      KARTURT_PREVIEW_TARGET_ID: "rough-queen-62552713/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview",
+      KARTURT_PRODUCTION_TARGET_ID: "wild-glitter-41970460/br-spring-smoke-ao3apicl/ep-sparkling-rain-aospujja/karturt_production",
+      KARTURT_R3_RUN_ID: "cp3preview261026",
+      KARTURT_R3_SCENARIO: "R3-RACE-REQUEST",
+      KARTURT_R3_WORKER_TAG: "b",
+    };
+
+    expect(getR3WorkerIdentity("cp3preview261026", previewEnvironment, releaseSha, 12345)).toEqual({
+      releaseSha,
+      runId: "cp3preview261026",
+      scenario: "R3-RACE-REQUEST",
+      workerTag: "b",
+      workerInstanceId: expect.stringMatching(/^[0-9a-f]{16}$/),
+    });
+    expect(() => getR3WorkerIdentity("cp3preview261026", {
+      ...previewEnvironment,
+      KARTURT_PREVIEW_TARGET_ID: "other-project/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview",
+    }, releaseSha, 12345)).toThrow("approved Preview database target");
   });
 });

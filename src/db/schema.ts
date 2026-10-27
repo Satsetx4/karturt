@@ -195,6 +195,9 @@ export const appAccounts = pgTable("app_accounts", {
   loginIdentifier: varchar("login_identifier", { length: 100 }).notNull(),
   failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  pinHash: text("pin_hash"),
+  pinChangeFailedAttempts: integer("pin_change_failed_attempts").notNull().default(0),
+  pinChangeLockedUntil: timestamp("pin_change_locked_until", { withTimezone: true }),
   personId: uuid("person_id"),
   householdId: uuid("household_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -229,6 +232,7 @@ export const appAccounts = pgTable("app_accounts", {
     .on(table.rtUnitId, table.householdId)
     .where(sql`${table.accountType} = 'resident' and ${table.status} = 'active'`),
   check("app_accounts_failed_login_attempts_valid", sql`${table.failedLoginAttempts} between 0 and 5`),
+  check("app_accounts_pin_change_failed_attempts_valid", sql`${table.pinChangeFailedAttempts} between 0 and 5`),
   check(
     "app_accounts_type_scope_valid",
     sql`(${table.accountType} = 'resident' and ${table.rtUnitId} is not null and ${table.personId} is not null and ${table.householdId} is not null) or (${table.accountType} = 'official' and ${table.rtUnitId} is not null and ${table.personId} is not null and ${table.householdId} is null) or (${table.accountType} = 'system_admin' and ${table.rtUnitId} is null and ${table.personId} is null and ${table.householdId} is null)`,

@@ -15,6 +15,7 @@ const inputSchema = z.object({
   identifier: z.string().trim().min(1).max(100).optional(),
   displayName: z.string().trim().min(1).max(160),
   password: z.string().min(6).max(128),
+  pin: z.string().regex(/^\d{6}$/).optional(),
   rtUnitId: z.string().uuid().optional(),
   personId: z.string().uuid().optional(),
   householdId: z.string().uuid().optional(),
@@ -41,6 +42,7 @@ async function main() {
     identifier: envValue("KARTURT_LOGIN_IDENTIFIER")?.trim() || undefined,
     displayName: envValue("KARTURT_DISPLAY_NAME"),
     password: envValue("KARTURT_ACCOUNT_PASSWORD"),
+    pin: envValue("KARTURT_ACCOUNT_PIN") || undefined,
     rtUnitId: envValue("KARTURT_RT_UNIT_ID") || undefined,
     personId: envValue("KARTURT_PERSON_ID") || undefined,
     householdId: envValue("KARTURT_HOUSEHOLD_ID") || undefined,
@@ -52,7 +54,13 @@ async function main() {
   }
   const input = parsed.data;
   if (!isValidAccountPassword(input.type, input.password)) {
-    throw new Error("Resident PIN must be exactly six digits.");
+    throw new Error(input.type === "resident"
+      ? "Resident PIN must be exactly six digits."
+      : "Official and System Admin passwords must be 16 to 128 characters.");
+  }
+  const initialPin = input.type === "resident" ? input.password : input.pin;
+  if (!initialPin || !/^\d{6}$/.test(initialPin)) {
+    throw new Error("Every provisioned account needs an initial six-digit PIN.");
   }
   if (input.type !== "system_admin" && (!input.rtUnitId || !input.personId)) {
     throw new Error("Resident and official accounts require an RT unit and a person record.");
@@ -99,6 +107,7 @@ async function main() {
   const userId = randomUUID();
   const email = `${randomUUID()}@accounts.karturt.invalid`;
   const passwordHash = await hashPassword(input.password);
+  const pinHash = input.type === "resident" ? passwordHash : await hashPassword(initialPin);
   const appAccountId = await db.transaction(async (transaction) => {
     await transaction.insert(authUser).values({
       id: userId,
@@ -121,6 +130,7 @@ async function main() {
       rtUnitId: input.type === "system_admin" ? null : input.rtUnitId!,
       personId: input.type === "system_admin" ? null : input.personId!,
       householdId: input.type === "resident" ? input.householdId! : null,
+      pinHash,
     }).returning({ id: appAccounts.id });
 
     if (input.type === "official") {

@@ -2,19 +2,29 @@ import { readFileSync } from "node:fs";
 import { checkServerIdentity, rootCertificates } from "node:tls";
 import { Pool, type PoolConfig } from "pg";
 import { stagingDatabaseTarget } from "@/db/staging-target";
+import { assertPreviewConnectionTarget, assertR3PreviewBusinessDateTarget } from "@/db/preview-target";
+import { assertProductionConnectionTarget } from "@/db/production-target";
 
-export type DatabaseEnvironment = "development" | "staging" | "production" | "test";
+export type DatabaseEnvironment = "development" | "preview" | "staging" | "production" | "test";
 export type DatabaseConnectionPurpose = "runtime" | "migration";
 
-function validateApplicationName(applicationName: string, databaseEnvironment: DatabaseEnvironment, purpose: DatabaseConnectionPurpose) {
+function validateApplicationName(
+  applicationName: string,
+  databaseEnvironment: DatabaseEnvironment,
+  purpose: DatabaseConnectionPurpose,
+  max: number,
+) {
   const r3ApplicationName = /^krt-r3-[a-z0-9]{8,20}-R3-RACE-(REQUEST|VERIFY|CASH|REVERSAL)-(a|b)$/;
+  const previewR3 = databaseEnvironment === "preview" && process.env.APP_ENV === "preview";
+  if (previewR3) assertR3PreviewBusinessDateTarget(process.env);
   if (
-    databaseEnvironment !== "staging" ||
+    (databaseEnvironment !== "staging" && !previewR3) ||
     purpose !== "runtime" ||
+    max !== 1 ||
     applicationName.length > 63 ||
     !r3ApplicationName.test(applicationName)
   ) {
-    throw new Error("R3 application name is allowed only for a bounded staging runtime worker.");
+    throw new Error("R3 application name is allowed only for a bounded one-connection staging or approved Preview runtime worker.");
   }
 }
 
@@ -26,6 +36,28 @@ const allowedConnectionParameters = new Set([
   "application_name",
   "channel_binding",
 ]);
+
+export function isVerifiedNodeTlsSocket(stream: unknown): boolean {
+  if (!stream || typeof stream !== "object") return false;
+
+  const socket = stream as {
+    encrypted?: unknown;
+    authorized?: unknown;
+    authorizationError?: unknown;
+    getProtocol?: () => string | null;
+  };
+  if (
+    socket.encrypted !== true ||
+    socket.authorized !== true ||
+    (socket.authorizationError !== undefined && socket.authorizationError !== null) ||
+    typeof socket.getProtocol !== "function"
+  ) {
+    return false;
+  }
+
+  const protocol = socket.getProtocol();
+  return protocol === "TLSv1.2" || protocol === "TLSv1.3";
+}
 
 function assertStagingTarget(
   url: URL,
@@ -79,9 +111,13 @@ export function createDatabasePoolConfig(
   if (isCanonicalStagingTarget && databaseEnvironment !== "staging") {
     throw new Error("The canonical staging database cannot be used under another environment label.");
   }
+  if (databaseEnvironment === "preview") assertPreviewConnectionTarget(connectionString, purpose);
+  if (databaseEnvironment === "production") assertProductionConnectionTarget(connectionString, purpose);
   const isLoopback = loopbackHosts.has(host);
-  if (isLoopback && (databaseEnvironment === "staging" || databaseEnvironment === "production")) {
-    throw new Error("Staging and production database connections must use a remote TLS endpoint.");
+  if (isLoopback && (databaseEnvironment === "preview" || databaseEnvironment === "staging" || databaseEnvironment === "production")) {
+    throw new Error(databaseEnvironment === "preview"
+      ? "Preview database connections must use a remote TLS endpoint."
+      : "Staging and production database connections must use a remote TLS endpoint.");
   }
 
   if (databaseEnvironment === "staging") {
@@ -103,8 +139,16 @@ export function createDatabasePoolConfig(
   const caPath = url.searchParams.get("sslrootcert");
   const channelBinding = url.searchParams.get("channel_binding");
   const sslNegotiation = url.searchParams.get("sslnegotiation");
-  if (databaseEnvironment === "staging" && caPath && caPath !== "system") {
-    throw new Error("Staging TLS must use the Node.js trusted CA store; custom CA paths are not accepted.");
+  if (
+    (databaseEnvironment === "preview" || databaseEnvironment === "staging" || databaseEnvironment === "production") &&
+    caPath &&
+    caPath !== "system"
+  ) {
+    throw new Error(databaseEnvironment === "preview"
+      ? "Preview TLS must use the Node.js trusted CA store; custom CA paths are not accepted."
+      : databaseEnvironment === "production"
+        ? "Production TLS must use the Node.js trusted CA store; custom CA paths are not accepted."
+        : "Staging TLS must use the Node.js trusted CA store; custom CA paths are not accepted.");
   }
   if (channelBinding && channelBinding !== "prefer") {
     throw new Error("Strict PostgreSQL channel binding is unsupported; omit channel_binding or use prefer.");
@@ -116,7 +160,7 @@ export function createDatabasePoolConfig(
     throw new Error("Database connection URL must not include a fragment.");
   }
 
-  if (applicationNameOverride) validateApplicationName(applicationNameOverride, databaseEnvironment, purpose);
+  if (applicationNameOverride) validateApplicationName(applicationNameOverride, databaseEnvironment, purpose, max);
   const applicationName = applicationNameOverride ?? url.searchParams.get("application_name") ?? undefined;
   const userName = decodeURIComponent(url.username);
   const password = decodeURIComponent(url.password);
@@ -128,7 +172,7 @@ export function createDatabasePoolConfig(
   const ssl = isLoopback
     ? undefined
     : {
-      ...(databaseEnvironment === "staging"
+      ...(databaseEnvironment === "staging" || databaseEnvironment === "preview" || databaseEnvironment === "production"
         ? { ca: [...rootCertificates] }
         : caPath && caPath !== "system"
           ? { ca: readFileSync(caPath) }

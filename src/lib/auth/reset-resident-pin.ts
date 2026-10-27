@@ -81,7 +81,13 @@ export async function resetResidentPin(
 
     await transaction
       .update(appAccounts)
-      .set({ failedLoginAttempts: 0, lockedUntil: null })
+      .set({
+        pinHash: passwordHash,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        pinChangeFailedAttempts: 0,
+        pinChangeLockedUntil: null,
+      })
       .where(eq(appAccounts.id, target.id));
     const revokedSessions = await transaction
       .delete(authSession)

@@ -1,11 +1,24 @@
 import type { NextConfig } from "next";
 import { execFileSync } from "node:child_process";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
+import { isExactVercelPreviewReleaseBuild } from "@/lib/deployment-build-source";
 
-const compiledReleaseSha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-if (!/^[0-9a-f]{40}$/.test(compiledReleaseSha)) {
-  throw new Error("Next.js build requires a full Git commit SHA for release identity.");
+function resolveCompiledReleaseSha() {
+  const declaredPreviewSha = process.env.KARTURT_VERCEL_PREVIEW_RELEASE_SHA?.trim();
+  if (declaredPreviewSha !== undefined) {
+    if (!isExactVercelPreviewReleaseBuild(process.env, declaredPreviewSha)) {
+      throw new Error("An explicit release SHA is allowed only for an exact Vercel Preview build.");
+    }
+    return declaredPreviewSha;
+  }
+
+  const gitSha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  if (!/^[0-9a-f]{40}$/.test(gitSha)) {
+    throw new Error("Next.js build requires a full Git commit SHA for release identity.");
+  }
+  return gitSha;
 }
+const compiledReleaseSha = resolveCompiledReleaseSha();
 function assertCleanBuildSource() {
   const sourceStatus = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], { encoding: "utf8" });
   const unexpectedChanges = sourceStatus.split(/\r?\n/).filter(Boolean).filter((entry) => {
@@ -37,6 +50,8 @@ const nextConfig: NextConfig = {
 };
 
 export default function config(phase: string): NextConfig {
-  if (phase === PHASE_PRODUCTION_BUILD) assertCleanBuildSource();
+  if (phase === PHASE_PRODUCTION_BUILD && !isExactVercelPreviewReleaseBuild(process.env, compiledReleaseSha)) {
+    assertCleanBuildSource();
+  }
   return nextConfig;
 }
