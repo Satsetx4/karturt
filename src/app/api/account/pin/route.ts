@@ -7,6 +7,7 @@ import { isSameOriginMutation } from "@/app/api/chairman/waivers/response";
 import {
   AccountPinLockedError,
   AccountPinNotConfiguredError,
+  DuplicateOfficialAccountPinError,
   changeAccountPin,
   InvalidCurrentAccountPinError,
 } from "@/lib/auth/change-account-pin";
@@ -57,6 +58,9 @@ export async function POST(request: Request) {
     }
     if (error instanceof AccountPinNotConfiguredError) {
       return response("PIN belum disiapkan pada akun ini. Hubungi pengelola melalui jalur resmi.", 409);
+    }
+    if (error instanceof DuplicateOfficialAccountPinError) {
+      return response("PIN pengurus harus berbeda dari PIN akun pengurus lain.", 409);
     }
     return response("PIN belum dapat diubah. Silakan coba lagi.", 500);
   }

@@ -4,6 +4,7 @@ import type { AppDatabase } from "@/db/client";
 import { appAccounts, authAccount, authSession, households, officialAssignments, people } from "@/db/schema";
 import { appendAuditEvent } from "@/lib/audit/writer";
 import type { Principal } from "@/lib/auth/permissions";
+import { lockOfficialPinAccounts, officialPinIsUsedByAnotherAccount } from "@/lib/auth/official-pin-uniqueness";
 import { officialAssignmentActiveOn, jakartaBusinessDate } from "@/lib/officials/lifecycle";
 
 const MAX_PIN_CHANGE_FAILURES = 5;
@@ -42,10 +43,18 @@ export class InvalidAccountPinFormatError extends Error {
   }
 }
 
+export class DuplicateOfficialAccountPinError extends Error {
+  constructor() {
+    super("Official account PINs must be unique.");
+    this.name = "DuplicateOfficialAccountPinError";
+  }
+}
+
 type ChangeOutcome =
   | { kind: "changed"; sessionsRevoked: number }
   | { kind: "locked" }
   | { kind: "invalid_current_pin" }
+  | { kind: "duplicate_pin" }
   | { kind: "not_configured" };
 
 function accountTypeForPrincipal(principal: Principal) {
@@ -64,6 +73,9 @@ export async function changeAccountPin(
   }
 
   const outcome = await database.transaction<ChangeOutcome>(async (transaction) => {
+    if (principal.role !== "resident" && principal.role !== "system_admin") {
+      await lockOfficialPinAccounts(transaction);
+    }
     const businessDate = jakartaBusinessDate();
     const [account] = await transaction
       .select({
@@ -193,6 +205,12 @@ export async function changeAccountPin(
       return { kind: "invalid_current_pin" };
     }
 
+    if (
+      principal.role !== "resident" &&
+      principal.role !== "system_admin" &&
+      await officialPinIsUsedByAnotherAccount(transaction, account.id, input.newPin)
+    ) return { kind: "duplicate_pin" };
+
     const passwordHash = await hashPassword(input.newPin);
     if (residentCredential) {
       const [updatedCredential] = await transaction
@@ -237,6 +255,7 @@ export async function changeAccountPin(
 
   if (outcome.kind === "locked") throw new AccountPinLockedError();
   if (outcome.kind === "invalid_current_pin") throw new InvalidCurrentAccountPinError();
+  if (outcome.kind === "duplicate_pin") throw new DuplicateOfficialAccountPinError();
   if (outcome.kind === "not_configured") throw new AccountPinNotConfiguredError();
   return { sessionsRevoked: outcome.sessionsRevoked };
 }

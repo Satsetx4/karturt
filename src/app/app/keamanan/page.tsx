@@ -53,10 +53,20 @@ export default async function AccountSecurityPage() {
         <span className="mfa-symbol"><ShieldCheck size={24} aria-hidden="true" /></span>
         <p className="eyebrow">PENGATURAN AKUN</p>
         <h1 id="account-security-title">Keamanan akun</h1>
-        <p>PIN awal mengikuti workbook dan boleh sama untuk pengguna dengan peran yang sama. Mengubah PIN hanya memperbarui akun Anda.</p>
+        <p>{principal.role === "system_admin"
+          ? "PIN System Admin tidak digunakan untuk masuk atau memberi otorisasi."
+          : principal.role === "resident"
+            ? "PIN awal mengikuti workbook dan dapat sama dengan PIN warga lain. Mengubah PIN hanya memperbarui akun Anda."
+            : "PIN setiap akun pengurus harus berbeda. Mengubah PIN hanya memperbarui akun Anda."}</p>
         <div className="security-policy-note">
-          <strong>Perlindungan akun pengurus dan System Admin</strong>
-          <p>Ketua RT, Bendahara, dan System Admin tetap masuk dengan kata sandi 16–128 karakter. System Admin juga wajib menyelesaikan TOTP. PIN enam digit tidak dapat digunakan untuk masuk atau menyetujui tindakan mereka.</p>
+          <strong>{principal.role === "system_admin"
+            ? "Perlindungan System Admin"
+            : principal.role === "resident" ? "Perlindungan PIN warga" : "Perlindungan akun pengurus"}</strong>
+          <p>{principal.role === "system_admin"
+            ? "System Admin tetap masuk dengan kata sandi kuat 16–128 karakter dan TOTP terverifikasi. PIN tidak dapat menggantikan keduanya atau menyetujui tindakan."
+            : principal.role === "resident"
+              ? "Warga masuk dengan nomor rumah dan PIN enam digit. PIN hanya berlaku untuk akun Anda; perubahan PIN mencabut sesi lama."
+              : "Ketua RT dan Bendahara masuk dengan username serta PIN unik enam digit. Kata sandi kuat 16–128 karakter tetap terpisah dan hanya digunakan untuk pemulihan PIN."}</p>
         </div>
         <ChangeAccountPinForm role={principal.role} canChangePin={Boolean(account?.hasPin)} />
       </section>

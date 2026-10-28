@@ -5,20 +5,20 @@
 ```text
 Beranda
   ├─ Warga → nomor rumah + PIN → ruang akun warga
-  └─ Pengurus → nama akun + kata sandi → ruang Bendahara/Ketua RT
+  └─ Pengurus → username + PIN 6 digit → ruang Bendahara/Ketua RT
 
 System Admin memakai jalur langsung /system/login.
   ├─ kata sandi + TOTP yang sudah terdaftar → ruang akun System Admin
   └─ belum terdaftar → hanya layar penyiapan TOTP; akses sistem ditahan
 ```
 
-The sign-in forms use large touch targets, readable labels, an accessible error region, a hidden honeypot field, and an 8-hour server session. Theme preference is the only client-side setting and is read before first paint. Local storage errors are handled.
+The sign-in forms use large touch targets, readable labels, an accessible error region, a hidden honeypot field, and an 8-hour server session. Theme preference is the only client-side setting and is read before first paint. Local storage errors are handled. Officials can set or recover a PIN with their separate strong account password; recovery revokes sessions and is audited. System Admin keeps the strong password plus verified TOTP flow.
 
 ## Four included capabilities
 
 1. A deployable Next.js/TypeScript/Tailwind foundation with Neon/Drizzle, private environment configuration, health check, and versioned migrations.
 2. RT, settings, house, person, household, account, and official-assignment records with tenant-safe foreign keys and one-current-role constraints.
-3. Separate resident/official authentication, server-derived role assignment, database-backed login limiting, and mandatory System Admin TOTP.
+3. Separate resident/official authentication, server-derived role assignment, database-backed login limiting, and mandatory System Admin TOTP. Resident login remains house number + six-digit PIN; official login is username + six-digit PIN; System Admin login remains strong password + verified TOTP.
 4. Annual billing years, effective-month fee snapshots, one due row per household/month, a repeat-safe 12-month generator, due day 10, and `NOT_DUE` before household start or after its ending month.
 
 ## Data ownership and constraints

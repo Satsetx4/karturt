@@ -7,6 +7,7 @@ import { getCurrentPrincipal, MfaEnrollmentRequiredError, UnauthenticatedError }
 import {
   AccountPinRecoveryLockedError,
   AccountPinRecoveryNotAvailableError,
+  DuplicateOfficialAccountPinError,
   InvalidAccountPasswordForPinRecoveryError,
   InvalidPinRecoveryInputError,
   recoverAccountPin,
@@ -58,6 +59,9 @@ export async function POST(request: Request) {
     }
     if (error instanceof InvalidPinRecoveryInputError) {
       return response("Kata sandi atau PIN baru tidak memenuhi kebijakan akun.", 400);
+    }
+    if (error instanceof DuplicateOfficialAccountPinError) {
+      return response("PIN pengurus harus berbeda dari PIN akun pengurus lain.", 409);
     }
     if (error instanceof AccountPinRecoveryNotAvailableError) {
       return response("Pemulihan PIN hanya tersedia bagi pengurus dan System Admin aktif.", 403);

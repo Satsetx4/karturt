@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, CheckCircle2, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { LoginForm, type LoginKind } from "@/components/login-form";
+import { OfficialPinRecoveryForm } from "@/components/official-pin-recovery-form";
 import { SiteFooter } from "@/components/site-footer";
 
 const details: Record<LoginKind, { title: string; eyebrow: string; description: string; icon: typeof CheckCircle2 }> = {
@@ -14,7 +15,7 @@ const details: Record<LoginKind, { title: string; eyebrow: string; description: 
   official: {
     title: "Ruang pengurus",
     eyebrow: "Untuk bendahara dan Ketua RT",
-    description: "Akun pengurus terpisah dari akun warga untuk menjaga batas tugas.",
+    description: "Masuk menggunakan username dan PIN enam digit khusus akun pengurus.",
     icon: ShieldCheck,
   },
   system_admin: {
@@ -63,7 +64,7 @@ export function LoginPage({ kind }: { kind: LoginKind }) {
           </div>
           <LoginForm kind={kind} />
           {kind === "resident" && <p className="help-line">Lupa PIN? Hubungi pengurus RT untuk bantuan.</p>}
-          {kind === "official" && <p className="help-line">Akun pengurus dibuat terpisah oleh Ketua RT.</p>}
+          {kind === "official" && <OfficialPinRecoveryForm />}
           {kind === "system_admin" && <p className="help-line">System Admin tidak dapat memverifikasi atau mencatat pembayaran.</p>}
         </div>
       </section>

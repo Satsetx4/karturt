@@ -14,9 +14,9 @@ const copy: Record<LoginKind, { identifierLabel: string; identifierHint: string;
     submit: "Masuk sebagai warga",
   },
   official: {
-    identifierLabel: "Nama akun",
-    identifierHint: "Nama akun dari Ketua RT",
-    passwordLabel: "Kata sandi",
+    identifierLabel: "Username pengurus",
+    identifierHint: "Username akun pengurus",
+    passwordLabel: "PIN enam digit",
     submit: "Masuk sebagai pengurus",
   },
   system_admin: {
@@ -44,7 +44,9 @@ export function LoginForm({ kind }: { kind: LoginKind }) {
       const response = await fetch(`/api/login/${kind}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ identifier, password, website: honeypot }),
+        body: JSON.stringify(kind === "official"
+          ? { identifier, pin: password, website: honeypot }
+          : { identifier, password, website: honeypot }),
       });
       const result = (await response.json().catch(() => ({}))) as { twoFactorRedirect?: boolean; message?: string };
 
@@ -87,13 +89,16 @@ export function LoginForm({ kind }: { kind: LoginKind }) {
       <input
         className="form-input"
         id="login-password"
-        name="password"
+        name={kind === "official" ? "pin" : "password"}
         type="password"
         autoComplete="current-password"
-        inputMode={kind === "resident" ? "numeric" : undefined}
-        maxLength={128}
+        inputMode={kind === "resident" || kind === "official" ? "numeric" : undefined}
+        maxLength={kind === "official" ? 6 : 128}
+        pattern={kind === "official" ? "[0-9]{6}" : undefined}
         value={password}
-        onChange={(event) => setPassword(event.target.value)}
+        onChange={(event) => setPassword(kind === "official"
+          ? event.target.value.replace(/\D/g, "").slice(0, 6)
+          : event.target.value)}
         required
       />
 
@@ -104,7 +109,7 @@ export function LoginForm({ kind }: { kind: LoginKind }) {
 
       {error && <p className="form-error" role="alert">{error}</p>}
 
-      <button className="button button--primary login-submit" type="submit" disabled={busy || !identifier || !password}>
+      <button className="button button--primary login-submit" type="submit" disabled={busy || !identifier || (kind === "official" ? password.length !== 6 : !password)}>
         {busy ? <LoaderCircle className="spinner" size={18} aria-hidden="true" /> : <span>{text.submit}</span>}
         {!busy && <ArrowRight size={18} aria-hidden="true" />}
       </button>

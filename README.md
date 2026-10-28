@@ -7,7 +7,7 @@ KartuRT is a mobile-first RT dues administration app. Milestone 1 establishes th
 - Next.js App Router, React, and TypeScript
 - Tailwind CSS 4
 - Neon PostgreSQL with Drizzle ORM and versioned SQL migrations
-- Better Auth with separate resident and official sign-in paths
+- Better Auth with separate resident, official, and System Admin sign-in paths
 - Vitest with PGlite for PostgreSQL-compatible integration and constraint tests
 
 ## Local setup
@@ -32,19 +32,21 @@ Required for all account types:
 
 - `KARTURT_ACCOUNT_TYPE`: `resident`, `official`, or `system_admin`
 - `KARTURT_DISPLAY_NAME`: the real account holder name
-- `KARTURT_ACCOUNT_PASSWORD`: resident PIN or official/System Admin password; stored only as a Better Auth password hash
+- `KARTURT_ACCOUNT_PASSWORD`: resident PIN or official/System Admin strong password; stored only as a Better Auth password hash
 
 Officials and System Admins require `KARTURT_LOGIN_IDENTIFIER` as their username. Resident identifiers are derived from the selected household's `house.number`; do not provide a resident identifier. Resident provisioning requires the RT, active household, and active person IDs, and the server verifies that all three belong together before creating the account. A resident PIN must contain exactly six numeric digits.
+
+For an official, `KARTURT_ACCOUNT_PASSWORD` is a separate 16–128-character recovery credential; set `KARTURT_ACCOUNT_PIN` to the official's six-digit login PIN. Each official PIN must differ from every other official PIN. System Admins use only their strong password and verified TOTP; their `KARTURT_ACCOUNT_PIN` must remain unset. A Ketua RT or Bendahara who forgets or has not set a PIN can recover it from the login page with their username and current strong password. Recovery revokes existing sessions and is audited. Never put a PIN or password in Git, issues, logs, or chat.
 
 Officials also require `KARTURT_RT_UNIT_ID`, `KARTURT_PERSON_ID`, and `KARTURT_OFFICIAL_ROLE` (`treasurer` or `rt_chairman`); `KARTURT_ASSIGNMENT_STARTS_ON` can set a scheduled role start date.
 
 System Admin accounts do not belong to an RT unit. After the first password sign-in, enroll an authenticator app. System Admin access remains blocked until a TOTP factor is verified. Enrollment shows backup codes once; save them outside the app. If an admin loses both the authenticator and backup codes, a different verified System Admin can perform a reasoned, referenced emergency recovery. It revokes the target's sessions and old factor; the target remains outside the app until a new TOTP factor is verified.
 
-Five failed resident PIN attempts lock that account for 15 minutes; the IP-based login rate limit also remains active. A Chairman can reset a resident PIN only within their RT. A System Admin resident recovery must include a reason and recovery reference. Both reset paths revoke the resident's existing sessions and append an audit event. Emergency System Admin 2FA recovery is a separate action and must be authorized by another verified System Admin.
+Five failed PIN attempts lock that account for 15 minutes; the IP-based login rate limit also remains active. This applies to residents and officials. A Chairman can reset a resident PIN only within their RT. A System Admin resident recovery must include a reason and recovery reference. Both reset paths revoke the resident's existing sessions and append an audit event. Emergency System Admin 2FA recovery is a separate action and must be authorized by another verified System Admin.
 
 Account creation is not exposed as a public sign-up route. Resident and official accounts are separate identities, and an official role comes from an active `official_assignments` row rather than client input.
 
-Login identifiers are unique within each RT. Until sign-in includes an RT selector, an identifier that matches accounts in multiple RT units is rejected as ambiguous instead of choosing an account arbitrarily.
+Login identifiers are unique within each RT. Until sign-in includes an RT selector, an identifier that matches accounts in multiple RT units is rejected as ambiguous instead of choosing an account arbitrarily. Official PIN sign-in also rejects an identifier that matches multiple official accounts. See [the V1.1 official PIN rollout plan](docs/v1.1-official-pin-auth.md) for the staged rollout and rollback boundary.
 
 ## Database workflow
 
