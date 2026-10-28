@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { isExactVercelPreviewReleaseBuild } from "@/lib/deployment-build-source";
 
@@ -19,7 +21,62 @@ function resolveCompiledReleaseSha() {
   return gitSha;
 }
 const compiledReleaseSha = resolveCompiledReleaseSha();
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "undefined";
+}
+
+function safeConfigKey(key: string): string {
+  return /secret|token|password|credential|private|environment|env/i.test(key) ? "<redacted-key>" : key;
+}
+
+function reportVercelConfigSourceDiagnostic() {
+  try {
+    const status = execFileSync("git", ["status", "--porcelain=v1", "--", "vercel.json"], { encoding: "utf8" });
+    if (!status.trim()) return;
+
+    const tracked = execFileSync("git", ["show", "HEAD:vercel.json"], { encoding: "utf8" });
+    const current = readFileSync("vercel.json", "utf8");
+    let trackedConfig: Record<string, unknown> | undefined;
+    let currentConfig: Record<string, unknown> | undefined;
+    try {
+      trackedConfig = JSON.parse(tracked) as Record<string, unknown>;
+      currentConfig = JSON.parse(current) as Record<string, unknown>;
+    } catch {
+      // Hashes and parseability are enough to diagnose without logging config values.
+    }
+
+    const changedTopLevelKeys = trackedConfig && currentConfig
+      ? [...new Set([...Object.keys(trackedConfig), ...Object.keys(currentConfig)])]
+        .filter((key) => canonicalJson(trackedConfig?.[key]) !== canonicalJson(currentConfig?.[key]))
+        .map(safeConfigKey)
+        .sort()
+      : null;
+    const report = {
+      event: "karturt-build-source-diagnostic",
+      path: "vercel.json",
+      gitStatus: status.trim().slice(0, 2).trim(),
+      trackedSha256: createHash("sha256").update(tracked).digest("hex"),
+      workingSha256: createHash("sha256").update(current).digest("hex"),
+      jsonParseable: Boolean(trackedConfig && currentConfig),
+      semanticJsonMatch: trackedConfig && currentConfig
+        ? canonicalJson(trackedConfig) === canonicalJson(currentConfig)
+        : null,
+      changedTopLevelKeys,
+    };
+    console.info(`[karturt-build-source-diagnostic] ${JSON.stringify(report)}`);
+  } catch {
+    console.info("[karturt-build-source-diagnostic] {\"event\":\"karturt-build-source-diagnostic\",\"path\":\"vercel.json\",\"available\":false}");
+  }
+}
+
 function assertCleanBuildSource() {
+  reportVercelConfigSourceDiagnostic();
   const sourceStatus = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], { encoding: "utf8" });
   const unexpectedChanges = sourceStatus.split(/\r?\n/).filter(Boolean).filter((entry) => {
     const path = entry.slice(3).replace(/\\/g, "/");
@@ -56,8 +113,12 @@ const nextConfig: NextConfig = {
 };
 
 export default function config(phase: string): NextConfig {
-  if (phase === PHASE_PRODUCTION_BUILD && !isExactVercelPreviewReleaseBuild(process.env, compiledReleaseSha)) {
-    assertCleanBuildSource();
+  if (phase === PHASE_PRODUCTION_BUILD) {
+    if (isExactVercelPreviewReleaseBuild(process.env, compiledReleaseSha)) {
+      reportVercelConfigSourceDiagnostic();
+    } else {
+      assertCleanBuildSource();
+    }
   }
   return nextConfig;
 }
