@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
 import { assertCanPerform, type Principal } from "@/lib/auth/permissions";
 import {
@@ -13,6 +13,7 @@ export interface FeeRateInput {
   id: string;
   effectiveMonth: number;
   monthlyAmount: number;
+  householdId?: string | null;
 }
 
 export interface AnnualDueInput {
@@ -43,7 +44,7 @@ export function buildAnnualDues(input: AnnualDueInput) {
     throw new Error("Household end date cannot be before its start date.");
   }
 
-  const rates = [...input.feeRates].sort((left, right) => left.effectiveMonth - right.effectiveMonth);
+  const rates = input.feeRates.filter((rate) => rate.householdId == null || rate.householdId === input.householdId);
   for (const rate of rates) {
     if (!Number.isInteger(rate.effectiveMonth) || rate.effectiveMonth < 1 || rate.effectiveMonth > 12) {
       throw new Error("Fee rate effective month must be between 1 and 12.");
@@ -52,8 +53,9 @@ export function buildAnnualDues(input: AnnualDueInput) {
       throw new Error("Monthly fee amounts must be positive whole rupiah values.");
     }
   }
-  if (new Set(rates.map((rate) => rate.effectiveMonth)).size !== rates.length) {
-    throw new Error("Only one fee rate may take effect in a billing month.");
+  const rateScopes = rates.map((rate) => `${rate.effectiveMonth}:${rate.householdId ?? "global"}`);
+  if (new Set(rateScopes).size !== rateScopes.length) {
+    throw new Error("Only one fee rate per scope may take effect in a billing month.");
   }
 
   const startYearMonth = input.householdStartsOn.slice(0, 7);
@@ -77,7 +79,10 @@ export function buildAnnualDues(input: AnnualDueInput) {
       };
     }
 
-    const rate = [...rates].reverse().find((candidate) => candidate.effectiveMonth <= month);
+    const rate = rates
+      .filter((candidate) => candidate.effectiveMonth <= month)
+      .sort((left, right) => left.effectiveMonth - right.effectiveMonth || Number(left.householdId === input.householdId) - Number(right.householdId === input.householdId))
+      .at(-1);
     if (!rate) {
       throw new Error(`No fee rate is configured for ${monthKey}.`);
     }
@@ -132,9 +137,13 @@ export async function generateHouseholdDues(
     if (!settings) throw new Error("RT billing settings were not found.");
 
     const rates = await transaction
-      .select({ id: feeRates.id, effectiveMonth: feeRates.effectiveMonth, monthlyAmount: feeRates.monthlyAmount })
+      .select({ id: feeRates.id, effectiveMonth: feeRates.effectiveMonth, monthlyAmount: feeRates.monthlyAmount, householdId: feeRates.householdId })
       .from(feeRates)
-      .where(and(eq(feeRates.rtUnitId, rtUnitId), eq(feeRates.billingYearId, year.id)))
+      .where(and(
+        eq(feeRates.rtUnitId, rtUnitId),
+        eq(feeRates.billingYearId, year.id),
+        or(isNull(feeRates.householdId), eq(feeRates.householdId, household.id)),
+      ))
       .orderBy(feeRates.effectiveMonth);
 
     const proposed = buildAnnualDues({

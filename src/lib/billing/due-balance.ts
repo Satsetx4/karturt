@@ -10,6 +10,7 @@ export type DueFinancialBalance = {
   status: "unpaid" | "paid" | "waived" | "not_due";
   originalAmount: number;
   adjustmentTotal: number;
+  importedOpeningBalance: number;
   effectiveTarget: number;
   activeReceived: number;
   outstanding: number;
@@ -56,6 +57,13 @@ export async function getDueFinancialBalances(
           and adjustment.rt_unit_id = ${dueRtUnitColumn}
           and adjustment.household_id = ${dueHouseholdColumn}
       ), 0)::text`,
+      importedOpeningBalance: sql<string>`coalesce((
+        select sum(opening.amount)
+        from public.sheet2_opening_balance_items opening
+        where opening.monthly_due_id = ${dueIdColumn}
+          and opening.rt_unit_id = ${dueRtUnitColumn}
+          and opening.household_id = ${dueHouseholdColumn}
+      ), 0)::text`,
       activeReceived: sql<string>`coalesce((
         select sum(allocation.amount)
         from public.payment_allocations allocation
@@ -85,7 +93,9 @@ export async function getDueFinancialBalances(
   return rows.map((row) => {
     const originalAmount = safeAmount(row.originalAmount, "original amount");
     const adjustmentTotal = safeAmount(row.adjustmentTotal, "adjustment total");
-    const activeReceived = safeAmount(row.activeReceived, "active received total");
+    const importedOpeningBalance = safeAmount(row.importedOpeningBalance, "imported opening balance");
+    const activePaymentReceived = safeAmount(row.activeReceived, "active received total");
+    const activeReceived = safeAmount(activePaymentReceived + importedOpeningBalance, "combined received total");
     const effectiveTarget = safeAmount(originalAmount + adjustmentTotal, "effective target");
     const outstanding = safeAmount(effectiveTarget - activeReceived, "outstanding balance");
     if (effectiveTarget < 0 || activeReceived < 0 || outstanding < 0) {
@@ -98,6 +108,7 @@ export async function getDueFinancialBalances(
       status: row.status,
       originalAmount,
       adjustmentTotal,
+      importedOpeningBalance,
       effectiveTarget,
       activeReceived,
       outstanding,

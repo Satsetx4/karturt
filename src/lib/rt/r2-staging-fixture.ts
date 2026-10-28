@@ -93,6 +93,8 @@ export const canonicalR2SyntheticFixtureTableCounts: Readonly<Record<string, num
   audit_events: 2,
   waiver_actions: 0,
   waiver_items: 0,
+  sheet2_import_batches: 0,
+  sheet2_opening_balance_items: 0,
 };
 const expectedFixtureTableCounts = canonicalR2SyntheticFixtureTableCounts;
 

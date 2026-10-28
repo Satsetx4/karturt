@@ -61,6 +61,7 @@ function isReportAmounts(value: unknown): value is ReportAmounts {
     candidate.target,
     candidate.effectiveTarget,
     candidate.received,
+    candidate.openingBalanceReceived,
     candidate.transferReceived,
     candidate.cashReceived,
     candidate.waived,
@@ -72,7 +73,7 @@ function isReportAmounts(value: unknown): value is ReportAmounts {
   ].every(isSafeCount);
   if (!safeFields) return false;
   const methodTotal = Number(candidate.transferReceived) + Number(candidate.cashReceived);
-  const obligationTotal = Number(candidate.received) + Number(candidate.waived) + Number(candidate.outstanding);
+  const obligationTotal = Number(candidate.openingBalanceReceived) + Number(candidate.received) + Number(candidate.waived) + Number(candidate.outstanding);
   return Number.isSafeInteger(methodTotal) &&
     Number.isSafeInteger(obligationTotal) &&
     methodTotal === candidate.received &&
@@ -146,6 +147,7 @@ function isChairmanReport(value: unknown, expectedYear: number): value is Chairm
     "target",
     "effectiveTarget",
     "received",
+    "openingBalanceReceived",
     "transferReceived",
     "cashReceived",
     "waived",
@@ -422,6 +424,7 @@ export function ChairmanReports({
               <Metric label="Target awal" amount={data.yearly.target} />
               <Metric label="Target efektif" amount={data.yearly.effectiveTarget} />
               <Metric label="Diterima" amount={data.yearly.received} />
+              <Metric label="Saldo awal impor Sheet2" amount={data.yearly.openingBalanceReceived} />
               <Metric label="Belum diterima · akuntansi tahunan" amount={data.yearly.outstanding} />
               <Metric label="Transfer" amount={data.yearly.transferReceived} />
               <Metric label="Tunai" amount={data.yearly.cashReceived} />
@@ -429,12 +432,12 @@ export function ChairmanReports({
               <Metric label="Tidak ditagih" count={data.yearly.notDueCount} countUnit="tagihan" />
             </dl>
             <p className="chairman-report-identity">
-              Diterima + dibebaskan + belum diterima = target efektif.
-              <span>{rupiah(data.yearly.received)} + {rupiah(data.yearly.waived)} + {rupiah(data.yearly.outstanding)} = {rupiah(data.yearly.effectiveTarget)}</span>
+              Transfer + tunai = pembayaran terverifikasi.
+              <span>{rupiah(data.yearly.transferReceived)} + {rupiah(data.yearly.cashReceived)} = {rupiah(data.yearly.received)}</span>
             </p>
             <p className="chairman-report-identity">
-              Transfer + tunai = diterima.
-              <span>{rupiah(data.yearly.transferReceived)} + {rupiah(data.yearly.cashReceived)} = {rupiah(data.yearly.received)}</span>
+              Saldo awal impor Sheet2 + pembayaran terverifikasi + dibebaskan + sisa kewajiban = target efektif.
+              <span>{rupiah(data.yearly.openingBalanceReceived)} + {rupiah(data.yearly.received)} + {rupiah(data.yearly.waived)} + {rupiah(data.yearly.outstanding)} = {rupiah(data.yearly.effectiveTarget)}</span>
             </p>
           </section>
 
@@ -470,18 +473,19 @@ export function ChairmanReports({
                       <Metric label="Target awal" amount={month.target} />
                       <Metric label="Target efektif" amount={month.effectiveTarget} />
                       <Metric label="Diterima" amount={month.received} />
+                      <Metric label="Saldo awal impor Sheet2" amount={month.openingBalanceReceived} />
                       <Metric label="Transfer" amount={month.transferReceived} />
                       <Metric label="Tunai" amount={month.cashReceived} />
                       <Metric label="Dibebaskan" amount={month.waived} />
                       <Metric label="Sisa kewajiban" amount={month.outstanding} />
                     </dl>
                     <p className="chairman-report-identity">
-                      Transfer + tunai = diterima.
+                      Transfer + tunai = pembayaran terverifikasi.
                       <span>{rupiah(month.transferReceived)} + {rupiah(month.cashReceived)} = {rupiah(month.received)}</span>
                     </p>
                     <p className="chairman-report-identity">
-                      Diterima + dibebaskan + sisa kewajiban = target efektif.
-                      <span>{rupiah(month.received)} + {rupiah(month.waived)} + {rupiah(month.outstanding)} = {rupiah(month.effectiveTarget)}</span>
+                      Saldo awal impor Sheet2 + pembayaran terverifikasi + dibebaskan + sisa kewajiban = target efektif.
+                      <span>{rupiah(month.openingBalanceReceived)} + {rupiah(month.received)} + {rupiah(month.waived)} + {rupiah(month.outstanding)} = {rupiah(month.effectiveTarget)}</span>
                     </p>
                   </article>
                 );

@@ -15,6 +15,7 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "fixture:workbook-offline": "tsx scripts/verify-workbook-account-fixture.ts",
+    "import:sheet2-private": "node --env-file=.env.sheet2-import.local --import tsx scripts/import-sheet2-private.ts",
     "test:constraints": "vitest run tests/constraints",
     "test:authorization": "vitest run tests/authorization",
     "test:security-closure": "vitest run tests/authorization/system-admin-recovery-route-session.test.ts tests/authorization/security-closure-input.test.ts tests/integration/security-closure-csrf-browser.test.ts tests/integration/security-closure-rate-limit.test.ts tests/integration/security-closure-session-fixation.test.ts",

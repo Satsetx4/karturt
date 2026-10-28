@@ -80,12 +80,12 @@ describe("F12 household database guards", () => {
       SET status = 'not_due', amount = 0, fee_rate_id = NULL, waived_reason = NULL,
           created_at = created_at + interval '1 minute'
       WHERE id = $1
-    `, [alteredDue.due.id])).rejects.toThrow(/obligation snapshot rewritten/);
+    `, [alteredDue.due.id])).rejects.toThrow(/obligation snapshot/);
 
     await expect(client.query(
       "UPDATE public.monthly_dues SET status = 'unpaid' WHERE id = $1",
       [safeDue.due.id],
-    )).rejects.toThrow(/NOT_DUE is terminal and immutable/);
+    )).rejects.toThrow(/NOT_DUE is a terminal.*state/);
   });
 
   it("rejects post-end reconciliation when the due has payment-request history", async () => {
@@ -134,7 +134,7 @@ describe("F12 household database guards", () => {
       UPDATE public.monthly_dues
       SET status = 'not_due', amount = 0, fee_rate_id = NULL, waived_reason = NULL
       WHERE id = $1
-    `, [dueFixture.due.id])).rejects.toThrow(/obligation snapshot rewritten/);
+    `, [dueFixture.due.id])).rejects.toThrow(/obligation snapshot/);
 
     const [unchanged] = (await client.query<{ status: string; amount: number }>(
       "SELECT status::text, amount FROM public.monthly_dues WHERE id = $1",
@@ -154,6 +154,6 @@ describe("F12 household database guards", () => {
       UPDATE public.monthly_dues
       SET status = 'not_due', amount = 0, fee_rate_id = NULL, waived_reason = NULL
       WHERE id = $1
-    `, [dueFixture.due.id])).rejects.toThrow(/obligation snapshot rewritten/);
+    `, [dueFixture.due.id])).rejects.toThrow(/obligation snapshot/);
   });
 });

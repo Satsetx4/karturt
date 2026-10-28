@@ -15,15 +15,21 @@ const environment = {
 };
 
 describe("Production migration authorization", () => {
-  it("binds preflight and apply to a full SHA, exact target, issue authorization, and owner GO", () => {
+  it("binds read-only preflight to a full SHA, exact target, and issue authorization without a Production GO", () => {
     const target = parseProductionTargetIdentity(environment);
-    expect(parseProductionMigrationAuthorization(environment, "preflight", releaseSha, target)).toMatchObject({
+    const preflightEnvironment: Record<string, string | undefined> = { ...environment };
+    delete preflightEnvironment.KARTURT_PRODUCTION_GO_REF;
+    delete preflightEnvironment.KARTURT_PRODUCTION_PREFLIGHT_REF;
+    delete preflightEnvironment.KARTURT_PRODUCTION_RECOVERY_REF;
+    const preflight = parseProductionMigrationAuthorization(preflightEnvironment, "preflight", releaseSha, target);
+    expect(preflight).toMatchObject({
       authorizedSha: releaseSha,
       authorizedTarget: environment.KARTURT_PRODUCTION_TARGET_ID,
       authorizationRef: environment.KARTURT_PRODUCTION_MIGRATION_AUTHORIZATION_REF,
-      productionGoRef: environment.KARTURT_PRODUCTION_GO_REF,
     });
+    expect(preflight).not.toHaveProperty("productionGoRef");
     expect(parseProductionMigrationAuthorization(environment, "apply", releaseSha, target)).toMatchObject({
+      productionGoRef: environment.KARTURT_PRODUCTION_GO_REF,
       preflightRef: environment.KARTURT_PRODUCTION_PREFLIGHT_REF,
       recoveryRef: environment.KARTURT_PRODUCTION_RECOVERY_REF,
     });
@@ -41,6 +47,10 @@ describe("Production migration authorization", () => {
 
   it("requires durable preflight and recovery references for apply", () => {
     const target = parseProductionTargetIdentity(environment);
+    const missingGo: Record<string, string | undefined> = { ...environment };
+    delete missingGo.KARTURT_PRODUCTION_GO_REF;
+    expect(() => parseProductionMigrationAuthorization(missingGo, "apply", releaseSha, target))
+      .toThrow("KARTURT_PRODUCTION_GO_REF is required");
     const missingPreflight: Record<string, string | undefined> = { ...environment };
     delete missingPreflight.KARTURT_PRODUCTION_PREFLIGHT_REF;
     expect(() => parseProductionMigrationAuthorization(missingPreflight, "apply", releaseSha, target))
@@ -56,6 +66,6 @@ describe("Production migration authorization", () => {
     expect(() => parseProductionMigrationAuthorization({
       ...environment,
       KARTURT_PRODUCTION_GO_REF: "https://example.com/approval",
-    }, "preflight", releaseSha, target)).toThrow("GitHub issue comment reference for KartuRT");
+    }, "apply", releaseSha, target)).toThrow("GitHub issue comment reference for KartuRT");
   });
 });

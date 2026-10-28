@@ -344,6 +344,7 @@ describe("workbook financial settlement fixture", () => {
       target: 12 * MONTHLY_AMOUNT,
       effectiveTarget: 12 * MONTHLY_AMOUNT,
       received: 9 * MONTHLY_AMOUNT,
+      openingBalanceReceived: 0,
       transferReceived: 9 * MONTHLY_AMOUNT,
       cashReceived: 0,
       waived: 0,

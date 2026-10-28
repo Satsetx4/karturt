@@ -84,6 +84,7 @@ const runtimeTriggerDependencySignatures = [
   "public.assert_payment_request_ledger_v1(uuid)",
   "public.assert_payment_request_phase9_v1(uuid)",
   "public.assert_payment_reversal_phase9_v1(uuid)",
+  "public.assert_sheet2_import_batch_v1(uuid)",
   "public.assert_waiver_action_phase10_v1(uuid)",
   "public.assert_waiver_due_phase10_v1(uuid)",
   "public.due_active_received_phase11_v1(uuid)",
@@ -400,7 +401,7 @@ async function assertTargetMigrationState(
       return entry.hash.toLowerCase() === expected.hash.toLowerCase() && entry.created_at === String(expected.folderMillis);
     });
   if (!matchesOfficialPrefix || (journal.rows.length === 0 && stateRow.application_object_count !== 0)) {
-    throw new Error("Preview migration journal is not an official prefix of Drizzle migrations 0000–0014.");
+    throw new Error("Preview migration journal is not an official prefix of Drizzle migrations 0000–0015.");
   }
 }
 

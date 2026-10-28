@@ -106,6 +106,13 @@
       "when": 1793047220192,
       "tag": "0014_handy_genesis",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793118499115,
+      "tag": "0015_sheet2_opening_balance_import",
+      "breakpoints": true
     }
   ]
 }

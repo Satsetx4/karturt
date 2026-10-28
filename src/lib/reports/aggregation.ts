@@ -7,6 +7,7 @@ export type ReportAmounts = {
   target: number;
   effectiveTarget: number;
   received: number;
+  openingBalanceReceived: number;
   transferReceived: number;
   cashReceived: number;
   waived: number;
@@ -85,6 +86,7 @@ export type ReportDueInput = {
   originalAmount: number;
   adjustmentTotal: number;
   activeReceived: number;
+  importedOpeningBalance: number;
   transferReceived: number;
   cashReceived: number;
   waiverAmount: number;
@@ -109,6 +111,7 @@ const ZERO_TOTALS: ReportTotals = {
   target: 0,
   effectiveTarget: 0,
   received: 0,
+  openingBalanceReceived: 0,
   transferReceived: 0,
   cashReceived: 0,
   waived: 0,
@@ -188,6 +191,7 @@ function calculateDue(due: ReportDueInput, year: number, businessDate: string): 
   const targetAmount = safeInteger(due.originalAmount, "target amount");
   const adjustmentTotal = safeInteger(due.adjustmentTotal, "adjustment total", { nonNegative: false });
   const received = safeInteger(due.activeReceived, "received amount");
+  const openingBalanceReceived = safeInteger(due.importedOpeningBalance, "imported opening balance");
   const transferReceived = safeInteger(due.transferReceived, "transfer amount");
   const cashReceived = safeInteger(due.cashReceived, "cash amount");
   const waiverAmount = safeInteger(due.waiverAmount, "waiver amount");
@@ -197,6 +201,7 @@ function calculateDue(due: ReportDueInput, year: number, businessDate: string): 
       targetAmount !== 0 ||
       adjustmentTotal !== 0 ||
       received !== 0 ||
+      openingBalanceReceived !== 0 ||
       transferReceived !== 0 ||
       cashReceived !== 0 ||
       waiverAmount !== 0
@@ -213,23 +218,24 @@ function calculateDue(due: ReportDueInput, year: number, businessDate: string): 
 
   const effectiveTarget = safeInteger(targetAmount + adjustmentTotal, "effective target");
   if (effectiveTarget <= 0) throw new ReportInvariantError("An obligation has a non-positive effective target.");
-  if (add(transferReceived, cashReceived, "method total") !== received) {
-    throw new ReportInvariantError("Payment method totals do not match active receipts.");
+  if (add(transferReceived, cashReceived, "verified payment total") !== received) {
+    throw new ReportInvariantError("Verified payment methods do not match received amounts.");
   }
 
   const waived = due.status === "waived" ? waiverAmount : 0;
   if ((due.status === "waived" && waived <= 0) || (due.status !== "waived" && waiverAmount !== 0)) {
     throw new ReportInvariantError("Waiver ledger and due status do not match.");
   }
-  if (due.status === "waived" && (received !== 0 || waived !== effectiveTarget)) {
+  if (due.status === "waived" && (received !== 0 || openingBalanceReceived !== 0 || waived !== effectiveTarget)) {
     throw new ReportInvariantError("A waived due does not match the full-waiver ledger contract.");
   }
 
-  const outstanding = safeInteger(effectiveTarget - received - waived, "outstanding amount");
-  if (add(add(received, waived, "settlement total"), outstanding, "settlement total") !== effectiveTarget) {
+  const openingAndVerified = add(openingBalanceReceived, received, "opening and verified balance");
+  const outstanding = safeInteger(effectiveTarget - openingAndVerified - waived, "outstanding amount");
+  if (add(add(openingAndVerified, waived, "settlement total"), outstanding, "settlement total") !== effectiveTarget) {
     throw new ReportInvariantError("The due does not reconcile to its target.");
   }
-  if ((due.status === "paid" && (received === 0 || outstanding !== 0)) || (due.status === "unpaid" && outstanding === 0)) {
+  if ((due.status === "paid" && (openingAndVerified === 0 || outstanding !== 0)) || (due.status === "unpaid" && outstanding === 0)) {
     throw new ReportInvariantError("Due status does not match its financial balance.");
   }
 
@@ -238,6 +244,7 @@ function calculateDue(due: ReportDueInput, year: number, businessDate: string): 
     target: targetAmount,
     effectiveTarget,
     received,
+    openingBalanceReceived,
     transferReceived,
     cashReceived,
     waived,
@@ -253,6 +260,7 @@ function addTotals(target: ReportTotals, value: ReportTotals) {
   target.target = add(target.target, value.target, "target total");
   target.effectiveTarget = add(target.effectiveTarget, value.effectiveTarget, "effective target total");
   target.received = add(target.received, value.received, "received total");
+  target.openingBalanceReceived = add(target.openingBalanceReceived, value.openingBalanceReceived, "opening balance received total");
   target.transferReceived = add(target.transferReceived, value.transferReceived, "transfer total");
   target.cashReceived = add(target.cashReceived, value.cashReceived, "cash total");
   target.waived = add(target.waived, value.waived, "waived total");

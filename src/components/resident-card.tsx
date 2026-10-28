@@ -459,7 +459,15 @@ export function ResidentMonthCard({
           <div className="due-receipt-detail">
             <h3>Rincian pembayaran {name} {due.billingYear}</h3>
             {receipts.length === 0 ? (
-              <p>Rincian kuitansi belum tersedia. Hubungi Bendahara RT.</p>
+              due.openingBalanceImport ? (
+                <p>
+                  Saldo awal dari impor historis Sheet2 sebesar {rupiah(due.openingBalanceImport.amount)}
+                  {` (dicatat ${requestHistoryDate(due.openingBalanceImport.recordedAt)} WIB). `}
+                  Ini bukan kuitansi pembayaran terverifikasi.
+                </p>
+              ) : (
+                <p>Rincian kuitansi belum tersedia. Hubungi Bendahara RT.</p>
+              )
             ) : (
               <ul>
                 {receipts.map((receipt, index) => (
@@ -475,7 +483,7 @@ export function ResidentMonthCard({
               </ul>
             )}
             <p className="due-receipt-note">
-              Nominal di atas adalah alokasi untuk bulan ini, bukan total satu transaksi lintas bulan.
+              Nominal kuitansi di atas adalah alokasi terverifikasi untuk bulan ini, bukan total satu transaksi lintas bulan.
             </p>
           </div>
         </details>

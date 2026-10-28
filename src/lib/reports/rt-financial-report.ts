@@ -261,6 +261,11 @@ export async function getRtFinancialReport(
       throw new ReportInvariantError();
     }
     const methods = methodsByDueId.get(due.id) ?? { transferReceived: 0, cashReceived: 0 };
+    const verifiedPaymentReceived = methods.transferReceived + methods.cashReceived;
+    if (!Number.isSafeInteger(verifiedPaymentReceived) ||
+        verifiedPaymentReceived !== balance.activeReceived - balance.importedOpeningBalance) {
+      throw new ReportInvariantError();
+    }
     return {
       monthlyDueId: due.id,
       household: {
@@ -279,7 +284,8 @@ export async function getRtFinancialReport(
       status: due.status,
       originalAmount: balance.originalAmount,
       adjustmentTotal: balance.adjustmentTotal,
-      activeReceived: balance.activeReceived,
+      activeReceived: verifiedPaymentReceived,
+      importedOpeningBalance: balance.importedOpeningBalance,
       transferReceived: methods.transferReceived,
       cashReceived: methods.cashReceived,
       waiverAmount: due.status === "waived" ? waiverEntries[0]!.amount : 0,

@@ -319,7 +319,7 @@ describe("resident card semantics", () => {
     expect(text.match(/Rp 40\.000/g)).toHaveLength(2);
     expect(text).toContain("Diverifikasi 24 Okt 2026, 19.30 WIB");
     expect(text).toContain("KRT-ABCDEF123456");
-    expect(text).toContain("Nominal di atas adalah alokasi untuk bulan ini, bukan total satu transaksi lintas bulan.");
+    expect(text).toContain("Nominal kuitansi di atas adalah alokasi terverifikasi untuk bulan ini, bukan total satu transaksi lintas bulan.");
     expect(markup).toContain(`dateTime=\"${receiptDate}\"`);
   });
 

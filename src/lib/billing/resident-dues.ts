@@ -1,6 +1,14 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
-import { billingYears, monthlyDues, paymentAllocations, paymentReversals, payments } from "@/db/schema";
+import {
+  billingYears,
+  monthlyDues,
+  paymentAllocations,
+  paymentReversals,
+  payments,
+  sheet2ImportBatches,
+  sheet2OpeningBalanceItems,
+} from "@/db/schema";
 import { getDueFinancialBalances } from "@/lib/billing/due-balance";
 import type { ResidentMonthReceipt } from "@/lib/billing/resident-card";
 import { assertCanPerform, type Principal } from "@/lib/auth/permissions";
@@ -51,6 +59,41 @@ export async function getResidentMonthlyDues(
     const paidIds = dues
       .filter((due) => balancesByDueId.get(due.id)?.status === "paid")
       .map((due) => due.id);
+    const openingRows = dues.length === 0 ? [] : await transaction
+      .select({
+        monthlyDueId: sheet2OpeningBalanceItems.monthlyDueId,
+        amount: sheet2OpeningBalanceItems.amount,
+        sourceSheet: sheet2ImportBatches.sourceSheet,
+        asOfDate: sheet2ImportBatches.asOfDate,
+        recordedAt: sheet2OpeningBalanceItems.recordedAt,
+      })
+      .from(sheet2OpeningBalanceItems)
+      .innerJoin(sheet2ImportBatches, and(
+        eq(sheet2ImportBatches.id, sheet2OpeningBalanceItems.importBatchId),
+        eq(sheet2ImportBatches.rtUnitId, sheet2OpeningBalanceItems.rtUnitId),
+      ))
+      .where(and(
+        eq(sheet2OpeningBalanceItems.rtUnitId, rtUnitId),
+        eq(sheet2OpeningBalanceItems.householdId, householdId),
+        inArray(sheet2OpeningBalanceItems.monthlyDueId, dues.map((due) => due.id)),
+      ))
+      .orderBy(asc(sheet2OpeningBalanceItems.monthlyDueId));
+    const openingBalanceByDueId = new Map(openingRows.map((row) => {
+      if (
+        row.sourceSheet !== "Sheet2" ||
+        !Number.isSafeInteger(row.amount) || row.amount <= 0 ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(row.asOfDate)
+      ) throw new Error("Stored Sheet2 opening balance metadata is invalid.");
+      return [row.monthlyDueId, {
+        amount: row.amount,
+        sourceSheet: "Sheet2" as const,
+        asOfDate: row.asOfDate,
+        recordedAt: row.recordedAt.toISOString(),
+      }] as const;
+    }));
+    if (openingBalanceByDueId.size !== openingRows.length) {
+      throw new Error("A monthly due has more than one imported opening balance.");
+    }
     const receiptRows = paidIds.length === 0 ? [] : await transaction
       .select({
         monthlyDueId: paymentAllocations.monthlyDueId,
@@ -104,8 +147,13 @@ export async function getResidentMonthlyDues(
       }
       const period = `${due.billingYear}-${String(due.month).padStart(2, "0")}`;
       const receipts = balance.status === "paid" ? (receiptsByDueId.get(due.id) ?? []) : [];
-      if (receipts.length > 0 &&
-          receipts.reduce((total, receipt) => total + receipt.allocationAmount, 0) !== balance.activeReceived) {
+      const receiptTotal = receipts.reduce((total, receipt) => total + receipt.allocationAmount, 0);
+      const openingBalanceImport = openingBalanceByDueId.get(due.id) ?? null;
+      if ((openingBalanceImport?.amount ?? 0) !== balance.importedOpeningBalance) {
+        throw new Error("Resident opening-balance rows do not reconcile to the financial balance.");
+      }
+      if (balance.status === "paid" &&
+          receiptTotal !== balance.activeReceived - balance.importedOpeningBalance) {
         throw new Error("Resident receipt allocations do not reconcile to the active ledger.");
       }
       return {
@@ -123,6 +171,7 @@ export async function getResidentMonthlyDues(
         periodTiming: period < currentPeriod ? "past" as const
           : period > currentPeriod ? "future" as const : "current" as const,
         receipts,
+        openingBalanceImport,
         paymentRequestStatus: balance.hasPendingRequest ? "pending" as const : null,
       };
     });

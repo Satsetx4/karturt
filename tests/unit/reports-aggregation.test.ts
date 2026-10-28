@@ -41,6 +41,7 @@ function due(
     originalAmount,
     adjustmentTotal: 0,
     activeReceived: 0,
+    importedOpeningBalance: 0,
     transferReceived: 0,
     cashReceived: 0,
     waiverAmount: 0,
@@ -121,6 +122,7 @@ describe("F13 report aggregation", () => {
       target: 1_360_000,
       effectiveTarget: 1_365_000,
       received: 290_000,
+      openingBalanceReceived: 0,
       transferReceived: 120_000,
       cashReceived: 170_000,
       waived: 40_000,
@@ -130,7 +132,7 @@ describe("F13 report aggregation", () => {
       notDueCount: 14,
       overdueCount: 5,
     });
-    expect(result.yearly.effectiveTarget).toBe(result.yearly.received + result.yearly.waived + result.yearly.outstanding);
+    expect(result.yearly.effectiveTarget).toBe(result.yearly.openingBalanceReceived + result.yearly.received + result.yearly.waived + result.yearly.outstanding);
     expect(result.arrears).toMatchObject({ totalOutstanding: 195_000, count: 5, householdCount: 3 });
     expect(result.arrears.households).toEqual(expect.arrayContaining([
       expect.objectContaining({ houseNumber: "A-03", lifecycle: "historical", totalOutstanding: 40_000, periods: [expect.objectContaining({ month: 2, outstanding: 40_000 })] }),
@@ -260,6 +262,27 @@ describe("F13 report aggregation", () => {
       due(identity, 1, { originalAmount: 100_000, activeReceived: 50_000, transferReceived: 40_000, cashReceived: 10_000 }),
     ], { year: YEAR, availableYears: [YEAR], businessDate: BUSINESS_DATE });
     expect(report.monthly[0]).toMatchObject({ received: 50_000, transferReceived: 40_000, cashReceived: 10_000, outstanding: 50_000 });
+  });
+
+  it("keeps imported opening balances out of verified payment totals", () => {
+    const identity = household({ householdId: "opening", houseNumber: "A-08" });
+    const report = aggregateRtFinancialReport([
+      due(identity, 1, {
+        status: "unpaid",
+        originalAmount: 100_000,
+        activeReceived: 50_000,
+        importedOpeningBalance: 30_000,
+        transferReceived: 40_000,
+        cashReceived: 10_000,
+      }),
+    ], { year: YEAR, availableYears: [YEAR], businessDate: BUSINESS_DATE });
+    expect(report.yearly).toMatchObject({
+      received: 50_000,
+      openingBalanceReceived: 30_000,
+      transferReceived: 40_000,
+      cashReceived: 10_000,
+      outstanding: 20_000,
+    });
   });
 
   it("fails closed on unsafe totals, method mismatches, invalid NOT_DUE activity, and inconsistent waiver amounts", () => {

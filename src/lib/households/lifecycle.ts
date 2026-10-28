@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { AppDatabase } from "@/db/client";
 import {
   appAccounts,
@@ -482,9 +482,13 @@ async function addOpenYearDues(
     .limit(1);
   if (!settings) throw new HouseholdLifecycleInvariantError("Pengaturan tagihan RT tidak tersedia.");
   const rates = await transaction
-    .select({ id: feeRates.id, effectiveMonth: feeRates.effectiveMonth, monthlyAmount: feeRates.monthlyAmount })
+    .select({ id: feeRates.id, effectiveMonth: feeRates.effectiveMonth, monthlyAmount: feeRates.monthlyAmount, householdId: feeRates.householdId })
     .from(feeRates)
-    .where(and(eq(feeRates.rtUnitId, input.rtUnitId), eq(feeRates.billingYearId, year.id)))
+    .where(and(
+      eq(feeRates.rtUnitId, input.rtUnitId),
+      eq(feeRates.billingYearId, year.id),
+      or(isNull(feeRates.householdId), eq(feeRates.householdId, input.householdId)),
+    ))
     .orderBy(asc(feeRates.effectiveMonth));
 
   let dueRows: ReturnType<typeof buildAnnualDues>;

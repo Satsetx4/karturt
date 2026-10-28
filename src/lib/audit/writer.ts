@@ -174,6 +174,49 @@ function normalizeContext(action: string, context: AuditContext | undefined): Au
     return { period, monthlyAmount };
   }
 
+  if (action === "billing.sheet2_opening_balance_imported") {
+    assertContextKeys(keys, "asOfDate,householdCount,monthlyDueCount,officialAccountCount,openingBalanceCount,residentAccountCount,sourceSheet,systemAdminAccountCount,tariffGroupOneCount,tariffGroupTwoCount,year");
+    assertAuditDate(value.asOfDate);
+    if (value.sourceSheet !== "Sheet2" || value.year !== 2026) {
+      throw new Error("Opening-balance audit source is not canonical.");
+    }
+    for (const count of [
+      value.householdCount,
+      value.monthlyDueCount,
+      value.officialAccountCount,
+      value.openingBalanceCount,
+      value.residentAccountCount,
+      value.systemAdminAccountCount,
+      value.tariffGroupOneCount,
+      value.tariffGroupTwoCount,
+    ]) assertAuditCount(count);
+    if (
+      value.householdCount !== 73 ||
+      value.monthlyDueCount !== 876 ||
+      value.officialAccountCount !== 2 ||
+      value.openingBalanceCount !== 626 ||
+      value.residentAccountCount !== 73 ||
+      value.systemAdminAccountCount !== 1 ||
+      value.tariffGroupOneCount !== 57 ||
+      value.tariffGroupTwoCount !== 16
+    ) {
+      throw new Error("Opening-balance audit counts do not match the approved Sheet2 import contract.");
+    }
+    return {
+      asOfDate: value.asOfDate as string,
+      householdCount: 73,
+      monthlyDueCount: 876,
+      officialAccountCount: 2,
+      openingBalanceCount: 626,
+      residentAccountCount: 73,
+      sourceSheet: "Sheet2",
+      systemAdminAccountCount: 1,
+      tariffGroupOneCount: 57,
+      tariffGroupTwoCount: 16,
+      year: 2026,
+    };
+  }
+
   if (action === "billing.adjustment_created") {
     if (keys.join(",") !== "amountDelta,effectiveTargetAfter,originalAmount") {
       throw new Error("Audit context fields do not match the action contract.");
@@ -414,6 +457,9 @@ export async function appendAuditEvent<TTransaction extends TransactionExecutor>
   }
   if (action === "fee_rate.created" && (entityType !== "fee_rate" || reason !== null)) {
     throw new Error("Tariff creation audit requires a fee rate entity and no reason.");
+  }
+  if (action === "billing.sheet2_opening_balance_imported" && (entityType !== "sheet2_import_batch" || reason !== null)) {
+    throw new Error("Sheet2 opening-balance audit requires an import batch entity and no reason.");
   }
   if (action === "billing.adjustment_created" && (entityType !== "due_adjustment" || reason === null)) {
     throw new Error("Adjustment audit requires a due adjustment entity and a mandatory reason.");

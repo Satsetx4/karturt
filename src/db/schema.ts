@@ -271,10 +271,41 @@ export const billingYears = pgTable("billing_years", {
   check("billing_years_year_valid", sql`${table.year} between 2000 and 2200`),
 ]);
 
+export const sheet2ImportBatches = pgTable("sheet2_import_batches", {
+  id: uuid("id").primaryKey(),
+  rtUnitId: uuid("rt_unit_id").notNull(),
+  billingYearId: uuid("billing_year_id").notNull(),
+  createdByAccountId: uuid("created_by_account_id").notNull().references(() => appAccounts.id, { onDelete: "restrict" }),
+  importedSystemAdminAccountId: uuid("imported_system_admin_account_id").notNull().references(() => appAccounts.id, { onDelete: "restrict" }),
+  sourceSheet: varchar("source_sheet", { length: 16 }).notNull().default("Sheet2"),
+  asOfDate: date("as_of_date", { mode: "string" }).notNull(),
+  householdCount: smallint("household_count").notNull(),
+  residentAccountCount: smallint("resident_account_count").notNull(),
+  officialAccountCount: smallint("official_account_count").notNull(),
+  systemAdminAccountCount: smallint("system_admin_account_count").notNull(),
+  monthlyDueCount: integer("monthly_due_count").notNull(),
+  openingBalanceCount: integer("opening_balance_count").notNull(),
+  tariffClassCounts: jsonb("tariff_class_counts").$type<number[]>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({
+    name: "sheet2_import_batches_rt_year_fk",
+    columns: [table.rtUnitId, table.billingYearId],
+    foreignColumns: [billingYears.rtUnitId, billingYears.id],
+  }).onDelete("restrict"),
+  unique("sheet2_import_batches_rt_id_uq").on(table.rtUnitId, table.id),
+  uniqueIndex("sheet2_import_batches_rt_year_uq").on(table.rtUnitId, table.billingYearId),
+  check("sheet2_import_batches_source_sheet", sql`${table.sourceSheet} = 'Sheet2'`),
+  check("sheet2_import_batches_as_of_date", sql`${table.asOfDate} = '2026-10-27'`),
+  check("sheet2_import_batches_counts", sql`${table.householdCount} = 73 and ${table.residentAccountCount} = 73 and ${table.officialAccountCount} = 2 and ${table.systemAdminAccountCount} = 1 and ${table.monthlyDueCount} = 876 and ${table.openingBalanceCount} = 626 and ${table.tariffClassCounts} = '[57, 16]'::jsonb`),
+]);
+
 export const feeRates = pgTable("fee_rates", {
   id: uuid("id").primaryKey().defaultRandom(),
   rtUnitId: uuid("rt_unit_id").notNull(),
   billingYearId: uuid("billing_year_id").notNull(),
+  householdId: uuid("household_id"),
+  sheet2ImportBatchId: uuid("sheet2_import_batch_id"),
   effectiveMonth: smallint("effective_month").notNull(),
   monthlyAmount: integer("monthly_amount").notNull(),
   createdByAccountId: uuid("created_by_account_id"),
@@ -289,17 +320,35 @@ export const feeRates = pgTable("fee_rates", {
     foreignColumns: [billingYears.rtUnitId, billingYears.id],
   }).onDelete("restrict"),
   foreignKey({
+    name: "fee_rates_rt_household_fk",
+    columns: [table.rtUnitId, table.householdId],
+    foreignColumns: [households.rtUnitId, households.id],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "fee_rates_sheet2_import_batch_fk",
+    columns: [table.sheet2ImportBatchId],
+    foreignColumns: [sheet2ImportBatches.id],
+  }).onDelete("restrict"),
+  foreignKey({
     name: "fee_rates_creator_scope_fk",
     columns: [table.rtUnitId, table.createdByAccountId, table.createdByAccountType],
     foreignColumns: [appAccounts.rtUnitId, appAccounts.id, appAccounts.accountType],
   }).onDelete("restrict"),
-  uniqueIndex("fee_rates_year_month_uq").on(table.billingYearId, table.effectiveMonth),
+  uniqueIndex("fee_rates_year_month_uq").on(table.billingYearId, table.effectiveMonth)
+    .where(sql`${table.householdId} is null`),
+  uniqueIndex("fee_rates_household_year_month_uq")
+    .on(table.billingYearId, table.householdId, table.effectiveMonth)
+    .where(sql`${table.householdId} is not null`),
   uniqueIndex("fee_rates_rt_actor_idempotency_uq")
     .on(table.rtUnitId, table.createdByAccountId, table.idempotencyKey)
     .where(sql`${table.idempotencyKey} is not null`),
   unique("fee_rates_year_id_uq").on(table.billingYearId, table.id),
   check("fee_rates_effective_month_valid", sql`${table.effectiveMonth} between 1 and 12`),
   check("fee_rates_positive_amount", sql`${table.monthlyAmount} > 0`),
+  check(
+    "fee_rates_sheet2_import_scope",
+    sql`(${table.sheet2ImportBatchId} is null and ${table.householdId} is null) or (${table.sheet2ImportBatchId} is not null and ${table.householdId} is not null and ${table.createdByAccountId} is null and ${table.createdByAccountType} is null and ${table.idempotencyKey} is null and ${table.requestFingerprint} is null and ${table.effectiveMonth} = 1)`,
+  ),
   check(
     "fee_rates_f11_audit_metadata_complete",
     sql`(${table.createdByAccountId} is null and ${table.createdByAccountType} is null and ${table.idempotencyKey} is null and ${table.requestFingerprint} is null) or (${table.createdByAccountId} is not null and ${table.createdByAccountType} = 'official' and ${table.idempotencyKey} is not null and ${table.requestFingerprint} ~ '^[0-9a-f]{64}$')`,
@@ -347,6 +396,33 @@ export const monthlyDues = pgTable("monthly_dues", {
     "monthly_dues_status_amount_consistent",
     sql`(${table.status} = 'not_due' and ${table.amount} = 0 and ${table.feeRateId} is null and ${table.waivedReason} is null) or (${table.status} in ('unpaid', 'paid') and ${table.amount} > 0 and ${table.feeRateId} is not null and ${table.waivedReason} is null) or (${table.status} = 'waived' and ${table.amount} > 0 and ${table.feeRateId} is not null and ${table.waivedReason} is not null and length(trim(${table.waivedReason})) > 0)`,
   ),
+]);
+
+export const sheet2OpeningBalanceItems = pgTable("sheet2_opening_balance_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  rtUnitId: uuid("rt_unit_id").notNull(),
+  importBatchId: uuid("import_batch_id").notNull(),
+  householdId: uuid("household_id").notNull(),
+  monthlyDueId: uuid("monthly_due_id").notNull(),
+  amount: integer("amount").notNull(),
+  sourceRangeStartMonth: smallint("source_range_start_month").notNull(),
+  sourceRangeEndMonth: smallint("source_range_end_month").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({
+    name: "sheet2_opening_balance_batch_scope_fk",
+    columns: [table.rtUnitId, table.importBatchId],
+    foreignColumns: [sheet2ImportBatches.rtUnitId, sheet2ImportBatches.id],
+  }).onDelete("restrict"),
+  foreignKey({
+    name: "sheet2_opening_balance_due_scope_fk",
+    columns: [table.rtUnitId, table.householdId, table.monthlyDueId],
+    foreignColumns: [monthlyDues.rtUnitId, monthlyDues.householdId, monthlyDues.id],
+  }).onDelete("restrict"),
+  uniqueIndex("sheet2_opening_balance_due_uq").on(table.monthlyDueId),
+  index("sheet2_opening_balance_batch_idx").on(table.rtUnitId, table.importBatchId),
+  check("sheet2_opening_balance_amount_positive", sql`${table.amount} > 0`),
+  check("sheet2_opening_balance_source_range_valid", sql`${table.sourceRangeStartMonth} between 1 and 12 and ${table.sourceRangeEndMonth} between ${table.sourceRangeStartMonth} and 12`),
 ]);
 
 export const dueAdjustments = pgTable("due_adjustments", {
@@ -740,8 +816,10 @@ export const schema = {
   appAccounts,
   officialAssignments,
   billingYears,
+  sheet2ImportBatches,
   feeRates,
   monthlyDues,
+  sheet2OpeningBalanceItems,
   dueAdjustments,
   paymentRequests,
   payments,

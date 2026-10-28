@@ -14,6 +14,7 @@ export const officialMigrationTags = [
   "0012_phase_11_tariff_adjustment",
   "0013_phase_12_household_management",
   "0014_handy_genesis",
+  "0015_sheet2_opening_balance_import",
 ] as const;
 
 export const officialMigrationCount = officialMigrationTags.length;
