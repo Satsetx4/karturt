@@ -196,6 +196,13 @@ describe("legacy billing migration upgrade", () => {
     }
   }, 60000);
 
+  it("allows the Sheet2 deferred assertion under the runtime function policy", () => {
+    const migratorSource = readFileSync(resolve(process.cwd(), "src/db/migrate.ts"), "utf8");
+    const dependencyList = /const runtimeTriggerDependencySignatures = \[([\s\S]*?)\] as const/.exec(migratorSource)?.[1] ?? "";
+
+    expect(dependencyList).toContain('"public.assert_sheet2_import_batch_v1(uuid)"');
+  });
+
   it("upgrades intact transfer and cash history through 0015 without changing Gate C ledger history", async () => {
     const upgradeClient = new PGlite();
     try {

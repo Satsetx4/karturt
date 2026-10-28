@@ -432,10 +432,6 @@ export function ChairmanReports({
               <Metric label="Tidak ditagih" count={data.yearly.notDueCount} countUnit="tagihan" />
             </dl>
             <p className="chairman-report-identity">
-              Diterima + dibebaskan + belum diterima = target efektif.
-              <span>{rupiah(data.yearly.received)} + {rupiah(data.yearly.waived)} + {rupiah(data.yearly.outstanding)} = {rupiah(data.yearly.effectiveTarget)}</span>
-            </p>
-            <p className="chairman-report-identity">
               Transfer + tunai = pembayaran terverifikasi.
               <span>{rupiah(data.yearly.transferReceived)} + {rupiah(data.yearly.cashReceived)} = {rupiah(data.yearly.received)}</span>
             </p>

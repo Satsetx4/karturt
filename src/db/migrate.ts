@@ -84,6 +84,7 @@ const runtimeTriggerDependencySignatures = [
   "public.assert_payment_request_ledger_v1(uuid)",
   "public.assert_payment_request_phase9_v1(uuid)",
   "public.assert_payment_reversal_phase9_v1(uuid)",
+  "public.assert_sheet2_import_batch_v1(uuid)",
   "public.assert_waiver_action_phase10_v1(uuid)",
   "public.assert_waiver_due_phase10_v1(uuid)",
   "public.due_active_received_phase11_v1(uuid)",
