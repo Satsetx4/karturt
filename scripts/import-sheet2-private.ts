@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
-import { appAccounts } from "@/db/schema";
+import { appAccounts, authTwoFactor, authUser } from "@/db/schema";
 import { closeDb, getDb } from "@/db/client";
 import {
   assertProductionConnectionTarget,
@@ -34,6 +34,7 @@ type BridgePayload = {
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const REQUIRED_PRODUCTION_TARGET = "holy-term-22410117/br-jolly-bonus-azzd71cl/ep-empty-rain-azwe3eb3/karturt_production";
+const REQUIRED_SYSTEM_ADMIN_LOGIN = "ADMIN";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -49,7 +50,7 @@ function parseArguments(args: string[]) {
     else if (args[index] === "--owner-go") ownerGo = args[++index];
     else if (args[index] === "--help") {
       process.stdout.write(
-        "Use --workbook <local path> --owner-go \"IMPORT SHEET2 SHA <40-char SHA> TARGET <project/branch/endpoint/database> RT <RT UUID> BATCH <batch UUID>\" after separate owner GO. Set the expected release SHA, Production/Preview target IDs, database URL, actor, stable batch UUID, and separate privileged credentials in ignored .env.sheet2-import.local.\n",
+        "Use --workbook <local path> --owner-go \"IMPORT SHEET2 SHA <40-char SHA> TARGET <project/branch/endpoint/database> RT <RT UUID> BATCH <batch UUID>\" after separate owner GO. Set the expected release SHA, Production target IDs, database URL, RT and active ADMIN account IDs, stable batch UUID, and separate official credentials in ignored .env.sheet2-import.local.\n",
       );
       process.exit(0);
     } else throw new Error("Command arguments are invalid.");
@@ -200,22 +201,29 @@ async function main() {
   const requiredOwnerPhrase = `IMPORT SHEET2 SHA ${sha} TARGET ${targetKey} RT ${rtUnitId} BATCH ${importBatchId}`;
   if (ownerGo !== requiredOwnerPhrase) throw new Error("Owner GO confirmation does not match this SHA, target, and batch.");
 
-  const payload = readSheet2InMemory(workbookPath);
-  if (payload.importBatchId !== importBatchId) throw new Error("The workbook batch identifier does not match local settings.");
-  const residents = mapRows(payload.entries);
-
-  const [actorAccount] = await database.select({
+  const activeAdmins = await database.select({
     id: appAccounts.id,
     authUserId: appAccounts.authUserId,
+    loginIdentifier: appAccounts.loginIdentifier,
     rtUnitId: appAccounts.rtUnitId,
     householdId: appAccounts.householdId,
     personId: appAccounts.personId,
-  }).from(appAccounts).where(and(
-    eq(appAccounts.id, actorAccountId),
-    eq(appAccounts.accountType, "system_admin"),
-    eq(appAccounts.status, "active"),
-  )).limit(1);
-  if (!actorAccount) throw new Error("The active System Admin actor could not be verified.");
+    twoFactorEnabled: authUser.twoFactorEnabled,
+    twoFactorVerified: authTwoFactor.verified,
+  }).from(appAccounts)
+    .innerJoin(authUser, eq(authUser.id, appAccounts.authUserId))
+    .leftJoin(authTwoFactor, eq(authTwoFactor.userId, authUser.id))
+    .where(and(
+      eq(appAccounts.accountType, "system_admin"),
+      eq(appAccounts.status, "active"),
+    )).limit(2);
+  const [actorAccount] = activeAdmins;
+  if (
+    activeAdmins.length !== 1 || actorAccount?.id !== actorAccountId ||
+    actorAccount.loginIdentifier !== REQUIRED_SYSTEM_ADMIN_LOGIN ||
+    actorAccount.rtUnitId !== null || actorAccount.householdId !== null || actorAccount.personId !== null ||
+    actorAccount.twoFactorEnabled !== true || actorAccount.twoFactorVerified !== true
+  ) throw new Error("The sole active global ADMIN account and its verified MFA factor could not be verified.");
 
   const actor: Principal = {
     authUserId: actorAccount.authUserId,
@@ -225,6 +233,10 @@ async function main() {
     householdId: actorAccount.householdId,
     personId: actorAccount.personId,
   };
+  const payload = readSheet2InMemory(workbookPath);
+  if (payload.importBatchId !== importBatchId) throw new Error("The workbook batch identifier does not match local settings.");
+  const residents = mapRows(payload.entries);
+
   const input: Sheet2ImportInput = {
     rtUnitId,
     importBatchId,
@@ -242,11 +254,6 @@ async function main() {
         password: required("SHEET2_TREASURER_PASSWORD"),
       },
     ],
-    systemAdmin: {
-      loginIdentifier: required("SHEET2_SYSTEM_ADMIN_LOGIN"),
-      displayName: required("SHEET2_SYSTEM_ADMIN_DISPLAY_NAME"),
-      password: required("SHEET2_SYSTEM_ADMIN_PASSWORD"),
-    },
   };
   const result = await importSheet2(database, input);
   process.stdout.write(`${JSON.stringify({
@@ -254,7 +261,9 @@ async function main() {
     householdCount: result.householdCount,
     residentAccountCount: result.residentAccountCount,
     officialAccountCount: result.officialAccountCount,
-    systemAdminAccountCount: result.systemAdminAccountCount,
+    createdAccountCount: result.createdAccountCount,
+    reusedSystemAdminAccountCount: result.reusedSystemAdminAccountCount,
+    totalImportAccountCount: result.totalImportAccountCount,
     monthlyDueCount: result.monthlyDueCount,
     openingBalanceCount: result.openingBalanceCount,
     arrearsCount: result.arrearsCount,

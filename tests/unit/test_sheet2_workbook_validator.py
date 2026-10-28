@@ -77,6 +77,8 @@ class Sheet2WorkbookValidatorTests(unittest.TestCase):
         self.assertEqual(summary["overdue_household_months"], 138)
         self.assertEqual(summary["unpaid_not_yet_due_household_months"], 112)
         self.assertEqual(summary["expected_total_accounts"], 76)
+        self.assertEqual(summary["new_accounts_to_create"], 75)
+        self.assertEqual(summary["reused_system_admin_account_count"], 1)
         self.assertTrue(all("pin" not in entry for entry in private_map["entries"]))
         self.assertNotIn("Synthetic Resident", json.dumps(summary))
         self.assertNotIn("SYNTH-HOUSE", json.dumps(summary))

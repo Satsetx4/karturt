@@ -33,6 +33,7 @@ const OFFICIAL_COUNT = 2;
 const OPENING_BALANCE_COUNT = 626;
 const DUE_COUNT = 876;
 const SYSTEM_ADMIN_COUNT = 1;
+const SYSTEM_ADMIN_LOGIN = "ADMIN";
 const TARIFF_GROUP_COUNTS = [57, 16] as const;
 const MAX_POSTGRES_INTEGER = 2_147_483_647;
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -55,19 +56,12 @@ export type Sheet2OfficialCredential = {
   password: string;
 };
 
-export type Sheet2SystemAdminCredential = {
-  loginIdentifier: string;
-  displayName: string;
-  password: string;
-};
-
 export type Sheet2ImportInput = {
   rtUnitId: string;
   importBatchId: string;
   actor: Principal;
   residents: readonly Sheet2ResidentImportRow[];
   officials: readonly Sheet2OfficialCredential[];
-  systemAdmin: Sheet2SystemAdminCredential;
 };
 
 export type Sheet2ImportResult = {
@@ -76,7 +70,9 @@ export type Sheet2ImportResult = {
   householdCount: 73;
   residentAccountCount: 73;
   officialAccountCount: 2;
-  systemAdminAccountCount: 1;
+  createdAccountCount: 75;
+  reusedSystemAdminAccountCount: 1;
+  totalImportAccountCount: 76;
   monthlyDueCount: 876;
   openingBalanceCount: 626;
   arrearsCount: 138;
@@ -108,8 +104,7 @@ function normalizeInput(input: Sheet2ImportInput) {
     !input || typeof input !== "object" ||
     !UUID_V4.test(input.rtUnitId) || !UUID_V4.test(input.importBatchId) ||
     !Array.isArray(input.residents) || !Array.isArray(input.officials) ||
-    input.residents.length !== RESIDENT_COUNT || input.officials.length !== OFFICIAL_COUNT ||
-    !input.systemAdmin || typeof input.systemAdmin !== "object"
+    input.residents.length !== RESIDENT_COUNT || input.officials.length !== OFFICIAL_COUNT
   ) throw new Sheet2ImportError("Sheet2 import contract is invalid.");
 
   const residents: NormalizedResident[] = input.residents.map((row) => {
@@ -194,27 +189,13 @@ function normalizeInput(input: Sheet2ImportInput) {
     new Set(officials.map(({ password }) => password)).size !== OFFICIAL_COUNT
   ) throw new Sheet2ImportError("Separate official account credentials failed validation.");
 
-  const systemAdmin = {
-    loginIdentifier: input.systemAdmin.loginIdentifier?.trim(),
-    displayName: input.systemAdmin.displayName?.trim(),
-    password: input.systemAdmin.password,
-  };
-  if (
-    !systemAdmin.loginIdentifier || !LOGIN_IDENTIFIER.test(systemAdmin.loginIdentifier) ||
-    !systemAdmin.displayName || systemAdmin.displayName.length > 160 ||
-    !isValidAccountPassword("system_admin", systemAdmin.password) ||
-    officials.some(({ loginIdentifier }) => loginIdentifier!.toLocaleLowerCase("id-ID") === systemAdmin.loginIdentifier!.toLocaleLowerCase("id-ID")) ||
-    new Set([...officials.map(({ password }) => password), systemAdmin.password]).size !== 3 ||
-    residents.some((row) => row.pin === systemAdmin.password)
-  ) throw new Sheet2ImportError("Separate System Admin credentials failed validation.");
-
   if (residents.some((row) => officials.some(({ password }) => password === row.pin))) {
     throw new Sheet2ImportError("Resident PINs cannot be reused as privileged account passwords.");
   }
   const allLogins = [
     ...residents.map(({ loginKey }) => loginKey),
     ...officials.map(({ loginIdentifier }) => loginIdentifier!.toLocaleLowerCase("id-ID")),
-    systemAdmin.loginIdentifier.toLocaleLowerCase("id-ID"),
+    SYSTEM_ADMIN_LOGIN.toLocaleLowerCase("id-ID"),
   ];
   if (new Set(allLogins).size !== allLogins.length) {
     throw new Sheet2ImportError("Account login identifiers must be unique across imported roles.");
@@ -226,7 +207,6 @@ function normalizeInput(input: Sheet2ImportInput) {
     actor: input.actor,
     residents,
     officials,
-    systemAdmin,
     tariffClassCounts: TARIFF_GROUP_COUNTS,
   };
 }
@@ -238,7 +218,9 @@ function result(importBatchId: string, idempotentReplay: boolean): Sheet2ImportR
     householdCount: 73,
     residentAccountCount: 73,
     officialAccountCount: 2,
-    systemAdminAccountCount: 1,
+    createdAccountCount: 75,
+    reusedSystemAdminAccountCount: SYSTEM_ADMIN_COUNT,
+    totalImportAccountCount: 76,
     monthlyDueCount: 876,
     openingBalanceCount: 626,
     arrearsCount: 138,
@@ -251,7 +233,7 @@ function result(importBatchId: string, idempotentReplay: boolean): Sheet2ImportR
 
 async function createPrivilegedAccount(
   transaction: Pick<AppDatabase, "insert">,
-  input: { rtUnitId: string | null; accountType: "official" | "system_admin"; loginIdentifier: string; displayName: string; password: string; personId?: string; role?: "rt_chairman" | "treasurer" },
+  input: { rtUnitId: string; accountType: "official"; loginIdentifier: string; displayName: string; password: string; personId: string },
 ) {
   const authUserId = randomUUID();
   const now = new Date();
@@ -291,9 +273,27 @@ async function assertActiveMfaActor(database: AppDatabase, actor: Principal) {
   if (actor.role !== "system_admin" || actor.rtUnitId !== null || actor.householdId !== null || actor.personId !== null) {
     throw new Sheet2ImportError("Sheet2 import requires an active System Admin with verified MFA.");
   }
-  const [account] = await database.select({
+  const activeAdmins = await database.select({
     id: appAccounts.id,
+    authUserId: appAccounts.authUserId,
+    loginIdentifier: appAccounts.loginIdentifier,
+    rtUnitId: appAccounts.rtUnitId,
+    householdId: appAccounts.householdId,
+    personId: appAccounts.personId,
   }).from(appAccounts)
+    .where(and(
+      eq(appAccounts.accountType, "system_admin"),
+      eq(appAccounts.status, "active"),
+    )).limit(2).for("update");
+  const [account] = activeAdmins;
+  if (
+    activeAdmins.length !== 1 || account?.id !== actor.appAccountId ||
+    account.authUserId !== actor.authUserId || account.loginIdentifier !== SYSTEM_ADMIN_LOGIN ||
+    account.rtUnitId !== null || account.householdId !== null || account.personId !== null
+  ) throw new Sheet2ImportError("Sheet2 import requires the sole active global ADMIN account.");
+
+  const [verifiedActor] = await database.select({ id: authUser.id })
+    .from(appAccounts)
     .innerJoin(authUser, eq(authUser.id, appAccounts.authUserId))
     .innerJoin(authTwoFactor, eq(authTwoFactor.userId, authUser.id))
     .where(and(
@@ -304,7 +304,7 @@ async function assertActiveMfaActor(database: AppDatabase, actor: Principal) {
       eq(authUser.twoFactorEnabled, true),
       eq(authTwoFactor.verified, true),
     )).limit(1);
-  if (!account) throw new Sheet2ImportError("Sheet2 import requires an active System Admin with verified MFA.");
+  if (!verifiedActor) throw new Sheet2ImportError("Sheet2 import requires an active System Admin with verified MFA.");
 }
 
 async function assertNoCollidingKeys(
@@ -312,7 +312,6 @@ async function assertNoCollidingKeys(
   rtUnitId: string,
   residents: NormalizedResident[],
   officials: { loginIdentifier: string }[],
-  systemAdmin: { loginIdentifier: string },
 ) {
   const houseKeys = new Set(residents.map(({ houseKey }) => houseKey));
   const loginKeys = new Set([
@@ -323,14 +322,9 @@ async function assertNoCollidingKeys(
     .from(houses).where(eq(houses.rtUnitId, rtUnitId));
   const existingRtLogins = await transaction.select({ loginIdentifier: appAccounts.loginIdentifier })
     .from(appAccounts).where(eq(appAccounts.rtUnitId, rtUnitId));
-  const existingAdminLogin = await transaction.select({ id: appAccounts.id })
-    .from(appAccounts)
-    .where(and(eq(appAccounts.accountType, "system_admin"), sql`lower(${appAccounts.loginIdentifier}) = lower(${systemAdmin.loginIdentifier})`))
-    .limit(1);
   if (
     existingHouses.some(({ number }) => houseKeys.has(number.normalize("NFKC").toLocaleLowerCase("id-ID"))) ||
-    existingRtLogins.some(({ loginIdentifier }) => loginKeys.has(loginIdentifier.toLocaleLowerCase("id-ID"))) ||
-    existingAdminLogin.length > 0
+    existingRtLogins.some(({ loginIdentifier }) => loginKeys.has(loginIdentifier.toLocaleLowerCase("id-ID")))
   ) {
     throw new Sheet2ImportError("Sheet2 import conflicts with an existing house or account key.");
   }
@@ -339,8 +333,12 @@ async function assertNoCollidingKeys(
 async function assertReplayMatchesInput(
   transaction: Pick<AppDatabase, "select">,
   input: ReturnType<typeof normalizeInput>,
-  existingAdminAccountId: string,
+  reusedSystemAdminAccountId: string,
 ) {
+  if (reusedSystemAdminAccountId !== input.actor.appAccountId) {
+    throw new Sheet2ImportError("Existing Sheet2 batch does not reference the verified ADMIN actor.");
+  }
+
   const residentRows = await transaction.select({
     houseNumber: houses.number,
     fullName: people.fullName,
@@ -401,14 +399,6 @@ async function assertReplayMatchesInput(
         row.fullName === actual.fullName && row.houseKey === actual.houseNumber.normalize("NFKC").toLocaleLowerCase("id-ID"))
     )
   )) throw new Sheet2ImportError("Existing Sheet2 batch does not match the requested replay.");
-
-  const [admin] = await transaction.select({ loginIdentifier: appAccounts.loginIdentifier })
-    .from(appAccounts)
-    .where(and(eq(appAccounts.id, existingAdminAccountId), eq(appAccounts.accountType, "system_admin")))
-    .limit(1);
-  if (admin?.loginIdentifier.toLocaleLowerCase("id-ID") !== input.systemAdmin.loginIdentifier.toLocaleLowerCase("id-ID")) {
-    throw new Sheet2ImportError("Existing Sheet2 batch does not match the requested replay.");
-  }
 
   const actualOpeningRows = await transaction.select({
     houseNumber: houses.number,
@@ -509,7 +499,7 @@ export async function importSheet2(database: AppDatabase, rawInput: Sheet2Import
         throw new Sheet2ImportError("An active official role already exists for this RT on the import date.");
       }
 
-      await assertNoCollidingKeys(transaction as unknown as AppDatabase, input.rtUnitId, input.residents, input.officials, input.systemAdmin);
+      await assertNoCollidingKeys(transaction as unknown as AppDatabase, input.rtUnitId, input.residents, input.officials);
 
       const [existingYear] = await transaction.select({
         id: billingYears.id,
@@ -600,19 +590,14 @@ export async function importSheet2(database: AppDatabase, rawInput: Sheet2Import
         });
       }
 
-      const importedSystemAdminAccountId = await createPrivilegedAccount(transaction, {
-        rtUnitId: null,
-        accountType: "system_admin",
-        loginIdentifier: input.systemAdmin.loginIdentifier!,
-        displayName: input.systemAdmin.displayName!,
-        password: input.systemAdmin.password!,
-      });
+      const reusedSystemAdminAccountId = input.actor.appAccountId;
       const [batch] = await transaction.insert(sheet2ImportBatches).values({
         id: input.importBatchId,
         rtUnitId: input.rtUnitId,
         billingYearId,
         createdByAccountId: input.actor.appAccountId,
-        importedSystemAdminAccountId,
+        // Retain the migration's legacy column while referencing the existing verified ADMIN.
+        importedSystemAdminAccountId: reusedSystemAdminAccountId,
         sourceSheet: "Sheet2",
         asOfDate: SHEET2_AS_OF_DATE,
         householdCount: RESIDENT_COUNT,
