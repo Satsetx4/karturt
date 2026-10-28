@@ -4,7 +4,7 @@ export type ProductionMigrationAuthorization = {
   authorizedSha: string;
   authorizedTarget: string;
   authorizationRef: string;
-  productionGoRef: string;
+  productionGoRef?: string;
   preflightRef?: string;
   recoveryRef?: string;
 };
@@ -53,16 +53,15 @@ export function parseProductionMigrationAuthorization(
   }
 
   const authorizationRef = requireIssueReference(environment, "KARTURT_PRODUCTION_MIGRATION_AUTHORIZATION_REF");
+  if (mode === "preflight") return { authorizedSha, authorizedTarget, authorizationRef };
+
   const productionGoRef = requireIssueReference(environment, "KARTURT_PRODUCTION_GO_REF");
-  if (mode === "apply") {
-    return {
-      authorizedSha,
-      authorizedTarget,
-      authorizationRef,
-      productionGoRef,
-      preflightRef: requireIssueReference(environment, "KARTURT_PRODUCTION_PREFLIGHT_REF"),
-      recoveryRef: requireIssueReference(environment, "KARTURT_PRODUCTION_RECOVERY_REF"),
-    };
-  }
-  return { authorizedSha, authorizedTarget, authorizationRef, productionGoRef };
+  return {
+    authorizedSha,
+    authorizedTarget,
+    authorizationRef,
+    productionGoRef,
+    preflightRef: requireIssueReference(environment, "KARTURT_PRODUCTION_PREFLIGHT_REF"),
+    recoveryRef: requireIssueReference(environment, "KARTURT_PRODUCTION_RECOVERY_REF"),
+  };
 }
