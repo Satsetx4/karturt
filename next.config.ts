@@ -26,7 +26,13 @@ function assertCleanBuildSource() {
     return !(entry.startsWith("?? ") && (path === ".vc" || path.startsWith(".vc/")));
   });
   if (unexpectedChanges.length > 0) {
-    throw new Error("Production builds require clean source tracked by Git.");
+    const unexpectedPaths = unexpectedChanges.map((entry) => {
+      const status = entry.slice(0, 2);
+      const path = entry.slice(3).replace(/\\/g, "/");
+      const containsPrivatePath = /(?:^|\/)(?:\.env(?:\.[^/]*)?|data\/private)(?:\/|$)|\.(?:xlsx?|csv|jsonl|dump)$|(?:resident|household|credential|secret|password|token)/i.test(path);
+      return `${status} ${containsPrivatePath ? "<redacted private path>" : JSON.stringify(path)}`;
+    });
+    throw new Error(`Production builds require clean source tracked by Git. Unexpected paths: ${unexpectedPaths.join("; ")}`);
   }
 }
 
