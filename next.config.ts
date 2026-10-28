@@ -31,6 +31,18 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value) ?? "undefined";
 }
 
+function isSemanticallyUnchangedVercelConfig(path: string): boolean {
+  if (path !== "vercel.json") return false;
+
+  try {
+    const trackedConfig = JSON.parse(execFileSync("git", ["show", "HEAD:vercel.json"], { encoding: "utf8" })) as unknown;
+    const currentConfig = JSON.parse(readFileSync(path, "utf8")) as unknown;
+    return canonicalJson(trackedConfig) === canonicalJson(currentConfig);
+  } catch {
+    return false;
+  }
+}
+
 function safeConfigKey(key: string): string {
   return /secret|token|password|credential|private|environment|env/i.test(key) ? "<redacted-key>" : key;
 }
@@ -80,7 +92,10 @@ function assertCleanBuildSource() {
   const sourceStatus = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], { encoding: "utf8" });
   const unexpectedChanges = sourceStatus.split(/\r?\n/).filter(Boolean).filter((entry) => {
     const path = entry.slice(3).replace(/\\/g, "/");
-    return !(entry.startsWith("?? ") && (path === ".vc" || path.startsWith(".vc/")));
+    const status = entry.slice(0, 2).trim();
+    const isVercelConfigSemanticNoop = status === "M" && isSemanticallyUnchangedVercelConfig(path);
+    return !(entry.startsWith("?? ") && (path === ".vc" || path.startsWith(".vc/")))
+      && !isVercelConfigSemanticNoop;
   });
   if (unexpectedChanges.length > 0) {
     const unexpectedPaths = unexpectedChanges.map((entry) => {
