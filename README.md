@@ -1,6 +1,14 @@
 # KartuRT
 
-KartuRT is a mobile-first RT dues administration app. Milestone 1 establishes the database, private account model, role checks, and annual monthly-dues generator. Payment requests and payment verification are outside this milestone.
+KartuRT is a mobile-first dues administration app for one RT. The released V1 includes resident and official accounts, annual dues, payment requests, Treasurer-verified transfers and cash, payment history/reversal, household management, waivers, adjustments, and reports. Payments are handled manually; there is no payment gateway.
+
+## Current release and agent handover
+
+- Released `main` baseline: `f48b5850f3669148536f850e2c9f687d433f154a`.
+- Final V1 read-only release evidence: [roadmap #107](https://github.com/Satsetx4/karturt/issues/107#issuecomment-6473942195) and [release closeout #110](https://github.com/Satsetx4/karturt/issues/110#issuecomment-6473941681).
+- The exact-SHA Gate A passed in [run #40702901680](https://github.com/Satsetx4/karturt/actions/runs/40702901680); PostgreSQL concurrency and PostgreSQL 18 recovery were **SKIPPED**, not PASS.
+- Start agent work with [docs/HANDOVER_V1.md](docs/HANDOVER_V1.md) and [docs/AI_AGENT_MAINTENANCE_GUIDE.md](docs/AI_AGENT_MAINTENANCE_GUIDE.md). Earlier milestone and phase reports are historical and do not replace the final Production closeout.
+- The release GO is bound to the released SHA and target. Any later Production operation needs a fresh exact-SHA/target authorization. Do not repeat the Sheet2 import.
 
 ## Stack
 
@@ -70,12 +78,12 @@ npm run build
 
 PGlite integration tests apply the checked-in PostgreSQL migrations and cover unique constraints, cross-RT foreign keys, temporal official exclusivity, idempotent 12-month generation, due dates on the 10th, `NOT_DUE` lifecycle rows before/after household membership, legacy billing migration, credential login and recovery, one-time System Admin backup codes, and permission boundaries.
 
-## Scope boundary
+## Current product boundary
 
-This milestone does not create payment requests, payment records, transfer/cash workflows, payment verification, reversals, or receipt screens. The permission policy records that Treasurer is the future payment verifier, while System Admin and RT Chairman have no payment-verification permission. No payment endpoint exists yet.
+V1 operates one RT on Free-tier services, with manual Treasurer verification and cash recording; it has no payment gateway. Future months are not arrears. Transfer requests submitted through the app are limited to the current and overdue periods; future prepayment is recorded manually by the Treasurer. System Admin and RT Chairman do not have payment-verification permission. See the [approved single-RT scope](docs/mvp-single-rt-scope-freeze.md) and [handover](docs/HANDOVER_V1.md) before changing product boundaries.
 
 ## Search readiness
 
 The root page has Indonesian metadata, canonical/Open Graph/Twitter fields, an organization profile, and a typographic brand icon. `/sitemap.xml` contains the public root page; `robots.txt` excludes private, auth, and API paths. Login pages use `noindex`. A Google Search Console verification value can be added through `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`.
 
-`LocalBusiness` markup is omitted because KartuRT is software and no physical business/contact details have been supplied. The application also has no WhatsApp or payment call-to-action in this milestone.
+`LocalBusiness` markup is omitted because KartuRT is software and no physical business/contact details have been supplied. This section describes public indexing metadata, not authenticated payment features; consult the handover for the current product scope.
