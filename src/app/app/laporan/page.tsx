@@ -87,7 +87,7 @@ export default async function ChairmanReportsPage({ searchParams }: ChairmanRepo
       <ChairmanReports
         initialYear={selection.year}
         initialMonth={month}
-        rtIdentity={`${rt.name} · RW ${rt.rwCode} · ${rt.village}`}
+        rtIdentity={`${rt.name} - RW ${rt.rwCode} - ${rt.village}`}
         autoSelectAvailableYear={!selection.explicit}
       />
       <SiteFooter />
