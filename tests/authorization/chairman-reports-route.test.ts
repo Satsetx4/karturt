@@ -49,13 +49,15 @@ describe("Chairman reports route boundary", () => {
     mocks.getReport.mockResolvedValue(payload);
   });
 
-  it("loads the authenticated Chairman's report for the requested year without caching", async () => {
+  it.each(["rt_chairman", "treasurer"])("loads the authenticated %s report for the requested year without caching", async (role) => {
+    const reader = { ...chairman, role };
+    mocks.principal.mockResolvedValue(reader);
     const response = await reportRoute.GET(new Request("http://localhost:3000/api/chairman/reports?year=2026"));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual(payload);
-    expect(mocks.getReport).toHaveBeenCalledWith(mocks.database, chairman, {
+    expect(mocks.getReport).toHaveBeenCalledWith(mocks.database, reader, {
       year: 2026,
       businessDate: "2026-10-04",
     });

@@ -52,10 +52,10 @@ function assertValidYear(year: unknown): asserts year is number {
   }
 }
 
-async function assertActiveChairman(database: ReportDatabase, principal: Principal, businessDate: string) {
+async function assertActiveReportReader(database: ReportDatabase, principal: Principal, businessDate: string) {
   const rtUnitId = principal.rtUnitId;
   if (
-    principal.role !== "rt_chairman" ||
+    (principal.role !== "rt_chairman" && principal.role !== "treasurer") ||
     !rtUnitId ||
     !canPerform(principal, "report:read:rt", { rtUnitId })
   ) {
@@ -84,7 +84,7 @@ async function assertActiveChairman(database: ReportDatabase, principal: Princip
     ))
     .orderBy(asc(officialAssignments.id))
     .limit(2);
-  if (assignments.length !== 1 || assignments[0]?.role !== "rt_chairman") throw new ReportForbiddenError();
+  if (assignments.length !== 1 || assignments[0]?.role !== principal.role) throw new ReportForbiddenError();
   return rtUnitId;
 }
 
@@ -136,7 +136,7 @@ export async function getRtFinancialReport(
   if (!input || !validDate(input.businessDate)) throw new InvalidReportYearError();
   if (input.year !== undefined) assertValidYear(input.year);
 
-  const rtUnitId = await assertActiveChairman(database, principal, input.businessDate);
+  const rtUnitId = await assertActiveReportReader(database, principal, input.businessDate);
   const yearRows = await database
     .select({ id: billingYears.id, year: billingYears.year })
     .from(billingYears)

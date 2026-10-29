@@ -35,7 +35,7 @@ export interface Principal {
 
 const permissions: Record<AppRole, ReadonlySet<Permission>> = {
   resident: new Set(["billing:read:self", "payment:request:self", "payment:history:self", "payment:cancel:self"]),
-  treasurer: new Set(["billing:read:rt", "resident:read:rt", "payment:verify", "payment:reject", "payment:record_cash", "payment:reverse"]),
+  treasurer: new Set(["report:read:rt", "billing:read:rt", "resident:read:rt", "payment:verify", "payment:reject", "payment:record_cash", "payment:reverse"]),
   rt_chairman: new Set([
     "billing:read:rt",
     "report:read:rt",

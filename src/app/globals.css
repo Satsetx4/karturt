@@ -1045,3 +1045,37 @@ button { color: inherit; }
   .account-security-menu { justify-content: stretch; }
   .account-security-link { width: 100%; }
 }
+
+
+.monthly-report-controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin-bottom: 24px; }
+.monthly-report-controls label { display: grid; gap: 8px; flex: 1; min-width: 150px; }
+.monthly-report-controls select { min-height: 44px; max-width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink); }
+.monthly-report-controls button { min-height: 44px; white-space: normal; }
+.monthly-report-print { min-width: 0; overflow-wrap: anywhere; }
+.monthly-report-print h2, .monthly-report-print h3 { margin: 16px 0 12px; }
+.monthly-report-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: .9rem; }
+.monthly-report-table caption { text-align: left; font-weight: 700; padding-bottom: 8px; }
+.monthly-report-table th, .monthly-report-table td { border-bottom: 1px solid var(--line, #aaa); padding: 10px 6px; text-align: left; overflow-wrap: anywhere; }
+.monthly-report-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.monthly-report-note, .monthly-report-timestamp { font-size: .85rem; line-height: 1.6; margin: 12px 0; }
+@media print {
+  @page { size: A4 portrait; margin: 15mm; }
+  html:has(.chairman-reports-page), body:has(.chairman-reports-page) { background: white !important; color: black !important; color-scheme: light !important; }
+  .chairman-reports-page > :not(.chairman-reports-area),
+  .chairman-reports-area > :not(.monthly-report-print),
+  .monthly-report-controls { display: none !important; }
+  .chairman-reports-page, .chairman-reports-area, .monthly-report-print {
+    display: block !important; width: 100% !important; max-width: none !important;
+    margin: 0 !important; padding: 0 !important; background: white !important;
+    color: black !important; border: 0 !important; box-shadow: none !important;
+  }
+  .monthly-report-print * { color: black !important; text-shadow: none !important; }
+  .monthly-report-print { font: 10pt/1.4 Arial, sans-serif; }
+  .monthly-report-print h2 { font-size: 17pt; }
+  .monthly-report-print h2, .monthly-report-print h3 { break-after: avoid; }
+  .monthly-report-table { font-size: 10pt; table-layout: fixed; }
+  .monthly-report-table thead { display: table-header-group; }
+  .monthly-report-table tfoot { display: table-row-group; }
+  .monthly-report-table tr { break-inside: avoid; }
+  .monthly-report-table th, .monthly-report-table td { border-color: #777; }
+}

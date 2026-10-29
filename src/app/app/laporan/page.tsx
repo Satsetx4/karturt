@@ -1,3 +1,6 @@
+import { eq } from "drizzle-orm";
+import { getDb } from "@/db/client";
+import { rtUnits } from "@/db/schema";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -22,7 +25,7 @@ export const metadata: Metadata = {
 };
 
 type ChairmanReportsPageProps = {
-  searchParams: Promise<{ year?: string | string[] }>;
+  searchParams: Promise<{ year?: string | string[]; month?: string | string[] }>;
 };
 
 function jakartaCurrentYear() {
@@ -54,7 +57,7 @@ export default async function ChairmanReportsPage({ searchParams }: ChairmanRepo
   }
 
   if (
-    principal.role !== "rt_chairman" ||
+    (principal.role !== "rt_chairman" && principal.role !== "treasurer") ||
     !principal.rtUnitId ||
     !canPerform(principal, "report:read:rt", { rtUnitId: principal.rtUnitId })
   ) {
@@ -63,6 +66,12 @@ export default async function ChairmanReportsPage({ searchParams }: ChairmanRepo
 
   const query = await searchParams;
   const selection = selectedYearFromQuery(query.year);
+  const month = typeof query.month === "string" && /^(0?[1-9]|1[0-2])$/.test(query.month)
+    ? Number(query.month)
+    : Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", month: "2-digit" }).format(new Date()));
+  const [rt] = await getDb().select({ name: rtUnits.name, rwCode: rtUnits.rwCode, village: rtUnits.village })
+    .from(rtUnits).where(eq(rtUnits.id, principal.rtUnitId)).limit(1);
+  if (!rt) notFound();
 
   return (
     <main className="page-shell chairman-reports-page">
@@ -77,6 +86,8 @@ export default async function ChairmanReportsPage({ searchParams }: ChairmanRepo
       </nav>
       <ChairmanReports
         initialYear={selection.year}
+        initialMonth={month}
+        rtIdentity={`${rt.name} - RW ${rt.rwCode} - ${rt.village}`}
         autoSelectAvailableYear={!selection.explicit}
       />
       <SiteFooter />

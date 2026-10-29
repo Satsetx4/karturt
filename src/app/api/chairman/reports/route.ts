@@ -27,7 +27,7 @@ function reportErrorResponse(error: unknown) {
     return reportJson({ message: "Sesi berakhir. Silakan masuk kembali." }, 401);
   }
   if (error instanceof ReportForbiddenError || (error instanceof Error && error.message.startsWith("Forbidden:"))) {
-    return reportJson({ message: "Laporan hanya tersedia untuk Ketua RT aktif." }, 403);
+    return reportJson({ message: "Laporan hanya tersedia untuk Ketua RT atau Bendahara aktif." }, 403);
   }
   if (error instanceof InvalidReportYearError) {
     return reportJson({ message: "Tahun laporan tidak valid." }, 400);
