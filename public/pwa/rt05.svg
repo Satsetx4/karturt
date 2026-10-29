@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="RT05">
+  <title>RT05</title>
+  <rect width="512" height="512" fill="#173745"/>
+  <g font-family="Segoe UI, Arial, sans-serif" font-weight="700" font-size="190" text-anchor="middle">
+    <text x="256" y="240" fill="#f4fbf8">RT</text>
+    <text x="256" y="425" fill="#82c0b5">05</text>
+  </g>
+</svg>

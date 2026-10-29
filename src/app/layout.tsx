@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     description: "Informasi iuran RT dan administrasi warga dalam satu tempat.",
     images: ["/og-karturt.svg"],
   },
-  icons: { icon: "/icon.svg", apple: [{ url: "/pwa/apple-touch-icon.png", sizes: "180x180", type: "image/png" }] },
+  icons: { icon: "/icon.svg", apple: [{ url: "/pwa/rt05-apple-touch-icon.png", sizes: "180x180", type: "image/png" }] },
   appleWebApp: { capable: true, title: "KartuRT", statusBarStyle: "default" },
   verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
     ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }

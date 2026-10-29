@@ -15,13 +15,21 @@ describe("online-only installable PWA", () => {
   });
 
   it("serves actual PNG artwork at the declared dimensions, including Apple and maskable icons", () => {
-    for (const icon of [...manifest().icons!, { src: "/pwa/apple-touch-icon.png", sizes: "180x180", type: "image/png" }]) {
+    for (const icon of [...manifest().icons!, { src: "/pwa/rt05-apple-touch-icon.png", sizes: "180x180", type: "image/png" }]) {
       expect(icon.src).toMatch(/^\/pwa\/[a-z0-9-]+\.png$/);
       const png = readFileSync(join(process.cwd(), "public", icon.src));
       expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
       expect(`${png.readUInt32BE(16)}x${png.readUInt32BE(20)}`).toBe(icon.sizes);
     }
     expect(manifest().icons?.find((icon) => icon.purpose === "maskable")).toBeDefined();
+  });
+
+  it("uses RT05 artwork for every installation icon", () => {
+    expect(manifest().icons?.every((icon) => icon.src.startsWith("/pwa/rt05-"))).toBe(true);
+    const svg = readFileSync(join(process.cwd(), "public/pwa/rt05.svg"), "utf8");
+    expect(svg).toContain("<title>RT05</title>");
+    expect(svg).toContain(">RT</text>");
+    expect(svg).toContain(">05</text>");
   });
 
   it("provides an accessible browser fallback without falsely showing a native installation action", () => {

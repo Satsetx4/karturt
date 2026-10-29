@@ -2,7 +2,7 @@
 
 PWA dasar menambahkan identitas aplikasi dan pemasangan ke layar utama. Manifest memiliki ID dan start URL `/`, sehingga peluncuran membuka pilihan Warga/Pengurus tanpa menyimpan akun atau mengunci jenis peran. Browser yang mendukung pemasangan memakai tampilan `standalone`.
 
-Ikon PNG 192/512 px dan Apple 180 px berasal dari `public/icon.svg` yang sudah dipakai KartuRT. Ikon maskable 512 px menyediakan ruang aman tambahan untuk pemotongan ikon oleh sistem operasi. Metadata Apple dan warna tema dipasang pada layout bersama.
+Ikon PNG 192/512 px dan Apple 180 px memakai inisial **RT05** dalam dua baris, dengan warna KartuRT. Sumber vektornya adalah `public/pwa/rt05.svg`. Nama berkas RT05 yang baru membedakan ikon ini dari ikon K pada prototipe sebelumnya. Ikon maskable 512 px menyediakan ruang aman tambahan untuk pemotongan ikon oleh sistem operasi. Metadata Apple dan warna tema dipasang pada layout bersama.
 
 ## Penggunaan
 
