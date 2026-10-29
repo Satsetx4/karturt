@@ -37,6 +37,8 @@ Item berikut berstatus **DEFERRED**, bukan dihapus (**REMOVED**), dan tetap menj
 
 F14 tetap ditunda sampai setelah launch. Pembekuan scope ini hanya mencakup Package 1; dokumen ini tidak memulai Launch Safety atau implementasi fitur tertunda.
 
+**Pembaruan pasca-launch, 29 Oktober 2026:** atas persetujuan pemilik, laporan iuran bulanan kini memiliki cetak/simpan PDF dan implementasi ekspor CSV untuk ringkasan serta tunggakan periode terpilih. Akses memakai laporan RT yang sudah diotorisasi bagi Ketua RT dan Bendahara. Catatan penundaan F14 di atas adalah keputusan MVP awal; ekspor CSV laporan ini sudah dikerjakan, sedangkan berkas Excel `.xlsx` berformat khusus dan ekspor data lainnya belum termasuk. Lihat [panduan laporan](treasurer-monthly-report.md).
+
 ## Kebijakan acceptance F13.1
 
 Acceptance browser manual mencakup sesi Ketua RT yang terautentikasi, navigasi dashboard ke Laporan, `/app/laporan`, kecocokan laporan dengan API pada sesi yang sama, ringkasan tahunan dan bulanan, tunggakan, seluruh viewport responsif yang diwajibkan, serta pemeriksaan kebocoran UI/keamanan yang terlihat.
