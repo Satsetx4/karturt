@@ -1079,3 +1079,19 @@ button { color: inherit; }
   .monthly-report-table tr { break-inside: avoid; }
   .monthly-report-table th, .monthly-report-table td { border-color: #777; }
 }
+
+
+.site-footer { flex-wrap: wrap; }
+.pwa-install { flex-basis: 100%; min-width: 0; }
+.pwa-install summary { list-style: none; width: fit-content; color: var(--ink); }
+.pwa-install summary::-webkit-details-marker { display: none; }
+.pwa-install summary:active { transform: scale(.97); }
+.pwa-install-arrow { transition: transform 180ms ease; }
+.pwa-install[open] .pwa-install-arrow { transform: rotate(180deg); }
+.pwa-install-guide { max-width: 520px; margin-top: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); line-height: 1.7; overflow-wrap: anywhere; }
+.pwa-install-guide h2 { font-size: 17px; margin: 0 0 10px; }
+.pwa-install-guide p { margin: 10px 0; }
+.pwa-install-guide ol { list-style: decimal; padding-left: 20px; margin: 12px 0; }
+.pwa-install-guide li + li { margin-top: 10px; }
+.pwa-install-guide button { margin: 10px 0; min-height: 44px; }
+@media (prefers-reduced-motion: reduce) { .pwa-install-arrow { transition: none; } }
