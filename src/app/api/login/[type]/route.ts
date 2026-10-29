@@ -6,9 +6,9 @@ import { isValidAccountPassword } from "@/lib/auth/account-password";
 import { clearAccountLoginFailures, isAccountLoginLocked, recordFailedAccountLogin } from "@/lib/auth/login-lockout";
 import { toPublicLoginResponse } from "@/lib/auth/login-response";
 import { getDb } from "@/db/client";
-import { appAccounts, authAccount, authSession, houses, households, officialAssignments, people } from "@/db/schema";
+import { appAccounts, authAccount, authSession, houses, households, people } from "@/db/schema";
 import { findUniqueLoginAccount } from "@/lib/auth/login-account";
-import { officialAssignmentActiveOn, jakartaBusinessDate } from "@/lib/officials/lifecycle";
+import { jakartaBusinessDate } from "@/lib/officials/lifecycle";
 
 export const runtime = "nodejs";
 
@@ -98,6 +98,12 @@ const payloadSchema = z.object({
   website: z.string().max(200).optional(),
 });
 
+const officialPayloadSchema = z.object({
+  identifier: z.string().trim().min(1).max(100),
+  pin: z.string().regex(/^\d{6}$/),
+  website: z.string().max(200).optional(),
+});
+
 function createCredentialAuthRequest(request: Request, email: string, password: string) {
   const forwardedHeaders = new Headers({ "content-type": "application/json" });
   for (const name of ["origin", "cookie", "x-forwarded-for", "x-real-ip", "user-agent", "accept-language"]) {
@@ -108,6 +114,19 @@ function createCredentialAuthRequest(request: Request, email: string, password: 
     method: "POST",
     headers: forwardedHeaders,
     body: JSON.stringify({ email, password, rememberMe: false }),
+  });
+}
+
+function createOfficialPinAuthRequest(request: Request, identifier: string, pin: string) {
+  const forwardedHeaders = new Headers({ "content-type": "application/json" });
+  for (const name of ["origin", "cookie", "x-forwarded-for", "x-real-ip", "user-agent", "accept-language"]) {
+    const value = request.headers.get(name);
+    if (value) forwardedHeaders.set(name, value);
+  }
+  return new Request(new URL("/api/auth/sign-in/official-pin", request.url), {
+    method: "POST",
+    headers: forwardedHeaders,
+    body: JSON.stringify({ identifier, pin, rememberMe: false }),
   });
 }
 
@@ -133,6 +152,23 @@ export async function POST(request: Request, context: { params: Promise<{ type: 
   } catch {
     return NextResponse.json({ message: "Periksa kembali data yang diisi." }, { status: 400 });
   }
+
+  if (type === "official") {
+    const officialParsed = officialPayloadSchema.safeParse(rawBody);
+    if (!officialParsed.success) {
+      return NextResponse.json({ message: "Periksa kembali data yang diisi." }, { status: 400, headers: { "cache-control": "no-store" } });
+    }
+    if (officialParsed.data.website) return toPublicLoginResponse(new Response(null, { status: 401 }));
+
+    const response = await getAuth().handler(createOfficialPinAuthRequest(
+      request,
+      officialParsed.data.identifier.toLowerCase(),
+      officialParsed.data.pin,
+    ));
+    console.info(JSON.stringify({ event: "auth.login.completed", accountType: "official", outcome: response.ok ? "accepted" : "rejected" }));
+    return toPublicLoginResponse(response);
+  }
+
   const parsed = payloadSchema.safeParse(rawBody);
   if (!parsed.success) return NextResponse.json({ message: "Periksa kembali data yang diisi." }, { status: 400 });
   if (parsed.data.website) return NextResponse.json({ message: "Data masuk belum cocok atau akun belum aktif." }, { status: 401 });
@@ -187,15 +223,6 @@ export async function POST(request: Request, context: { params: Promise<{ type: 
     : null;
   if (type === "resident" && !residentCredential) {
     return rejectLoginAttempt(request, type, parsed.data.password);
-  }
-
-  if (type === "official") {
-    const assignments = await db
-      .select({ id: officialAssignments.id })
-      .from(officialAssignments)
-      .where(and(eq(officialAssignments.appAccountId, account.id), officialAssignmentActiveOn(jakartaBusinessDate())))
-      .limit(2);
-    if (assignments.length !== 1) return rejectLoginAttempt(request, type, parsed.data.password);
   }
 
   const authRequest = createCredentialAuthRequest(request, account.email, parsed.data.password);

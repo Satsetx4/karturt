@@ -4,6 +4,7 @@ import type { AppDatabase } from "@/db/client";
 import { appendAuditEvent } from "@/lib/audit/writer";
 import { appAccounts, authAccount, authSession, officialAssignments } from "@/db/schema";
 import { isValidAccountPassword } from "@/lib/auth/account-password";
+import { lockOfficialPinAccounts, officialPinIsUsedByAnotherAccount } from "@/lib/auth/official-pin-uniqueness";
 import type { Principal } from "@/lib/auth/permissions";
 import { officialAssignmentActiveOn, jakartaBusinessDate } from "@/lib/officials/lifecycle";
 
@@ -38,10 +39,18 @@ export class InvalidPinRecoveryInputError extends Error {
   }
 }
 
+export class DuplicateOfficialAccountPinError extends Error {
+  constructor() {
+    super("Official account PINs must be unique.");
+    this.name = "DuplicateOfficialAccountPinError";
+  }
+}
+
 type RecoveryOutcome =
   | { kind: "recovered"; sessionsRevoked: number }
   | { kind: "locked" }
   | { kind: "invalid_password" }
+  | { kind: "duplicate_pin" }
   | { kind: "not_available" };
 
 function accountTypeForPrincipal(principal: Principal) {
@@ -62,6 +71,7 @@ export async function recoverAccountPin(
   ) throw new InvalidPinRecoveryInputError();
 
   const outcome = await database.transaction<RecoveryOutcome>(async (transaction) => {
+    if (principal.role !== "system_admin") await lockOfficialPinAccounts(transaction);
     const [account] = await transaction.select({
       id: appAccounts.id,
       authUserId: appAccounts.authUserId,
@@ -131,6 +141,11 @@ export async function recoverAccountPin(
       return { kind: "invalid_password" };
     }
 
+    if (
+      principal.role !== "system_admin" &&
+      await officialPinIsUsedByAnotherAccount(transaction, account.id, input.newPin)
+    ) return { kind: "duplicate_pin" };
+
     const pinHash = await hashPassword(input.newPin);
     await transaction.update(appAccounts).set({
       pinHash,
@@ -154,6 +169,7 @@ export async function recoverAccountPin(
 
   if (outcome.kind === "locked") throw new AccountPinRecoveryLockedError();
   if (outcome.kind === "invalid_password") throw new InvalidAccountPasswordForPinRecoveryError();
+  if (outcome.kind === "duplicate_pin") throw new DuplicateOfficialAccountPinError();
   if (outcome.kind === "not_available") throw new AccountPinRecoveryNotAvailableError();
   return { sessionsRevoked: outcome.sessionsRevoked };
 }

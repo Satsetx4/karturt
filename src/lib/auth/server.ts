@@ -5,8 +5,10 @@ import type { AppDatabase } from "@/db/client";
 import { getDb } from "@/db/client";
 import { relationalSchema } from "@/db/schema";
 import { requireAuthEnvironment } from "@/lib/env";
+import { officialPinPlugin } from "@/lib/auth/official-pin-plugin";
 
 export function createAuth(database: AppDatabase, options: { secret: string; baseURL: string }) {
+  const twoFactorChallengeSeconds = 60 * 10;
   return betterAuth({
     appName: "KartuRT",
     baseURL: options.baseURL,
@@ -22,9 +24,10 @@ export function createAuth(database: AppDatabase, options: { secret: string; bas
     },
     plugins: [twoFactor({
       issuer: "KartuRT",
+      twoFactorCookieMaxAge: twoFactorChallengeSeconds,
       backupCodeOptions: { storeBackupCodes: "encrypted" },
       accountLockout: { enabled: true, maxFailedAttempts: 5, durationSeconds: 900 },
-    })],
+    }), officialPinPlugin(database, { twoFactorChallengeSeconds })],
     rateLimit: {
       enabled: true,
       storage: "database",
@@ -32,6 +35,8 @@ export function createAuth(database: AppDatabase, options: { secret: string; bas
       max: 100,
       customRules: {
         "/sign-in/email": { window: 60, max: 5 },
+        "/sign-in/official-pin": { window: 60, max: 5 },
+        "/official-pin/recover": { window: 60, max: 5 },
         "/change-password": { window: 60, max: 3 },
         "/two-factor/enable": { window: 60, max: 3 },
         "/two-factor/disable": { window: 60, max: 3 },

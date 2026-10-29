@@ -8,6 +8,7 @@ import { assertDevelopmentProvisioningEnvironment } from "@/db/development-provi
 import { appAccounts, authAccount, authUser, officialAssignments, people } from "@/db/schema";
 import { resolveResidentProvisioningTarget } from "@/lib/accounts/resident-provisioning";
 import { isValidAccountPassword } from "@/lib/auth/account-password";
+import { lockOfficialPinAccounts, officialPinIsUsedByAnotherAccount } from "@/lib/auth/official-pin-uniqueness";
 import { requireDatabaseEnvironment } from "@/lib/env";
 
 const inputSchema = z.object({
@@ -109,6 +110,12 @@ async function main() {
   const passwordHash = await hashPassword(input.password);
   const pinHash = input.type === "resident" ? passwordHash : await hashPassword(initialPin);
   const appAccountId = await db.transaction(async (transaction) => {
+    if (input.type === "official") {
+      await lockOfficialPinAccounts(transaction);
+      if (await officialPinIsUsedByAnotherAccount(transaction, null, initialPin)) {
+        throw new Error("Official account PINs must be unique.");
+      }
+    }
     await transaction.insert(authUser).values({
       id: userId,
       name: input.displayName,

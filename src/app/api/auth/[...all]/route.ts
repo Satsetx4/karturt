@@ -16,6 +16,10 @@ async function handle(request: Request) {
   const pathname = new URL(request.url).pathname;
   const endpoint = pathname.replace(/^\/api\/auth/, "");
 
+  if (endpoint === "/sign-in/email") {
+    return jsonResponse({ message: "Gunakan halaman masuk sesuai jenis akun." }, 403);
+  }
+
   if (endpoint === "/change-password") {
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) return auth.handler(request);

@@ -2,8 +2,8 @@ import { stagingDatabaseTarget } from "@/db/staging-target";
 
 export const previewDatabaseTarget = {
   database: "karturt_preview",
-  runtimeRole: "karturt_preview_runtime",
-  migrationRole: "karturt_preview_migrator",
+  runtimeRole: "karturt_preview_runtime_f4",
+  migrationRole: "karturt_preview_migrator_f4",
 } as const;
 
 export const r3PreviewBusinessDateTarget = {
