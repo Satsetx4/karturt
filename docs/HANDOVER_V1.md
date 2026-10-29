@@ -1,37 +1,46 @@
-# KartuRT V1 — handover
+# KartuRT — handover proyek
 
-**Agen penerus: baca dokumen ini dan panduan maintenance sebelum mengubah kode atau menjalankan operasi.** Jika informasi tampak bertentangan, gunakan bukti terbaru yang terikat pada SHA/target dan periksa sumber kode terkait. Jangan mengubah layanan Production untuk melengkapi handover ini.
+**Agen penerus: baca dokumen ini dan [panduan maintenance](AI_AGENT_MAINTENANCE_GUIDE.md) sebelum mengubah kode atau menjalankan operasi.** Jika sumber berbeda, utamakan bukti terbaru yang terikat pada SHA dan target, lalu cocokkan dengan kode. Jangan mengubah layanan Production untuk melengkapi handover.
 
-**Snapshot dokumentasi:** 2026-10-29, Asia/Bangkok. Bukti RELEASE GO bertanggal 2026-10-28; SHA main, status issue, dan deployment terbaru diperiksa ulang pada 2026-10-29. Baseline rilis: **f48b5850f3669148536f850e2c9f687d433f154a**. Dokumen ini merangkum bukti rilis dan batas operasional, bukan izin baru untuk operasi Production.
+**Snapshot:** 2026-10-30, Asia/Bangkok. Repo `Satsetx4/karturt`; `main` saat diperiksa: **69473a3f4fa5a097b8cd66b920c04169cee540f4**. Rilis V1 awal dimulai di `f48b5850f3669148536f850e2c9f687d433f154a`; sesudahnya fitur PR #117–#120 telah tergabung dan deployment Production terbaru yang diperiksa READY. Catatan ini merekam status, bukan izin baru untuk merge, deploy, akses akun, atau operasi database.
 
 ## Sumber kebenaran
 
-- [Roadmap #107 — final release closeout #6473942195](https://github.com/Satsetx4/karturt/issues/107#issuecomment-6473942195)
-- [Release execution #110 — final read-only closeout #6473941681](https://github.com/Satsetx4/karturt/issues/110#issuecomment-6473941681)
-- [Neon Production target and runtime-role audit #6468497997](https://github.com/Satsetx4/karturt/issues/110#issuecomment-6468497997)
-- [Gate A run #40702901680](https://github.com/Satsetx4/karturt/actions/runs/40702901680)
+- [Main saat snapshot](https://github.com/Satsetx4/karturt/commit/69473a3f4fa5a097b8cd66b920c04169cee540f4)
+- [PR #117 — login resmi username + PIN](https://github.com/Satsetx4/karturt/pull/117), [PR #118 — laporan Bendahara dan cetak A4](https://github.com/Satsetx4/karturt/pull/118), [PR #119 — ekspor CSV](https://github.com/Satsetx4/karturt/pull/119), [PR #120 — PWA RT05](https://github.com/Satsetx4/karturt/pull/120)
+- [Gate A untuk head PR #120](https://github.com/Satsetx4/karturt/actions/runs/40888073109) — lulus pada `2c13eea03f065768c2718cb15ea1bcc1ec42aad2`; concurrency Postgres dan recovery PG18 **SKIPPED**.
+- [Roadmap #107 — catatan closeout awal](https://github.com/Satsetx4/karturt/issues/107#issuecomment-6473942195), [release execution #110 — catatan closeout awal](https://github.com/Satsetx4/karturt/issues/110#issuecomment-6473941681), [audit target Neon saat itu](https://github.com/Satsetx4/karturt/issues/110#issuecomment-6468497997)
+- [PR #116 — dokumen handover ini](https://github.com/Satsetx4/karturt/pull/116) masih OPEN dan belum tergabung ke `main`.
 - [Aplikasi Production](https://karturt-review-staging-20261012.vercel.app/)
 
-Issue #107 dan #110 masih **OPEN secara administratif**. Isi awal issue menyimpan status lama; komentar final yang ditautkan di atas adalah catatan rilis yang lebih baru. Jangan menutup atau mengubah issue tersebut tanpa permintaan owner.
+Issue #107 dan #110 masih **OPEN** dan berisi catatan lama. Komentar closeout di atas berguna untuk rilis V1 awal, sedangkan bukti merge dan rilis PR #117–#120 ada di halaman PR masing-masing. Jangan menutup atau mengubah issue tersebut tanpa permintaan owner.
 
-## Status rilis V1
+## Status repo dan Production
 
-| Bagian | Status yang tercatat | Batas bukti |
+| Bagian | Status pada 2026-10-30 | Batas bukti |
 |---|---|---|
-| Source main | SHA **f48b5850f3669148536f850e2c9f687d433f154a** | Ini SHA rilis yang disetujui pada closeout. |
-| Vercel Production | Deployment **dpl_6gsSBK7CpN2HM3B3Ywe7sXARNCr2**, READY; alias mengarah ke deployment; health HTTPS 200 | Hasil read-only pada closeout, bukan bukti bahwa deployment lain diizinkan. |
-| Neon Production | Project **holy-term-22410117**, branch **br-jolly-bonus-azzd71cl**, endpoint **ep-empty-rain-azwe3eb3**, database **karturt_production**, PostgreSQL 18 | Runtime TLS diverifikasi oleh Node (TLS 1.3); role runtime bukan superuser dan tidak memiliki CREATE pada database/schema publik. |
-| Migrasi | 0000–0015; migrasi 0015 sudah ada | Jangan menjalankan migrasi ulang untuk menyelesaikan handover. |
-| Gate A | SUCCESS pada SHA rilis, run #40702901680 | Lint, typecheck, suite tes, konsistensi jurnal migrasi, pemeriksaan drift schema, dan build Production lulus. |
-| PostgreSQL concurrency | **SKIPPED** pada run rilis | Bukan PASS. |
-| PostgreSQL 18 recovery | **SKIPPED** pada run rilis | Bukan PASS. |
-| Smoke | Resident, Chairman, Treasurer, isolasi lintas rumah, batas otorisasi, dan layout responsif PASS | Admin TOTP dan dashboard PASS berdasarkan konfirmasi owner; agen tidak membaca sesi/cookie owner. |
+| `main` | **69473a3f4fa5a097b8cd66b920c04169cee540f4**, hasil merge PR #120 | Tidak ada perubahan source lokal yang menjadi bagian dari SHA ini. |
+| Fitur tergabung | PR #117 login resmi; #118 laporan iuran dan cetak PDF; #119 CSV bulanan; #120 install PWA RT05 | Lihat fitur dan batasnya di bawah serta detail tiap PR. |
+| Vercel Production | Project `karturt-review-staging-20261012` (`prj_Mv4rABJvDNAvSD78SVt5WbjFakEq`); deployment **dpl_EWeS8aYU7bqa1mT58Mfpxqtq9Eo9** READY, target `production`, Git SHA `69473a3`; alias `https://karturt-review-staging-20261012.vercel.app/` | Status diperiksa read-only. Nama project memuat kata “staging”, tetapi deployment ini bertarget Production. Ini bukan izin untuk deploy SHA berikutnya. |
+| Gate A | PASS pada head PR #120 `2c13eea03f065768c2718cb15ea1bcc1ec42aad2`, run #40888073109 | Concurrency Postgres dan recovery PG18 dilewati, bukan PASS. |
+| Status check gabungan GitHub | Ada check `Vercel` berstatus failure pada main dan menunjuk [project disposable F4](https://vercel.com/sekawan/karturt-v1-1-f4-disposable-20261029/FV7gwk9SP8MJRaQUxxZkPX8CVHZH) | Jangan samakan check Vercel disposable itu dengan deployment Production yang READY; verifikasi ulang check dan target sebelum keputusan rilis. |
+| Neon Production | Catatan closeout terakhir menyebut project `holy-term-22410117`, branch `br-jolly-bonus-azzd71cl`, endpoint `ep-empty-rain-azwe3eb3`, database `karturt_production`, PostgreSQL 18; migrasi sampai 0015 | Ini target yang terdokumentasi pada audit sebelumnya, **belum diverifikasi ulang dalam pembaruan handover ini**. Verifikasi ulang secara read-only sebelum operasi yang kelak diizinkan. |
+| Akun resmi / PIN / TOTP Admin | Kesiapan akun nyata belum diverifikasi ulang setelah rilis PR #117–#120 | Rilis tidak melakukan login akun riil. Jangan menganggap username, PIN, assignment, atau MFA Production sudah diverifikasi. |
 
-Vercel project menggunakan Git source dari branch main. Vercel menjelaskan bahwa commit pada branch Git terhubung biasanya membuat deployment, kecuali build dilewati melalui Ignore Build Step ([dokumentasi Vercel](https://vercel.com/docs/builds)). Karena konfigurasi Ignore Build Step Production tidak tersedia dalam audit ini, **jangan merge perubahan ke main jika itu dapat memicu deployment**. Release GO untuk SHA di atas tidak mengizinkan deploy SHA baru, migrasi, atau import baru.
+PR #117–#120 masing-masing mempunyai riwayat persetujuan dan deployment tersendiri. Itu tidak memberi izin untuk merge/deploy berikutnya, migrasi, perubahan secret, atau perubahan data. Vercel memakai Git dari `main`; konfigurasi Ignore Build Step belum diverifikasi. **Jangan merge PR #116 atau PR lain ke `main` tanpa kewenangan merge/deployment yang baru dan spesifik.**
 
-## Produk dan batas V1
+## Produk, fitur rilis, dan batasnya
 
-KartuRT adalah aplikasi administrasi iuran untuk **satu RT**, pada layanan Free, dengan verifikasi transfer manual oleh Bendahara dan pencatatan tunai. Tidak ada payment gateway. Isolasi multi-tenant tetap harus dipertahankan walaupun operasional V1 hanya melayani satu RT.
+KartuRT adalah aplikasi administrasi iuran untuk **satu RT**, pada layanan Free, dengan verifikasi transfer manual oleh Bendahara dan pencatatan tunai. Tidak ada payment gateway. Isolasi multi-tenant tetap harus dipertahankan walaupun operasional saat ini hanya melayani satu RT.
+
+| Fitur yang sudah tergabung di `main` | Perilaku yang perlu diketahui |
+|---|---|
+| Login pengurus (PR #117) | Ketua RT/Bendahara masuk dengan username dan PIN enam digit; warga tetap memakai nomor rumah dan PIN; System Admin tetap memakai password kuat dan TOTP. Tidak ada migrasi pada PR ini. |
+| Laporan iuran bulanan dan cetak (PR #118) | Bendahara dan Ketua RT dapat membaca laporan sesuai RT aktif, memilih bulan/tahun, lalu cetak atau simpan PDF A4. Angka dikelompokkan menurut bulan iuran dan merupakan posisi data saat dibuka, bukan laporan kas atau snapshot historis akhir bulan. |
+| Unduh CSV (PR #119) | Ketua RT dan Bendahara dapat mengunduh laporan bulan/tahun terpilih, termasuk ringkasan, saldo awal, transfer/tunai, waiver, tunggakan, dan status rumah. Ekspor memakai payload laporan yang sudah diotorisasi. |
+| PWA RT05 (PR #120) | Aplikasi dapat ditambahkan ke layar utama dengan ikon RT05. Ini shell online-only: tidak ada service worker, cache data keuangan, notifikasi push, atau autentikasi offline. |
+
+PWA belum diuji dengan pemasangan fisik di Android/iPhone. Rilis di atas tidak membuktikan kesiapan akun Production; laporan PR menyatakan login akun nyata tidak dilakukan.
 
 Kebijakan finansial:
 
@@ -43,6 +52,8 @@ Kebijakan finansial:
 - Saldo, penyesuaian, waiver, pembatalan, rejection, reversal, serta audit ledger harus dihitung dari ledger; jangan mengubah status iuran secara langsung.
 
 ### Data Production dan provenance
+
+Angka di bawah adalah baseline dari audit setelah import pada 2026-10-28. PR #117–#120 tidak menambahkan migrasi atau mengubah data bisnis, tetapi angka terkini tetap harus dibaca ulang secara read-only sebelum dipakai untuk keputusan operasional.
 
 Satu batch import Sheet2 telah selesai dan diaudit read-only:
 
@@ -110,25 +121,39 @@ Perintah npm run db:check dan npm run db:migrate hanya untuk database pengembang
 | Peran kode | Batas utama |
 |---|---|
 | resident | Hanya iuran, pengajuan, riwayat, dan pembatalan milik household yang melekat pada principal server. |
-| treasurer | Akses finansial satu RT: membaca kewajiban, verifikasi/tolak transfer, catat tunai, dan reversal. |
-| rt_chairman | Manajemen RT: household/warga, pengurus, laporan, tarif, penyesuaian, waiver, generator iuran, audit dalam scope RT. |
+| treasurer | Akses finansial satu RT: membaca kewajiban dan laporan, verifikasi/tolak transfer, catat tunai, dan reversal. Tidak mendapat akses tulis waiver. |
+| rt_chairman | Manajemen RT: household/warga, pengurus, laporan, tarif, penyesuaian, waiver, generator iuran, audit dalam scope RT. Tidak memverifikasi pembayaran. |
 | system_admin | Pemulihan/manajemen sistem dan audit; tidak punya izin finansial RT. |
 
 Principal dan RT/household scope ditentukan di server dari account/assignment aktif; jangan percaya role, RT, atau household dari payload klien. System Admin memerlukan password 16–128 karakter dan faktor TOTP terverifikasi. Pemulihan MFA harus melalui admin terverifikasi lain, alasan, referensi, pencabutan session, dan audit sesuai implementasi. Jangan membuat jalur bypass.
 
-## Prioritas dan backlog
+## Pekerjaan aktif dan prioritas
 
-1. **P0 — rotasi kredensial runtime Neon yang pernah terekspos.** Perlakukan nilai sebagai bocor; owner/operator harus merotasi dengan aman, memperbarui konfigurasi runtime Vercel dan konfigurasi importer privat yang relevan, lalu memverifikasi health/TLS. Nilai rahasia tidak boleh dicatat atau dikirim lewat chat/PR. **Rotasi tidak dilakukan sebagai bagian handover ini.**
-2. **P1 — buktikan job PostgreSQL concurrency dan recovery PG18 secara independen.** Run rilis menandai keduanya SKIPPED; jalankan hanya terhadap database disposable terisolasi dan catat hasil pada SHA yang diuji.
-3. **P1 — tutup celah bukti pemulihan Production.** docs/backup-restore-drill.md adalah drill staging historis, bukan bukti backup/restore Production. Siapkan prosedur dan rehearsal pada target disposable; operasi Production memerlukan otorisasi baru.
-4. **P1 — audit dependency dan isu keamanan pada main terkini.** Laporan lama bukan bukti kondisi dependency pada SHA sekarang; rekam perintah, waktu, SHA, dan hasil sebelum menyebut PASS.
-5. **P2 — backlog produk tertunda dari scope freeze:** F14 Export, F15 Audit UI, F16 lifecycle pengurus, full F17 admin tools, F19 notifikasi, F20 PWA, full F21 studi UX, dan full F23 optimisasi. Item ini ditunda, bukan otomatis terbuka untuk implementasi.
+### Matriks iuran bulanan/tahunan — masih WIP lokal
+
+Pemilik meminta tampilan laporan berbentuk matriks yang bisa melihat keseluruhan iuran per bulan/tahun dan per rumah. Draft implementasi saat snapshot **belum ada di GitHub** dan belum masuk `main`:
+
+- Worktree: `D:\!AGY\karturt-annual-dues-matrix-20261030`
+- Branch lokal: `feat/annual-dues-matrix-20261030`, berbasis main `69473a3f4fa5a097b8cd66b920c04169cee540f4`
+- File lokal berubah: `docs/treasurer-monthly-report.md`, `src/app/globals.css`, `src/components/chairman-reports.tsx`, `src/lib/reports/aggregation.ts`, `src/lib/reports/monthly-report-csv.ts`; file baru `src/lib/reports/household-matrix.ts`
+- Belum ada commit, push, atau PR. Jangan menganggap diff ini sudah ada pada branch handover/GitHub. Jika agen penerus memakai checkout yang sama, periksa `git status` dan diff sebelum melanjutkan; jangan menimpa perubahan lokal.
+- Pemeriksaan sebelumnya: ESLint pada file TypeScript yang berubah lulus; `npm run typecheck` terhambat karena instalasi dependency lokal tidak menemukan modul `pg` dan menampilkan error di file DB/script; tes tidak dijalankan. Ulangi pemeriksaan setelah dependency lokal beres dan tinjau hasil fungsional sebelum membuat PR.
+
+### Risiko/pekerjaan lain yang masih terbuka
+
+1. **P0 — rotasi kredensial runtime Neon yang pernah terekspos.** Handover lama menandai nilainya terekspos; catatan rilis PR #117–#120 tidak membuktikan rotasi selesai. Owner/operator perlu memverifikasi dan menangani rotasi, memperbarui consumer runtime/import privat yang relevan, lalu memeriksa health/TLS. Jangan cari, salin, atau kirim nilai rahasia. Ini tidak dilakukan dalam handover.
+2. **P1 — bukti concurrency PostgreSQL dan recovery PG18.** Run terbaru Gate A menandai kedua job **SKIPPED**. Jalankan hanya dengan database disposable terisolasi dan catat hasil pada SHA yang tepat.
+3. **P1 — bukti backup/restore Production.** `docs/backup-restore-drill.md` hanya mencatat drill staging historis; belum membuktikan backup/restore Production. Siapkan rehearsal disposable. Operasi Production tetap perlu otorisasi terpisah.
+4. **P1 — audit dependency/keamanan untuk SHA main sekarang.** Laporan lama bukan bukti status terkini. Catat waktu, SHA, perintah, dan temuan sebelum menyatakan PASS.
+5. **P1 — kesiapan akun Production.** Tidak ada login akun nyata pada rilis terakhir; status akun resmi, PIN, assignment, dan TOTP Admin belum diverifikasi ulang. Minta owner/operator yang berwenang meninjau alur akun secara aman; jangan melakukan login dengan kredensial riil dari pekerjaan handover.
+6. **P2 — backlog produk:** laporan iuran, cetak A4, CSV, dan shell PWA dasar sudah ada. Matriks tahunan masih WIP di atas. Audit UI, lifecycle pengurus, cakupan penuh alat System Admin, notifikasi, studi UX lengkap, dan optimisasi lebih lanjut masih tertunda sesuai scope freeze.
 
 ## Checklist takeover dan Definition of Done
 
 - [ ] Baca dokumen ini, [panduan maintenance agen](AI_AGENT_MAINTENANCE_GUIDE.md), dan dokumen domain yang relevan.
-- [ ] Periksa ulang main, worktree, status Git, PR aktif, ruleset branch, dan issue #107/#110. Jangan menghapus atau menimpa berkas kerja lokal.
-- [ ] Perlakukan komentar final #107/#110 sebagai bukti rilis; jangan menaikkan SKIPPED menjadi PASS atau konfirmasi owner menjadi hasil tes agen.
+- [ ] Periksa ulang `main`, worktree, status Git, PR aktif, dan ruleset branch. Issue #107/#110 berisi checkpoint lama; cocokkan dengan PR #117–#120 serta status provider terkini. Jangan menghapus atau menimpa berkas kerja lokal.
+- [ ] Jangan menaikkan SKIPPED menjadi PASS atau konfirmasi owner menjadi hasil tes agen. Cocokkan setiap klaim dengan SHA dan run yang tepat.
+- [ ] Jika melanjutkan matriks tahunan, periksa lebih dahulu worktree/branch lokal yang dicatat di atas. Jika tidak tersedia, baca dokumen laporan dan implementasi saat ini sebelum merancang ulang.
 - [ ] Untuk perubahan aplikasi, gunakan branch → PR → Gate A pada head SHA tepat → review → merge hanya setelah side effect Production diketahui dan diizinkan.
 - [ ] Pertahankan scope satu RT, tenant guard, data finansial, session, dan role boundaries; jangan masukkan secret atau data warga ke repo.
 - [ ] Tutup tugas dengan commit/PR dan bukti yang dapat ditelusuri. Nyatakan batas dan pekerjaan yang belum diuji.

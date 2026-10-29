@@ -4,11 +4,12 @@ KartuRT is a mobile-first dues administration app for one RT. The released V1 in
 
 ## Current release and agent handover
 
-- Released `main` baseline: `f48b5850f3669148536f850e2c9f687d433f154a`.
-- Final V1 read-only release evidence: [roadmap #107](https://github.com/Satsetx4/karturt/issues/107#issuecomment-6473942195) and [release closeout #110](https://github.com/Satsetx4/karturt/issues/110#issuecomment-6473941681).
-- The exact-SHA Gate A passed in [run #40702901680](https://github.com/Satsetx4/karturt/actions/runs/40702901680); PostgreSQL concurrency and PostgreSQL 18 recovery were **SKIPPED**, not PASS.
-- Start agent work with [docs/HANDOVER_V1.md](docs/HANDOVER_V1.md) and [docs/AI_AGENT_MAINTENANCE_GUIDE.md](docs/AI_AGENT_MAINTENANCE_GUIDE.md). Earlier milestone and phase reports are historical and do not replace the final Production closeout.
-- The release GO is bound to the released SHA and target. Any later Production operation needs a fresh exact-SHA/target authorization. Do not repeat the Sheet2 import.
+- Handover snapshot (2026-10-30): `main` `69473a3f4fa5a097b8cd66b920c04169cee540f4`. The current Production deployment recorded in [docs/HANDOVER_V1.md](docs/HANDOVER_V1.md) is READY on that SHA.
+- Merged follow-up PRs: [#117 official login](https://github.com/Satsetx4/karturt/pull/117), [#118 Treasurer report and A4 printing](https://github.com/Satsetx4/karturt/pull/118), [#119 monthly CSV](https://github.com/Satsetx4/karturt/pull/119), [#120 PWA with RT05 icon](https://github.com/Satsetx4/karturt/pull/120).
+- Gate A passed on tested head `2c13eea03f065768c2718cb15ea1bcc1ec42aad2` in [run #40888073109](https://github.com/Satsetx4/karturt/actions/runs/40888073109); PostgreSQL concurrency and PostgreSQL 18 recovery were **SKIPPED**, not PASS. Physical phone installation and real-account login remain unverified.
+- Start agent work with [docs/HANDOVER_V1.md](docs/HANDOVER_V1.md) and [docs/AI_AGENT_MAINTENANCE_GUIDE.md](docs/AI_AGENT_MAINTENANCE_GUIDE.md). Issues #107 and #110 contain older checkpoint text; the handover links newer PR/release evidence.
+- An annual dues matrix is WIP in a local, unpushed branch documented in the handover. It is not part of `main` or this GitHub branch.
+- Past release approvals apply only to their recorded SHA/target. Any later Production operation needs fresh, operation-specific authorization. Do not repeat the Sheet2 import.
 
 ## Stack
 

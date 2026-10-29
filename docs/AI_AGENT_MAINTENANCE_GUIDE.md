@@ -4,15 +4,15 @@ Panduan ini adalah prosedur kerja untuk maintenance setelah V1 dirilis. Untuk ri
 
 ## 1. Titik awal setiap sesi
 
-1. Baca [handover V1](HANDOVER_V1.md), [scope freeze](mvp-single-rt-scope-freeze.md), lalu source yang akan disentuh.
-2. Periksa SHA main terbaru, branch aktif, perubahan lokal, PR/checks, dan ruleset GitHub. Jangan mengasumsikan HEAD masih SHA rilis.
-3. Issue #107 dan #110 masih OPEN. Isi body menyimpan checkpoint lama; mulai dari komentar final yang ditautkan di handover. Jangan menutup issue.
+1. Baca [handover proyek](HANDOVER_V1.md), [scope freeze](mvp-single-rt-scope-freeze.md), lalu source yang akan disentuh.
+2. Periksa SHA `main` terbaru, branch aktif, perubahan lokal, PR/checks, dan ruleset GitHub. Snapshot handover ini mencatat `69473a3f4fa5a097b8cd66b920c04169cee540f4`; jangan mengasumsikan SHA atau status itu masih terbaru.
+3. Issue #107 dan #110 masih OPEN, tetapi isi body/checkpoint-nya lama. Cocokkan catatan rilis awal dengan PR #117–#120 dan bukti provider terkini. Jangan menutup issue.
 4. Pisahkan worktree bila checkout pengguna memiliki perubahan atau artefak belum dilacak. Jangan menghapus screenshot, berkas, cache, env, atau konfigurasi lokal untuk membuat status bersih.
 5. Kerjakan perubahan minimum di branch sendiri. Jangan ubah layanan, target, atau kebijakan produk untuk mengatasi hambatan yang bukan bagian dari tugas.
 
 ## 2. Batas izin
 
-Rilis dan import Production selesai pada SHA f48b5850f3669148536f850e2c9f687d433f154a. Catatan RELEASE GO itu hanya bukti untuk deployment/SHA/target rilis tersebut; bukan izin umum bagi agent.
+Rilis V1 awal dan import Production tercatat pada SHA `f48b5850f3669148536f850e2c9f687d433f154a`. Sesudahnya, merge PR #117–#120 dan deployment terbaru yang tercatat berujung pada `main` `69473a3f4fa5a097b8cd66b920c04169cee540f4`, dengan deployment `dpl_EWeS8aYU7bqa1mT58Mfpxqtq9Eo9` READY. Detail dan bukti ada di [handover](HANDOVER_V1.md) serta PR terkait. Riwayat persetujuan itu hanya bukti untuk operasi/SHA/target terdahulu; bukan izin umum bagi agen.
 
 Tanpa instruksi baru yang terikat pada **operasi, target, dan SHA yang tepat**, jangan:
 
@@ -25,7 +25,7 @@ Issue/PR yang sudah ada, deployment READY, aturan CLI, idempotensi kode, atau pe
 
 ### Kredensial yang terekspos
 
-Ada kredensial runtime Neon Production yang pernah tercantum dalam percakapan. Perlakukan sebagai **terekspos dan perlu rotasi**. Owner/operator harus mengoordinasikan rotasi di Neon, memperbarui semua consumer runtime Vercel dan env importer privat yang relevan, lalu memverifikasi aplikasi/TLS. Jangan menyalin, mencari, mengulang, menyimpan, atau mengirim nilai kredensial. Rotasi tidak termasuk handover ini.
+Handover terdahulu menandai kredensial runtime Neon Production sebagai **terekspos dan perlu rotasi**. Catatan rilis PR #117–#120 tidak membuktikan bahwa rotasi selesai. Owner/operator harus memverifikasi status dan mengoordinasikan rotasi di Neon, memperbarui consumer runtime Vercel dan env importer privat yang relevan, lalu memverifikasi aplikasi/TLS. Jangan menyalin, mencari, mengulang, menyimpan, atau mengirim nilai kredensial. Rotasi tidak termasuk handover ini.
 
 Jangan membuka .env.local, .env.sheet2-import.local, berkas env bootstrap, atau secret store untuk menyalin nilainya. Catat hanya **nama variabel**, bukan nilainya. Jangan menambahkan env lokal, token, cookie, key, kredensial, PIN, TOTP, data warga, atau dump/database backup ke Git.
 
@@ -79,6 +79,8 @@ Jangan jalankan npm run import:sheet2-private untuk data Production rilis ini. J
 - Jumlah invoice, adjustment, waiver, payments, allocations, active settlement, dan reversal harus direkonsiliasi; jangan mengubah monthly_dues.status atau saldo dengan UPDATE manual.
 - Opening balance historis dari import bukan payment record. Kwitansi hanya berasal dari pembayaran yang benar-benar dicatat dan diverifikasi.
 - Penyesuaian tarif baru tidak boleh mengubah snapshot iuran/request lama secara diam-diam. Reversal mempertahankan histori; jangan menghapus jejak audit.
+- Laporan Ketua RT/Bendahara dan CSV merangkum posisi data saat ini menurut **bulan iuran**; itu bukan cashbook dan bukan snapshot historis akhir bulan. Cetak A4 dan CSV harus tetap memakai RT scope dan payload laporan yang telah diotorisasi.
+- Matriks iuran per bulan/tahun sedang dikerjakan pada worktree lokal yang tercatat di [handover](HANDOVER_V1.md); perubahan itu belum ada di `main` atau GitHub. Pertahankan perilaku laporan/CSV lama dan scope peran saat melanjutkan.
 
 Sebelum menambah aturan finansial, turunkan ekspektasi dari implementasi di src/lib/billing/, schema/constraint di src/db/schema.ts dan drizzle/, serta tes integration/constraints. Buat fixture sintetis baru, tidak memakai data RT aktual.
 
@@ -87,7 +89,7 @@ Sebelum menambah aturan finansial, turunkan ekspektasi dari implementasi di src/
 Permission matrix sumbernya src/lib/auth/permissions.ts, principal server dari src/lib/auth/principal.ts. Perubahan route harus memeriksa principal di server dan menolak identitas/scope yang dikirim klien.
 
 - resident: hanya household yang terikat pada account aktif; read dues, request, history, cancel.
-- treasurer: satu RT aktif; baca kewajiban, verifikasi/tolak transfer, catat tunai, reversal.
+- treasurer: satu RT aktif; baca kewajiban dan laporan, verifikasi/tolak transfer, catat tunai, reversal. Akses laporan tidak memberi hak tulis waiver.
 - rt_chairman: manajemen household/warga/pengurus, tarif, adjustment, waiver, laporan, generator dan audit sesuai scope RT.
 - system_admin: pemulihan/manajemen sistem dan audit; tidak menjalankan operasi finansial RT.
 - System Admin harus punya password 16–128 karakter dan TOTP yang sudah diverifikasi sebelum principal diberikan.
@@ -125,10 +127,10 @@ Alur maintenance:
 1. Mulai dari main terbaru dan buat branch khusus; gunakan worktree lain bila checkout pengguna dirty.
 2. Ubah hanya file yang diminta. Tinjau diff dan git status; stage path yang memang termasuk tugas.
 3. Push branch dan buka PR dengan ringkasan, dampak, serta bukti/checklist. Jangan masukkan file env, screenshots ber-PII, workbook, atau file generated yang tidak diminta.
-4. Pastikan Gate A local verification lulus pada head SHA PR yang tepat. Gate A menguji aplikasi, tes, migrasi, drift, dan build.
+4. Pastikan Gate A local verification lulus pada head SHA PR yang tepat. Gate A menguji aplikasi, tes, migrasi, drift, dan build. Pada head PR #120 `2c13eea03f065768c2718cb15ea1bcc1ec42aad2`, run #40888073109 lulus, tetapi concurrency dan recovery PG18 **SKIPPED**.
 5. .github/workflows/gate-a.yml menjalankan job PostgreSQL concurrency dan disposable PG18 hanya untuk branch/pola tertentu. Status SKIPPED harus disebut SKIPPED dan tidak menjadi PASS. Bila job itu relevan, pilih jalur branch/test yang membuat job berjalan dan gunakan database disposable.
 6. Selesaikan komentar review dan cek status branch ruleset/mergeability.
-7. Sebelum merge ke main, pastikan apakah integrasi Git Vercel akan membangun Production. Catatan deployment menunjukkan proyek ini pernah menerima Git-source Production dari main; Vercel secara default deploy tiap commit pada branch Production kecuali Ignore Build Step dikonfigurasi. Setting ignore tidak terverifikasi pada audit. Jangan merge bila akibatnya deployment Production tanpa GO baru atau melanggar scope owner.
+7. Sebelum merge ke main, pastikan apakah integrasi Git Vercel akan membangun Production. Deployment READY terbaru yang tercatat mengacu ke main `69473a3f4fa5a097b8cd66b920c04169cee540f4`; project bernama `karturt-review-staging-20261012` bertarget Production. Setting Ignore Build Step tidak terverifikasi. Check status GitHub `Vercel` pada snapshot terbaru menunjuk project F4 disposable yang berbeda; jangan menyamakan check itu dengan status Production. Jangan merge bila akibatnya deployment Production tanpa GO baru atau melanggar scope owner.
 8. Deployment/rollback bukan bagian dari PR maintenance biasa. Untuk operasi Production, wajib dapatkan GO baru yang terikat pada SHA dan target tepat. GO rilis f48b5850f3669148536f850e2c9f687d433f154a tidak berlaku untuk merge commit baru.
 
 Untuk docs-only PR, jangan menyertakan Closes #107 atau Closes #110; issue tetap sebagai ledger historis dan open secara administratif.
@@ -149,7 +151,9 @@ Untuk docs-only PR, jangan menyertakan Closes #107 atau Closes #110; issue tetap
 | P1 | Buktikan concurrency Postgres dan recovery PG18 pada SHA kandidat dan database disposable | Agen dapat menyiapkan source/tes; bukti run harus aktual dan status SKIPPED tidak diterima sebagai PASS. |
 | P1 | Buat bukti pemulihan Production yang layak; rehearsal restore tetap hanya di disposable | Owner mengotorisasi operasi target Production secara terpisah; tidak menyentuh Production tanpa izin. |
 | P1 | Audit dependency/security terhadap SHA terbaru | Agen, dengan output dan tanggal; jangan menyebut audit historis sebagai audit baru. |
-| P2 | Prioritaskan backlog tertunda F14/F15/F16/F17/F19/F20/F21/F23 | Owner memilih item dan membuka scope sebelum implementasi. |
+| P1 | Verifikasi kesiapan akun Production secara aman | Tidak ada login akun nyata pada rilis terbaru; owner/operator menangani status akun, PIN, assignment dan MFA tanpa membagikan kredensial. |
+| P2 | Lanjutkan matriks laporan iuran per periode/rumah | Ada draft lokal belum dipush pada branch `feat/annual-dues-matrix-20261030`; periksa worktree di handover, jangan menimpa atau mengklaim sudah rilis. |
+| P2 | Backlog scope freeze lain: Audit UI, lifecycle pengurus, cakupan penuh alat System Admin, notifikasi, studi UX lengkap, optimisasi | F14 CSV dan shell PWA dasar sudah tergabung; owner memilih item tersisa sebelum implementasi. |
 
 ## 11. Definition of Done
 
