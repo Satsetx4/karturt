@@ -1,5 +1,6 @@
 "use client";
 
+import { MonthlyReportPrint } from "@/components/monthly-report-print";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CalendarDays, ChartPie, RotateCcw } from "lucide-react";
@@ -255,13 +256,18 @@ function retryButton(onClick: () => void) {
 
 export function ChairmanReports({
   initialYear,
+  initialMonth,
+  rtIdentity,
   autoSelectAvailableYear,
 }: {
   initialYear: number;
+  initialMonth: number;
+  rtIdentity: string;
   autoSelectAvailableYear: boolean;
 }) {
   const router = useRouter();
   const [selectedYear, setSelectedYear] = useState(initialYear);
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth);
   const [data, setData] = useState<ChairmanReport | null>(null);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
@@ -271,9 +277,9 @@ export function ChairmanReports({
 
   useEffect(() => {
     if (autoSelectAvailableYear) {
-      router.replace(`/app/laporan?year=${initialYear}`, { scroll: false });
+      router.replace(`/app/laporan?year=${initialYear}&month=${initialMonth}`, { scroll: false });
     }
-  }, [autoSelectAvailableYear, initialYear, router]);
+  }, [autoSelectAvailableYear, initialYear, initialMonth, router]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -308,7 +314,7 @@ export function ChairmanReports({
           autoSelectRef.current = false;
           selectingDefaultYear = true;
           setSelectedYear(newestYear);
-          router.replace(`/app/laporan?year=${newestYear}`, { scroll: false });
+          router.replace(`/app/laporan?year=${newestYear}&month=${initialMonth}`, { scroll: false });
           return;
         }
 
@@ -327,7 +333,7 @@ export function ChairmanReports({
     }
     void loadReport();
     return () => controller.abort();
-  }, [retryToken, router, selectedYear]);
+  }, [retryToken, router, selectedYear, initialMonth]);
 
   function changeYear(event: ChangeEvent<HTMLSelectElement>) {
     const nextYear = Number(event.target.value);
@@ -337,7 +343,7 @@ export function ChairmanReports({
     setError("");
     setLoading(true);
     setSelectedYear(nextYear);
-    router.replace(`/app/laporan?year=${nextYear}`, { scroll: false });
+    router.replace(`/app/laporan?year=${nextYear}&month=${selectedMonth}`, { scroll: false });
   }
 
   function retry() {
@@ -386,6 +392,10 @@ export function ChairmanReports({
 
       {data && !loading && !error && (
         <>
+          <MonthlyReportPrint report={data} rtIdentity={rtIdentity} month={selectedMonth} onMonthChange={(month) => {
+            setSelectedMonth(month);
+            router.replace(`/app/laporan?year=${selectedYear}&month=${month}`, { scroll: false });
+          }} />
           {!hasYearData && (
             <div className="chairman-report-empty" role="status">
               <ChartPie size={24} aria-hidden="true" />

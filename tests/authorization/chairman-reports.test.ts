@@ -97,8 +97,8 @@ describe("Chairman RT report service authorization", () => {
     return rows;
   }
 
-  it("allows an active Chairman to read their own RT report without changing financial or audit rows", async () => {
-    const fixture = await createOfficial("rt_chairman");
+  it.each(["rt_chairman", "treasurer"] as const)("allows an active %s to read their own RT report without changing financial or audit rows", async (role) => {
+    const fixture = await createOfficial(role);
     const [year] = await testDatabase.db.insert(billingYears).values({
       rtUnitId: fixture.rtUnitId,
       year: 2026,
@@ -132,8 +132,8 @@ describe("Chairman RT report service authorization", () => {
     expect(after).toEqual(before);
   });
 
-  it("denies a Chairman whose account became inactive after principal resolution", async () => {
-    const fixture = await createOfficial("rt_chairman");
+  it.each(["rt_chairman", "treasurer"] as const)("denies %s whose account became inactive after principal resolution", async (role) => {
+    const fixture = await createOfficial(role);
     await testDatabase.db.update(appAccounts)
       .set({ status: "disabled" })
       .where(eq(appAccounts.id, fixture.accountId));
@@ -142,8 +142,8 @@ describe("Chairman RT report service authorization", () => {
       .rejects.toBeInstanceOf(ReportForbiddenError);
   });
 
-  it("denies a Chairman whose assignment has ended after principal resolution", async () => {
-    const fixture = await createOfficial("rt_chairman");
+  it.each(["rt_chairman", "treasurer"] as const)("denies %s whose assignment has ended after principal resolution", async (role) => {
+    const fixture = await createOfficial(role);
     await testDatabase.db.update(officialAssignments)
       .set({ endsOn: "2026-10-03" })
       .where(eq(officialAssignments.id, fixture.assignmentId));
@@ -152,12 +152,16 @@ describe("Chairman RT report service authorization", () => {
       .rejects.toBeInstanceOf(ReportForbiddenError);
   });
 
-  it.each(["treasurer", "resident", "system_admin"] as const)("denies %s", async (role) => {
+  it("rejects a role that differs from the stored official assignment", async () => {
+    const fixture = await createOfficial("treasurer");
+    await expect(getRtFinancialReport(database, { ...fixture.principal, role: "rt_chairman" }, { year: 2026, businessDate }))
+      .rejects.toBeInstanceOf(ReportForbiddenError);
+  });
+
+  it.each(["resident", "system_admin"] as const)("denies %s", async (role) => {
     const fixture = role === "resident"
       ? { principal: await createResident() }
-      : role === "treasurer"
-        ? await createOfficial("treasurer")
-        : { principal: {
+      : { principal: {
           authUserId: "system-admin-user",
           appAccountId: randomUUID(),
           role: "system_admin" as const,
@@ -170,8 +174,8 @@ describe("Chairman RT report service authorization", () => {
       .rejects.toBeInstanceOf(ReportForbiddenError);
   });
 
-  it("does not let a Chairman widen scope by substituting a different RT", async () => {
-    const fixture = await createOfficial("rt_chairman");
+  it.each(["rt_chairman", "treasurer"] as const)("does not let %s widen scope by substituting a different RT", async (role) => {
+    const fixture = await createOfficial(role);
     const otherRt = await createRt(testDatabase.db);
     const forgedScope: Principal = { ...fixture.principal, rtUnitId: otherRt };
 
@@ -179,8 +183,8 @@ describe("Chairman RT report service authorization", () => {
       .rejects.toBeInstanceOf(ReportForbiddenError);
   });
 
-  it("does not disclose another RT's available billing years", async () => {
-    const fixture = await createOfficial("rt_chairman");
+  it.each(["rt_chairman", "treasurer"] as const)("does not disclose another RT's available billing years to %s", async (role) => {
+    const fixture = await createOfficial(role);
     const otherRt = await createRt(testDatabase.db);
     await testDatabase.db.insert(billingYears).values({ rtUnitId: otherRt, year: 2026, status: "open" });
 

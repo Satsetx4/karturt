@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Banknote, Clock3, Home, ReceiptText } from "lucide-react";
+import { ArrowRight, Banknote, Clock3, Home, ReceiptText, ChartPie } from "lucide-react";
 import type { TreasurerPaymentRequest } from "@/lib/billing/treasurer-payment-requests";
 
 const rupiah = (amount: number) => new Intl.NumberFormat("id-ID", {
@@ -52,6 +52,17 @@ export function TreasurerDashboard({ requests }: { requests: TreasurerPaymentReq
         </div>
         <Link className="button button--secondary" href="/app/bendahara/riwayat">
           Buka riwayat transaksi <ArrowRight size={18} aria-hidden="true" />
+        </Link>
+      </section>
+
+      <section className="treasurer-history-entry" aria-labelledby="treasurer-report-entry-title">
+        <div>
+          <p className="eyebrow">RAPAT BULANAN</p>
+          <h2 id="treasurer-report-entry-title">Laporan iuran</h2>
+          <p>Tinjau laporan dan cetak ringkasan bulanan untuk rapat RT.</p>
+        </div>
+        <Link className="button button--secondary" href="/app/laporan">
+          <ChartPie size={18} aria-hidden="true" /> Buka laporan iuran
         </Link>
       </section>
 

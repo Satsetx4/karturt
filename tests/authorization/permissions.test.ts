@@ -78,12 +78,14 @@ describe("role authorization", () => {
     expect(canPerform(principal("treasurer"), "resident:reset_credential", { rtUnitId: "rt-one" })).toBe(false);
   });
 
-  it("grants RT reports only to a same-RT Chairman and keeps payment verification Treasurer-only", () => {
+  it("grants RT reports to same-RT Chairman and Treasurer and keeps payment verification Treasurer-only", () => {
     const chairman = principal("rt_chairman");
     expect(canPerform(chairman, "report:read:rt", { rtUnitId: "rt-one" })).toBe(true);
     expect(canPerform(chairman, "report:read:rt", { rtUnitId: "rt-two" })).toBe(false);
     expect(canPerform(chairman, "report:read:rt")).toBe(false);
-    expect(canPerform(principal("treasurer"), "report:read:rt", { rtUnitId: "rt-one" })).toBe(false);
+    expect(canPerform(principal("treasurer"), "report:read:rt", { rtUnitId: "rt-one" })).toBe(true);
+    expect(canPerform(principal("treasurer"), "report:read:rt", { rtUnitId: "rt-two" })).toBe(false);
+    expect(canPerform(principal("treasurer", { rtUnitId: null }), "report:read:rt", { rtUnitId: "rt-one" })).toBe(false);
     expect(canPerform(principal("resident"), "report:read:rt", { rtUnitId: "rt-one" })).toBe(false);
     expect(canPerform(
       principal("system_admin", { rtUnitId: null, householdId: null, personId: null }),

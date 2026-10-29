@@ -453,7 +453,7 @@ describe("System Admin recovery route cookie-session boundary", () => {
       .where(eq(monthlyDues.id, firstRequest.dueId))).toMatchObject([{ status: "paid" }]);
   });
 
-  it("enforces live Chairman sessions, tenant scope, and state preservation on waiver/report routes", async () => {
+  it("enforces live official sessions, tenant scope, and separate waiver/report permissions", async () => {
     const rtUnitId = await createRt(testDatabase.db);
     const chairman = await regularSession("Chairman route actor", "official", { role: "rt_chairman", rtUnitId });
     const resident = await regularSession("Resident waiver target", "resident", { rtUnitId });
@@ -604,7 +604,7 @@ describe("System Admin recovery route cookie-session boundary", () => {
     expect(await testDatabase.db.select({ status: monthlyDues.status }).from(monthlyDues).where(eq(monthlyDues.id, due!.id)))
       .toMatchObject([{ status: "waived" }]);
 
-    for (const denied of [resident, treasurer, { cookie: null }]) {
+    for (const denied of [resident, { cookie: null }]) {
       mocks.requestHeaders = new Headers(denied.cookie ? { cookie: denied.cookie } : {});
       const response = await getChairmanReport(new Request("http://localhost:3000/api/chairman/reports", {
         headers: denied.cookie ? { cookie: denied.cookie } : {},
@@ -618,6 +618,14 @@ describe("System Admin recovery route cookie-session boundary", () => {
     }));
     expect(chairmanReport.status).toBe(200);
     await expect(chairmanReport.json()).resolves.toMatchObject({ yearly: { target: 40000, waived: 40000 } });
+
+    mocks.requestHeaders = new Headers({ cookie: treasurer.cookie });
+    const treasurerReport = await getChairmanReport(new Request("http://localhost:3000/api/chairman/reports", {
+      headers: { cookie: treasurer.cookie },
+    }));
+    expect(treasurerReport.status).toBe(200);
+    expect(treasurerReport.headers.get("cache-control")).toBe("no-store");
+    await expect(treasurerReport.json()).resolves.toMatchObject({ yearly: { target: 40000, waived: 40000 } });
 
     mocks.requestHeaders = new Headers({ cookie: otherRtChairman.cookie });
     const otherRtReport = await getChairmanReport(new Request("http://localhost:3000/api/chairman/reports", {
