@@ -6,6 +6,8 @@ Pilih tahun dan bulan, lalu gunakan **Cetak / Simpan PDF**. Pilihan periode terc
 
 ## Arti angka
 
+Tombol **Unduh CSV** mengunduh ringkasan dan rincian tunggakan untuk bulan/tahun yang dipilih, memakai data laporan yang sudah dimuat dan diotorisasi. CSV menggunakan UTF-8 dengan BOM, pemisah titik koma, dan nominal rupiah berupa angka utuh agar dapat diolah di Excel. Jika Excel tidak memisahkan kolom otomatis, gunakan menu impor CSV dengan delimiter titik koma. Teks yang berpotensi menjadi formula dinetralkan; tanda kutip, delimiter, dan baris baru di dalam nama ditangani sebagai isi sel. Berkas unduhan memuat data warga dan harus disimpan/dibagikan hanya kepada pihak yang berwenang.
+
 Laporan mengelompokkan pembayaran menurut **bulan tagihan**, bukan tanggal penerimaan uang. Angka menunjukkan posisi data saat laporan dibaca, bukan snapshot penutupan bulan historis. Pembayaran di muka dapat masuk ke bulan tagihan mendatang. Laporan ini bukan buku kas dan tidak mencakup pengeluaran.
 
 Saldo awal impor, pembayaran transfer/tunai terverifikasi, pemutihan, dan sisa kewajiban ditampilkan terpisah. Reversal mengikuti perhitungan laporan yang sudah ada. Tunggakan hanya memuat kewajiban yang melewati jatuh tempo pada periode terpilih; sisa kewajiban yang belum jatuh tempo tetap terlihat di ringkasan.

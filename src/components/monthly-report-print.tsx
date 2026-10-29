@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Printer } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Download, Printer } from "lucide-react";
+import { createMonthlyReportCsv } from "@/lib/reports/monthly-report-csv";
 import type { RtFinancialReportResponse } from "@/lib/reports/aggregation";
 
 const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
@@ -16,6 +17,28 @@ export function MonthlyReportPrint({ report, rtIdentity, month, onMonthChange }:
   onMonthChange: (month: number) => void;
 }) {
   const printedAt = useRef<HTMLTimeElement>(null);
+  const [downloadError, setDownloadError] = useState("");
+  function downloadCsv() {
+    let url: string | undefined;
+    const link = document.createElement("a");
+    try {
+      setDownloadError("");
+      const csv = createMonthlyReportCsv(report, rtIdentity, month);
+      url = URL.createObjectURL(new Blob([csv.content], { type: "text/csv;charset=utf-8" }));
+      link.href = url;
+      link.download = csv.filename;
+      document.body.appendChild(link);
+      link.click();
+    } catch {
+      setDownloadError("CSV belum dapat diunduh. Silakan coba lagi.");
+    } finally {
+      link.remove();
+      if (url) {
+        const downloadUrl = url;
+        window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 60_000);
+      }
+    }
+  }
   useEffect(() => {
     function stampPrintTime() {
       if (!printedAt.current) return;
@@ -46,6 +69,10 @@ export function MonthlyReportPrint({ report, rtIdentity, month, onMonthChange }:
         <button className="button button--secondary" type="button" onClick={() => window.print()}>
           <Printer size={18} aria-hidden="true" /> Cetak / Simpan PDF
         </button>
+        <button className="button button--secondary" type="button" onClick={downloadCsv}>
+          <Download size={18} aria-hidden="true" /> Unduh CSV
+        </button>
+        {downloadError && <p role="alert">{downloadError}</p>}
       </div>
       <h2 id="monthly-print-title">Laporan Iuran Bulanan</h2>
       <p><strong>{rtIdentity}</strong><br />Periode tagihan: {months[month - 1]} {report.year}</p>
