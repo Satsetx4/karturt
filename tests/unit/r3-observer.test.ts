@@ -64,7 +64,7 @@ describe("RELEASE FIRST R3 observer input gate", () => {
       KARTURT_PREVIEW_TARGET_ID: "rough-queen-62552713/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview",
       KARTURT_PRODUCTION_TARGET_ID: "wild-glitter-41970460/br-spring-smoke-ao3apicl/ep-sparkling-rain-aospujja/karturt_production",
       VERCEL_AUTOMATION_BYPASS_SECRET: "preview-bypass-test-only",
-      DATABASE_URL: "postgresql://karturt_preview_runtime:test-only@ep-green-smoke-aobgfksu.c-3.ap-southeast-1.aws.neon.tech/karturt_preview?sslmode=verify-full",
+      DATABASE_URL: "postgresql://karturt_preview_runtime_f4:test-only@ep-green-smoke-aobgfksu.c-3.ap-southeast-1.aws.neon.tech/karturt_preview?sslmode=verify-full",
       KARTURT_R3_APP_ORIGIN_A: "https://karturt-review-staging-20261012-a-sekawan.vercel.app",
       KARTURT_R3_APP_ORIGIN_B: "https://karturt-review-staging-20261012-b-sekawan.vercel.app",
     });

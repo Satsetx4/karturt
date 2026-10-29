@@ -4,7 +4,7 @@ import { getR3PoolIdentity } from "@/db/client";
 
 const previewTarget = "rough-queen-62552713/br-fragrant-poetry-aousu14b/ep-green-smoke-aobgfksu/karturt_preview";
 const productionTarget = "wild-glitter-41970460/br-spring-smoke-ao3apicl/ep-sparkling-rain-aospujja/karturt_production";
-const previewUrl = "postgresql://karturt_preview_runtime:test-only@ep-green-smoke-aobgfksu.c-3.ap-southeast-1.aws.neon.tech/karturt_preview?sslmode=verify-full";
+const previewUrl = "postgresql://karturt_preview_runtime_f4:test-only@ep-green-smoke-aobgfksu.c-3.ap-southeast-1.aws.neon.tech/karturt_preview?sslmode=verify-full";
 
 function setPreviewTarget(target = previewTarget) {
   vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", target);
