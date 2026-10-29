@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { getPublicAppUrl } from "@/lib/env";
 import "./globals.css";
 
@@ -32,10 +32,17 @@ export const metadata: Metadata = {
     description: "Informasi iuran RT dan administrasi warga dalam satu tempat.",
     images: ["/og-karturt.svg"],
   },
-  icons: { icon: "/icon.svg" },
+  icons: { icon: "/icon.svg", apple: [{ url: "/pwa/rt05-apple-touch-icon.png", sizes: "180x180", type: "image/png" }] },
+  appleWebApp: { capable: true, title: "KartuRT", statusBarStyle: "default" },
   verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
     ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
     : undefined,
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#173745",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
