@@ -64,6 +64,7 @@ export default async function AccountHomePage() {
         <SignOutButton />
       </header>
       <div className="account-security-menu">
+        {(principal.role === "rt_chairman" || principal.role === "system_admin") && <Link className="button button--secondary" href="/app/aktivitas">Riwayat aktivitas</Link>}
         <Link className="button button--secondary account-security-link" href="/app/keamanan">
           <ShieldCheck size={18} aria-hidden="true" /> Keamanan akun
         </Link>

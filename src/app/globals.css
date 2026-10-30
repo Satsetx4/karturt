@@ -1027,7 +1027,7 @@ button { color: inherit; }
 
 
 
-.account-security-menu { display: flex; justify-content: flex-end; padding: 10px 0 4px; }
+.account-security-menu { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; padding: 10px 0 4px; }
 .account-security-link { min-height: 44px; }
 .security-policy-note { margin: 20px 0; padding: 15px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); }
 .security-policy-note strong { display: block; color: var(--ink); }
@@ -1088,6 +1088,16 @@ button { color: inherit; }
 .pwa-install summary:active { transform: scale(.97); }
 .pwa-install-arrow { transition: transform 180ms ease; }
 .pwa-install[open] .pwa-install-arrow { transform: rotate(180deg); }
+.audit-area { max-width: 900px; }
+.audit-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; margin: 24px 0; }
+.audit-filters label { display: grid; gap: 8px; flex: 1 1 180px; min-width: 0; }
+.audit-filters input, .audit-filters select { min-height: 44px; width: 100%; padding: 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; }
+.audit-list { list-style: none; margin: 24px 0; padding: 0; }
+.audit-list li { border-top: 1px solid var(--line); padding: 20px 0; overflow-wrap: anywhere; }
+.audit-list h2 { margin: 8px 0; font-size: 1.1rem; }
+.audit-list p { margin: 8px 0; }
+.audit-list time, .audit-list small { color: var(--muted); font-size: .85rem; }
+.audit-empty { padding: 24px 0; }
 .pwa-install-guide { max-width: 520px; margin-top: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); line-height: 1.7; overflow-wrap: anywhere; }
 .pwa-install-guide h2 { font-size: 17px; margin: 0 0 10px; }
 .pwa-install-guide p { margin: 10px 0; }
