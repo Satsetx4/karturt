@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, Printer } from "lucide-react";
 import { createMonthlyReportCsv } from "@/lib/reports/monthly-report-csv";
+import { createAnnualReportCsv } from "@/lib/reports/annual-report-csv";
 import type { RtFinancialReportResponse } from "@/lib/reports/aggregation";
 
 const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
@@ -18,12 +19,12 @@ export function MonthlyReportPrint({ report, rtIdentity, month, onMonthChange }:
 }) {
   const printedAt = useRef<HTMLTimeElement>(null);
   const [downloadError, setDownloadError] = useState("");
-  function downloadCsv() {
+  function downloadCsv(scope: "month" | "year") {
     let url: string | undefined;
     const link = document.createElement("a");
     try {
       setDownloadError("");
-      const csv = createMonthlyReportCsv(report, rtIdentity, month);
+      const csv = scope === "year" ? createAnnualReportCsv(report, rtIdentity) : createMonthlyReportCsv(report, rtIdentity, month);
       url = URL.createObjectURL(new Blob([csv.content], { type: "text/csv;charset=utf-8" }));
       link.href = url;
       link.download = csv.filename;
@@ -69,8 +70,11 @@ export function MonthlyReportPrint({ report, rtIdentity, month, onMonthChange }:
         <button className="button button--secondary" type="button" onClick={() => window.print()}>
           <Printer size={18} aria-hidden="true" /> Cetak / Simpan PDF
         </button>
-        <button className="button button--secondary" type="button" onClick={downloadCsv}>
-          <Download size={18} aria-hidden="true" /> Unduh CSV
+        <button className="button button--secondary" type="button" onClick={() => downloadCsv("month")}>
+          <Download size={18} aria-hidden="true" /> Unduh CSV bulanan
+        </button>
+        <button className="button button--secondary" type="button" onClick={() => downloadCsv("year")}>
+          <Download size={18} aria-hidden="true" /> Unduh CSV tahunan
         </button>
         {downloadError && <p role="alert">{downloadError}</p>}
       </div>

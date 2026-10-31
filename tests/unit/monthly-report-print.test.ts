@@ -37,6 +37,8 @@ describe("monthly meeting print report", () => {
     expect(html).toContain("bukan tanggal uang diterima");
     expect(html).toContain("bukan buku kas");
     expect(html).toContain("RT Sintetis");
+    expect(html).toContain("Unduh CSV bulanan");
+    expect(html).toContain("Unduh CSV tahunan");
   });
 
   it("shows a truthful empty state instead of carrying arrears from another month", () => {
