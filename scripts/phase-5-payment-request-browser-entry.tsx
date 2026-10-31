@@ -6,6 +6,8 @@ import {
   ResidentPaymentRequestPanel,
 } from "../src/components/resident-card";
 import { duesSummary, yearMonths, type ResidentDue } from "../src/lib/billing/resident-card";
+import { TreasurerResolutionCoordinator } from "../src/components/treasurer-resolution-coordinator";
+import { TreasurerVerificationButton } from "../src/components/treasurer-verification-button";
 
 function SmokePage({ initialDues }: { initialDues: ResidentDue[] }) {
   const [dues, setDues] = useState(initialDues);
@@ -37,6 +39,11 @@ function SmokePage({ initialDues }: { initialDues: ResidentDue[] }) {
             <ResidentMonthCard key={month} name={name} due={due} />
           ))}
         </ol>
+        <section aria-label="Konfirmasi bendahara sintetis">
+          <TreasurerResolutionCoordinator>
+            <TreasurerVerificationButton requestCode="KRT-SMOKE-5A7B9C" />
+          </TreasurerResolutionCoordinator>
+        </section>
       </section>
     </main>
   );
