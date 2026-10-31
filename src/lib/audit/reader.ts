@@ -7,6 +7,9 @@ import { canPerform, type Principal } from "@/lib/auth/permissions";
 import { resolvePrincipalForUser } from "@/lib/auth/principal";
 
 export const auditActions = {
+  "official.assignment_created": "Jabatan pengurus dijadwalkan",
+  "official.assignment_ended": "Masa jabatan pengurus diakhiri",
+  "official.assignment_handover": "Pergantian pengurus dijadwalkan",
   "payment_request.created": "Permintaan pembayaran dibuat",
   "payment_request.verified": "Pembayaran transfer diverifikasi",
   "payment_request.rejected": "Permintaan pembayaran ditolak",
