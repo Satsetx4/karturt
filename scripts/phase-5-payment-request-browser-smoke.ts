@@ -103,8 +103,10 @@ const originalPending = new Set(["2026-02"]);
 const claimedPeriods = new Set(originalPending);
 const idempotentResponses = new Map<string, Record<string, unknown>>();
 let postCount = 0;
+let verificationCount = 0;
 let lastPayload: unknown = null;
 let lastIdempotencyKey = "";
+const receivedKeys: string[] = [];
 
 function currentDues() {
   return dues.map((due) => {
@@ -130,6 +132,11 @@ async function readBody(request: IncomingMessage) {
 function createMockServer(bundlePath: string) {
   return createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
+    if (request.method === "POST" && url.pathname === "/api/treasurer/payment-requests/KRT-SMOKE-5A7B9C/verify") {
+      verificationCount += 1;
+      json(response, 200, { message: "Pembayaran berhasil dikonfirmasi." });
+      return;
+    }
     if (request.method === "GET" && url.pathname === "/") {
       response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       response.end(`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment request browser smoke</title><style>${css}</style></head><body><div id="root"></div><script src="/app.js"></script></body></html>`);
@@ -151,6 +158,7 @@ function createMockServer(bundlePath: string) {
     if (request.method === "POST" && url.pathname === "/api/resident/payment-requests") {
       postCount += 1;
       lastIdempotencyKey = String(request.headers["idempotency-key"] ?? "");
+      receivedKeys.push(lastIdempotencyKey);
       try {
         lastPayload = JSON.parse(await readBody(request));
       } catch {
@@ -245,6 +253,7 @@ async function runBrowserSmoke() {
   let socket: WebSocket | undefined;
   let commandId = 0;
   const pending = new Map<number, (message: Record<string, unknown>) => void>();
+  const browserErrors: unknown[] = [];
   const activePortPath = join(resolvedProfilePath, "DevToolsActivePort");
 
   try {
@@ -264,6 +273,7 @@ async function runBrowserSmoke() {
     socket = new WebSocket(target.webSocketDebuggerUrl);
     socket.addEventListener("message", (event) => {
       const message = JSON.parse(String(event.data)) as { id?: number; error?: unknown };
+      if ((message as { method?: string }).method === "Runtime.exceptionThrown") browserErrors.push(message);
       if (message.id === undefined) return;
       const resolveMessage = pending.get(message.id);
       if (!resolveMessage) return;
@@ -311,7 +321,7 @@ async function runBrowserSmoke() {
       }
       const currentText = await evaluate("document.body.innerText");
       const metrics = await evaluate("fetch('/__metrics').then(response => response.json())");
-      throw new Error(`${message} Current page text: ${JSON.stringify(currentText)}; mock metrics: ${JSON.stringify(metrics)}.`);
+      throw new Error(`${message} Current page text: ${JSON.stringify(currentText)}; mock metrics: ${JSON.stringify(metrics)}; browser errors: ${JSON.stringify(browserErrors)}.`);
     };
     const captureEvidence = async (name: string) => {
       const response = await command("Page.captureScreenshot", {
@@ -368,6 +378,27 @@ async function runBrowserSmoke() {
     }))()`);
     assert.deepEqual((confirmation as { periods: string[] }).periods, ["Desember 2025", "Maret 2026", "April 2026"]);
     assert.ok((confirmation as { buttonHeight: number }).buttonHeight >= 44, "Confirmation touch target is below 44px.");
+    await command("Network.enable");
+    await command("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+    await evaluate(`([...document.querySelectorAll('button')].find(item => item.textContent.includes('Konfirmasi dan ajukan'))).click()`);
+    await waitFor("document.body.innerText.includes('Status pengajuan belum dapat dipastikan')", "Offline submission must display uncertain status.");
+    assert.equal(postCount, 0, "Offline submission reached the mock server.");
+    assert.equal(await evaluate("Boolean(document.querySelector('.payment-request-success'))"), false, "Offline submission showed success.");
+    await command("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+    await delay(300);
+    assert.equal(postCount, 0, "Reconnection automatically queued a payment.");
+    // Lose the response after the server records it, without Chromium's transport-level retry.
+    await evaluate(`(() => { const originalFetch = window.fetch; let loseResponse = true;
+      window.fetch = async (...args) => { const response = await originalFetch(...args);
+        if (loseResponse && args[0] === '/api/resident/payment-requests' && args[1]?.method === 'POST') {
+          loseResponse = false; await response.text(); throw new TypeError('Synthetic response loss');
+        } return response;
+      }; })()`);
+    await evaluate(`([...document.querySelectorAll('button')].find(item => item.textContent.includes('Konfirmasi dan ajukan'))).click()`);
+    await waitFor("document.body.innerText.includes('Status pengajuan belum dapat dipastikan') && ![...document.querySelectorAll('button')].some(item => item.disabled && item.textContent.includes('Mengirim'))", "Lost response was not handled.");
+    await delay(200);
+    assert.equal(postCount, 1, "Lost-response fixture did not receive exactly one request.");
+    assert.equal(await evaluate("Boolean(document.querySelector('.payment-request-success'))"), false, "Lost response showed success.");
     await evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(item => item.textContent.includes('Konfirmasi dan ajukan')); button.click(); button.click(); })()`);
     await waitFor("document.body.innerText.includes('KRT-SMOKE-5A7B9C')", "Payment request did not reach the success state.");
     const result = await evaluate(`(() => ({
@@ -389,7 +420,9 @@ async function runBrowserSmoke() {
     assert.equal((result as { pendingText: boolean }).pendingText, true);
     assert.equal((result as { pendingIcon: boolean }).pendingIcon, true);
     assert.match(String((result as { whatsappHref: string }).whatsappHref), /^https:\/\/wa\.me\/628123456789\?text=/);
-    assert.equal(metrics.postCount, 1, "Double-click issued more than one POST.");
+    assert.equal(metrics.postCount, 2, "Manual retry and double-click issued an unexpected number of POSTs.");
+    assert.equal(new Set(receivedKeys).size, 1, "Retry changed the idempotency key after losing the server response.");
+    assert.equal(idempotentResponses.size, 1, "Retry duplicated the recorded payment request.");
     assert.deepEqual(metrics.lastPayload, { period: "2026-04" }, "The browser sent internal identifiers or extra fields.");
     assert.match(metrics.lastIdempotencyKey, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
 
@@ -484,6 +517,22 @@ async function runBrowserSmoke() {
     assert.match(message, /KRT-SMOKE-5A7B9C/);
     assert.match(message, /Desember 2025, Maret 2026, April 2026/);
     assert.match(message.replace(/\s/g, ""), /Rp110\.000/);
+    await command("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+    await evaluate("document.querySelector('.treasurer-confirm-button').click()");
+    await waitFor("document.querySelector('.treasurer-verify-actions').innerText.includes('Sambungan terputus')", "Offline verification did not display connection failure.");
+    assert.equal(verificationCount, 0, "Offline verification reached the server.");
+    assert.equal(await evaluate("Boolean(document.querySelector('.treasurer-feedback--success'))"), false, "Offline verification falsely showed success.");
+    await command("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+    await delay(300);
+    assert.equal(verificationCount, 0, "Reconnection automatically confirmed payment.");
+    await evaluate("document.querySelector('.treasurer-confirm-button').click(); document.querySelector('.treasurer-confirm-button').click()");
+    await waitFor("Boolean(document.querySelector('.treasurer-feedback--success'))", "Online manual verification did not succeed.");
+    assert.equal(verificationCount, 1, "Verification double-click sent duplicate requests.");
+    assert.equal(browserErrors.length, 0, "The browser reported an uncaught exception.");
+    assert.equal(await evaluate("navigator.serviceWorker.getRegistrations().then(items => items.length)"), 0, "Unexpected service worker.");
+    assert.deepEqual(await evaluate("caches.keys()"), [], "Unexpected offline cache.");
+    assert.deepEqual(await evaluate("Object.keys(localStorage)"), [], "Payment fixture persisted data in localStorage.");
+    console.info("Online-only resident/treasurer: offline failure without false success, no automatic replay, response-loss idempotency, and manual retry: PASS.");
     console.info("Older unpaid selection, confirmation total, double-click guard, public period payload, WhatsApp details, and refresh persistence: PASS.");
     console.info(`Non-sensitive browser screenshots saved: ${savedScreenshots.join(", ")}`);
   } finally {
@@ -509,6 +558,7 @@ async function main() {
       platform: "browser",
       target: ["chrome120"],
       jsx: "automatic",
+      define: { "process.env": "{}" },
       outfile: bundlePath,
       logLevel: "silent",
     });

@@ -213,7 +213,7 @@ export function ResidentPaymentRequestPanel({
       onCreated();
       void refreshHistory();
     } catch {
-      setMessage("Belum tersambung. Periksa internet lalu coba lagi.");
+      setMessage("Sambungan terputus. Status pengajuan belum dapat dipastikan. Periksa riwayat setelah tersambung; coba lagi untuk melanjutkan pengajuan yang sama.");
     } finally {
       inFlight.current = false;
       setSubmitting(false);
