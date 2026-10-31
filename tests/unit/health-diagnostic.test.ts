@@ -67,4 +67,20 @@ describe("safe Preview health diagnostics", () => {
     expect(response.status).toBe(200); expect(await response.json()).toEqual({ status: "ok", databaseTlsVerified: true });
     expect(release).toHaveBeenCalledOnce(); expect(log).not.toHaveBeenCalled();
   });
+
+  it("returns healthy F4 Preview with the real R3 helper when no race worker is configured", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/r3-worker-identity")>("@/lib/r3-worker-identity");
+    mocks.identity.mockImplementation(actual.getR3WorkerIdentity);
+    for (const key of ["KARTURT_R3_RUN_ID", "KARTURT_R3_SCENARIO", "KARTURT_R3_WORKER_TAG"]) vi.stubEnv(key, undefined);
+    vi.stubEnv("KARTURT_PREVIEW_TARGET_ID", "soft-dawn-95924243/br-still-bar-aoqs0gbc/ep-bold-brook-ao92fqh8/karturt_preview");
+    vi.stubEnv("KARTURT_PRODUCTION_TARGET_ID", "holy-term-22410117/br-jolly-bonus-azzd71cl/ep-production-test-only/karturt_production");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const release = vi.fn();
+    mocks.connection.mockReturnValue({ db: { execute: vi.fn().mockResolvedValue({}) }, pool: { connect: vi.fn().mockResolvedValue({ connection: { stream: {} }, release }) } });
+    mocks.tls.mockReturnValue(true);
+    const response = await GET(new Request("https://example.invalid/api/health", { headers: { "x-karturt-r3-run-id": "forgedrun20261031" } }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "ok", databaseTlsVerified: true });
+    expect(release).toHaveBeenCalledOnce(); expect(log).not.toHaveBeenCalled();
+  });
 });
