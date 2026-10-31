@@ -2,6 +2,8 @@
 
 Baseline: main `c3b46606ec58f3a3cac642c81d46053155cce42b` (rilis F16 / PR #123). Slice ini melengkapi CSV bulanan dengan satu CSV tahunan, bukan database dump, daftar kontak warga, atau berkas Excel berformat khusus.
 
+**Status terkini: CLOSED untuk CSV V1.** Dirilis melalui PR #124 / `91613ae`; pemilik kemudian menyatakan "saya sudah verifikasi f14 dan f16, silahkan ditutup". Lihat [catatan penutupan](v1-f14-f16-acceptance-closure.md). Bukti dan gate di bawah adalah riwayat implementasi; verifikasi pemilik menutup penerimaan, tanpa mengubah pengujian agent yang tidak dijalankan menjadi PASS.
+
 ## Alur dan lingkup
 
 Ketua/Bendahara → Laporan iuran → pilih tahun → Unduh CSV tahunan. Pemilihan bulan tetap berlaku untuk cetak/PDF dan CSV bulanan; CSV tahunan selalu memuat semua 12 bulan pada tahun laporan yang sudah dimuat. Satu tombol tambahan memakai gaya/tata letak yang ada; tidak ada halaman, endpoint, schema, dependency atau izin baru.
