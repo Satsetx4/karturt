@@ -69,6 +69,16 @@ function normalizeContext(action: string, context: AuditContext | undefined): Au
   }
 
   const keys = Object.keys(value).sort();
+  if (["official.assignment_created", "official.assignment_ended", "official.assignment_handover"].includes(action)) {
+    assertContextKeys(keys, "endsOn,previousAccountId,revokedSessionCount,role,startsOn,targetAccountId");
+    assertAuditDate(value.startsOn);
+    if (value.endsOn !== null) assertAuditDate(value.endsOn);
+    assertAuditUuid(value.targetAccountId);
+    if (value.previousAccountId !== null) assertAuditUuid(value.previousAccountId);
+    assertAuditCount(value.revokedSessionCount);
+    if (value.role !== "rt_chairman" && value.role !== "treasurer") throw new Error("Invalid official audit role.");
+    return { ...value };
+  }
   if (action === "payment_request.created") {
     if (keys.join(",") !== "itemCount,periods,totalAmount") {
       throw new Error("Audit context fields do not match the action contract.");
@@ -477,6 +487,9 @@ export async function appendAuditEvent<TTransaction extends TransactionExecutor>
     throw new Error("Household lifecycle audits require a household entity and a mandatory reason.");
   }
   const safeContext = normalizeContext(action, input.context);
+  if (action.startsWith("official.assignment_") && (entityType !== "official_assignment" || reason === null)) {
+    throw new Error("Official lifecycle audit requires an assignment and reason.");
+  }
   if (Buffer.byteLength(JSON.stringify(safeContext), "utf8") > 2048) {
     throw new Error("Audit context exceeds the supported size.");
   }
