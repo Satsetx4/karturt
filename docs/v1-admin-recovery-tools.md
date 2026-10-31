@@ -1,5 +1,7 @@
 # F17: alat pemulihan akun sederhana
 
+Status 1 November 2026: CLOSED dalam cakupan V1 ini. PR #126 dirilis pada main `9cdc58fe5937b2bebdb4a01329f5f98ff7fb645e`, deployment `dpl_HTrv745uWX26tKzw8dyaqtfKsQ59` READY. CI main `41215997210` lulus. Pemilik menyatakan "f17 sudah saya nyatakan OK". Ini penerimaan pemilik; tidak mengubah batas bukti pengujian agen di bawah.
+
 Baseline aplikasi: main `91613aef6b5b72a956a38f17a0401b62bdb9d018`. Branch `feat/v1-admin-recovery-tools-20261031` juga membawa commit dokumentasi penutupan F14/F16 dari PR #125; tidak bergantung pada fitur aplikasi lain yang belum dirilis.
 
 ## Gap dan alur

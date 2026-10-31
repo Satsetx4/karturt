@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { AppDatabase } from "../../src/db/client";
 import {
   activeDueSettlements,
@@ -44,7 +44,13 @@ type Scenario = {
   dues: Map<number, string>;
 };
 
-const businessDate = "2026-10-02";
+// Use a future fixture year so PostgreSQL's real-clock tariff guard remains exercised.
+const fixtureYear = Number(new Intl.DateTimeFormat("en", { timeZone: "Asia/Jakarta", year: "numeric" }).format(new Date())) + 1;
+const businessDate = `${fixtureYear}-10-02`;
+vi.mock("@/lib/officials/lifecycle", async (original) => ({
+  ...await original<typeof import("@/lib/officials/lifecycle")>(),
+  jakartaBusinessDate: () => businessDate,
+}));
 const waiverReason = "Pemutihan berdasarkan keputusan rapat RT";
 
 function postgresCode(error: unknown): string | undefined {
@@ -126,7 +132,7 @@ describe("Gate C WAIVED, NOT_DUE, tariff, and financial-history invariants", () 
 
     const [year] = await testDatabase.db.insert(billingYears).values({
       rtUnitId,
-      year: 2026,
+      year: fixtureYear,
       status: "open",
     }).returning({ id: billingYears.id });
     const [originalRate] = await createFeeRateFixture(testDatabase.db, {
@@ -146,7 +152,7 @@ describe("Gate C WAIVED, NOT_DUE, tariff, and financial-history invariants", () 
         feeRateId: notDue ? null : originalRate!.id,
         month,
         amount: notDue ? 0 : 40000,
-        dueDate: `2026-${String(month).padStart(2, "0")}-10`,
+        dueDate: `${fixtureYear}-${String(month).padStart(2, "0")}-10`,
         status: notDue ? "not_due" as const : "unpaid" as const,
       };
     })).returning({ id: monthlyDues.id, month: monthlyDues.month });
@@ -216,26 +222,26 @@ describe("Gate C WAIVED, NOT_DUE, tariff, and financial-history invariants", () 
     const scenario = await createScenario();
     const dueId = scenario.dues.get(1)!;
     const request = await createResidentPaymentRequest(database, scenario.resident, {
-      period: "2026-01",
+      period: `${fixtureYear}-01`,
       idempotencyKey: randomUUID(),
     });
     const [requestRow] = await testDatabase.db.select().from(paymentRequests)
       .where(eq(paymentRequests.requestCode, request.requestCode));
     const [requestItemBefore] = await testDatabase.db.select().from(paymentRequestItems)
       .where(eq(paymentRequestItems.requestId, requestRow!.id));
-    expect(requestItemBefore).toMatchObject({ monthlyDueId: dueId, period: "2026-01", amount: 40000 });
+    expect(requestItemBefore).toMatchObject({ monthlyDueId: dueId, period: `${fixtureYear}-01`, amount: 40000 });
 
     await cancelResidentPaymentRequest(database, scenario.resident, request.requestCode);
     const cash = await recordTreasurerCashPayment(database, scenario.treasurer, {
       householdId: scenario.householdId,
-      period: "2026-01",
+      period: `${fixtureYear}-01`,
       idempotencyKey: randomUUID(),
     }, businessDate);
     const [payment] = await testDatabase.db.select().from(payments)
       .where(and(eq(payments.rtUnitId, scenario.rtUnitId), eq(payments.method, "cash")));
     const [allocation] = await testDatabase.db.select().from(paymentAllocations)
       .where(eq(paymentAllocations.paymentId, payment!.id));
-    expect(cash).toMatchObject({ totalAmount: 40000, itemCount: 1, periods: ["2026-01"] });
+    expect(cash).toMatchObject({ totalAmount: 40000, itemCount: 1, periods: [`${fixtureYear}-01`] });
     expect(allocation).toMatchObject({ monthlyDueId: dueId, amount: 40000 });
 
     await reverseTreasurerPayment(database, scenario.treasurer, {
@@ -251,20 +257,20 @@ describe("Gate C WAIVED, NOT_DUE, tariff, and financial-history invariants", () 
 
     await expect(createChairmanWaiver(database, scenario.treasurer, {
       householdId: scenario.householdId,
-      periods: ["2026-03"],
+      periods: [`${fixtureYear}-03`],
       reason: waiverReason,
       idempotencyKey: randomUUID(),
     }, businessDate)).rejects.toThrow();
     await expect(createChairmanWaiver(database, scenario.chairman, {
       householdId: scenario.householdId,
-      periods: ["2026-03"],
+      periods: [`${fixtureYear}-03`],
       reason: "   ",
       idempotencyKey: randomUUID(),
     }, businessDate)).rejects.toThrow();
 
     await createChairmanWaiver(database, scenario.chairman, {
       householdId: scenario.householdId,
-      periods: ["2026-01"],
+      periods: [`${fixtureYear}-01`],
       reason: waiverReason,
       idempotencyKey: randomUUID(),
     }, businessDate);
@@ -324,7 +330,7 @@ describe("Gate C WAIVED, NOT_DUE, tariff, and financial-history invariants", () 
       rtUnitId: scenario.rtUnitId,
       householdId: scenario.householdId,
       monthlyDueId: dueId,
-      period: "2026-01",
+      period: `${fixtureYear}-01`,
       amount: 40000,
     });
     expect(waiverAudits).toHaveLength(1);
@@ -334,7 +340,7 @@ describe("Gate C WAIVED, NOT_DUE, tariff, and financial-history invariants", () 
       entityType: "waiver_action",
       entityId: actions[0]!.id,
       reason: waiverReason,
-      context: { itemCount: 1, periods: "2026-01", totalAmount: 40000 },
+      context: { itemCount: 1, periods: `${fixtureYear}-01`, totalAmount: 40000 },
     });
     expect(waivedDue).toMatchObject({ status: "waived", amount: 40000, waivedReason: waiverReason });
     expect(activeSettlementRows).toHaveLength(0);
@@ -416,17 +422,17 @@ describe("Gate C WAIVED, NOT_DUE, tariff, and financial-history invariants", () 
     expect(before).toMatchObject({ status: "not_due", amount: 0, feeRateId: null, waivedReason: null });
 
     await expect(createResidentPaymentRequest(database, scenario.resident, {
-      period: "2026-02",
+      period: `${fixtureYear}-02`,
       idempotencyKey: randomUUID(),
     })).rejects.toThrow();
     await expect(recordTreasurerCashPayment(database, scenario.treasurer, {
       householdId: scenario.householdId,
-      period: "2026-02",
+      period: `${fixtureYear}-02`,
       idempotencyKey: randomUUID(),
     }, businessDate)).rejects.toThrow();
     await expect(createChairmanWaiver(database, scenario.chairman, {
       householdId: scenario.householdId,
-      periods: ["2026-02"],
+      periods: [`${fixtureYear}-02`],
       reason: waiverReason,
       idempotencyKey: randomUUID(),
     }, businessDate)).rejects.toThrow();
@@ -466,7 +472,7 @@ describe("Gate C WAIVED, NOT_DUE, tariff, and financial-history invariants", () 
     const januaryDueId = scenario.dues.get(1)!;
     const marchDueId = scenario.dues.get(3)!;
     const request = await createResidentPaymentRequest(database, scenario.resident, {
-      period: "2026-01",
+      period: `${fixtureYear}-01`,
       idempotencyKey: randomUUID(),
     });
     const [requestRow] = await testDatabase.db.select().from(paymentRequests)
@@ -498,7 +504,7 @@ describe("Gate C WAIVED, NOT_DUE, tariff, and financial-history invariants", () 
     await cancelResidentPaymentRequest(database, scenario.resident, request.requestCode);
     await recordTreasurerCashPayment(database, scenario.treasurer, {
       householdId: scenario.householdId,
-      period: "2026-01",
+      period: `${fixtureYear}-01`,
       idempotencyKey: randomUUID(),
     }, businessDate);
     const [payment] = await testDatabase.db.select().from(payments)
@@ -511,7 +517,7 @@ describe("Gate C WAIVED, NOT_DUE, tariff, and financial-history invariants", () 
     }, businessDate);
     await createChairmanWaiver(database, scenario.chairman, {
       householdId: scenario.householdId,
-      periods: ["2026-01"],
+      periods: [`${fixtureYear}-01`],
       reason: waiverReason,
       idempotencyKey: randomUUID(),
     }, businessDate);

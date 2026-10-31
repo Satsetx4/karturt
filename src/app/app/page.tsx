@@ -1,4 +1,5 @@
 import { ResidentCard } from "@/components/resident-card";
+import { PaymentNotifications } from "@/components/payment-notifications";
 import { getResidentProfile } from "@/lib/billing/resident-profile";
 import { jakartaBusinessDate } from "@/lib/officials/lifecycle";
 import type { Metadata } from "next";
@@ -71,6 +72,7 @@ export default async function AccountHomePage() {
           <ShieldCheck size={18} aria-hidden="true" /> Keamanan akun
         </Link>
       </div>
+      {(principal.role === "resident" || principal.role === "treasurer") && <PaymentNotifications accountId={principal.appAccountId} role={principal.role} />}
       {profile ? (
         <ResidentCard profile={profile} businessDate={jakartaBusinessDate()} />
       ) : principal.role === "treasurer" ? (

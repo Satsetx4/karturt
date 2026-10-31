@@ -1114,3 +1114,9 @@ button { color: inherit; }
 .pwa-install-guide li + li { margin-top: 10px; }
 .pwa-install-guide button { margin: 10px 0; min-height: 44px; }
 @media (prefers-reduced-motion: reduce) { .pwa-install-arrow { transition: none; } }
+.payment-notifications { margin-bottom: 24px; }
+.payment-notifications h2 { font-size: 20px; }
+.payment-notifications ul { list-style: none; padding: 0; margin: 16px 0; }
+.payment-notifications li { padding: 16px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.payment-notifications li .button { display: flex; width: fit-content; margin-top: 12px; }
+.payment-notifications .button { min-height: 44px; }
