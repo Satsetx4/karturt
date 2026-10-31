@@ -1,15 +1,5 @@
 import type { RtFinancialReportResponse } from "./aggregation";
-
-function cell(value: string | number): string {
-  if (typeof value === "number") {
-    if (!Number.isSafeInteger(value) || value < 0) throw new Error("Invalid report amount.");
-    return String(value);
-  }
-  // Spreadsheet programs may evaluate quoted text as a formula too.
-  const safe = /^[\s\u0000-\u001f]*[=+\-@]/.test(value) || /^[\t\r\n]/.test(value)
-    ? `'${value}` : value;
-  return `"${safe.replaceAll('"', '""')}"`;
-}
+import { serializeReportCsv } from "./csv";
 
 export function createMonthlyReportCsv(report: RtFinancialReportResponse, rtIdentity: string, month: number) {
   if (!Number.isInteger(month) || month < 1 || month > 12 ||
@@ -49,6 +39,6 @@ export function createMonthlyReportCsv(report: RtFinancialReportResponse, rtIden
   rows.push(["Catatan", "Saldo awal impor dan pemutihan bukan pembayaran baru. Pembayaran yang dibatalkan tidak dihitung sebagai penerimaan.", "", "", "", "", ""]);
   return {
     filename: `laporan-iuran-${period}.csv`,
-    content: "\uFEFF" + rows.map((row) => row.map(cell).join(";")).join("\r\n") + "\r\n",
+    content: serializeReportCsv(rows),
   };
 }

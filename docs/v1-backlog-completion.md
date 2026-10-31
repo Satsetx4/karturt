@@ -1,13 +1,15 @@
 # V1 backlog completion
 
-Current released baseline: `74f4b26a87760ef527ea918934f4de9578502224`, 31 October 2026 (PR #122). Production deployment `dpl_7HpdTo9uBLivqVfyfWuRaAc36Xbv` was READY; public health returned ok with verified database TLS at release verification. Owner acceptance of the pending PR #122 checklist: "semuanya selesai dan saya anggap lulus" (owner-reported, not independently observed by the agent).
+Current released baseline: `c3b46606ec58f3a3cac642c81d46053155cce42b`, 31 October 2026 (F16 / PR #123). Production deployment `dpl_ujuEtM4cwHyGir3fFNZ55mVgEcio` was READY; bounded live health/TLS/login/anonymous-access checks passed. Post-merge CI run `41173681126` subsequently passed. Signed-in F16 Preview lifecycle acceptance was NOT RUN; owner explicitly authorized release with that limitation recorded. Owner acceptance of the earlier PR #122 checklist: "semuanya selesai dan saya anggap lulus" (owner-reported, not independently observed by the agent).
 Owner instruction: "kerjakan sesuai perencanaan backlog. buat sesederhana mungkin dan jangan membuat semakin rumit".
 
 Keep Single-RT operations, tenant isolation, current RBAC, append-only audit and financial ledger invariants. Production merge/deploy/migration remains a separate decision bound to the final SHA and target. Use synthetic data for development and Preview; never copy credentials or resident data into evidence.
 
-## Current step: F16 official lifecycle
+## Current step: F14 annual CSV export
 
-F15 and online-only hardening are released; F15/F20 acceptance was reported passed by the owner. Historical evidence remains in [online-only acceptance](v1-online-only-acceptance.md). The next slice adds scoped official assignment management, with existing-account scheduling, inclusive WIB dates, atomic handover, audit and session revocation. See [F16 scope, acceptance and limitations](v1-official-lifecycle.md).
+F15, online-only hardening, and F16 official lifecycle are released. F15/F20 acceptance was reported passed by the owner; F16 signed-in verification remains an explicit gap. See [online-only acceptance](v1-online-only-acceptance.md) and [F16 scope and limitations](v1-official-lifecycle.md). The current slice adds one annual CSV download to the existing authorized report, without expanding datasets into a generic dump. See [F14 scope and acceptance](v1-annual-report-export.md).
+
+## Released F15 scope (historical)
 
 Mobile flow: account home → Riwayat aktivitas → optional date/activity filter → older events → back to account home.
 Four capabilities: scoped activity summaries, date/type filters, 25-event cursor pagination, account-home navigation.
@@ -22,8 +24,9 @@ The UI shows actor display name, canonical activity label, WIB time and audit re
 - [x] F15: full local regression (704 tests / 95 files), typecheck, changed-file ESLint, migration journal/schema drift checks, optimized build, static rendering at 360/390/420/768/1440 px in light/dark themes without horizontal overflow.
 - [x] F15: PR #121 merged and released to Production at the SHA above; exact-main Gate A passed. Public health/login and anonymous activity redirect checked.
 - [x] F15: owner reported the pending checklist complete and passed before PR #122 release; this is owner acceptance, not agent-executed signed-in testing.
-- [ ] F16: local implementation of existing-account schedule/end/handover UI, session revocation and transactional audit; testing and Preview/release gates tracked in the F16 document. Not released.
-- [ ] F14: monthly CSV already implemented; agree additional operational datasets before extending export. Do not build a generic database dump.
+- [x] F16: existing-account schedule/end/handover UI, session revocation and transactional audit implemented and released through PR #123. Local 753 tests, typecheck/lint/build, synthetic component browser checks and exact-head CI passed.
+- [ ] F16: signed-in deployed lifecycle/session-revocation verification remains not run; release authorization is not test acceptance.
+- [ ] F14: monthly CSV available; annual CSV slice implemented locally with scope/tests in the F14 document. CI/Preview/acceptance/release pending. Other datasets and special `.xlsx` format are outside this slice.
 - [ ] F17: bounded account/recovery tooling after F15/F16; retain verified TOTP and existing recovery controls.
 - [ ] F19: define recipient/event matrix; prefer in-app notifications first. Push needs a separate privacy/security design.
 - [x] F20: online-only is the approved scope; no offline transaction queue, background replay, or private-data offline cache.
