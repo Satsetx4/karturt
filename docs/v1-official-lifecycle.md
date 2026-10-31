@@ -2,6 +2,8 @@
 
 Baseline: main `74f4b26a87760ef527ea918934f4de9578502224`. Branch `feat/v1-official-lifecycle-20261031`.
 
+**Status terkini: CLOSED untuk lingkup F16 V1.** Dirilis melalui PR #123 / `c3b4660`; pemilik kemudian menyatakan "saya sudah verifikasi f14 dan f16, silahkan ditutup". Lihat [catatan penutupan](v1-f14-f16-acceptance-closure.md). Gate dan keterbatasan di bawah adalah riwayat implementasi; verifikasi pemilik menutup penerimaan tanpa membuat klaim pengujian tambahan oleh agent.
+
 ## Alur dan lingkup
 
 Ruang akun Ketua → Jabatan pengurus → pilih tindakan → periksa ringkasan → konfirmasi → daftar terbaru. Tampilan memakai komponen, warna terang/gelap, dan tombol KartuRT yang ada, agar tidak menambah pola navigasi baru. Tiga tindakan inti dan satu daftar: jadwalkan jabatan, akhiri masa jabatan Bendahara, pergantian pengurus secara atomik, dan riwayat aktif/terjadwal/selesai.
