@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { AppDatabase } from "@/db/client";
 import {
   appAccounts,
@@ -23,7 +23,13 @@ import {
 } from "../helpers/database";
 
 type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
-const businessDate = "2026-10-02";
+// Use a future fixture year so PostgreSQL's real-clock tariff guard remains exercised.
+const fixtureYear = Number(new Intl.DateTimeFormat("en", { timeZone: "Asia/Jakarta", year: "numeric" }).format(new Date())) + 1;
+const businessDate = `${fixtureYear}-10-02`;
+vi.mock("@/lib/officials/lifecycle", async (original) => ({
+  ...await original<typeof import("@/lib/officials/lifecycle")>(),
+  jakartaBusinessDate: () => businessDate,
+}));
 const triggerName = "phase11_audit_failure_test_trigger";
 const functionName = "phase11_audit_failure_test";
 
@@ -95,7 +101,7 @@ describe("phase 11 financial mutations roll back when audit fails", () => {
     const { rtUnitId, chairman } = await createChairman();
     const [year] = await testDatabase.db.insert(billingYears).values({
       rtUnitId,
-      year: 2026,
+      year: fixtureYear,
       status: "open",
     }).returning({ id: billingYears.id });
     await createFeeRateFixture(testDatabase.db, {
@@ -132,7 +138,7 @@ describe("phase 11 financial mutations roll back when audit fails", () => {
     const { rtUnitId, household, chairman } = await createChairman();
     const [year] = await testDatabase.db.insert(billingYears).values({
       rtUnitId,
-      year: 2026,
+      year: fixtureYear,
       status: "open",
     }).returning({ id: billingYears.id });
     const [feeRate] = await createFeeRateFixture(testDatabase.db, {
@@ -148,7 +154,7 @@ describe("phase 11 financial mutations roll back when audit fails", () => {
       feeRateId: feeRate!.id,
       month: 1,
       amount: 40000,
-      dueDate: "2026-01-10",
+      dueDate: `${fixtureYear}-01-10`,
       status: "unpaid",
     }).returning({ id: monthlyDues.id });
     await failAuditAction("billing.adjustment_created");

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { AppDatabase } from "@/db/client";
 import {
   appAccounts,
@@ -30,7 +30,13 @@ import { createAuthUser, createFeeRateFixture, createHousehold, createRt, create
 
 type TestDatabase = Awaited<ReturnType<typeof createTestDatabase>>;
 type Fixture = { rtUnitId: string; chairman: Principal };
-const businessDate = "2026-10-02";
+// Use a future fixture year so PostgreSQL's real-clock tariff guard remains exercised.
+const fixtureYear = Number(new Intl.DateTimeFormat("en", { timeZone: "Asia/Jakarta", year: "numeric" }).format(new Date())) + 1;
+const businessDate = `${fixtureYear}-10-02`;
+vi.mock("@/lib/officials/lifecycle", async (original) => ({
+  ...await original<typeof import("@/lib/officials/lifecycle")>(),
+  jakartaBusinessDate: () => businessDate,
+}));
 
 describe("Chairman fee rate read/write service", () => {
   let testDatabase: TestDatabase;
@@ -80,12 +86,12 @@ describe("Chairman fee rate read/write service", () => {
     const other = await createChairmanFixture();
     const [year] = await testDatabase.db.insert(billingYears).values({
       rtUnitId: fixture.rtUnitId,
-      year: 2026,
+      year: fixtureYear,
       status: "open",
     }).returning({ id: billingYears.id });
     const [otherYear] = await testDatabase.db.insert(billingYears).values({
       rtUnitId: other.rtUnitId,
-      year: 2026,
+      year: fixtureYear,
       status: "open",
     }).returning({ id: billingYears.id });
     await createFeeRateFixture(testDatabase.db, {
@@ -102,14 +108,14 @@ describe("Chairman fee rate read/write service", () => {
     });
 
     await expect(listChairmanFeeRates(database, fixture.chairman, undefined, businessDate)).resolves.toMatchObject({
-      years: [{ id: year!.id, year: 2026, status: "open" }],
+      years: [{ id: year!.id, year: fixtureYear, status: "open" }],
       rates: [{ billingYearId: year!.id, effectiveMonth: 1, monthlyAmount: 40000 }],
     });
     await expect(listChairmanFeeRates(database, fixture.chairman, year!.id, businessDate)).resolves.toMatchObject({
       rates: [{ billingYearId: year!.id, monthlyAmount: 40000 }],
     });
     await expect(listChairmanFeeRates(database, fixture.chairman, otherYear!.id, businessDate)).resolves.toMatchObject({
-      years: [{ id: year!.id, year: 2026, status: "open" }],
+      years: [{ id: year!.id, year: fixtureYear, status: "open" }],
       rates: [],
     });
   });
@@ -118,7 +124,7 @@ describe("Chairman fee rate read/write service", () => {
     const fixture = await createChairmanFixture();
     const [year] = await testDatabase.db.insert(billingYears).values({
       rtUnitId: fixture.rtUnitId,
-      year: 2026,
+      year: fixtureYear,
       status: "open",
     }).returning({ id: billingYears.id });
     await createFeeRateFixture(testDatabase.db, {
@@ -162,7 +168,7 @@ describe("Chairman fee rate read/write service", () => {
       entityType: "fee_rate",
       entityId: created.id,
       reason: null,
-      context: { period: "2026-11", monthlyAmount: 75000 },
+      context: { period: `${fixtureYear}-11`, monthlyAmount: 75000 },
     });
 
     await expect(createChairmanFeeRate(database, fixture.chairman, {
@@ -181,12 +187,12 @@ describe("Chairman fee rate read/write service", () => {
     const fixture = await createChairmanFixture();
     const [openYear] = await testDatabase.db.insert(billingYears).values({
       rtUnitId: fixture.rtUnitId,
-      year: 2026,
+      year: fixtureYear,
       status: "open",
     }).returning({ id: billingYears.id });
     const [draftYear] = await testDatabase.db.insert(billingYears).values({
       rtUnitId: fixture.rtUnitId,
-      year: 2027,
+      year: fixtureYear + 1,
       status: "draft",
     }).returning({ id: billingYears.id });
     await createFeeRateFixture(testDatabase.db, {
@@ -215,7 +221,7 @@ describe("Chairman fee rate read/write service", () => {
     const fixture = await createChairmanFixture();
     const [year] = await testDatabase.db.insert(billingYears).values({
       rtUnitId: fixture.rtUnitId,
-      year: 2027,
+      year: fixtureYear + 1,
       status: "draft",
     }).returning({ id: billingYears.id });
 
@@ -238,7 +244,7 @@ describe("Chairman fee rate read/write service", () => {
     const fixture = await createChairmanFixture();
     const [year] = await testDatabase.db.insert(billingYears).values({
       rtUnitId: fixture.rtUnitId,
-      year: 2026,
+      year: fixtureYear,
       status: "open",
     }).returning({ id: billingYears.id });
     await createFeeRateFixture(testDatabase.db, {
@@ -279,7 +285,7 @@ describe("Chairman fee rate read/write service", () => {
     };
     await recordTreasurerCashPayment(database, treasurer, {
       householdId: existingHousehold.householdId,
-      period: "2026-01",
+      period: `${fixtureYear}-01`,
       idempotencyKey: randomUUID(),
     }, businessDate);
 
@@ -321,7 +327,7 @@ describe("Chairman fee rate read/write service", () => {
     const fixture = await createChairmanFixture();
     const [year] = await testDatabase.db.insert(billingYears).values({
       rtUnitId: fixture.rtUnitId,
-      year: 2026,
+      year: fixtureYear,
       status: "open",
     }).returning({ id: billingYears.id });
     await createFeeRateFixture(testDatabase.db, {
@@ -331,7 +337,7 @@ describe("Chairman fee rate read/write service", () => {
       monthlyAmount: 40000,
     });
 
-    const requestedHousehold = await createHousehold(testDatabase.db, fixture.rtUnitId, { startsOn: "2026-11-01" });
+    const requestedHousehold = await createHousehold(testDatabase.db, fixture.rtUnitId, { startsOn: `${fixtureYear}-11-01` });
     await generateHouseholdDues(database, fixture.chairman, {
       householdId: requestedHousehold.householdId,
       billingYearId: year!.id,
@@ -345,11 +351,11 @@ describe("Chairman fee rate read/write service", () => {
       personId: requestedHousehold.personId,
       householdId: requestedHousehold.householdId,
     });
-    const resident = await resolvePrincipalForUser(database, residentUser.id, "2026-11-01");
+    const resident = await resolvePrincipalForUser(database, residentUser.id, `${fixtureYear}-11-01`);
     const request = await createResidentPaymentRequest(database, resident, {
-      period: "2026-11",
+      period: `${fixtureYear}-11`,
       idempotencyKey: randomUUID(),
-    }, "2026-11-01");
+    }, `${fixtureYear}-11-01`);
     const [requestRow] = await testDatabase.db.select().from(paymentRequests)
       .where(eq(paymentRequests.requestCode, request.requestCode));
     const [requestItem] = await testDatabase.db.select().from(paymentRequestItems)
@@ -361,7 +367,7 @@ describe("Chairman fee rate read/write service", () => {
       monthlyAmount: 75000,
       idempotencyKey: randomUUID(),
     }, businessDate);
-    const newlyGeneratedHousehold = await createHousehold(testDatabase.db, fixture.rtUnitId, { startsOn: "2026-11-01" });
+    const newlyGeneratedHousehold = await createHousehold(testDatabase.db, fixture.rtUnitId, { startsOn: `${fixtureYear}-11-01` });
     await generateHouseholdDues(database, fixture.chairman, {
       householdId: newlyGeneratedHousehold.householdId,
       billingYearId: year!.id,
@@ -381,7 +387,7 @@ describe("Chairman fee rate read/write service", () => {
         eq(paymentRequestItems.monthlyDueId, requestItem!.monthlyDueId),
       ));
 
-    expect(requestItem).toMatchObject({ amount: 40000, period: "2026-11" });
+    expect(requestItem).toMatchObject({ amount: 40000, period: `${fixtureYear}-11` });
     expect(requestAfter).toMatchObject({ status: "pending", totalAmount: 40000 });
     expect(itemAfter).toEqual(requestItem);
     expect(requestedNovember).toMatchObject({ amount: 40000 });

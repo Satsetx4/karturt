@@ -1,13 +1,14 @@
 # V1 backlog completion
 
-Current released baseline: `91613aef6b5b72a956a38f17a0401b62bdb9d018`, 31 October 2026 (F14 / PR #124, including F16 / PR #123). Production deployment `dpl_33pFJyWWr97W4mcaCUSGkM4wK1YK` was READY; bounded live health/TLS/login/anonymous-access checks passed. Post-merge CI run `41187800621` passed. Owner subsequently stated "saya sudah verifikasi f14 dan f16, silahkan ditutup"; F14/F16 are CLOSED within their V1 scope. This is owner-reported verification, not an agent-executed signed-in test. See [closure record](v1-f14-f16-acceptance-closure.md).
+Current released baseline: `9cdc58fe5937b2bebdb4a01329f5f98ff7fb645e`, PR #126 (F17). Production deployment `dpl_HTrv745uWX26tKzw8dyaqtfKsQ59` READY; bounded health/TLS/login/anonymous-denial checks passed. Main CI `41215997210` passed. On 1 November 2026 owner stated "f17 sudah saya nyatakan OK": F17 CLOSED for its bounded recovery scope. Owner acceptance is distinct from agent-executed signed-in tests.
+
 Owner instruction: "kerjakan sesuai perencanaan backlog. buat sesederhana mungkin dan jangan membuat semakin rumit".
 
 Keep Single-RT operations, tenant isolation, current RBAC, append-only audit and financial ledger invariants. Production merge/deploy/migration remains a separate decision bound to the final SHA and target. Use synthetic data for development and Preview; never copy credentials or resident data into evidence.
 
-## Current step: F17 bounded account recovery tools
+## Current step: F19 in-app payment notifications
 
-F14, F15, F16 and online-only PWA are released and owner-accepted within their recorded scope. F14/F16 verification was explicitly confirmed and closed by the owner. F17 now adds a verified-Admin account lookup and UI over existing resident PIN/Admin 2FA recovery services, retaining their permission, session and audit controls. See [F17 scope/evidence/limits](v1-admin-recovery-tools.md) and [F14/F16 closure record](v1-f14-f16-acceptance-closure.md). F17 is not released; Preview and owner acceptance remain pending.
+F14, F15, F16, F17 and online-only PWA are released and owner-accepted within their recorded scope. F19 adds a read-only current-status feed for Treasurer and Resident, using existing payment data without migrations or push. See [F19 scope and acceptance criteria](v1-payment-notifications.md), [F17 evidence](v1-admin-recovery-tools.md) and [F14/F16 closure](v1-f14-f16-acceptance-closure.md).
 
 ## Released F15 scope (historical)
 
@@ -27,8 +28,8 @@ The UI shows actor display name, canonical activity label, WIB time and audit re
 - [x] F16: existing-account schedule/end/handover UI, session revocation and transactional audit implemented and released through PR #123. Local 753 tests, typecheck/lint/build, synthetic component browser checks and exact-head CI passed.
 - [x] F16: owner confirmed verification and instructed closure on 31 October 2026. CLOSED; this does not retroactively claim agent-executed deployed tests.
 - [x] F14: monthly/annual CSV and arrears released through PR #124; owner confirmed verification and instructed closure. CLOSED for V1 CSV scope. Other datasets and special `.xlsx` format remain outside scope.
-- [ ] F17: bounded lookup and recovery UI implemented locally; verification/Preview/release tracked in the F17 document. No new privileged mutation policy or generic account console. Not released.
-- [ ] F19: define recipient/event matrix; prefer in-app notifications first. Push needs a separate privacy/security design.
+- [x] F17: bounded account lookup/recovery UI released through PR #126; owner accepted on 1 November 2026. CLOSED within this scope, not a generic account console.
+- [ ] F19: in-app payment status feed implementation and verification underway; Preview/release/owner acceptance pending. Push remains outside this scope.
 - [x] F20: online-only is the approved scope; no offline transaction queue, background replay, or private-data offline cache.
 - [x] F20: owner reported all pending checklist items complete and passed, including Android/iPhone and signed-in acceptance. Synthetic browser tests remain separate evidence.
 - [ ] F21: observe representative users from all roles on synthetic Preview; record task results and resolve usability blockers. Browser emulation is not user research.

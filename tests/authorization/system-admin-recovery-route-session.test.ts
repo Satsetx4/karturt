@@ -16,6 +16,7 @@ vi.mock("@/lib/auth/server", async () => {
   return { ...actual, getAuth: () => mocks.auth };
 });
 
+import * as officialLifecycle from "@/lib/officials/lifecycle";
 import type { AppDatabase } from "@/db/client";
 import { POST as recoverTwoFactor } from "@/app/api/system-admin/accounts/[accountId]/recover-two-factor/route";
 import { GET as getResidentRequests, POST as createResidentRequest } from "@/app/api/resident/payment-requests/route";
@@ -1431,46 +1432,50 @@ describe("System Admin recovery route cookie-session boundary", () => {
   });
 
   it("revokes and rejects a Resident cookie after an authenticated household replacement", async () => {
-    const rtUnitId = await createRt(testDatabase.db);
-    const resident = await regularSession("Replacement old Resident", "resident", { rtUnitId });
-    const chairman = await regularSession("Replacement Chairman", "official", { role: "rt_chairman", rtUnitId });
-    const [billingYear] = await testDatabase.db.insert(billingYears).values({
-      rtUnitId,
-      year: 2026,
-      status: "open",
-    }).returning({ id: billingYears.id });
-    await createFeeRateFixture(testDatabase.db, {
-      rtUnitId,
-      billingYearId: billingYear!.id,
-      effectiveMonth: 1,
-      monthlyAmount: 40000,
-    });
-    expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, resident.userId))).not.toHaveLength(0);
+    // Keep the scheduled November replacement in the future regardless of the host clock.
+    const clock = vi.spyOn(officialLifecycle, "jakartaBusinessDate").mockReturnValue("2026-10-31");
+    try {
+      const rtUnitId = await createRt(testDatabase.db);
+      const resident = await regularSession("Replacement old Resident", "resident", { rtUnitId });
+      const chairman = await regularSession("Replacement Chairman", "official", { role: "rt_chairman", rtUnitId });
+      const [billingYear] = await testDatabase.db.insert(billingYears).values({
+        rtUnitId,
+        year: 2026,
+        status: "open",
+      }).returning({ id: billingYears.id });
+      await createFeeRateFixture(testDatabase.db, {
+        rtUnitId,
+        billingYearId: billingYear!.id,
+        effectiveMonth: 1,
+        monthlyAmount: 40000,
+      });
+      expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, resident.userId))).not.toHaveLength(0);
 
-    mocks.requestHeaders = new Headers({ cookie: chairman.cookie });
-    const response = await replaceChairmanHouseholdResident(new Request(
-      `http://localhost:3000/api/chairman/households/${resident.householdId}/replace`,
-      {
-        method: "POST",
-        headers: {
-          origin: "http://localhost:3000",
-          "content-type": "application/json",
-          cookie: chairman.cookie,
+      mocks.requestHeaders = new Headers({ cookie: chairman.cookie });
+      const response = await replaceChairmanHouseholdResident(new Request(
+        `http://localhost:3000/api/chairman/households/${resident.householdId}/replace`,
+        {
+          method: "POST",
+          headers: {
+            origin: "http://localhost:3000",
+            "content-type": "application/json",
+            cookie: chairman.cookie,
+          },
+          body: JSON.stringify({
+            effectiveMonth: "2026-11",
+            fullName: "Replacement fixture resident",
+            initialPin: "839174",
+            reason: "F2.1 stale session revocation fixture",
+          }),
         },
-        body: JSON.stringify({
-          effectiveMonth: "2026-11",
-          fullName: "Replacement fixture resident",
-          initialPin: "839174",
-          reason: "F2.1 stale session revocation fixture",
-        }),
-      },
-    ), { params: Promise.resolve({ householdId: resident.householdId! }) });
+      ), { params: Promise.resolve({ householdId: resident.householdId! }) });
 
-    expect(response.status).toBe(200);
-    expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, resident.userId))).toHaveLength(0);
-    mocks.requestHeaders = new Headers({ cookie: resident.cookie });
-    const staleRead = await getResidentDues();
-    expect(staleRead.status).toBe(401);
+      expect(response.status).toBe(200);
+      expect(await testDatabase.db.select().from(authSession).where(eq(authSession.userId, resident.userId))).toHaveLength(0);
+      mocks.requestHeaders = new Headers({ cookie: resident.cookie });
+      const staleRead = await getResidentDues();
+      expect(staleRead.status).toBe(401);
+    } finally { clock.mockRestore(); }
   });
 
   it("crosses signed-cookie principal categories against all available representative route families", async () => {
