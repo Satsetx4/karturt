@@ -1,6 +1,6 @@
 # KartuRT
 
-KartuRT is a mobile-first RT dues administration app. Milestone 1 establishes the database, private account model, role checks, and annual monthly-dues generator. Payment requests and payment verification are outside this milestone.
+KartuRT is a mobile-first RT dues administration app. V1 includes annual dues, resident payment requests, Treasurer verification and cash payments, reversals, Chairman household/tariff/waiver management, monthly reports with CSV and A4 printing, and an online-only installable PWA. Officials use username + PIN; System Admin retains password + verified TOTP.
 
 ## Stack
 
@@ -74,7 +74,7 @@ PGlite integration tests apply the checked-in PostgreSQL migrations and cover un
 
 ## Scope boundary
 
-This milestone does not create payment requests, payment records, transfer/cash workflows, payment verification, reversals, or receipt screens. The permission policy records that Treasurer is the future payment verifier, while System Admin and RT Chairman have no payment-verification permission. No payment endpoint exists yet.
+V1 operates for one RT while retaining tenant isolation, cross-RT constraints and authorization tests. Treasurer verifies payments; Chairman and System Admin have no payment-verification permission. The read-only activity page follows the existing Chairman/System Admin audit permission. See [scope freeze](docs/mvp-single-rt-scope-freeze.md) and [backlog completion](docs/v1-backlog-completion.md) for remaining work and acceptance limits. Presence of code does not authorize a Production release.
 
 ## Search readiness
 

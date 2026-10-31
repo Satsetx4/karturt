@@ -41,6 +41,8 @@ F14 tetap ditunda sampai setelah launch. Pembekuan scope ini hanya mencakup Pack
 
 **PWA dasar, 29 Oktober 2026:** fondasi F20 kini disiapkan berupa manifest, ikon KartuRT, mode standalone, dan panduan pemasangan. Aplikasi tetap online; tidak ada cache offline data keuangan atau push notification. Konfirmasi pemasangan dan penggunaan pada Android/iPhone fisik masih diperlukan. Lihat [cakupan dan pemeriksaan PWA](pwa-basic.md).
 
+**Kandidat penyelesaian F15, 31 Oktober 2026:** halaman `/app/aktivitas` menyediakan ringkasan aktivitas, filter tanggal/jenis, dan pagination bagi Ketua RT serta System Admin sesuai izin yang sudah ada. Ketua dibatasi ke RT-nya; raw context/alasan tidak ditampilkan. Tidak ada migrasi atau perubahan ledger. Status pengujian dan pekerjaan lanjutan dicatat di [backlog completion](v1-backlog-completion.md); ini bukan persetujuan rilis Production.
+
 ## Kebijakan acceptance F13.1
 
 Acceptance browser manual mencakup sesi Ketua RT yang terautentikasi, navigasi dashboard ke Laporan, `/app/laporan`, kecocokan laporan dengan API pada sesi yang sama, ringkasan tahunan dan bulanan, tunggakan, seluruh viewport responsif yang diwajibkan, serta pemeriksaan kebocoran UI/keamanan yang terlihat.

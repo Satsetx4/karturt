@@ -139,6 +139,16 @@ describe("R3 observer sample assessment", () => {
 });
 
 describe("R3 health worker identity", () => {
+  it.each([null, "forgedrun20261031"])("leaves ordinary F4 Preview health independent of R3 when header is %s", (header) => {
+    const environment: NodeJS.ProcessEnv = {
+      NODE_ENV: "test", APP_ENV: "preview", DATABASE_ENV: "preview",
+      KARTURT_PREVIEW_TARGET_ID: "soft-dawn-95924243/br-still-bar-aoqs0gbc/ep-bold-brook-ao92fqh8/karturt_preview",
+      KARTURT_PRODUCTION_TARGET_ID: "holy-term-22410117/br-jolly-bonus-azzd71cl/ep-production-test-only/karturt_production",
+    };
+    expect(getR3WorkerIdentity(header, environment, releaseSha, 12345)).toBeNull();
+    expect(getR3WorkerIdentity(header, { ...environment, KARTURT_R3_RUN_ID: "dateonly20261031" }, releaseSha, 12345)).toBeNull();
+  });
+
   const stagingWorkerEnvironment: NodeJS.ProcessEnv = {
     NODE_ENV: "test",
     APP_ENV: "staging",

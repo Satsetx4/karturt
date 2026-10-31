@@ -20,6 +20,8 @@ export function getR3WorkerIdentity(
   const runId = environment.KARTURT_R3_RUN_ID;
   const scenario = environment.KARTURT_R3_SCENARIO;
   const workerTag = environment.KARTURT_R3_WORKER_TAG;
+  // Ordinary Preview health checks are not R3 race-worker probes.
+  if (!scenario && !workerTag) return null;
   const staging = environment.APP_ENV === "staging" && environment.DATABASE_ENV === "staging";
   const preview = environment.APP_ENV === "preview" && environment.DATABASE_ENV === "preview";
   if (preview) assertR3PreviewBusinessDateTarget(environment);
