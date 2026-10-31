@@ -16,7 +16,7 @@ Scope: continue from released main `feee9848ef290be88e8ec3f6799d2db8c989044d`. T
 
 `npx tsx scripts/phase-5-payment-request-browser-smoke.ts`: actual headless Chromium with synthetic React components and a mock HTTP server. Tests offline submission, no false success, no automatic replay on reconnect, response loss after server acceptance, same-key manual retry with exactly one recorded request, double-click guards, and offline/manual Treasurer confirmation. The response-loss fault is injected around browser fetch after the mock server responds; it is not a real provider outage. Layout checks cover 360/390/430/768/1440 px. Browser fixtures contain synthetic data only. Next Link runs without a Next router; full application navigation is outside this harness.
 
-Typecheck and changed-file ESLint passed before final build. An initial build attempt correctly refused a dirty source tree; a clean-source optimized build must be checked before the PR is considered ready.
+Typecheck and changed-file ESLint passed. The clean-source optimized build passed at `5bd2ee8799442e5f6d71deb94b849b03c9ed55bc` using test environment labels and CI-only dummy configuration, without a database connection. Earlier attempts correctly refused a dirty source tree and missing environment labels. This is compilation evidence, not a deployed Production test.
 
 ## Remaining acceptance (do not mark PASS without execution)
 
