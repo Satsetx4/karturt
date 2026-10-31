@@ -5,9 +5,9 @@ Owner instruction: "kerjakan sesuai perencanaan backlog. buat sesederhana mungki
 
 Keep Single-RT operations, tenant isolation, current RBAC, append-only audit and financial ledger invariants. Production merge/deploy/migration remains a separate decision bound to the final SHA and target. Use synthetic data for development and Preview; never copy credentials or resident data into evidence.
 
-## Next step: F17 Admin Tooling
+## Current step: F17 bounded account recovery tools
 
-F14, F15, F16 and online-only PWA are released and owner-accepted within their recorded scope. F14/F16 verification was explicitly confirmed and closed by the owner; historical agent test limitations remain recorded. Next: audit existing account/recovery tools for F17, then implement only missing bounded operations with existing MFA, RBAC and audit controls. See [closure record](v1-f14-f16-acceptance-closure.md), [F14 scope](v1-annual-report-export.md) and [F16 scope](v1-official-lifecycle.md).
+F14, F15, F16 and online-only PWA are released and owner-accepted within their recorded scope. F14/F16 verification was explicitly confirmed and closed by the owner. F17 now adds a verified-Admin account lookup and UI over existing resident PIN/Admin 2FA recovery services, retaining their permission, session and audit controls. See [F17 scope/evidence/limits](v1-admin-recovery-tools.md) and [F14/F16 closure record](v1-f14-f16-acceptance-closure.md). F17 is not released; Preview and owner acceptance remain pending.
 
 ## Released F15 scope (historical)
 
@@ -27,7 +27,7 @@ The UI shows actor display name, canonical activity label, WIB time and audit re
 - [x] F16: existing-account schedule/end/handover UI, session revocation and transactional audit implemented and released through PR #123. Local 753 tests, typecheck/lint/build, synthetic component browser checks and exact-head CI passed.
 - [x] F16: owner confirmed verification and instructed closure on 31 October 2026. CLOSED; this does not retroactively claim agent-executed deployed tests.
 - [x] F14: monthly/annual CSV and arrears released through PR #124; owner confirmed verification and instructed closure. CLOSED for V1 CSV scope. Other datasets and special `.xlsx` format remain outside scope.
-- [ ] F17: bounded account/recovery tooling after F15/F16; retain verified TOTP and existing recovery controls.
+- [ ] F17: bounded lookup and recovery UI implemented locally; verification/Preview/release tracked in the F17 document. No new privileged mutation policy or generic account console. Not released.
 - [ ] F19: define recipient/event matrix; prefer in-app notifications first. Push needs a separate privacy/security design.
 - [x] F20: online-only is the approved scope; no offline transaction queue, background replay, or private-data offline cache.
 - [x] F20: owner reported all pending checklist items complete and passed, including Android/iPhone and signed-in acceptance. Synthetic browser tests remain separate evidence.

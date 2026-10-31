@@ -1,0 +1,1 @@
+export default function RecoveryLoading() { return <main className="page-shell"><section className="app-card" aria-busy="true"><h1>Pemulihan akun</h1><p role="status">Memuat halaman…</p></section></main>; }
