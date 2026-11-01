@@ -7,9 +7,10 @@ Owner instruction: "kerjakan sesuai perencanaan backlog. buat sesederhana mungki
 
 Keep Single-RT operations, tenant isolation, current RBAC, append-only audit and financial ledger invariants. Production merge/deploy/migration remains a separate decision bound to the final SHA and target. Use synthetic data for development and Preview; never copy credentials or resident data into evidence.
 
-## Current step: F21 usability study
+## Current step: F23 measured optimization
 
-F14, F15, F16, F17, F19 and online-only PWA are released and owner-accepted within their recorded scope. [F21 protocol](v1-ux-study.md) provides short tasks for Warga, Bendahara, Ketua and System Admin, a blank results sheet, read-only synthetic Preview boundaries and closure criteria. Agent entry/login review is recorded separately. Actual participant sessions remain pending; no participant score, duration or success is inferred from CI/browser checks. F23 follows measured findings.
+F14, F15, F16, F17, F19, F20 and F21 are owner-accepted within their recorded scope. On 1 November 2026 owner stated "f21 sudah ok" and requested F23. No participant observations, scores or task durations were supplied; they remain unrecorded. F23 measures synthetic report/notification reads before any optimization; no Production data or provider mutation.
+
 
 ## Released F15 scope (historical)
 
@@ -33,8 +34,8 @@ The UI shows actor display name, canonical activity label, WIB time and audit re
 - [x] F19: PR #127 released; owner stated "F19 ok." on 1 November 2026. CLOSED for in-app online-only notifications. Push remains outside scope.
 - [x] F20: online-only is the approved scope; no offline transaction queue, background replay, or private-data offline cache.
 - [x] F20: owner reported all pending checklist items complete and passed, including Android/iPhone and signed-in acceptance. Synthetic browser tests remain separate evidence.
-- [ ] F21: protocol/results template and agent entry/login review prepared; actual observations of all four roles and owner acceptance pending. See v1-ux-study.md. Browser emulation is not user research.
-- [ ] F23: remeasure current reports with synthetic data before optimizing; the historic PGlite 500-household result is not a Production SLA.
+- [x] F21: owner stated "f21 sudah ok" on 1 November 2026. CLOSED by owner acceptance; participant details remain unrecorded. Agent browser checks are not user research.
+- [ ] F23: measured 50/500-household nonempty synthetic reads; retain report calculations and simplify pending Treasurer notifications. See [F23 results/limits](v1-optimization.md). Full regression/build/CI/Preview/release tracked in the F23 PR; no Production SLA claimed.
 
 Each code slice uses branch → PR → exact-SHA CI → isolated synthetic Preview. Verify target identity before any provider mutation. Record skipped tests as skipped. Physical-device/user acceptance must come from actual participants; never infer it from CI.
 

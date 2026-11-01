@@ -1,6 +1,6 @@
 # F21 — uji kemudahan penggunaan sederhana
 
-Status 1 November 2026: **persiapan dan peninjauan agen selesai; sesi peserta belum dijalankan**. Baseline main `0d89347d9761c1e881e519c013909ab0af741bb1` (F19 diterima pemilik). Ini studi kecil untuk menemukan hambatan, bukan bukti statistik bahwa seluruh pengguna dapat memakai aplikasi.
+Status 1 November 2026: **CLOSED berdasarkan penerimaan pemilik "f21 sudah ok"**. Detail peserta/hasil sesi tidak diberikan; lembar hasil di bawah tetap kosong dan bukan klaim observasi pengguna oleh agen. Baseline main `0d89347d9761c1e881e519c013909ab0af741bb1` (F19 diterima pemilik). Ini studi kecil untuk menemukan hambatan, bukan bukti statistik bahwa seluruh pengguna dapat memakai aplikasi.
 
 ## Lingkungan dan batas tindakan
 

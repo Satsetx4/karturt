@@ -15,16 +15,20 @@ export async function getPaymentNotifications(database: AppDatabase, principal: 
   }
   const isResident = active.role === "resident";
   const eventAt = sql<Date>`coalesce(${paymentReversals.reversedAt}, ${paymentRequests.resolvedAt}, ${paymentRequests.verifiedAt}, ${paymentRequests.createdAt})`.mapWith(paymentRequests.createdAt);
-  const rows = await database.select({
+  const rows = isResident ? await database.select({
     id: paymentRequests.id, requestCode: paymentRequests.requestCode,
     status: paymentRequests.status, reversedAt: paymentReversals.reversedAt, eventAt,
   }).from(paymentRequests)
     .leftJoin(payments, and(eq(payments.paymentRequestId, paymentRequests.id), eq(payments.rtUnitId, paymentRequests.rtUnitId), eq(payments.householdId, paymentRequests.householdId)))
     .leftJoin(paymentReversals, and(eq(paymentReversals.paymentId, payments.id), eq(paymentReversals.rtUnitId, paymentRequests.rtUnitId), eq(paymentReversals.householdId, paymentRequests.householdId)))
-    .where(and(eq(paymentRequests.rtUnitId, active.rtUnitId), isResident
-      ? and(eq(paymentRequests.requestedByAccountId, active.appAccountId), eq(paymentRequests.householdId, active.householdId!), inArray(paymentRequests.status, ["verified", "rejected"]))
-      : eq(paymentRequests.status, "pending")))
-    .orderBy(desc(eventAt), desc(paymentRequests.id)).limit(21);
+    .where(and(eq(paymentRequests.rtUnitId, active.rtUnitId), and(eq(paymentRequests.requestedByAccountId, active.appAccountId), eq(paymentRequests.householdId, active.householdId!), inArray(paymentRequests.status, ["verified", "rejected"]))))
+    .orderBy(desc(eventAt), desc(paymentRequests.id)).limit(21)
+    : await database.select({
+      id: paymentRequests.id, requestCode: paymentRequests.requestCode,
+      status: paymentRequests.status, reversedAt: sql<Date | null>`null`, eventAt: paymentRequests.createdAt,
+    }).from(paymentRequests)
+      .where(and(eq(paymentRequests.rtUnitId, active.rtUnitId), eq(paymentRequests.status, "pending")))
+      .orderBy(desc(paymentRequests.createdAt), desc(paymentRequests.id)).limit(21);
   return {
     viewerAccountId: active.appAccountId, role: active.role, checkedAt: new Date().toISOString(), hasMore: rows.length > 20,
     items: rows.slice(0, 20).map((row) => ({
