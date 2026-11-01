@@ -1,4 +1,4 @@
-export const OWNER_RECOVERY_HOST = "karturt-production.vercel.app";
+export const OWNER_RECOVERY_HOST = "karturt-production-rt-6.vercel.app";
 export const OWNER_RECOVERY_ORIGIN = `https://${OWNER_RECOVERY_HOST}`;
 
 type HeaderReader = Pick<Headers, "get">;
