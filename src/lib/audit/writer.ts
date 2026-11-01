@@ -28,6 +28,7 @@ const jwtPattern = /\beyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/;
 const recoveryActions = new Set([
   "resident.pin.structured_recovery",
   "system_admin.two_factor.emergency_recovery",
+  "system_admin.two_factor.owner_recovery",
 ]);
 
 function assertContextKeys(keys: string[], expected: string) {

@@ -2,10 +2,12 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { appendAuditEvent } from "@/lib/audit/writer";
 import { getDb } from "@/db/client";
-import { appAccounts } from "@/db/schema";
+import { appAccounts, authVerification } from "@/db/schema";
 import { isValidAccountPassword } from "@/lib/auth/account-password";
 import { MfaEnrollmentRequiredError, resolvePrincipalForUser, UnauthenticatedError } from "@/lib/auth/principal";
 import { getAuth } from "@/lib/auth/server";
+import { isOwnerRecoveryRequest } from "@/lib/auth/owner-recovery-origin";
+import { ownerRecoveryPendingIdentifier } from "@/lib/auth/owner-recovery-state";
 
 export const runtime = "nodejs";
 
@@ -15,6 +17,10 @@ async function handle(request: Request) {
 
   const pathname = new URL(request.url).pathname;
   const endpoint = pathname.replace(/^\/api\/auth/, "");
+
+  if (endpoint === "/system-admin/owner-recovery" && !isOwnerRecoveryRequest(request)) {
+    return jsonResponse({ message: "Halaman pemulihan tidak tersedia." }, 404);
+  }
 
   if (endpoint === "/sign-in/email") {
     return jsonResponse({ message: "Gunakan halaman masuk sesuai jenis akun." }, 403);
@@ -84,13 +90,14 @@ async function handle(request: Request) {
   }
 
   const twoFactorAuditAction = twoFactorAuditActionForEndpoint(endpoint);
-  let account: { id: string; accountType: string } | null = null;
+  let account: { id: string; authUserId: string; accountType: string } | null = null;
   if (twoFactorAuditAction || endpoint === "/two-factor/disable") {
     const session = await auth.api.getSession({ headers: request.headers });
     if (session) {
       try {
         const [current] = await getDb().select({
           id: appAccounts.id,
+          authUserId: appAccounts.authUserId,
           accountType: appAccounts.accountType,
         }).from(appAccounts).where(and(
           eq(appAccounts.authUserId, session.user.id),
@@ -110,7 +117,13 @@ async function handle(request: Request) {
   const response = await auth.handler(request);
   if (response.ok && account && twoFactorAuditAction) {
     try {
-      await appendAccountSecurityAudit(account.id, twoFactorAuditAction);
+      await appendAccountSecurityAudit(
+        account.id,
+        twoFactorAuditAction,
+        twoFactorAuditAction === "account.two_factor.verified" && account.accountType === "system_admin"
+          ? account.authUserId
+          : null,
+      );
     } catch {
       return await safeAuthResponse(response, { message: "Perubahan keamanan belum dapat dicatat." }, 503);
     }
@@ -126,7 +139,7 @@ function twoFactorAuditActionForEndpoint(endpoint: string) {
   return null;
 }
 
-async function appendAccountSecurityAudit(accountId: string, action: string) {
+async function appendAccountSecurityAudit(accountId: string, action: string, completedRecoveryAuthUserId: string | null = null) {
   await getDb().transaction(async (transaction) => {
     await appendAuditEvent(transaction, {
       actorAppAccountId: accountId,
@@ -136,6 +149,10 @@ async function appendAccountSecurityAudit(accountId: string, action: string) {
       reason: null,
       context: {},
     });
+    if (completedRecoveryAuthUserId) {
+      await transaction.delete(authVerification)
+        .where(eq(authVerification.identifier, ownerRecoveryPendingIdentifier(completedRecoveryAuthUserId)));
+    }
   });
 }
 

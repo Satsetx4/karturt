@@ -30,6 +30,7 @@ export const auditActions = {
   "resident.pin.reset": "PIN warga diatur ulang",
   "resident.pin.structured_recovery": "Akses warga dipulihkan",
   "system_admin.two_factor.emergency_recovery": "Verifikasi dua langkah dipulihkan",
+  "system_admin.two_factor.owner_recovery": "Verifikasi dua langkah dipulihkan oleh pemilik",
   "preview.synthetic_credential.rekeyed": "Akses akun uji diperbarui",
 } as const;
 
