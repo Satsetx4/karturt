@@ -1,14 +1,16 @@
 # V1 backlog completion
 
-Current released baseline: `9cdc58fe5937b2bebdb4a01329f5f98ff7fb645e`, PR #126 (F17). Production deployment `dpl_HTrv745uWX26tKzw8dyaqtfKsQ59` READY; bounded health/TLS/login/anonymous-denial checks passed. Main CI `41215997210` passed. On 1 November 2026 owner stated "f17 sudah saya nyatakan OK": F17 CLOSED for its bounded recovery scope. Owner acceptance is distinct from agent-executed signed-in tests.
+Current released baseline: `0d89347d9761c1e881e519c013909ab0af741bb1`, PR #127 (F19). Production deployment `dpl_HoYUrsdWniuhLQaQqbFuskErqiuA` READY; bounded live health/TLS/login/anonymous-denial checks passed. Main CI `41236972212` SUCCESS. On 1 November 2026 owner stated "F19 ok.": F19 CLOSED for the in-app, online-only payment-status scope. This is owner acceptance, distinct from agent-executed authenticated tests. See [F19 closure](v1-f19-acceptance-closure.md).
+
 
 Owner instruction: "kerjakan sesuai perencanaan backlog. buat sesederhana mungkin dan jangan membuat semakin rumit".
 
 Keep Single-RT operations, tenant isolation, current RBAC, append-only audit and financial ledger invariants. Production merge/deploy/migration remains a separate decision bound to the final SHA and target. Use synthetic data for development and Preview; never copy credentials or resident data into evidence.
 
-## Current step: F19 in-app payment notifications
+## Current step: F23 measured optimization
 
-F14, F15, F16, F17 and online-only PWA are released and owner-accepted within their recorded scope. F19 adds a read-only current-status feed for Treasurer and Resident, using existing payment data without migrations or push. See [F19 scope and acceptance criteria](v1-payment-notifications.md), [F17 evidence](v1-admin-recovery-tools.md) and [F14/F16 closure](v1-f14-f16-acceptance-closure.md).
+F14, F15, F16, F17, F19, F20 and F21 are owner-accepted within their recorded scope. On 1 November 2026 owner stated "f21 sudah ok" and requested F23. No participant observations, scores or task durations were supplied; they remain unrecorded. F23 measures synthetic report/notification reads before any optimization; no Production data or provider mutation.
+
 
 ## Released F15 scope (historical)
 
@@ -29,11 +31,11 @@ The UI shows actor display name, canonical activity label, WIB time and audit re
 - [x] F16: owner confirmed verification and instructed closure on 31 October 2026. CLOSED; this does not retroactively claim agent-executed deployed tests.
 - [x] F14: monthly/annual CSV and arrears released through PR #124; owner confirmed verification and instructed closure. CLOSED for V1 CSV scope. Other datasets and special `.xlsx` format remain outside scope.
 - [x] F17: bounded account lookup/recovery UI released through PR #126; owner accepted on 1 November 2026. CLOSED within this scope, not a generic account console.
-- [ ] F19: in-app payment status feed implementation and verification underway; Preview/release/owner acceptance pending. Push remains outside this scope.
+- [x] F19: PR #127 released; owner stated "F19 ok." on 1 November 2026. CLOSED for in-app online-only notifications. Push remains outside scope.
 - [x] F20: online-only is the approved scope; no offline transaction queue, background replay, or private-data offline cache.
 - [x] F20: owner reported all pending checklist items complete and passed, including Android/iPhone and signed-in acceptance. Synthetic browser tests remain separate evidence.
-- [ ] F21: observe representative users from all roles on synthetic Preview; record task results and resolve usability blockers. Browser emulation is not user research.
-- [ ] F23: remeasure current reports with synthetic data before optimizing; the historic PGlite 500-household result is not a Production SLA.
+- [x] F21: owner stated "f21 sudah ok" on 1 November 2026. CLOSED by owner acceptance; participant details remain unrecorded. Agent browser checks are not user research.
+- [ ] F23: measured 50/500-household nonempty synthetic reads; retain report calculations and simplify pending Treasurer notifications. See [F23 results/limits](v1-optimization.md). Full regression/build/CI/Preview/release tracked in the F23 PR; no Production SLA claimed.
 
 Each code slice uses branch → PR → exact-SHA CI → isolated synthetic Preview. Verify target identity before any provider mutation. Record skipped tests as skipped. Physical-device/user acceptance must come from actual participants; never infer it from CI.
 

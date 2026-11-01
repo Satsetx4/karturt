@@ -1,0 +1,169 @@
+{
+  "result": "COMPLETED_WITH_OBSERVATION",
+  "environment": "local disposable PGlite; synthetic ANALYZE after seeding, no Neon connection or mutation",
+  "scalingComparison": {
+    "method": "Same in-memory database, schema and service functions; independent RT fixtures at 50 and 500 households. One unrecorded warmup then seven timed runs per service path and fixture; notification old/new pairs alternate execution order in the same database and require identical results excluding checkedAt. Ratios use medians.",
+    "scales": {
+      "small_50": {
+        "dataset": {
+          "households": 50,
+          "annualDues": 600
+        },
+        "reads": {
+          "treasurer_notifications_baseline": {
+            "medianMs": 4.44,
+            "repeatMs": [
+              4.84,
+              4.17,
+              3.68,
+              4.72,
+              4.44,
+              4.76,
+              4.26
+            ]
+          },
+          "treasurer_notifications": {
+            "medianMs": 3.65,
+            "repeatMs": [
+              4.03,
+              3.41,
+              4.63,
+              3.49,
+              3.65,
+              2.77,
+              3.85
+            ],
+            "resultRows": 20
+          },
+          "chairman_f13_report_year_and_arrears": {
+            "medianMs": 61.42,
+            "repeatMs": [
+              64.12,
+              61.93,
+              60.39,
+              65.19,
+              59.15,
+              57.93,
+              61.42
+            ],
+            "arrearsHouseholds": 50
+          },
+          "household_management_list_first_page": {
+            "medianMs": 41.92,
+            "repeatMs": [
+              43.98,
+              42.16,
+              41.92,
+              43.98,
+              41.9,
+              39.45,
+              40.59
+            ],
+            "returnedRows": 50
+          }
+        }
+      },
+      "large_500": {
+        "dataset": {
+          "households": 500,
+          "annualDues": 6000
+        },
+        "reads": {
+          "treasurer_notifications_baseline": {
+            "medianMs": 4.28,
+            "repeatMs": [
+              3.34,
+              3.78,
+              4.66,
+              4.28,
+              3.54,
+              5.06,
+              4.49
+            ]
+          },
+          "treasurer_notifications": {
+            "medianMs": 3.13,
+            "repeatMs": [
+              2.95,
+              3.94,
+              3.13,
+              3.09,
+              3.08,
+              3.26,
+              3.98
+            ],
+            "resultRows": 20
+          },
+          "chairman_f13_report_year_and_arrears": {
+            "medianMs": 508.98,
+            "repeatMs": [
+              508.98,
+              512.99,
+              522.3,
+              493.04,
+              534.91,
+              504.48,
+              507.53
+            ],
+            "arrearsHouseholds": 500
+          },
+          "household_management_list_first_page": {
+            "medianMs": 176.04,
+            "repeatMs": [
+              168.03,
+              177.25,
+              168.67,
+              167.52,
+              187.14,
+              177.06,
+              176.04
+            ],
+            "returnedRows": 250
+          }
+        }
+      }
+    },
+    "ratios_500_to_50": {
+      "chairman_f13_report_year_and_arrears": 8.29,
+      "household_management_list_first_page": 4.2,
+      "treasurer_notifications": 0.86
+    },
+    "expectedDatasetMultiplier": 10,
+    "queryCount": "not instrumented; Drizzle/PGlite wrapper does not expose a reliable count without changing query execution",
+    "perHouseholdQueryPattern": "No obvious service-level per-household read loop in inspected report/list implementations; each fetch uses batched queries. Source inspection only.",
+    "interpretation": "Compare warmed median ratios to the 10x dataset multiplier. Shared-process cache effects remain possible; this is PGlite, not Neon, and establishes no production SLA."
+  },
+  "otherReadSmoke": {
+    "resident_billing_12_dues": {
+      "ms": 11.28,
+      "resultRows": 12
+    },
+    "resident_card_domain_summary": {
+      "ms": 0.15,
+      "resultRows": 12,
+      "totals": {
+        "paid": 30000,
+        "pending": 0,
+        "unpaid": 300000
+      }
+    },
+    "treasurer_payment_request_queue_nonempty": {
+      "ms": 17.37,
+      "resultRows": 250
+    },
+    "treasurer_payment_history_nonempty": {
+      "ms": 18.94,
+      "resultRows": 50
+    },
+    "resident_payment_history_nonempty": {
+      "ms": 4.65,
+      "resultRows": 1
+    }
+  },
+  "paymentFixtureAssessment": "50/500 valid resident requests, half verified using existing services. Queue, allocations, payments and audit constraints exercised. Rejection/reversal are covered by regression tests, not timed here.",
+  "memory": {
+    "heapUsedMiB": 153.9,
+    "note": "single end-of-run sample; no profiler/peak sampling"
+  },
+  "timestamp": "2026-11-01T00:06:14.821Z"
+}
