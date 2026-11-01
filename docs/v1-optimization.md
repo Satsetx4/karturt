@@ -38,6 +38,6 @@ Jalur Warga tetap memakai join untuk hasil verified/rejected dan reversal. Tidak
 1. Respons notifikasi lama/baru sama pada setiap pasangan benchmark; urutan, status, limit dan `hasMore` tetap benar.
 2. Enam tes service/API F19 lulus, termasuk tenant/principal aktif, penolakan role, verifikasi/rejection/reversal, batas daftar dan private/no-store. Typecheck dan ESLint file berubah lulus.
 3. Laporan/perhitungan keuangan tidak berubah; pemeriksaan regresi seluruh aplikasi, build dan CI exact-head dicatat pada PR F23 setelah dijalankan. Jangan menyimpulkan hasilnya dari dokumen ini.
-4. Sebelum rilis: CI → Preview exact-SHA yang diizinkan → verifikasi → izin merge/Production. Slice F23 belum dirilis dan belum diterima pemilik.
+4. Sebelum rilis: CI → Preview exact-SHA yang diizinkan → verifikasi → izin merge/Production. Urutan ini telah dilalui untuk PR #129; rilis dan penerimaan pemilik dicatat dalam catatan penutupan.
 
 Tidak dilakukan: pengukuran latency HTTP/TTFB, koneksi Neon, beban paralel, EXPLAIN Production, perubahan statistik Production, uji perangkat atau transaksi deployed. Statistik autovacuum/ANALYZE Neon tidak diperiksa. Angka lokal tidak membuktikan adanya masalah planner di Production; pengukuran provider diperlukan sebelum memutuskan indeks/tuning berikutnya.
