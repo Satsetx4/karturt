@@ -7,7 +7,7 @@ import { Brand } from "@/components/brand";
 import { SiteFooter } from "@/components/site-footer";
 import { TwoFactorSetupForm } from "@/components/two-factor-setup-form";
 import { getDb } from "@/db/client";
-import { appAccounts, authUser } from "@/db/schema";
+import { appAccounts, authTwoFactor, authUser } from "@/db/schema";
 import { getAuth } from "@/lib/auth/server";
 
 export const metadata: Metadata = {
@@ -22,13 +22,18 @@ export default async function TwoFactorSetupPage() {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) redirect("/system/login");
   const [account] = await getDb()
-    .select({ accountType: appAccounts.accountType, enabled: authUser.twoFactorEnabled })
+    .select({
+      accountType: appAccounts.accountType,
+      enabled: authUser.twoFactorEnabled,
+      factorVerified: authTwoFactor.verified,
+    })
     .from(appAccounts)
     .innerJoin(authUser, eq(authUser.id, appAccounts.authUserId))
+    .leftJoin(authTwoFactor, eq(authTwoFactor.userId, authUser.id))
     .where(and(eq(appAccounts.authUserId, session.user.id), eq(appAccounts.accountType, "system_admin")))
     .limit(1);
   if (!account) redirect("/");
-  if (account.enabled) redirect("/app");
+  if (account.enabled && account.factorVerified) redirect("/app");
 
   return (
     <main className="page-shell login-shell">

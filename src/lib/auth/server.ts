@@ -6,14 +6,20 @@ import { getDb } from "@/db/client";
 import { relationalSchema } from "@/db/schema";
 import { requireAuthEnvironment } from "@/lib/env";
 import { officialPinPlugin } from "@/lib/auth/official-pin-plugin";
+import { OWNER_RECOVERY_ORIGIN } from "@/lib/auth/owner-recovery-origin";
+import { ownerSystemAdminRecoveryPlugin } from "@/lib/auth/owner-system-admin-recovery-plugin";
 
 export function createAuth(database: AppDatabase, options: { secret: string; baseURL: string }) {
   const twoFactorChallengeSeconds = 60 * 10;
+  const trustedOrigins = [options.baseURL];
+  if (new URL(options.baseURL).origin === "https://karturt.vercel.app") {
+    trustedOrigins.push(OWNER_RECOVERY_ORIGIN);
+  }
   return betterAuth({
     appName: "KartuRT",
     baseURL: options.baseURL,
     secret: options.secret,
-    trustedOrigins: [options.baseURL],
+    trustedOrigins,
     database: drizzleAdapter(database, { provider: "pg", schema: relationalSchema }),
     emailAndPassword: {
       enabled: true,
@@ -27,7 +33,7 @@ export function createAuth(database: AppDatabase, options: { secret: string; bas
       twoFactorCookieMaxAge: twoFactorChallengeSeconds,
       backupCodeOptions: { storeBackupCodes: "encrypted" },
       accountLockout: { enabled: true, maxFailedAttempts: 5, durationSeconds: 900 },
-    }), officialPinPlugin(database, { twoFactorChallengeSeconds })],
+    }), officialPinPlugin(database, { twoFactorChallengeSeconds }), ownerSystemAdminRecoveryPlugin(database)],
     rateLimit: {
       enabled: true,
       storage: "database",
@@ -35,6 +41,7 @@ export function createAuth(database: AppDatabase, options: { secret: string; bas
       max: 100,
       customRules: {
         "/sign-in/email": { window: 60, max: 5 },
+        "/system-admin/owner-recovery": { window: 60, max: 5 },
         "/sign-in/official-pin": { window: 60, max: 5 },
         "/official-pin/recover": { window: 60, max: 5 },
         "/change-password": { window: 60, max: 3 },

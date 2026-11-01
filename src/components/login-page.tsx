@@ -4,6 +4,7 @@ import { Brand } from "@/components/brand";
 import { LoginForm, type LoginKind } from "@/components/login-form";
 import { OfficialPinRecoveryForm } from "@/components/official-pin-recovery-form";
 import { SiteFooter } from "@/components/site-footer";
+import { OWNER_RECOVERY_ORIGIN } from "@/lib/auth/owner-recovery-origin";
 
 const details: Record<LoginKind, { title: string; eyebrow: string; description: string; icon: typeof CheckCircle2 }> = {
   resident: {
@@ -65,7 +66,12 @@ export function LoginPage({ kind }: { kind: LoginKind }) {
           <LoginForm kind={kind} />
           {kind === "resident" && <p className="help-line">Lupa PIN? Hubungi pengurus RT untuk bantuan.</p>}
           {kind === "official" && <OfficialPinRecoveryForm />}
-          {kind === "system_admin" && <p className="help-line">System Admin tidak dapat memverifikasi atau mencatat pembayaran.</p>}
+          {kind === "system_admin" && (
+            <>
+              <p className="help-line">System Admin tidak dapat memverifikasi atau mencatat pembayaran.</p>
+              <p className="help-line">Tidak dapat memakai autentikator? <a href={`${OWNER_RECOVERY_ORIGIN}/system/recovery`}>Buka pemulihan pemilik melalui Vercel</a>.</p>
+            </>
+          )}
         </div>
       </section>
 

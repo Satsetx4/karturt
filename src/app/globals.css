@@ -124,6 +124,7 @@ button { color: inherit; }
 .form-input { width: 100%; min-height: 52px; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 10px; outline: none; color: var(--ink); background: var(--surface); transition: border-color 160ms ease, box-shadow 160ms ease; }
 .form-input::placeholder { color: color-mix(in srgb, var(--muted) 80%, transparent); }
 .form-input:focus { border-color: var(--teal); box-shadow: 0 0 0 4px var(--teal-wash); }
+.form-textarea { min-height: 104px; resize: vertical; line-height: 1.5; }
 .button { min-height: 50px; padding: 11px 18px; display: inline-flex; align-items: center; justify-content: center; gap: 11px; border: 1px solid transparent; border-radius: 10px; cursor: pointer; font-weight: 750; transition: transform 170ms ease, background 170ms ease, box-shadow 170ms ease; }
 .button:disabled { cursor: not-allowed; opacity: .62; }
 .button--primary { color: #f7fbf9; background: #173745; box-shadow: 0 5px 12px rgb(23 55 69 / 15%); }
@@ -163,6 +164,8 @@ button { color: inherit; }
 .security-card { width: min(100%, 580px); margin: 48px auto; padding: clamp(24px, 5vw, 42px); border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
 .security-card h1 { margin: 4px 0 10px; font-size: clamp(29px,4vw,40px); line-height: 1.08; letter-spacing: -.045em; }
 .security-card > p { color: var(--muted); }
+.recovery-reference { padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); }
+.recovery-reference code { font-weight: 700; letter-spacing: .04em; }
 .security-form { margin-top: 25px; }
 .qr-panel { width: fit-content; max-width: 100%; margin: 20px auto; padding: 15px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
 .backup-codes { padding: 15px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--ink); background: var(--surface-raised); font-family: ui-monospace, "Cascadia Mono", monospace; font-size: 13px; line-height: 1.9; overflow-wrap: anywhere; }
