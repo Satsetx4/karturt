@@ -1,16 +1,15 @@
 # V1 backlog completion
 
-Current released baseline: `0d89347d9761c1e881e519c013909ab0af741bb1`, PR #127 (F19). Production deployment `dpl_HoYUrsdWniuhLQaQqbFuskErqiuA` READY; bounded live health/TLS/login/anonymous-denial checks passed. Main CI `41236972212` SUCCESS. On 1 November 2026 owner stated "F19 ok.": F19 CLOSED for the in-app, online-only payment-status scope. This is owner acceptance, distinct from agent-executed authenticated tests. See [F19 closure](v1-f19-acceptance-closure.md).
+Current released baseline: `4d79d90560b4f29725d8cd66d9fb82dd86aebc46`, PR #129 (F23). Production deployment `dpl_Dxwjupz6VxWWJQ28eVBZHfvbwVMm` READY at release; bounded live health/TLS/login/anonymous-denial checks passed. Main CI `41262358280` completed/SUCCESS. On 1 November 2026 owner stated "F23 sudah saya tes dan OK": F23 CLOSED. Owner verification is distinct from agent-executed authenticated tests. See [F23 closure](v1-f23-acceptance-closure.md).
 
 
 Owner instruction: "kerjakan sesuai perencanaan backlog. buat sesederhana mungkin dan jangan membuat semakin rumit".
 
 Keep Single-RT operations, tenant isolation, current RBAC, append-only audit and financial ledger invariants. Production merge/deploy/migration remains a separate decision bound to the final SHA and target. Use synthetic data for development and Preview; never copy credentials or resident data into evidence.
 
-## Current step: F23 measured optimization
+## Current position: agreed V1 backlog CLOSED
 
-F14, F15, F16, F17, F19, F20 and F21 are owner-accepted within their recorded scope. On 1 November 2026 owner stated "f21 sudah ok" and requested F23. No participant observations, scores or task durations were supplied; they remain unrecorded. F23 measures synthetic report/notification reads before any optimization; no Production data or provider mutation.
-
+F14, F15, F16, F17, F19, F20, F21 and F23 are released/owner-accepted within their documented V1 scope. Owner reported testing and acceptance of F23 on 1 November 2026; detailed device/account/task results were not supplied. No participant outcomes or Production latency figures are inferred. Further enhancements are new scope, not unfinished work in these eight agreed slices. Independent PostgreSQL concurrency and PG18 recovery remain SKIPPED, not passed; issue #107/#110 remain untouched.
 
 ## Released F15 scope (historical)
 
@@ -25,7 +24,7 @@ The UI shows actor display name, canonical activity label, WIB time and audit re
 
 - [x] F15: local implementation and 12 focused service/page tests, including tenant isolation, active roles/MFA, redaction, filters and microsecond-safe pagination.
 - [x] F15: full local regression (704 tests / 95 files), typecheck, changed-file ESLint, migration journal/schema drift checks, optimized build, static rendering at 360/390/420/768/1440 px in light/dark themes without horizontal overflow.
-- [x] F15: PR #121 merged and released to Production at the SHA above; exact-main Gate A passed. Public health/login and anonymous activity redirect checked.
+- [x] F15: PR #121 merged and released to Production at its historical release SHA; exact-main Gate A passed. Public health/login and anonymous activity redirect checked.
 - [x] F15: owner reported the pending checklist complete and passed before PR #122 release; this is owner acceptance, not agent-executed signed-in testing.
 - [x] F16: existing-account schedule/end/handover UI, session revocation and transactional audit implemented and released through PR #123. Local 753 tests, typecheck/lint/build, synthetic component browser checks and exact-head CI passed.
 - [x] F16: owner confirmed verification and instructed closure on 31 October 2026. CLOSED; this does not retroactively claim agent-executed deployed tests.
@@ -35,7 +34,7 @@ The UI shows actor display name, canonical activity label, WIB time and audit re
 - [x] F20: online-only is the approved scope; no offline transaction queue, background replay, or private-data offline cache.
 - [x] F20: owner reported all pending checklist items complete and passed, including Android/iPhone and signed-in acceptance. Synthetic browser tests remain separate evidence.
 - [x] F21: owner stated "f21 sudah ok" on 1 November 2026. CLOSED by owner acceptance; participant details remain unrecorded. Agent browser checks are not user research.
-- [ ] F23: measured 50/500-household nonempty synthetic reads; retain report calculations and simplify pending Treasurer notifications. See [F23 results/limits](v1-optimization.md). Full regression/build/CI/Preview/release tracked in the F23 PR; no Production SLA claimed.
+- [x] F23: PR #129 released; owner stated "F23 sudah saya tes dan OK" on 1 November 2026. CLOSED for measured local optimization scope. Main CI SUCCESS. See [closure](v1-f23-acceptance-closure.md) and [measurement limits](v1-optimization.md).
 
 Each code slice uses branch → PR → exact-SHA CI → isolated synthetic Preview. Verify target identity before any provider mutation. Record skipped tests as skipped. Physical-device/user acceptance must come from actual participants; never infer it from CI.
 
